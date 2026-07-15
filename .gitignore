@@ -1,0 +1,22 @@
+# Editors
+.DS_Store
+.idea/
+*.iml
+.vscode/
+*.swp
+*~
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Local CLI state (e.g. gh device-id written when resolving GH_TOKEN on the host)
+.local/
+
+# Remote Control / worktree-isolated sessions
+.claude/worktrees/
+
+# Claude Code skill symlinks — generated locally by scripts/symlink-skills.sh from the
+# canonical .agents/skills/ tree. Not committed (Claude Code doesn't yet read .agents/skills/).
+.claude/skills/
