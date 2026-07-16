@@ -2,9 +2,21 @@
 .DS_Store
 .idea/
 *.iml
-.vscode/
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
 *.swp
 *~
+
+# .NET build output
+bin/
+obj/
+
+# Node / build output
+node_modules/
+dist/
+out/
+*.vsix
 
 # Env
 .env
