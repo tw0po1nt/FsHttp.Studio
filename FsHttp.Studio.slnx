@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="companion/Companion.fsproj" />
+  <Project Path="extension-host/src/Extension.fsproj" />
+  <Project Path="extension-host/webview/Webview.fsproj" />
+</Solution>
