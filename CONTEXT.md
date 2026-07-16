@@ -1,4 +1,4 @@
-# FsHttp.Explorer
+# FsHttp.Studio
 
 A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsHttp) request from an F# script and renders its response richly — the rendering FSI can only ever flatten to text.
 

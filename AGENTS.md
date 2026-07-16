@@ -1,4 +1,4 @@
-# FsHttp.Explorer
+# FsHttp.Studio
 
 ## Agent skills
 

@@ -1,4 +1,4 @@
-# FsHttp.Explorer
+# FsHttp.Studio
 
 A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsHttp) request straight from your F# script and **renders** the response — images, JSON, HTML — instead of flattening it to text.
 
@@ -8,7 +8,7 @@ A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsH
 
 FsHttp pitches itself as a code-first replacement for Postman and `.http` files, and for *describing* requests it's excellent. But the only way to run an `http { }` block today is FSI — and FSI can only **print**. It flattens every response into a string: an image comes back as a byte dump, a JSON payload as one dense unbrowsable line, an HTML page as escaped source. The part that makes a request tool worth using — *seeing* the response — is exactly what the F# workflow can't do. Worse, FSI's printer silently destroys the response body (it's read-once by default), so reaching for the bytes yourself is a trap.
 
-FsHttp.Explorer fills that gap: the request stays as idiomatic, source-controllable F#, and the response gets rendered richly, in the editor.
+FsHttp.Studio fills that gap: the request stays as idiomatic, source-controllable F#, and the response gets rendered richly, in the editor.
 
 ## What v0.1 does
 
@@ -40,7 +40,7 @@ The architectural decisions and their trade-offs are recorded in [`docs/adr/`](.
 
 v0.1 is a proof-of-concept to gauge whether F# developers want this — its acceptance is a live demo in the F# Discord. Deliberately deferred until that reaction lands:
 
-- the **explorer tree** (grouping, naming, the Testing-API-style tree the name hints at),
+- the **request tree** (grouping, naming, a Testing-API-style tree of your requests),
 - **marketplace publishing** and settings,
 - **`.fs`-in-a-project** execution (v0.1 is `.fsx`-only; blocks in compiled `.fs` files show no Run affordance — by design),
 - **request-chaining** (a block that needs a prior request's *response*, e.g. an auth token),
