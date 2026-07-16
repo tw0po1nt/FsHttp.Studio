@@ -1,0 +1,26 @@
+{
+  "name": "fshttp-studio",
+  "displayName": "FsHttp.Studio",
+  "description": "Run a single FsHttp request from an F# script and see the response rendered.",
+  "version": "0.0.1",
+  "private": true,
+  "engines": {
+    "vscode": "^1.66.0"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "scripts": {
+    "build:companion": "dotnet publish ../companion/Companion.fsproj -c Release -o dist/companion",
+    "build:fable:extension": "dotnet tool run fable src --outDir out",
+    "build:fable:webview": "dotnet tool run fable webview --outDir out/webview",
+    "build:bundle": "node esbuild.mjs",
+    "compile": "dotnet tool restore && npm run build:companion && npm run build:fable:extension && npm run build:fable:webview && npm run build:bundle",
+    "package": "npm run compile && vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "@vscode/vsce": "^3.9.2"
+  }
+}

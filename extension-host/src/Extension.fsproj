@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Node.fs" />
+    <Compile Include="Vscode.fs" />
+    <Compile Include="Envelope.fs" />
+    <Compile Include="Companion.fs" />
+    <Compile Include="Extension.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Fable.Core" Version="5.2.0" />
+  </ItemGroup>
+
+</Project>
