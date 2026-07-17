@@ -59,4 +59,32 @@ let tests =
           test "unknown request tag returns an error envelope" {
               let response = respondTo (JsonSerializer.Serialize {| tag = "not-a-real-tag" |})
               Expect.equal (response.GetProperty("tag").GetString()) "error" "unknown tag should be an error"
+          }
+
+          test "run request on a non-compiling block returns a compileError envelope with a range" {
+              let request =
+                  JsonSerializer.Serialize(
+                      {| tag = "run"
+                         source = "http {\n    GET undefinedBaseUrl\n}\n"
+                         blockIndex = 0 |}
+                  )
+
+              let response = respondTo request
+              Expect.equal (response.GetProperty("tag").GetString()) "compileError" "tag should be compileError"
+              let diagnostics = response.GetProperty("diagnostics")
+              Expect.isTrue (diagnostics.GetArrayLength() > 0) "at least one diagnostic expected"
+              let range = diagnostics.[0].GetProperty("range")
+              Expect.isTrue (range.GetProperty("startLine").GetInt32() > 0) "range should point at a real line"
+          }
+
+          test "run request on an out-of-range block index returns a runtimeError envelope" {
+              let request =
+                  JsonSerializer.Serialize(
+                      {| tag = "run"
+                         source = "let x = 1\n"
+                         blockIndex = 0 |}
+                  )
+
+              let response = respondTo request
+              Expect.equal (response.GetProperty("tag").GetString()) "runtimeError" "tag should be runtimeError"
           } ]
