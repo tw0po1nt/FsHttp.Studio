@@ -2,14 +2,27 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <!-- Match the renderer core's pinned FSharp.Core so pulling it in as a project reference
+         doesn't trip the NU1605 downgrade guard. -->
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Dom.fs" />
     <Compile Include="Main.fs" />
+    <!-- Build-time only: the renderer's JS runtime smoke (run under node in CI, never bundled into
+         the shipped webview — Main.fs doesn't import it, so esbuild tree-shakes it away). -->
+    <Compile Include="Smoke.fs" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="10.1.204" />
     <PackageReference Include="Fable.Core" Version="5.2.0" />
+    <PackageReference Include="Fable.Browser.Dom" Version="2.18.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../renderer/Renderer.fsproj" />
   </ItemGroup>
 
 </Project>

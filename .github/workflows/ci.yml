@@ -49,3 +49,8 @@ jobs:
 
       - run: npm run compile
         working-directory: extension-host
+
+      # Runs the renderer core's Fable/JS output under node — the guard that "compiles under Fable"
+      # actually "bundles and runs", which the .NET Seam-B suite structurally can't cover.
+      - run: npm run smoke
+        working-directory: extension-host

@@ -16,6 +16,7 @@
     "build:fable:extension": "dotnet tool run fable src --outDir out",
     "build:fable:webview": "dotnet tool run fable webview --outDir out/webview",
     "build:bundle": "node esbuild.mjs",
+    "smoke": "npm run build:fable:webview && node smoke.mjs",
     "compile": "dotnet tool restore && npm run build:companion && npm run build:fable:extension && npm run build:fable:webview && npm run build:bundle",
     "package": "npm run compile && vsce package --no-dependencies"
   },
