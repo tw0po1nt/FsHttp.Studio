@@ -11,6 +11,14 @@
   "activationEvents": [
     "onStartupFinished"
   ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "fshttpStudio.runBlock",
+        "title": "FsHttp.Studio: Run request"
+      }
+    ]
+  },
   "scripts": {
     "build:companion": "dotnet publish ../companion/Companion.fsproj -c Release -o dist/companion",
     "build:fable:extension": "dotnet tool run fable src --outDir out",
