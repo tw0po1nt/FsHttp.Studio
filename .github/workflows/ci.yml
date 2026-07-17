@@ -42,6 +42,8 @@ jobs:
 
       - run: dotnet build FsHttp.Studio.slnx
 
+      - run: dotnet test FsHttp.Studio.slnx --no-build
+
       - run: npm ci
         working-directory: extension-host
 
