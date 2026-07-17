@@ -210,7 +210,7 @@ let run (source: string) (blockIndex: int) : RunOutcome =
         // companion process pinning *different* versions of the same package (e.g. a script
         // edited from `FsHttp, 15.0.3` to `FsHttp, 13.3.0` between clicks) can collide there
         // ("Could not load type … from assembly …") — reproduced while building this module.
-        // Out of scope for #16 (a single pin resolving correctly); flagged for whoever
+        // Out of scope for #16 (a single pin resolving correctly); tracked in #38 for whoever
         // eventually hardens multi-version same-process reuse.
         use session =
             FsiEvaluationSession.Create(fsiConfig, args, inReader, Console.Error, Console.Error, collectible = true)

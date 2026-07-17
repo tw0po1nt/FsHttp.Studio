@@ -19,9 +19,15 @@ let private pngMagic =
 
 let private pngBytes = Array.append pngMagic [| 1uy; 2uy; 3uy; 4uy |]
 
+// Sequenced: every case spins up an FSI session that resolves `#r "nuget: FsHttp"` into the
+// process-wide package-management cache. Run in parallel (Expecto's default), those
+// resolutions race on the same cache files ("The process cannot access the file
+// '…resolvedReferences.paths' because it is being used by another process"), and a lost race
+// surfaces as a spurious CompileError. Serializing them removes the race.
 [<Tests>]
 let tests =
-    testList
+    testSequenced
+    <| testList
         "BlockRunner"
         [ test "ok carries status, merged headers, contentType, and a byte-intact image body" {
               use server =
