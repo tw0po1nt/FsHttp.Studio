@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The renderer core (Seam B). Pure F# with no browser or VSCode dependency: Fable compiles
+       it to JS for the webview (referenced by Webview.fsproj), and it builds as plain .NET for the
+       Expecto suite. netstandard2.0 keeps it consumable from both. FSharp.Core is pinned to
+       ADR-0002's toolchain version so every project in the solution agrees on one FSharp.Core. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Json.fs" />
+    <Compile Include="Renderer.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="10.1.204" />
+  </ItemGroup>
+
+</Project>
