@@ -8,7 +8,7 @@ module Renderer.Tests.RendererTests
 open System.Text
 open Expecto
 open Renderer.Core
-open Renderer.Tests.NodeQuery
+open Renderer.NodeQuery
 
 let private utf8 (s: string) = Encoding.UTF8.GetBytes s
 
@@ -65,6 +65,18 @@ let dispatchTests =
               Expect.isNonEmpty (byClass "json-bool" node) "booleans should be highlighted"
               Expect.isNonEmpty (byClass "json-null" node) "nulls should be highlighted"
               Expect.isNonEmpty (byClass "json-string" node) "strings should be highlighted"
+          }
+
+          test "a JSON string value with special characters is re-escaped, not shown raw" {
+              let node =
+                  renderBody (envelope "application/json" (utf8 """{"msg":"say \"hi\"\n"}"""))
+
+              let strings = byClass "json-string" node |> List.map innerText
+
+              Expect.contains
+                  strings
+                  "\"say \\\"hi\\\"\\n\""
+                  "embedded quotes and newlines should re-escape into a JSON literal"
           }
 
           test "a +json suffix content type is treated as JSON" {

@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <!-- Agree with the renderer core on one FSharp.Core (ADR-0002's toolchain pin), so pulling it
-         in as a project reference doesn't trip the NU1605 downgrade guard. -->
+    <!-- Match the renderer core's pinned FSharp.Core so pulling it in as a project reference
+         doesn't trip the NU1605 downgrade guard. -->
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   </PropertyGroup>
 

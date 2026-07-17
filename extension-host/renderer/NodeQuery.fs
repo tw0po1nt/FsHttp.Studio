@@ -1,9 +1,10 @@
-module Renderer.Tests.NodeQuery
-
-// Black-box helpers for asserting the *shape* of a rendered `Node` tree (Seam B): find elements
-// by tag or class, read attributes, and flatten text — the vocabulary the suite uses to check
-// "the JSON path dispatched to a tree", "the image is an <img> with a data: src", and so on,
-// without reaching into the renderer's internals.
+// Black-box helpers for asserting the *shape* of a rendered `Node` tree: find elements by tag or
+// class, read attributes, and flatten text — the vocabulary that checks "the JSON path dispatched
+// to a tree", "the image is an <img> with a data: src", and so on, without reaching into the
+// renderer's internals. It lives beside the core (not in a test project) so both consumers — the
+// .NET Seam-B Expecto suite and the Fable JS runtime smoke — share one copy. Referenced only by
+// those two, it is tree-shaken from the shipped webview bundle.
+module Renderer.NodeQuery
 
 open Renderer.Core
 

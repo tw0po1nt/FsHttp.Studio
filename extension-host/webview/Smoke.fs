@@ -12,37 +12,7 @@ module Webview.Smoke
 
 open System
 open Renderer.Core
-
-let rec private descendants (node: Node) : Node list =
-    match node with
-    | Node.Text _ -> []
-    | Node.Element(_, _, children) -> node :: List.collect descendants children
-
-let private tagOf (node: Node) =
-    match node with
-    | Node.Element(t, _, _) -> Some t
-    | Node.Text _ -> None
-
-let private attrOf (name: string) (node: Node) =
-    match node with
-    | Node.Element(_, attrs, _) -> attrs |> List.tryPick (fun (n, v) -> if n = name then Some v else None)
-    | Node.Text _ -> None
-
-let private hasClass (cls: string) (node: Node) =
-    match attrOf "class" node with
-    | Some v -> v.Split(' ') |> Array.contains cls
-    | None -> false
-
-let private byTag (t: string) (node: Node) =
-    descendants node |> List.filter (fun n -> tagOf n = Some t)
-
-let private byClass (c: string) (node: Node) =
-    descendants node |> List.filter (hasClass c)
-
-let rec private innerText (node: Node) : string =
-    match node with
-    | Node.Text t -> t
-    | Node.Element(_, _, children) -> children |> List.map innerText |> String.concat ""
+open Renderer.NodeQuery
 
 let private utf8 (s: string) = Text.Encoding.UTF8.GetBytes s
 
@@ -72,7 +42,7 @@ let run () : unit =
     check
         "image → <img> with a data: URI"
         (match byTag "img" image with
-         | [ i ] -> (attrOf "src" i |> Option.defaultValue "").StartsWith "data:image/png;base64,"
+         | [ i ] -> (attr "src" i |> Option.defaultValue "").StartsWith "data:image/png;base64,"
          | _ -> false)
 
     let json =
@@ -89,7 +59,7 @@ let run () : unit =
     check
         "HTML → sandboxed iframe"
         (match byTag "iframe" html with
-         | [ f ] -> attrOf "sandbox" f = Some "" && attrOf "srcdoc" f = Some "<h1>hi</h1>"
+         | [ f ] -> attr "sandbox" f = Some "" && attr "srcdoc" f = Some "<h1>hi</h1>"
          | _ -> false)
 
     let text = renderBody (env "text/plain" (utf8 "hello"))

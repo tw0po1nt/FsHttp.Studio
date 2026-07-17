@@ -38,6 +38,28 @@ let private el tag attrs children = Node.Element(tag, attrs, children)
 let private span cls text =
     Node.Element("span", [ "class", cls ], [ Node.Text text ])
 
+/// Re-encodes a decoded string as a JSON string literal for display. The parser resolves escapes
+/// into real characters, so rendering a value or key verbatim between quotes would show an
+/// unescaped `"` or `\` — dishonest JSON. Re-escaping restores a literal that reads as JSON.
+/// (No StringBuilder — see `Json.fs` for why — so the chars are concatenated.)
+let private jsonQuote (s: string) : string =
+    let escaped =
+        s
+        |> Seq.map (fun ch ->
+            match ch with
+            | '"' -> "\\\""
+            | '\\' -> "\\\\"
+            | '\n' -> "\\n"
+            | '\r' -> "\\r"
+            | '\t' -> "\\t"
+            | '\b' -> "\\b"
+            | '\f' -> "\\f"
+            | c when c < ' ' -> sprintf "\\u%04x" (int c)
+            | c -> string c)
+        |> String.concat ""
+
+    "\"" + escaped + "\""
+
 // --- formatting ---------------------------------------------------------------------------
 
 /// Bins the status into the CSS class the shell colours on (`status-2xx` … `status-5xx`). The
@@ -146,36 +168,29 @@ let private renderTextOrBinary (bytes: byte[]) : Node =
     else
         renderText bytes
 
+/// A collapsible container arm shared by the array and object renders: an open `<details>` whose
+/// `<summary>` carries the count label, above the rendered entries.
+let private jsonCollapsible (kindClass: string) (summaryText: string) (children: Node list) : Node =
+    el
+        "details"
+        [ "class", sprintf "json-node %s" kindClass; "open", "" ]
+        (el "summary" [ "class", "json-summary" ] [ Node.Text summaryText ] :: children)
+
 let rec private renderJsonValue (value: Json.JsonValue) : Node =
     match value with
     | Json.Null -> span "json-null" "null"
     | Json.Bool b -> span "json-bool" (if b then "true" else "false")
     | Json.Number n -> span "json-number" n
-    | Json.String s -> span "json-string" (sprintf "\"%s\"" s)
+    | Json.String s -> span "json-string" (jsonQuote s)
     | Json.Array items ->
-        let children =
-            items
-            |> List.map (fun item -> el "div" [ "class", "json-entry" ] [ renderJsonValue item ])
-
-        el
-            "details"
-            [ "class", "json-node json-array"; "open", "" ]
-            (el "summary" [ "class", "json-summary" ] [ Node.Text(sprintf "Array(%d)" (List.length items)) ]
-             :: children)
+        items
+        |> List.map (fun item -> el "div" [ "class", "json-entry" ] [ renderJsonValue item ])
+        |> jsonCollapsible "json-array" (sprintf "Array(%d)" (List.length items))
     | Json.Object members ->
-        let children =
-            members
-            |> List.map (fun (key, v) ->
-                el
-                    "div"
-                    [ "class", "json-entry" ]
-                    [ span "json-key" (sprintf "\"%s\"" key); Node.Text ": "; renderJsonValue v ])
-
-        el
-            "details"
-            [ "class", "json-node json-object"; "open", "" ]
-            (el "summary" [ "class", "json-summary" ] [ Node.Text(sprintf "Object(%d)" (List.length members)) ]
-             :: children)
+        members
+        |> List.map (fun (key, v) ->
+            el "div" [ "class", "json-entry" ] [ span "json-key" (jsonQuote key); Node.Text ": "; renderJsonValue v ])
+        |> jsonCollapsible "json-object" (sprintf "Object(%d)" (List.length members))
 
 let private renderJson (bytes: byte[]) : Node =
     match Json.tryParse (decodeText bytes) with

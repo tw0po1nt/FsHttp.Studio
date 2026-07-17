@@ -3,13 +3,12 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
-    <!-- Match the renderer core's assembly identity (ADR-0002's toolchain pin) so the two
-         projects agree on one FSharp.Core. -->
+    <!-- Match the renderer core's pinned FSharp.Core so the two projects agree on one
+         assembly identity. -->
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="NodeQuery.fs" />
     <Compile Include="RendererTests.fs" />
   </ItemGroup>
 
