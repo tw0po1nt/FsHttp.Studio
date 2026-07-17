@@ -10,6 +10,9 @@
   <ItemGroup>
     <Compile Include="Dom.fs" />
     <Compile Include="Main.fs" />
+    <!-- Build-time only: the renderer's JS runtime smoke (run under node in CI, never bundled into
+         the shipped webview — Main.fs doesn't import it, so esbuild tree-shakes it away). -->
+    <Compile Include="Smoke.fs" />
   </ItemGroup>
 
   <ItemGroup>

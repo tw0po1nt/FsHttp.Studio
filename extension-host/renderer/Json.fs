@@ -5,7 +5,10 @@
 // tests can assert against without a DOM.
 module Renderer.Json
 
-open System.Text
+// No StringBuilder: Fable 5.9's bundled fable-library omits the zero-arg `StringBuilder.ToString()`
+// its own codegen emits, so a StringBuilder here fails to bundle for the webview (caught by running
+// the Fable output, not by the .NET suite). Accumulating chars in a ResizeArray sidesteps it and
+// bundles cleanly. See the renderer's build smoke.
 
 /// A parsed JSON value. Numbers keep their original source text (`Number`) rather than a float so
 /// the tree renders exactly what the server sent — no `1e3`→`1000` or precision drift.
@@ -76,7 +79,7 @@ let private parseHex4 (c: Cursor) : int =
 
 let private parseString (c: Cursor) : string =
     expect c '"'
-    let sb = StringBuilder()
+    let chars = ResizeArray<char>()
     let mutable finished = false
 
     while not finished do
@@ -94,21 +97,21 @@ let private parseString (c: Cursor) : string =
                 c.Pos <- c.Pos + 1
 
                 match esc with
-                | '"' -> sb.Append('"') |> ignore
-                | '\\' -> sb.Append('\\') |> ignore
-                | '/' -> sb.Append('/') |> ignore
-                | 'b' -> sb.Append('\b') |> ignore
-                | 'f' -> sb.Append('\f') |> ignore
-                | 'n' -> sb.Append('\n') |> ignore
-                | 'r' -> sb.Append('\r') |> ignore
-                | 't' -> sb.Append('\t') |> ignore
-                | 'u' -> sb.Append(char (parseHex4 c)) |> ignore
+                | '"' -> chars.Add('"')
+                | '\\' -> chars.Add('\\')
+                | '/' -> chars.Add('/')
+                | 'b' -> chars.Add('\b')
+                | 'f' -> chars.Add('\f')
+                | 'n' -> chars.Add('\n')
+                | 'r' -> chars.Add('\r')
+                | 't' -> chars.Add('\t')
+                | 'u' -> chars.Add(char (parseHex4 c))
                 | other -> fail c (sprintf "invalid escape '\\%c'" other)
         | Some ch ->
             c.Pos <- c.Pos + 1
-            sb.Append(ch) |> ignore
+            chars.Add(ch)
 
-    sb.ToString()
+    System.String(chars.ToArray())
 
 let private parseNumber (c: Cursor) : JsonValue =
     let start = c.Pos

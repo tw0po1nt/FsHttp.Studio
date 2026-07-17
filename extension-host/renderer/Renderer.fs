@@ -100,34 +100,36 @@ let private renderText (bytes: byte[]) : Node =
     el "pre" [ "class", "response-text" ] [ Node.Text(decodeText bytes) ]
 
 let private hexDump (bytes: byte[]) : string =
-    let sb = StringBuilder()
     let maxBytes = min bytes.Length 256
+    let lines = ResizeArray<string>()
     let mutable offset = 0
 
     while offset < maxBytes do
-        sb.Append(sprintf "%08x  " offset) |> ignore
         let lineLen = min 16 (maxBytes - offset)
 
-        for j in 0..15 do
-            if j < lineLen then
-                sb.Append(sprintf "%02x " (int bytes.[offset + j])) |> ignore
-            else
-                sb.Append("   ") |> ignore
+        let hex =
+            [ for j in 0..15 ->
+                  if j < lineLen then
+                      sprintf "%02x " (int bytes.[offset + j])
+                  else
+                      "   " ]
+            |> String.concat ""
 
-        sb.Append(" ") |> ignore
+        let ascii =
+            [ for j in 0 .. lineLen - 1 ->
+                  let b = bytes.[offset + j]
+                  if b >= 32uy && b < 127uy then string (char b) else "." ]
+            |> String.concat ""
 
-        for j in 0 .. lineLen - 1 do
-            let b = bytes.[offset + j]
-            let ch = if b >= 32uy && b < 127uy then char b else '.'
-            sb.Append(ch) |> ignore
-
-        sb.Append('\n') |> ignore
+        lines.Add(sprintf "%08x  %s %s" offset hex ascii)
         offset <- offset + 16
 
-    if bytes.Length > maxBytes then
-        sb.Append(sprintf "… (%d more bytes)\n" (bytes.Length - maxBytes)) |> ignore
+    let dumped = lines |> String.concat "\n"
 
-    sb.ToString()
+    if bytes.Length > maxBytes then
+        dumped + sprintf "\n… (%d more bytes)" (bytes.Length - maxBytes)
+    else
+        dumped
 
 let private renderBinary (bytes: byte[]) : Node =
     el
