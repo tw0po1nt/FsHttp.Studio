@@ -5,7 +5,7 @@ module Companion.Tests.RequestHandlerTests
 // response carrying one range per block, mirroring the protocol from spec issue #13.
 
 open System.Text.Json
-open Xunit
+open Expecto
 open Companion.RequestHandler
 
 let private respondTo (requestJson: string) : JsonElement =
@@ -13,45 +13,50 @@ let private respondTo (requestJson: string) : JsonElement =
     let response = respond doc
     JsonDocument.Parse(JsonSerializer.Serialize response).RootElement.Clone()
 
-[<Fact>]
-let ``locate request returns a blocks envelope with one range per block`` () =
-    let request =
-        JsonSerializer.Serialize(
-            {| tag = "locate"
-               source = "http {\n    GET \"https://example.com/1\"\n}\n\nhttp {\n    GET \"https://example.com/2\"\n}\n" |}
-        )
+[<Tests>]
+let tests =
+    testList
+        "RequestHandler"
+        [ test "locate request returns a blocks envelope with one range per block" {
+              let request =
+                  JsonSerializer.Serialize(
+                      {| tag = "locate"
+                         source =
+                          "http {\n    GET \"https://example.com/1\"\n}\n\nhttp {\n    GET \"https://example.com/2\"\n}\n" |}
+                  )
 
-    let response = respondTo request
-    Assert.Equal("blocks", response.GetProperty("tag").GetString())
-    let ranges = response.GetProperty("ranges")
-    Assert.Equal(2, ranges.GetArrayLength())
+              let response = respondTo request
+              Expect.equal (response.GetProperty("tag").GetString()) "blocks" "tag should be blocks"
+              let ranges = response.GetProperty("ranges")
+              Expect.equal (ranges.GetArrayLength()) 2 "two ranges expected"
 
-    let first = ranges.[0]
-    Assert.Equal(1, first.GetProperty("startLine").GetInt32())
-    Assert.Equal(0, first.GetProperty("startCol").GetInt32())
+              let first = ranges.[0]
+              Expect.equal (first.GetProperty("startLine").GetInt32()) 1 "first block starts on line 1"
+              Expect.equal (first.GetProperty("startCol").GetInt32()) 0 "first block starts at column 0"
 
-    Assert.True(
-        first.GetProperty("endLine").GetInt32()
-        >= first.GetProperty("startLine").GetInt32()
-    )
+              Expect.isTrue
+                  (first.GetProperty("endLine").GetInt32()
+                   >= first.GetProperty("startLine").GetInt32())
+                  "endLine is not before startLine"
+          }
 
-[<Fact>]
-let ``locate request on source with no blocks returns an empty ranges array`` () =
-    let request =
-        JsonSerializer.Serialize
-            {| tag = "locate"
-               source = "let x = 1\n" |}
+          test "locate request on source with no blocks returns an empty ranges array" {
+              let request =
+                  JsonSerializer.Serialize
+                      {| tag = "locate"
+                         source = "let x = 1\n" |}
 
-    let response = respondTo request
-    Assert.Equal("blocks", response.GetProperty("tag").GetString())
-    Assert.Equal(0, response.GetProperty("ranges").GetArrayLength())
+              let response = respondTo request
+              Expect.equal (response.GetProperty("tag").GetString()) "blocks" "tag should be blocks"
+              Expect.equal (response.GetProperty("ranges").GetArrayLength()) 0 "no ranges expected"
+          }
 
-[<Fact>]
-let ``hello request still returns ready`` () =
-    let response = respondTo (JsonSerializer.Serialize {| tag = "hello" |})
-    Assert.Equal("ready", response.GetProperty("tag").GetString())
+          test "hello request still returns ready" {
+              let response = respondTo (JsonSerializer.Serialize {| tag = "hello" |})
+              Expect.equal (response.GetProperty("tag").GetString()) "ready" "hello should be answered with ready"
+          }
 
-[<Fact>]
-let ``unknown request tag returns an error envelope`` () =
-    let response = respondTo (JsonSerializer.Serialize {| tag = "not-a-real-tag" |})
-    Assert.Equal("error", response.GetProperty("tag").GetString())
+          test "unknown request tag returns an error envelope" {
+              let response = respondTo (JsonSerializer.Serialize {| tag = "not-a-real-tag" |})
+              Expect.equal (response.GetProperty("tag").GetString()) "error" "unknown tag should be an error"
+          } ]

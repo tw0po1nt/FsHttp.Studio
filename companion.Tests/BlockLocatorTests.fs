@@ -5,7 +5,7 @@ module Companion.Tests.BlockLocatorTests
 // `BlockLocatorTests` exercises `BlockLocator.locate` itself; `RequestHandlerTests` exercises
 // the envelope dispatch (`RequestHandler.respond`) that sits on top of it.
 
-open Xunit
+open Expecto
 open Companion.BlockLocator
 
 /// Reconstructs the exact source text a range covers, using FCS's own numbering (1-based
@@ -28,39 +28,46 @@ let private slice (source: string) (r: BlockRange) : string =
 
         sb.ToString()
 
-[<Fact>]
-let ``locates a single bare block, range covers the whole CE`` () =
-    let source =
-        """
+[<Tests>]
+let tests =
+    testList
+        "BlockLocator"
+        [ test "locates a single bare block, range covers the whole CE" {
+              let source =
+                  """
 http {
     GET "https://example.com/one"
 }
 """
 
-    let ranges = locate source
-    Assert.Single(ranges) |> ignore
-    Assert.Equal("http {\n    GET \"https://example.com/one\"\n}", slice source ranges.[0])
+              let ranges = locate source
+              Expect.hasLength ranges 1 "one block expected"
 
-[<Fact>]
-let ``range excludes an enclosing let binding`` () =
-    let source =
-        """
+              Expect.equal
+                  (slice source ranges.[0])
+                  "http {\n    GET \"https://example.com/one\"\n}"
+                  "range should cover the whole CE"
+          }
+
+          test "range excludes an enclosing let binding" {
+              let source =
+                  """
 let r =
     http {
         GET "https://example.com/one"
     }
 """
 
-    let ranges = locate source
-    Assert.Single(ranges) |> ignore
-    let text = slice source ranges.[0]
-    Assert.StartsWith("http {", text)
-    Assert.DoesNotContain("let r", text)
+              let ranges = locate source
+              Expect.hasLength ranges 1 "one block expected"
+              let text = slice source ranges.[0]
+              Expect.stringStarts text "http {" "range should start at the builder head"
+              Expect.isFalse (text.Contains "let r") "range should not include the let binding"
+          }
 
-[<Fact>]
-let ``locates every block in a multi-block file, in source order`` () =
-    let source =
-        """
+          test "locates every block in a multi-block file, in source order" {
+              let source =
+                  """
 let a =
     http {
         GET "https://example.com/1"
@@ -76,19 +83,22 @@ http {
 }
 """
 
-    let ranges = locate source
-    Assert.Equal(3, ranges.Length)
+              let ranges = locate source
+              Expect.equal ranges.Length 3 "three blocks expected"
 
-    let texts = ranges |> List.map (slice source)
-    Assert.All(texts, fun t -> Assert.StartsWith("http {", t))
-    Assert.Contains("/1", texts.[0])
-    Assert.Contains("/2", texts.[1])
-    Assert.Contains("/3", texts.[2])
+              let texts = ranges |> List.map (slice source)
 
-[<Fact>]
-let ``ignores http-shaped text in comments and strings`` () =
-    let source =
-        """
+              texts
+              |> List.iter (fun t -> Expect.stringStarts t "http {" "each range starts at the builder head")
+
+              Expect.stringContains texts.[0] "/1" "first block in source order"
+              Expect.stringContains texts.[1] "/2" "second block in source order"
+              Expect.stringContains texts.[2] "/3" "third block in source order"
+          }
+
+          test "ignores http-shaped text in comments and strings" {
+              let source =
+                  """
 // http { GET "https://example.com/commented" }
 (* http { GET "https://example.com/block-commented" } *)
 let s = "http { GET \"https://example.com/in-a-string\" }"
@@ -97,14 +107,14 @@ http {
 }
 """
 
-    let ranges = locate source
-    Assert.Single(ranges) |> ignore
-    Assert.Contains("/real", slice source ranges.[0])
+              let ranges = locate source
+              Expect.hasLength ranges 1 "only the real block should match"
+              Expect.stringContains (slice source ranges.[0]) "/real" "the matched block is the real one"
+          }
 
-[<Fact>]
-let ``an unbalanced closing brace inside a string does not truncate the block`` () =
-    let source =
-        """
+          test "an unbalanced closing brace inside a string does not truncate the block" {
+              let source =
+                  """
 http {
     GET "https://example.com/sixteen"
     header "X-Template" "}"
@@ -112,16 +122,16 @@ http {
 }
 """
 
-    let ranges = locate source
-    Assert.Single(ranges) |> ignore
-    let text = slice source ranges.[0]
-    Assert.Contains("X-After", text)
-    Assert.EndsWith("}", text)
+              let ranges = locate source
+              Expect.hasLength ranges 1 "one block expected"
+              let text = slice source ranges.[0]
+              Expect.stringContains text "X-After" "content after the string brace stays inside the block"
+              Expect.stringEnds text "}" "range extends to the real closing brace"
+          }
 
-[<Fact>]
-let ``an unbalanced opening brace inside a string does not swallow the next block`` () =
-    let source =
-        """
+          test "an unbalanced opening brace inside a string does not swallow the next block" {
+              let source =
+                  """
 http {
     GET "https://example.com/seventeen"
     header "X-Template" "{"
@@ -132,33 +142,34 @@ http {
 }
 """
 
-    let ranges = locate source
-    Assert.Equal(2, ranges.Length)
-    let first = slice source ranges.[0]
-    let second = slice source ranges.[1]
-    Assert.Contains("seventeen", first)
-    Assert.DoesNotContain("eighteen", first)
-    Assert.Contains("eighteen", second)
+              let ranges = locate source
+              Expect.equal ranges.Length 2 "two blocks expected"
+              let first = slice source ranges.[0]
+              let second = slice source ranges.[1]
+              Expect.stringContains first "seventeen" "first block covers the seventeen request"
+              Expect.isFalse (first.Contains "eighteen") "first block does not swallow the second"
+              Expect.stringContains second "eighteen" "second block covers the eighteen request"
+          }
 
-[<Fact>]
-let ``matches a dotted builder head`` () =
-    let source =
-        """
+          test "matches a dotted builder head" {
+              let source =
+                  """
 FsHttp.Dsl.http {
     GET "https://example.com/qualified"
 }
 """
 
-    let ranges = locate source
-    Assert.Single(ranges) |> ignore
-    Assert.StartsWith("FsHttp.Dsl.http {", slice source ranges.[0])
+              let ranges = locate source
+              Expect.hasLength ranges 1 "one block expected"
+              Expect.stringStarts (slice source ranges.[0]) "FsHttp.Dsl.http {" "range starts at the dotted head"
+          }
 
-[<Fact>]
-let ``an http-named identifier that is not a builder call is not matched`` () =
-    let source =
-        """
+          test "an http-named identifier that is not a builder call is not matched" {
+              let source =
+                  """
 let http = "not a builder"
 let httpUrl = "https://example.com/http/notablock"
 """
 
-    Assert.Empty(locate source)
+              Expect.isEmpty (locate source) "no builder calls, so no blocks"
+          } ]
