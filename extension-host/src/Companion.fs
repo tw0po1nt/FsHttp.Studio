@@ -20,18 +20,19 @@ let statusText =
     | SdkNotFound -> ".NET SDK not found"
     | Stopped -> "companion stopped"
 
+[<NoComparison>]
 type Handle = { Process: ChildProcess }
 
 let start (companionDllPath: string) (onState: State -> unit) : Handle =
     onState Starting
 
-    let options = box {| stdio = [| "pipe"; "pipe"; "pipe" |] |}
+    let options: obj = nonNull (box {| stdio = [| "pipe"; "pipe"; "pipe" |] |})
     let child = childProcess.spawn ("dotnet", [| companionDllPath |], options)
 
     let parser =
         FrameParser(fun payload ->
             let json = JS.JSON.parse (decodeUtf8 payload)
-            let tag = json?tag |> unbox<string>
+            let tag = (json?tag: obj) |> unbox<string>
 
             match tag with
             | "ready" -> onState Ready
@@ -42,7 +43,7 @@ let start (companionDllPath: string) (onState: State -> unit) : Handle =
     child.on (
         "error",
         fun err ->
-            let code = (err: obj)?code |> unbox<string>
+            let code = ((err: obj)?code: obj) |> unbox<string>
 
             if code = "ENOENT" then
                 onState SdkNotFound

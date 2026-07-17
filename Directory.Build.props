@@ -1,0 +1,10 @@
+<Project>
+
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningLevel>5</WarningLevel>
+    <Nullable>enable</Nullable>
+    <WarnOn>1182,3390,3517,3559,3560,3579</WarnOn>
+  </PropertyGroup>
+
+</Project>
