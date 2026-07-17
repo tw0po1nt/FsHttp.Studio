@@ -69,6 +69,13 @@ let private blankStatement (lines: string[]) (r: BlockRange) =
 /// exactly that one request (issue #16's setup-isolation criterion). Blanking preserves line
 /// count and untouched columns, so a compile error's range still lands on the real source
 /// position.
+///
+/// Known boundary of this per-block isolation model: blanking a *let-bound* block replaces its
+/// binding with `()`, so if the target (or later setup) references the value that block
+/// produced — e.g. `let auth = http { ... } |> Request.send` consumed by a downstream block —
+/// evaluation fails with an "undefined identifier" compileError. Each block is treated as
+/// independent by design; cross-block value reuse is out of scope for #16 and would need a
+/// different isolation strategy (tracked for whoever revisits block dependencies).
 let private buildSetup (source: string) (blocks: LocatedBlock list) (target: LocatedBlock) : string =
     let lines = source.Replace("\r\n", "\n").Split('\n')
 
@@ -86,15 +93,28 @@ let private buildSetup (source: string) (blocks: LocatedBlock list) (target: Loc
 let private errorDiagnostics (diags: FSharpDiagnostic[]) =
     diags |> Array.filter (fun d -> d.Severity = FSharpDiagnosticSeverity.Error)
 
-/// A diagnostic from the setup eval is native to the original source already — the setup
-/// snippet *is* the original text (minus blanked-out other blocks) — so no translation needed.
-let private setupDiagnostic (d: FSharpDiagnostic) : Diagnostic =
-    { Message = d.Message
-      Range =
-        { StartLine = d.StartLine
-          StartCol = d.StartColumn
-          EndLine = d.EndLine
-          EndCol = d.EndColumn } }
+/// Maps a diagnostic from the combined setup eval back onto the original source. Its first
+/// `realLineCount` lines *are* the original text (minus blanked-out other blocks), so a
+/// diagnostic within them is already native and needs no translation. A diagnostic beyond them
+/// originates in the appended `companionAddendum` (e.g. `open FsHttp` failing because the
+/// user's script carries no resolvable `#r`) and has no source counterpart, so anchor it at the
+/// top of the script — where the missing reference belongs — rather than a phantom line the UI
+/// would try, and fail, to highlight.
+let private setupDiagnostic (realLineCount: int) (d: FSharpDiagnostic) : Diagnostic =
+    if d.StartLine > realLineCount then
+        { Message = d.Message
+          Range =
+            { StartLine = 1
+              StartCol = 0
+              EndLine = 1
+              EndCol = 0 } }
+    else
+        { Message = d.Message
+          Range =
+            { StartLine = d.StartLine
+              StartCol = d.StartColumn
+              EndLine = d.EndLine
+              EndCol = d.EndColumn } }
 
 /// Maps a diagnostic from the isolated target snippet (`<CE>\n|> Request.send`) back onto the
 /// original source. The snippet's lines 1..N are the CE's own lines verbatim, so only line 1's
@@ -172,6 +192,10 @@ let run (source: string) (blockIndex: int) : RunOutcome =
         let setupText = buildSetup source located target
         let combinedSetup = setupText + "\n" + companionAddendum
 
+        // Lines 1..setupLineCount of `combinedSetup` are native source; anything the addendum
+        // reports past them has no source position (see `setupDiagnostic`).
+        let setupLineCount = setupText.Split('\n').Length
+
         let fsiConfig = FsiEvaluationSession.GetDefaultConfiguration()
         let args = [| "fsi.exe"; "--noninteractive"; "--nologo" |]
         use inReader = new IO.StringReader("")
@@ -195,7 +219,11 @@ let run (source: string) (blockIndex: int) : RunOutcome =
 
         match setupResult with
         | Choice2Of2 ex ->
-            match errorDiagnostics setupDiags |> Array.map setupDiagnostic |> Array.toList with
+            match
+                errorDiagnostics setupDiags
+                |> Array.map (fun d -> setupDiagnostic setupLineCount d)
+                |> Array.toList
+            with
             | [] -> RuntimeError ex.Message
             | errors -> CompileError errors
         | Choice1Of2 _ ->

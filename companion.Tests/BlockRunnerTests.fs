@@ -81,9 +81,19 @@ let tests =
               // FsHttp` here would still succeed. It doesn't, proving the pin the "ok" tests
               // rely on came from the source text, not a fallback the companion injected.
               let source = "open FsHttp\n\nhttp {\n    GET \"https://example.com\"\n}\n"
+              let sourceLineCount = source.Split('\n').Length
 
               match run source 0 with
-              | CompileError _ -> ()
+              | CompileError diagnostics ->
+                  // The failure comes from the companion addendum's own `open FsHttp`, which has
+                  // no user-source line; its range must still be anchored inside the real source
+                  // rather than a phantom line past the end (see BlockRunner.setupDiagnostic).
+                  for d in diagnostics do
+                      Expect.isTrue (d.Range.StartLine >= 1) "range should start at a real line"
+
+                      Expect.isTrue
+                          (d.Range.StartLine <= sourceLineCount)
+                          "an addendum-origin diagnostic must be clamped inside the user's source, not a phantom line"
               | other ->
                   failtestf "expected compileError (FsHttp is unresolved without the user's own #r), got %A" other
           }
