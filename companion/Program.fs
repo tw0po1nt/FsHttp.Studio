@@ -1,8 +1,9 @@
 module Companion.Program
 
 // Walking skeleton (issue #14) proved the framed envelope transport inside the real
-// two-process layout, porting prototype/dotnet-to-js-seam. Block location (issue #15) is
-// wired via RequestHandler.respond; block evaluation (ADR-0002's FCS session) lands on #16.
+// two-process layout, porting prototype/dotnet-to-js-seam. Block location (issue #15) and
+// block evaluation (issue #16, ADR-0002's FCS session) are both wired via
+// RequestHandler.respond.
 
 open System
 open System.Text.Json

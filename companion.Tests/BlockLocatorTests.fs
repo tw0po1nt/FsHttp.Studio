@@ -8,25 +8,9 @@ module Companion.Tests.BlockLocatorTests
 open Expecto
 open Companion.BlockLocator
 
-/// Reconstructs the exact source text a range covers, using FCS's own numbering (1-based
-/// lines, 0-based columns). Used to assert *what* a range covers, not just its coordinates —
-/// the property the acceptance criteria actually care about.
-let private slice (source: string) (r: BlockRange) : string =
-    let lines = source.Replace("\r\n", "\n").Split('\n')
-
-    if r.StartLine = r.EndLine then
-        let line = lines.[r.StartLine - 1]
-        line.Substring(r.StartCol, r.EndCol - r.StartCol)
-    else
-        let sb = System.Text.StringBuilder()
-        sb.Append(lines.[r.StartLine - 1].Substring(r.StartCol)) |> ignore
-
-        for i in r.StartLine .. r.EndLine - 2 do
-            sb.Append('\n').Append(lines.[i]) |> ignore
-
-        sb.Append('\n').Append(lines.[r.EndLine - 1].Substring(0, r.EndCol)) |> ignore
-
-        sb.ToString()
+/// Used to assert *what* a range covers, not just its coordinates — the property the
+/// acceptance criteria actually care about.
+let private slice = sliceRange
 
 [<Tests>]
 let tests =
@@ -172,4 +156,38 @@ let httpUrl = "https://example.com/http/notablock"
 """
 
               Expect.isEmpty (locate source) "no builder calls, so no blocks"
+          }
+
+          test "locateBlocks pairs a let-bound block with its whole statement, including a trailing pipe" {
+              let source =
+                  """
+let a =
+    http {
+        GET "https://example.com/one"
+    }
+    |> Request.send
+    |> ignore
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 1 "one block expected"
+              let statementText = slice source blocks.[0].Statement
+              Expect.stringStarts statementText "let a =" "statement range starts at the let keyword"
+              Expect.stringEnds statementText "|> ignore" "statement range extends through the trailing pipe"
+          }
+
+          test "locateBlocks pairs a bare block statement with itself" {
+              let source =
+                  """
+http {
+    GET "https://example.com/one"
+}
+|> Request.send
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 1 "one block expected"
+              let statementText = slice source blocks.[0].Statement
+              Expect.stringStarts statementText "http {" "statement range starts at the builder head"
+              Expect.stringEnds statementText "|> Request.send" "statement range extends through the trailing pipe"
           } ]

@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <Compile Include="BlockLocatorTests.fs" />
+    <Compile Include="TestServer.fs" />
+    <Compile Include="BlockRunnerTests.fs" />
     <Compile Include="RequestHandlerTests.fs" />
   </ItemGroup>
 

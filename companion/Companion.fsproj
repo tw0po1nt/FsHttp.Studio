@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Include="Envelope.fs" />
     <Compile Include="BlockLocator.fs" />
+    <Compile Include="BlockRunner.fs" />
     <Compile Include="RequestHandler.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
