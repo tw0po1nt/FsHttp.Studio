@@ -28,7 +28,7 @@ let childProcess: IChildProcessModule = jsNative
 let private pathModule: obj = jsNative
 
 [<Emit("$0.join(...$1)")>]
-let private joinNative (m: obj) (segments: string[]) : string = jsNative
+let private joinNative (_m: obj) (_segments: string[]) : string = jsNative
 
 module Path =
     let join (segments: string[]) : string = joinNative pathModule segments
