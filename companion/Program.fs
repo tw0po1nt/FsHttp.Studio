@@ -21,6 +21,7 @@ let main _argv =
 
     let handle (payload: byte[]) =
         use doc = JsonDocument.Parse(payload)
+
         let tag =
             match doc.RootElement.TryGetProperty "tag" with
             | true, v -> v.GetString()
@@ -28,7 +29,10 @@ let main _argv =
 
         match tag with
         | "hello" -> emit {| tag = "ready" |}
-        | other -> emit {| tag = "error"; message = sprintf "unknown request tag '%s'" (string other) |}
+        | other ->
+            emit
+                {| tag = "error"
+                   message = sprintf "unknown request tag '%s'" (string other) |}
 
     let rec loop () =
         match tryReadFrame rawStdin with

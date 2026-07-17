@@ -34,8 +34,7 @@ type FrameParser(onFrame: byte[] -> unit) =
 let encodeFrame (payload: byte[]) : byte[] =
     let len = payload.Length
 
-    let prefix =
-        [| byte (len >>> 24); byte (len >>> 16); byte (len >>> 8); byte len |]
+    let prefix = [| byte (len >>> 24); byte (len >>> 16); byte (len >>> 8); byte len |]
 
     Array.append prefix payload
 

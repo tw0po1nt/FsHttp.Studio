@@ -21,7 +21,9 @@ let activate (context: ExtensionContext) =
     let companionDll =
         Node.Path.join [| context.extensionPath; "dist"; "companion"; "Companion.dll" |]
 
-    let onState state = setStatusText (Companion.statusText state)
+    let onState state =
+        setStatusText (Companion.statusText state)
+
     companionHandle <- Some(Companion.start companionDll onState)
 
 let deactivate () =
