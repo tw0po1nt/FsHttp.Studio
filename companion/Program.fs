@@ -1,8 +1,8 @@
 module Companion.Program
 
-// Walking skeleton (issue #14): proves the framed envelope transport inside the real
-// two-process layout, porting prototype/dotnet-to-js-seam. Block location and block
-// evaluation (ADR-0002's FCS session) land on later tickets.
+// Walking skeleton (issue #14) proved the framed envelope transport inside the real
+// two-process layout, porting prototype/dotnet-to-js-seam. Block location (issue #15) is
+// wired via RequestHandler.respond; block evaluation (ADR-0002's FCS session) lands on #16.
 
 open System
 open System.Text.Json
@@ -21,18 +21,7 @@ let main _argv =
 
     let handle (payload: byte[]) =
         use doc = JsonDocument.Parse(payload)
-
-        let tag =
-            match doc.RootElement.TryGetProperty "tag" with
-            | true, v -> v.GetString()
-            | false, _ -> null
-
-        match tag with
-        | "hello" -> emit {| tag = "ready" |}
-        | other ->
-            emit
-                {| tag = "error"
-                   message = sprintf "unknown request tag '%s'" (string other) |}
+        emit (RequestHandler.respond doc)
 
     let rec loop () =
         match tryReadFrame rawStdin with

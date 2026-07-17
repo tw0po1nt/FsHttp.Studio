@@ -9,3 +9,7 @@ Research built a working in-host path: `web-tree-sitter` loading the tree-sitter
 ## Consequences
 
 No CodeLenses exist while the companion is booting or absent; this is surfaced through a companion-state status-bar item rather than looking like silent breakage. The tree-sitter research is kept in reserve as a proven fallback, to return only if degraded-mode CodeLenses become a real post-demo complaint.
+
+### Range coordinate convention
+
+Because ranges come straight off the FCS parse tree, the `blocks` envelope carries **FCS-native coordinates: 1-based lines, 0-based columns**. VS Code's own model (`vscode.Range`) uses **0-based lines**, so a consumer that forwards `startLine`/`endLine` unchanged into a `Range` lands every CodeLens exactly one line too low. The extension host is therefore responsible for subtracting 1 from the line when translating a `blocks` range into a VS Code position; the wire format is intentionally FCS-native so the companion never has to know about editor conventions. (Introduced with the block locator in [#15](https://github.com/tw0po1nt/FsHttp.Explorer/issues/15); the companion-side convention is also documented on `BlockLocator.BlockRange`.)
