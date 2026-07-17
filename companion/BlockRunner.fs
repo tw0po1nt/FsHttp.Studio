@@ -221,7 +221,7 @@ let run (source: string) (blockIndex: int) : RunOutcome =
         | Choice2Of2 ex ->
             match
                 errorDiagnostics setupDiags
-                |> Array.map (fun d -> setupDiagnostic setupLineCount d)
+                |> Array.map (setupDiagnostic setupLineCount)
                 |> Array.toList
             with
             | [] -> RuntimeError ex.Message
@@ -235,7 +235,7 @@ let run (source: string) (blockIndex: int) : RunOutcome =
             | Choice2Of2 ex ->
                 match
                     errorDiagnostics targetDiags
-                    |> Array.map (fun d -> targetDiagnostic target.Block ceLineCount d)
+                    |> Array.map (targetDiagnostic target.Block ceLineCount)
                     |> Array.toList
                 with
                 | [] -> RuntimeError ex.Message
