@@ -22,21 +22,8 @@ let private openFrameChannel () =
 
     rawStdin, emit
 
-let private getStringProp (name: string) (root: JsonElement) =
-    match root.TryGetProperty name with
-    | true, v ->
-        match v.GetString() with
-        | null -> ""
-        | s -> s
-    | false, _ -> ""
-
-let private getIntProp (name: string) (root: JsonElement) =
-    match root.TryGetProperty name with
-    | true, v -> v.GetInt32()
-    | false, _ -> 0
-
-// The long-lived server: reads a framed request, responds, repeats until the host closes stdin.
-let private runServer () =
+// The long-lived companion: reads a framed request, responds, repeats until the host closes stdin.
+let private runCompanion () =
     let rawStdin, emit = openFrameChannel ()
 
     let handle (payload: byte[]) =
@@ -73,6 +60,6 @@ let main argv =
     if Array.contains "--worker" argv then
         runWorker ()
     else
-        runServer ()
+        runCompanion ()
 
     0

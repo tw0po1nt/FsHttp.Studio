@@ -4,18 +4,9 @@ module Companion.RequestHandler
 // driven directly in tests (Seam A) without spawning the compiled process.
 
 open System.Text.Json
+open Companion.Envelope
 open Companion.BlockLocator
 open Companion.BlockRunner
-
-let private getStringProp (name: string) (root: JsonElement) =
-    match root.TryGetProperty name with
-    | true, v -> v.GetString()
-    | false, _ -> null
-
-let private getIntProp (name: string) (root: JsonElement) =
-    match root.TryGetProperty name with
-    | true, v -> v.GetInt32()
-    | false, _ -> 0
 
 let private toRangeObj (r: BlockRange) =
     {| startLine = r.StartLine
@@ -36,15 +27,11 @@ let respond (request: JsonDocument) : obj =
     match tag with
     | "hello" -> {| tag = "ready" |}
     | "locate" ->
-        let source =
-            root |> getStringProp "source" |> Option.ofObj |> Option.defaultValue ""
-
+        let source = root |> getStringProp "source"
         let ranges = locate source |> List.map toRangeObj
         {| tag = "blocks"; ranges = ranges |}
     | "run" ->
-        let source =
-            root |> getStringProp "source" |> Option.ofObj |> Option.defaultValue ""
-
+        let source = root |> getStringProp "source"
         let blockIndex = root |> getIntProp "blockIndex"
         runResponse source blockIndex
     | other ->

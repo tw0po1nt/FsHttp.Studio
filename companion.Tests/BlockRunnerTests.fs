@@ -220,3 +220,40 @@ let tests =
               | RuntimeError _ -> ()
               | other -> failtestf "expected runtimeError, got %A" other
           } ]
+
+// Pure pin parsing (no FSI, no server) — the input `run`'s conflict routing keys off. Kept out of
+// the sequenced integration list above so it stays a fast, order-independent unit.
+[<Tests>]
+let pinTests =
+    testList
+        "BlockRunner.extractPins"
+        [ test "an explicit pin parses to (package, Some version)" {
+              Expect.equal
+                  (extractPins "#r \"nuget: FsHttp, 15.0.3\"")
+                  [ "FsHttp", Some "15.0.3" ]
+                  "a single explicit pin should carry its version"
+          }
+
+          test "a version-less pin carries no version" {
+              Expect.equal
+                  (extractPins "#r \"nuget: FsHttp\"")
+                  [ "FsHttp", None ]
+                  "a version-less #r should parse to (package, None)"
+          }
+
+          test "a trailing option after the version is not folded into the version (#41 review)" {
+              // `#r "nuget: FsHttp, 15.0.3, PreRelease"`: the version group must stop at the comma,
+              // not capture "15.0.3," — which would never equal a loaded "15.0.3" and would route
+              // an identical re-pin to a needless worker.
+              Expect.equal
+                  (extractPins "#r \"nuget: FsHttp, 15.0.3, PreRelease\"")
+                  [ "FsHttp", Some "15.0.3" ]
+                  "the version must be '15.0.3', with the trailing option and its comma excluded"
+          }
+
+          test "multiple pins parse in source order" {
+              Expect.equal
+                  (extractPins "#r \"nuget: FsHttp, 15.0.3\"\n#r \"nuget: Newtonsoft.Json, 13.0.3\"")
+                  [ "FsHttp", Some "15.0.3"; "Newtonsoft.Json", Some "13.0.3" ]
+                  "each pin should appear once, in source order"
+          } ]

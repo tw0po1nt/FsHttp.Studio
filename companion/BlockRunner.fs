@@ -305,46 +305,44 @@ let outcomeToWire (outcome: RunOutcome) : obj =
         {| tag = "runtimeError"
            message = message |}
 
-let private jstr (e: JsonElement) =
-    match e.GetString() with
-    | null -> ""
-    | s -> s
-
 /// Parses a `--worker` child's response frame back into a `RunOutcome` — the inverse of
 /// `outcomeToWire` — so delegation is transparent to `run`'s caller.
 let private wireToOutcome (root: JsonElement) : RunOutcome =
-    match jstr (root.GetProperty "tag") with
+    match jsonString (root.GetProperty "tag") with
     | "ok" ->
         let headers =
-            [ for p in root.GetProperty("headers").EnumerateObject() -> p.Name, jstr p.Value ]
+            [ for p in root.GetProperty("headers").EnumerateObject() -> p.Name, jsonString p.Value ]
 
         Ok(
             root.GetProperty("status").GetInt32(),
-            jstr (root.GetProperty "reason"),
+            jsonString (root.GetProperty "reason"),
             headers,
-            jstr (root.GetProperty "contentType"),
-            jstr (root.GetProperty "bodyBase64")
+            jsonString (root.GetProperty "contentType"),
+            jsonString (root.GetProperty "bodyBase64")
         )
     | "compileError" ->
         [ for d in root.GetProperty("diagnostics").EnumerateArray() do
               let r = d.GetProperty "range"
 
-              { Message = jstr (d.GetProperty "message")
+              { Message = jsonString (d.GetProperty "message")
                 Range =
                   { StartLine = r.GetProperty("startLine").GetInt32()
                     StartCol = r.GetProperty("startCol").GetInt32()
                     EndLine = r.GetProperty("endLine").GetInt32()
                     EndCol = r.GetProperty("endCol").GetInt32() } } ]
         |> CompileError
-    | _ -> RuntimeError(jstr (root.GetProperty "message"))
+    | _ -> RuntimeError(jsonString (root.GetProperty "message"))
 
 /// Matches a `#r "nuget: Package[, Version]"` directive, capturing the package id and (if pinned)
 /// the version. Only explicit pins participate in conflict detection — a version-less `#r` is
 /// treated as "whatever resolves" and never triggers a worker (best effort; the demo pins).
 let private nugetPinRegex =
-    Regex("""#r\s+"nuget:\s*(?<pkg>[^,"\s]+)\s*(?:,\s*(?<ver>[^"\s]+))?""", RegexOptions.Compiled)
+    Regex("""#r\s+"nuget:\s*(?<pkg>[^,"\s]+)\s*(?:,\s*(?<ver>[^",\s]+))?""", RegexOptions.Compiled)
 
-let private extractPins (source: string) : (string * string option) list =
+/// Extracts the `#r "nuget: Package[, Version]"` pins in a script as `(package, version option)`
+/// pairs, in source order. A version-less `#r` yields `None` (see `nugetPinRegex`). Public for
+/// direct pin-parsing tests; `run` consumes it for conflict routing.
+let extractPins (source: string) : (string * string option) list =
     [ for m in nugetPinRegex.Matches source do
           let ver = m.Groups.["ver"]
 
