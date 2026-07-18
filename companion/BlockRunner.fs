@@ -390,31 +390,49 @@ let private loadLock = obj ()
 let private loadedVersions =
     Dictionary<string, LoadedVersion>(StringComparer.OrdinalIgnoreCase)
 
-/// True when any of `pins` asks to load a package version this process can't prove matches one it
-/// already loaded — the exact condition an in-process Run would collide on. Folds `pinConflicts`
-/// over the live load map under the lock.
-let private conflictsWithLoaded (pins: (string * string option) list) : bool =
-    lock loadLock (fun () ->
-        pins
-        |> List.exists (fun (pkg, ver) ->
-            let loaded =
-                match loadedVersions.TryGetValue pkg with
-                | true, v -> Some v
-                | false, _ -> None
+/// Where `run` sends one Run: the warm in-process session, or a fresh `--worker` child.
+type private RunRoute =
+    | InProcess
+    | Worker
 
-            pinConflicts loaded ver))
-
-/// Records what an about-to-run in-process eval will load, so a later differently-pinned Run is
-/// detected as a conflict. A version-less `#r` is recorded as `Versionless` — *not* skipped — so it
-/// participates in that detection. Called only on the in-process path: a worker Run loads into its
-/// own process, not ours, so it must not touch this map.
-let private markLoaded (pins: (string * string option) list) =
+/// Routes one Run's `pins` and, on the in-process path, reserves them in the load map — the
+/// conflict *check* and the reservation *act* under a single `lock loadLock` so the two are one
+/// atomic step. Taking the lock once per logical operation (not once per access) is the point: a
+/// check in one lock scope followed by a mark in another leaves a TOCTOU gap where a future
+/// concurrent caller could load a conflicting version between them (coding-standards rule 4). The
+/// request loop is serial today, but the lock exists precisely to stay correct when it isn't.
+///
+/// Reserving *before* the eval runs — rather than after a successful load — is deliberate. The map
+/// is a conservative over-approximation of what the shared ALC may hold: a Run that reaches the
+/// in-process path can resolve its `#r "nuget:"` into that ALC, and once resolved the assembly
+/// outlives the session whether the eval then compile-errors or throws. Over-marking a Run that
+/// never actually loaded only ever over-routes a *later* Run to a (safe, cold) worker; *under*-
+/// marking one that did load reopens the "Could not load type … from assembly …" ALC collision
+/// (ADR-0006). The errors aren't symmetric, so we err toward marking, and mark up front.
+let private routeAndReserve (pins: (string * string option) list) : RunRoute =
     lock loadLock (fun () ->
-        for pkg, ver in pins do
-            loadedVersions.[pkg] <-
-                match ver with
-                | Some v -> Pinned v
-                | None -> Versionless)
+        let conflicts =
+            pins
+            |> List.exists (fun (pkg, ver) ->
+                let loaded =
+                    match loadedVersions.TryGetValue pkg with
+                    | true, v -> Some v
+                    | false, _ -> None
+
+                pinConflicts loaded ver)
+
+        if conflicts then
+            Worker
+        else
+            // A version-less `#r` is recorded as `Versionless` — *not* skipped — so it still
+            // participates in a later Run's conflict detection.
+            for pkg, ver in pins do
+                loadedVersions.[pkg] <-
+                    match ver with
+                    | Some v -> Pinned v
+                    | None -> Versionless
+
+            InProcess)
 
 /// Bound on how long a `--worker` child may take to produce its response frame before the Run is
 /// force-terminated (coding-standards rule 3: every external process gets a bounded wait + kill
@@ -500,10 +518,6 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome
 /// process: no conflict -> the warm in-process session; conflict -> a fresh `--worker` child
 /// whose ALC won't collide.
 let run (source: string) (blockIndex: int) : RunOutcome =
-    let pins = extractPins source
-
-    if conflictsWithLoaded pins then
-        runInWorker workerTimeoutMs source blockIndex
-    else
-        markLoaded pins
-        runInProcessDirect source blockIndex
+    match routeAndReserve (extractPins source) with
+    | Worker -> runInWorker workerTimeoutMs source blockIndex
+    | InProcess -> runInProcessDirect source blockIndex
