@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues live as GitHub issues on `tw0po1nt/FsHttp.Explorer`, managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live as GitHub issues on `tw0po1nt/FsHttp.Studio`, managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
