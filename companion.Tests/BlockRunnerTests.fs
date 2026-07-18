@@ -178,6 +178,38 @@ let tests =
                   | other -> failtestf "Run #%d expected ok, got %A" i other
           }
 
+          test "two Runs in one process with different FsHttp pins both succeed (ALC isolation, #38)" {
+              // #38: `#r "nuget:"`-resolved package assemblies load into the process-wide default
+              // AssemblyLoadContext and outlive each per-Run FSI session. A second Run pinning a
+              // *different* version of the same package used to collide there ("Could not load
+              // type … from assembly …"). Option 1's fix keeps the warm in-process fast path but
+              // routes a pin that conflicts with an already-loaded version to a fresh worker
+              // process, whose ALC dies with it. Both Runs must come back green regardless of the
+              // order the two versions are exercised in.
+              use server =
+                  new TestServer(Map [ "/png", bytesHandler 200 "image/png" [] pngBytes ])
+
+              let sourceFor (version: string) =
+                  sprintf
+                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n"
+                      version
+                      server.BaseUrl
+
+              match run (sourceFor "15.0.3") 0 with
+              | Ok(status, _, _, _, _) -> Expect.equal status 200 "first pin (15.0.3) should run"
+              | other -> failtestf "first pin expected ok, got %A" other
+
+              match run (sourceFor "13.3.0") 0 with
+              | Ok(status, _, _, _, bodyBase64) ->
+                  Expect.equal status 200 "second, differently-pinned Run (13.3.0) should also run"
+
+                  Expect.equal
+                      (Convert.FromBase64String bodyBase64)
+                      pngBytes
+                      "the conflict-routed Run's body should be byte-intact"
+              | other -> failtestf "second pin expected ok (no ALC collision), got %A" other
+          }
+
           test "a network failure returns runtimeError, distinct from compileError" {
               let source =
                   sprintf

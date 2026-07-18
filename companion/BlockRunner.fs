@@ -9,11 +9,15 @@ module Companion.BlockRunner
 // that ever resolves the package, so their version pin always wins.
 
 open System
+open System.Diagnostics
 open System.Net.Http
+open System.Text.Json
+open System.Text.RegularExpressions
 open System.Collections.Generic
 open FSharp.Compiler.Diagnostics
 open FSharp.Compiler.Interactive.Shell
 open Companion.BlockLocator
+open Companion.Envelope
 
 type Diagnostic = { Message: string; Range: BlockRange }
 
@@ -192,10 +196,15 @@ let private extractResponse (v: FsiValue) : RunOutcome =
 
     Ok(statusInt, reason, headers, ctype, Convert.ToBase64String bytes)
 
-/// Runs the `blockIndex`-th block located in `source` (0-based, in source order — matching a
-/// `locate`/`blocks` envelope's ordering) and returns its outcome. A fresh `FsiEvaluationSession`
-/// is created and disposed per call, per issue #7's "fresh session per Run" resolution.
-let run (source: string) (blockIndex: int) : RunOutcome =
+/// Evaluates the `blockIndex`-th block located in `source` (0-based, in source order — matching a
+/// `locate`/`blocks` envelope's ordering) *in the current process* and returns its outcome. A
+/// fresh `FsiEvaluationSession` is created and disposed per call, per issue #7's "fresh session
+/// per Run" resolution.
+///
+/// This is the warm fast path. `run` calls it directly when the target's `#r "nuget:"` pins don't
+/// conflict with a version already loaded into this process, and the `--worker` entry point calls
+/// it in a throwaway child process to serve a conflicting pin against a clean ALC (#38).
+let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
     let located = locateBlocks source
 
     match List.tryItem blockIndex located with
@@ -217,14 +226,13 @@ let run (source: string) (blockIndex: int) : RunOutcome =
         // session's own dynamically-compiled user-code assembly should be reclaimable once
         // disposed rather than accumulating for the life of the process.
         //
-        // NOTE — a known limitation this does *not* cover: `collectible` only isolates the
-        // per-session dynamic assembly, not `#r "nuget:"`-resolved package assemblies, which
-        // load into the process-wide default AssemblyLoadContext. Two Runs in the same
-        // companion process pinning *different* versions of the same package (e.g. a script
-        // edited from `FsHttp, 15.0.3` to `FsHttp, 13.3.0` between clicks) can collide there
-        // ("Could not load type … from assembly …") — reproduced while building this module.
-        // Out of scope for #16 (a single pin resolving correctly); tracked in #38 for whoever
-        // eventually hardens multi-version same-process reuse.
+        // NOTE — `collectible` only isolates the per-session dynamic assembly, not `#r "nuget:"`-
+        // resolved package assemblies, which load into the process-wide default
+        // AssemblyLoadContext and outlive the session. Two in-process Runs pinning *different*
+        // versions of the same package would collide there ("Could not load type … from assembly
+        // …"). `run` prevents that by never entering this path for a conflicting pin: it routes
+        // such a Run to a throwaway `--worker` child process whose ALC dies with it (#38). So by
+        // the time we reach here, the target's pins are safe to load in-process.
         use session =
             FsiEvaluationSession.Create(fsiConfig, args, inReader, Console.Error, Console.Error, collectible = true)
 
@@ -259,3 +267,174 @@ let run (source: string) (blockIndex: int) : RunOutcome =
                     extractResponse v
                 with ex ->
                     RuntimeError ex.Message
+
+// ---------------------------------------------------------------------------------------------
+// #38 — multi-version isolation. `#r "nuget:"`-resolved assemblies load into the process-wide
+// default AssemblyLoadContext and outlive each per-Run FSI session, so a Run pinning a version
+// of a package that a previous in-process Run already loaded at a *different* version collides.
+// The fix keeps the warm in-process fast path (`runInProcessDirect`) and, only when a pin
+// actually conflicts, delegates that one Run to a short-lived `--worker` child process — a fresh
+// process, hence a fresh ALC that dies with it. `run` is the router; everything below serves it.
+// ---------------------------------------------------------------------------------------------
+
+/// Serialises a `RunOutcome` to the same tagged wire shape the host-facing `run`/`ok`/
+/// `compileError`/`runtimeError` envelope uses. Shared by the `--worker` child (which emits its
+/// outcome over this shape) and `RequestHandler` (which emits the host's response), so the two
+/// channels can't drift apart.
+let outcomeToWire (outcome: RunOutcome) : obj =
+    match outcome with
+    | Ok(status, reason, headers, contentType, bodyBase64) ->
+        {| tag = "ok"
+           status = status
+           reason = reason
+           headers = dict headers
+           contentType = contentType
+           bodyBase64 = bodyBase64 |}
+    | CompileError diagnostics ->
+        {| tag = "compileError"
+           diagnostics =
+            diagnostics
+            |> List.map (fun d ->
+                {| message = d.Message
+                   range =
+                    {| startLine = d.Range.StartLine
+                       startCol = d.Range.StartCol
+                       endLine = d.Range.EndLine
+                       endCol = d.Range.EndCol |} |}) |}
+    | RuntimeError message ->
+        {| tag = "runtimeError"
+           message = message |}
+
+let private jstr (e: JsonElement) =
+    match e.GetString() with
+    | null -> ""
+    | s -> s
+
+/// Parses a `--worker` child's response frame back into a `RunOutcome` — the inverse of
+/// `outcomeToWire` — so delegation is transparent to `run`'s caller.
+let private wireToOutcome (root: JsonElement) : RunOutcome =
+    match jstr (root.GetProperty "tag") with
+    | "ok" ->
+        let headers =
+            [ for p in root.GetProperty("headers").EnumerateObject() -> p.Name, jstr p.Value ]
+
+        Ok(
+            root.GetProperty("status").GetInt32(),
+            jstr (root.GetProperty "reason"),
+            headers,
+            jstr (root.GetProperty "contentType"),
+            jstr (root.GetProperty "bodyBase64")
+        )
+    | "compileError" ->
+        [ for d in root.GetProperty("diagnostics").EnumerateArray() do
+              let r = d.GetProperty "range"
+
+              { Message = jstr (d.GetProperty "message")
+                Range =
+                  { StartLine = r.GetProperty("startLine").GetInt32()
+                    StartCol = r.GetProperty("startCol").GetInt32()
+                    EndLine = r.GetProperty("endLine").GetInt32()
+                    EndCol = r.GetProperty("endCol").GetInt32() } } ]
+        |> CompileError
+    | _ -> RuntimeError(jstr (root.GetProperty "message"))
+
+/// Matches a `#r "nuget: Package[, Version]"` directive, capturing the package id and (if pinned)
+/// the version. Only explicit pins participate in conflict detection — a version-less `#r` is
+/// treated as "whatever resolves" and never triggers a worker (best effort; the demo pins).
+let private nugetPinRegex =
+    Regex("""#r\s+"nuget:\s*(?<pkg>[^,"\s]+)\s*(?:,\s*(?<ver>[^"\s]+))?""", RegexOptions.Compiled)
+
+let private extractPins (source: string) : (string * string option) list =
+    [ for m in nugetPinRegex.Matches source do
+          let ver = m.Groups.["ver"]
+
+          m.Groups.["pkg"].Value,
+          (if ver.Success && ver.Value <> "" then
+               Some ver.Value
+           else
+               None) ]
+
+// Package ids resolved into this process's default ALC so far, id -> version. Nuget ids are
+// case-insensitive. Guarded by a lock: the companion's request loop is serial today, but the
+// state is process-global and cheap to make robust against a future concurrent caller.
+let private loadLock = obj ()
+
+let private loadedVersions =
+    Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+
+/// True when any of `pins` names a package this process already loaded at a *different* version —
+/// the exact condition an in-process Run would collide on (#38).
+let private conflictsWithLoaded (pins: (string * string option) list) : bool =
+    lock loadLock (fun () ->
+        pins
+        |> List.exists (fun (pkg, ver) ->
+            match ver with
+            | Some v ->
+                match loadedVersions.TryGetValue pkg with
+                | true, loaded -> loaded <> v
+                | _ -> false
+            | None -> false))
+
+/// Records the versions an about-to-run in-process eval will load, so a later differently-pinned
+/// Run is detected as a conflict. Called only on the in-process path — a worker Run loads into
+/// its own process, not ours, so it must not touch this map.
+let private markLoaded (pins: (string * string option) list) =
+    lock loadLock (fun () ->
+        for pkg, ver in pins do
+            match ver with
+            | Some v -> loadedVersions.[pkg] <- v
+            | None -> ())
+
+/// Runs one block in a throwaway child process (`dotnet Companion.dll --worker`) so its
+/// `#r "nuget:"` assemblies load into a fresh default ALC that is reclaimed when the process
+/// exits — sidestepping the process-global collision. The child speaks one framed
+/// `{ source, blockIndex }` request in, one outcome envelope out, then exits.
+let private runInWorker (source: string) (blockIndex: int) : RunOutcome =
+    let companionDll = typeof<RunOutcome>.Assembly.Location
+
+    let psi = ProcessStartInfo(FileName = "dotnet")
+    psi.ArgumentList.Add companionDll
+    psi.ArgumentList.Add "--worker"
+    psi.RedirectStandardInput <- true
+    psi.RedirectStandardOutput <- true
+    psi.UseShellExecute <- false
+
+    try
+        match Process.Start psi with
+        | null -> RuntimeError "worker: failed to start evaluation process"
+        | proc ->
+            use proc = proc
+
+            let request: obj =
+                {| source = source
+                   blockIndex = blockIndex |}
+
+            writeFrame proc.StandardInput.BaseStream (JsonSerializer.SerializeToUtf8Bytes request)
+            proc.StandardInput.Close()
+
+            // A crashed worker closes stdout without a frame -> None -> a clean runtimeError,
+            // rather than a hang. Its stderr (FCS/user output) inherits ours, so no drain needed.
+            let outcome =
+                match tryReadFrame proc.StandardOutput.BaseStream with
+                | Some payload ->
+                    use doc = JsonDocument.Parse(payload: byte[])
+                    wireToOutcome doc.RootElement
+                | None -> RuntimeError "worker: evaluation process produced no response"
+
+            proc.WaitForExit()
+            outcome
+    with ex ->
+        RuntimeError(sprintf "worker: %s" ex.Message)
+
+/// Runs the `blockIndex`-th located block (0-based, source order) and returns its outcome. Routes
+/// on whether the target's `#r "nuget:"` pins conflict with a version already loaded in this
+/// process: no conflict -> the warm in-process session; conflict -> a fresh `--worker` child
+/// whose ALC won't collide (#38).
+let run (source: string) (blockIndex: int) : RunOutcome =
+    let pins = extractPins source
+
+    if conflictsWithLoaded pins then
+        runInWorker source blockIndex
+    else
+        markLoaded pins
+        runInProcessDirect source blockIndex

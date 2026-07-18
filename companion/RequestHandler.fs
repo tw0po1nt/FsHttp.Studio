@@ -23,25 +23,9 @@ let private toRangeObj (r: BlockRange) =
        endLine = r.EndLine
        endCol = r.EndCol |}
 
-let private runResponse (source: string) (blockIndex: int) : obj =
-    match run source blockIndex with
-    | Ok(status, reason, headers, contentType, bodyBase64) ->
-        {| tag = "ok"
-           status = status
-           reason = reason
-           headers = dict headers
-           contentType = contentType
-           bodyBase64 = bodyBase64 |}
-    | CompileError diagnostics ->
-        {| tag = "compileError"
-           diagnostics =
-            diagnostics
-            |> List.map (fun d ->
-                {| message = d.Message
-                   range = toRangeObj d.Range |}) |}
-    | RuntimeError message ->
-        {| tag = "runtimeError"
-           message = message |}
+// Serialising the outcome lives in `BlockRunner.outcomeToWire` so the host response here and the
+// `--worker` child's response (#38) emit one identical shape and can't drift.
+let private runResponse (source: string) (blockIndex: int) : obj = outcomeToWire (run source blockIndex)
 
 /// Handles one decoded request payload and returns the response object to serialize onto
 /// the frame channel.

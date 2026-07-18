@@ -9,16 +9,35 @@ open System
 open System.Text.Json
 open Companion.Envelope
 
-[<EntryPoint>]
-let main _argv =
-    // Grab the real stdout FIRST, then redirect everything else to stderr so the
-    // framing channel carries only envelopes.
+/// Sets up the frame channel the same way for both entry modes: grab the real stdout FIRST,
+/// then redirect everything else to stderr so only envelopes cross the wire. Returns the raw
+/// stdin/stdout handles and an `emit` that frames a response object onto stdout.
+let private openFrameChannel () =
     let rawStdout = Console.OpenStandardOutput()
     let rawStdin = Console.OpenStandardInput()
     Console.SetOut(Console.Error)
 
     let emit (o: obj) =
         writeFrame rawStdout (JsonSerializer.SerializeToUtf8Bytes o)
+
+    rawStdin, emit
+
+let private getStringProp (name: string) (root: JsonElement) =
+    match root.TryGetProperty name with
+    | true, v ->
+        match v.GetString() with
+        | null -> ""
+        | s -> s
+    | false, _ -> ""
+
+let private getIntProp (name: string) (root: JsonElement) =
+    match root.TryGetProperty name with
+    | true, v -> v.GetInt32()
+    | false, _ -> 0
+
+// The long-lived server: reads a framed request, responds, repeats until the host closes stdin.
+let private runServer () =
+    let rawStdin, emit = openFrameChannel ()
 
     let handle (payload: byte[]) =
         use doc = JsonDocument.Parse(payload)
@@ -32,4 +51,28 @@ let main _argv =
             loop ()
 
     loop ()
+
+// The `--worker` child (#38): serves exactly one `{ source, blockIndex }` request against this
+// process's own fresh ALC, then exits — taking its `#r "nuget:"` assemblies with it. Bypasses
+// `run`'s conflict routing (a fresh process has nothing loaded to conflict with) and evaluates
+// in-process directly, so a worker can never recursively spawn another worker.
+let private runWorker () =
+    let rawStdin, emit = openFrameChannel ()
+
+    match tryReadFrame rawStdin with
+    | None -> ()
+    | Some payload ->
+        use doc = JsonDocument.Parse(payload)
+        let root = doc.RootElement
+        let source = getStringProp "source" root
+        let blockIndex = getIntProp "blockIndex" root
+        emit (BlockRunner.outcomeToWire (BlockRunner.runInProcessDirect source blockIndex))
+
+[<EntryPoint>]
+let main argv =
+    if Array.contains "--worker" argv then
+        runWorker ()
+    else
+        runServer ()
+
     0
