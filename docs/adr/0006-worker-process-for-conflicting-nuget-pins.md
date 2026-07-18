@@ -14,4 +14,14 @@ We picked the hybrid — warm parent, worker only on conflict — because the co
 
 ## Consequences
 
-The companion now self-spawns children of its own binary through a `--worker` entry point; the worker serves exactly one Run against its clean ALC and exits, evaluating in-process directly so it can never recursively spawn another worker. Parent and worker exchange the same framed run envelope (via `outcomeToWire`/`wireToOutcome`) as the host↔companion channel, so the two channels can't drift. The parent tracks loaded package versions in a process-global map that a worker never touches, since a worker's assemblies load into its own process. Conflict detection is best-effort: only explicitly-versioned pins participate — a version-less `#r "nuget: FsHttp"` is treated as "whatever resolves" and never forces a worker.
+The companion now self-spawns children of its own binary through a `--worker` entry point; the worker serves exactly one Run against its clean ALC and exits, evaluating in-process directly so it can never recursively spawn another worker. Parent and worker exchange the same framed run envelope (via `outcomeToWire`/`wireToOutcome`) as the host↔companion channel, so the two channels can't drift. The parent tracks loaded package versions in a process-global map that a worker never touches, since a worker's assemblies load into its own process.
+
+### Version-less pins
+
+A version-less `#r "nuget: FsHttp"` resolves *some* latest into the process-wide ALC just as a pinned one does — it merely doesn't name the version. The map therefore records it too, as a distinct `Versionless` marker rather than nothing, and conflict detection routes a Run to a worker unless it can *prove* the requested load matches what the ALC already holds:
+
+- **Version-less then version-less is safe in-process.** Within one process nuget resolves `#r "nuget: pkg"` to the same latest every time, so a later version-less Run of an already-loaded package introduces no new version and stays on the warm path.
+- **Two explicit pins conflict exactly when they name different versions** — the original case.
+- **Every *mixed* pairing conflicts and is routed to a worker.** A version-less load followed by an explicit pin, *and* an explicit pin followed by a version-less load, both go to a fresh child. We can't name what the version-less side resolved to, so we can't prove it equals the pinned version — and assuming it does is exactly what let a version-less load silently poison a later (or earlier) pinned Run's in-process ALC.
+
+This is deliberately conservative: a mixed pairing whose version-less side *happens* to resolve to the pinned version is routed to a worker anyway. That costs one cold Run, never a collision — the right side to err on. The symmetry closes the collision class in both directions; the only property given up is that a version-less Run is no longer guaranteed to stay in-process when the same package was already pinned explicitly. The common cases (all version-less, or all the same explicit pin) stay both correct and warm.

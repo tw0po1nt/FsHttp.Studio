@@ -250,6 +250,43 @@ let tests =
               match run source 0 with
               | RuntimeError _ -> ()
               | other -> failtestf "expected runtimeError, got %A" other
+          }
+
+          // Kept last in this sequenced list on purpose: it loads FsHttp *version-less*, recording a
+          // `Versionless` entry in the process-global load map that would route every later
+          // explicitly-pinned Run above to a worker. Run last, that pollution can't reach them.
+          test "a version-less load then a differently-pinned Run does not collide in-process" {
+              // A version-less `#r "nuget: FsHttp"` resolves *some* latest into the process-wide
+              // ALC but names no version. If that load recorded nothing, a later Run pinning a
+              // *different* explicit version would see an empty map, run in-process against the
+              // already-poisoned ALC, and hit the original "Could not load type … from assembly …"
+              // collision. Recording the version-less load as a sentinel routes that later pinned
+              // Run to a fresh worker instead. Both Runs must come back green.
+              use server =
+                  new TestServer(Map [ "/png", bytesHandler 200 "image/png" [] pngBytes ])
+
+              let versionlessSource =
+                  sprintf "#r \"nuget: FsHttp\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n" server.BaseUrl
+
+              match run versionlessSource 0 with
+              | Ok(status, _, _, _, _) -> Expect.equal status 200 "the version-less Run should load latest and run"
+              | other -> failtestf "version-less Run expected ok, got %A" other
+
+              // 13.3.0 is not the latest FsHttp, so this explicit pin differs from whatever the
+              // version-less Run loaded — the exact conflict that used to slip through in-process.
+              let pinnedSource =
+                  sprintf "#r \"nuget: FsHttp, 13.3.0\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n" server.BaseUrl
+
+              match run pinnedSource 0 with
+              | Ok(status, _, _, _, bodyBase64) ->
+                  Expect.equal status 200 "the later differently-pinned Run should run without an ALC collision"
+
+                  Expect.equal
+                      (Convert.FromBase64String bodyBase64)
+                      pngBytes
+                      "the conflict-routed Run's body should be byte-intact"
+              | other ->
+                  failtestf "differently-pinned Run after a version-less load expected ok (no collision), got %A" other
           } ]
 
 // Pure pin parsing (no FSI, no server) — the input `run`'s conflict routing keys off. Kept out of
@@ -287,4 +324,50 @@ let pinTests =
                   (extractPins "#r \"nuget: FsHttp, 15.0.3\"\n#r \"nuget: Newtonsoft.Json, 13.0.3\"")
                   [ "FsHttp", Some "15.0.3"; "Newtonsoft.Json", Some "13.0.3" ]
                   "each pin should appear once, in source order"
+          } ]
+
+// The pure routing decision `run` keys off, exercised directly against explicit loaded-state rather
+// than the process-global map — so every quadrant (including the ones the sequenced integration
+// tests can't isolate, because earlier tests pre-populate that map) is a fast, deterministic unit.
+[<Tests>]
+let conflictTests =
+    testList
+        "BlockRunner.pinConflicts"
+        [ test "a package not loaded here never conflicts — the first load can't collide" {
+              Expect.isFalse (pinConflicts None (Some "15.0.3")) "an explicit pin against nothing loaded is fine"
+              Expect.isFalse (pinConflicts None None) "a version-less pin against nothing loaded is fine"
+          }
+
+          test "two explicit pins conflict exactly when they name different versions" {
+              Expect.isFalse
+                  (pinConflicts (Some(Pinned "15.0.3")) (Some "15.0.3"))
+                  "the same explicit version re-pinned stays in-process"
+
+              Expect.isTrue
+                  (pinConflicts (Some(Pinned "15.0.3")) (Some "13.3.0"))
+                  "a different explicit version is the original collision — route to a worker"
+          }
+
+          test "version-less then version-less stays in-process (same latest resolves)" {
+              Expect.isFalse
+                  (pinConflicts (Some Versionless) None)
+                  "two version-less Runs resolve the same latest, so no new version is loaded"
+          }
+
+          test "a version-less load then an explicit pin conflicts (the reported hole)" {
+              // The `Versionless` load resolved *some* unnamed latest; a later explicit pin can't be
+              // proven equal to it, so it must be routed to a worker rather than run in-process
+              // against the already-poisoned ALC.
+              Expect.isTrue
+                  (pinConflicts (Some Versionless) (Some "13.3.0"))
+                  "an explicit pin against a version-less load must route to a worker"
+          }
+
+          test "an explicit load then a version-less pin conflicts (the reverse hole)" {
+              // Symmetric to the above: a later version-less Run may resolve a different latest than
+              // the version already pinned into the ALC, and we can't prove it won't — so it too must
+              // route to a worker rather than collide in-process.
+              Expect.isTrue
+                  (pinConflicts (Some(Pinned "13.3.0")) None)
+                  "a version-less pin against an explicitly-loaded version must route to a worker"
           } ]
