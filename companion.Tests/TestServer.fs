@@ -78,6 +78,22 @@ let countingHandler (counter: int ref) (ctx: HttpListenerContext) =
     counter.Value <- counter.Value + 1
     textHandler 200 "hit" ctx
 
+/// A handler that never answers: it blocks on `release` until the test signals it, so the request
+/// send on the other end never completes. Drives the "worker produces no frame and hangs" path —
+/// the send inside the worker stalls, so the worker emits nothing at all. Self-contained against
+/// throws (a dropped connection once the caller is killed, a disposed event) so a background
+/// listener thread can never crash the test process.
+let hangingHandler (release: Threading.ManualResetEventSlim) (ctx: HttpListenerContext) =
+    try
+        release.Wait()
+    with _ ->
+        ()
+
+    try
+        ctx.Response.OutputStream.Close()
+    with _ ->
+        ()
+
 /// Streams `bytes` chunked, flushing the headers a beat *before* the body — the shape that
 /// makes FsHttp's default `ResponseHeadersRead` hand back a read-once body stream still tied to
 /// the live socket. This is what reproduces the "stream was already consumed" bug: a body

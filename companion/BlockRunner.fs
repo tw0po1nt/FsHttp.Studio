@@ -14,6 +14,7 @@ open System.Net.Http
 open System.Text.Json
 open System.Text.RegularExpressions
 open System.Collections.Generic
+open System.Threading.Tasks
 open FSharp.Compiler.Diagnostics
 open FSharp.Compiler.Interactive.Shell
 open Companion.BlockLocator
@@ -382,11 +383,25 @@ let private markLoaded (pins: (string * string option) list) =
             | Some v -> loadedVersions.[pkg] <- v
             | None -> ())
 
+/// Bound on how long a `--worker` child may take to produce its response frame before the Run is
+/// force-terminated (coding-standards rule 3: every external process gets a bounded wait + kill
+/// path). Long enough to absorb a cold first-run `#r "nuget:"` restore of a freshly-pinned
+/// version, short enough that a wedged worker — a user block that loops forever, or a request to a
+/// server that never answers — can't hang the Run indefinitely. Public so tests can drive the
+/// hung path on a short bound.
+let workerTimeoutMs = 120_000
+
 /// Runs one block in a throwaway child process (`dotnet Companion.dll --worker`) so its
 /// `#r "nuget:"` assemblies load into a fresh default ALC that is reclaimed when the process
 /// exits — sidestepping the process-global collision. The child speaks one framed
 /// `{ source, blockIndex }` request in, one outcome envelope out, then exits.
-let private runInWorker (source: string) (blockIndex: int) : RunOutcome =
+///
+/// The wait is bounded by `timeoutMs`: a worker that never produces its frame in time (a user
+/// block looping forever, a request that never answers), or produces it then stalls before
+/// exiting, is `Kill()`ed and the Run mapped to a `RuntimeError` rather than wedging the caller
+/// forever. `use proc = proc` disposes the handle but does not unblock a wait, so the bound and
+/// the kill — not disposal — are what guarantee the Run always terminates.
+let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome =
     let companionDll = typeof<RunOutcome>.Assembly.Location
 
     let psi = ProcessStartInfo(FileName = "dotnet")
@@ -402,6 +417,15 @@ let private runInWorker (source: string) (blockIndex: int) : RunOutcome =
         | proc ->
             use proc = proc
 
+            // Best-effort teardown: a worker mid-restore can spawn child `dotnet` processes, so
+            // take the whole tree. Never throw out of a kill — the process may already be gone.
+            let kill () =
+                try
+                    if not proc.HasExited then
+                        proc.Kill(entireProcessTree = true)
+                with _ ->
+                    ()
+
             let request: obj =
                 {| source = source
                    blockIndex = blockIndex |}
@@ -409,17 +433,32 @@ let private runInWorker (source: string) (blockIndex: int) : RunOutcome =
             writeFrame proc.StandardInput.BaseStream (JsonSerializer.SerializeToUtf8Bytes request)
             proc.StandardInput.Close()
 
-            // A crashed worker closes stdout without a frame -> None -> a clean runtimeError,
-            // rather than a hang. Its stderr (FCS/user output) inherits ours, so no drain needed.
-            let outcome =
-                match tryReadFrame proc.StandardOutput.BaseStream with
-                | Some payload ->
-                    use doc = JsonDocument.Parse(payload: byte[])
-                    wireToOutcome doc.RootElement
-                | None -> RuntimeError "worker: evaluation process produced no response"
+            // The frame read blocks with no native timeout, so cap it on a worker thread. A
+            // *crashed* child closes stdout without a frame -> None -> a clean runtimeError; a
+            // *hung* child produces nothing at all, so the read never returns — `Wait timeoutMs`
+            // caps that and we Kill() on expiry instead of blocking here forever. Killing closes
+            // the pipe, so the read task then completes (as None) and its thread is released. The
+            // child's stderr (FCS/user output) inherits ours, so no drain is needed.
+            let readFrame = Task.Run(fun () -> tryReadFrame proc.StandardOutput.BaseStream)
 
-            proc.WaitForExit()
-            outcome
+            if not (readFrame.Wait timeoutMs) then
+                kill ()
+                RuntimeError(sprintf "worker: no response within %dms; evaluation process terminated" timeoutMs)
+            else
+                let outcome =
+                    match readFrame.Result with
+                    | Some payload ->
+                        use doc = JsonDocument.Parse(payload: byte[])
+                        wireToOutcome doc.RootElement
+                    | None -> RuntimeError "worker: evaluation process produced no response"
+
+                // Frame's in hand; the child should now exit on its own. Bound that wait too — a
+                // worker that emitted its frame then stalled must not wedge `WaitForExit` — and
+                // Kill() it if it overstays.
+                if not (proc.WaitForExit timeoutMs) then
+                    kill ()
+
+                outcome
     with ex ->
         RuntimeError(sprintf "worker: %s" ex.Message)
 
@@ -431,7 +470,7 @@ let run (source: string) (blockIndex: int) : RunOutcome =
     let pins = extractPins source
 
     if conflictsWithLoaded pins then
-        runInWorker source blockIndex
+        runInWorker workerTimeoutMs source blockIndex
     else
         markLoaded pins
         runInProcessDirect source blockIndex
