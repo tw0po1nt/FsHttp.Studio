@@ -2,7 +2,7 @@
 
 A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsHttp) request straight from your F# script and **renders** the response — images, JSON, HTML — instead of flattening it to text.
 
-> **Status: v0.1, preparing for release.** The extension is wired end-to-end and its proof-of-concept demo in the F# Discord landed well; the work now is a release-readiness pass toward publishing on the VS Code Marketplace and Open VSX. See [Project status](#project-status).
+> **Status: v0.1, preparing for release.** The extension is wired end-to-end and its proof-of-concept demo landed well; the work now is a release-readiness pass toward publishing on the VS Code Marketplace and Open VSX. See [Project status](#project-status).
 
 ## Why
 
@@ -38,7 +38,7 @@ The architectural decisions and their trade-offs are recorded in [`docs/adr/`](.
 
 ## Out of scope for v0.1
 
-v0.1 set out to gauge whether F# developers want this — its proof-of-concept demo in the F# Discord landed well. Still deliberately deferred beyond v0.1:
+v0.1 set out to gauge whether F# developers want this — its proof-of-concept demo landed well. Still deliberately deferred beyond v0.1:
 
 - the **request tree** (grouping, naming, a Testing-API-style tree of your requests),
 - **settings**,
