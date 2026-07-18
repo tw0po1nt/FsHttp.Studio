@@ -1,4 +1,4 @@
-// The response viewer (issue #18, ADR-0001): a single webview panel, reused across runs,
+// The response viewer (ADR-0001): a single webview panel, reused across runs,
 // opened Beside the editor. This module owns creating/revealing that one panel and posting
 // messages into it; the webview side (`webview/Main.fs`) owns turning those messages into
 // rendered DOM via the renderer core.

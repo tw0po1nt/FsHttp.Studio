@@ -1,6 +1,6 @@
 module Renderer.Tests.RendererTests
 
-// Seam B (spec issue #13, ticket #17): drives canned response envelopes through the renderer core
+// Seam B: drives canned response envelopes through the renderer core
 // and asserts the shape of the resulting `Node` tree — no VSCode, no browser, no DOM. Each
 // Content-Type must dispatch to the expected element, a non-2xx renders its body honestly with the
 // code shown, and an undecodable body hits the size/hex fallback rather than throwing.

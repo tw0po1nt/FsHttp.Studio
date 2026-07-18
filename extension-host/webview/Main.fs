@@ -1,4 +1,4 @@
-// The webview entry (issue #18): listens for the extension host's postMessage protocol
+// The webview entry: listens for the extension host's postMessage protocol
 // (`running` / `result` / `error`) and mounts the renderer core's output via `Webview.Dom`, or a
 // plain placeholder/error text otherwise.
 module Webview.Main

@@ -1,6 +1,6 @@
 module Extension.Tests.ProtocolTests
 
-// Drives the pure logic behind issue #18's CodeLens/Run wiring as plain values — no VSCode, no
+// Drives the pure logic behind the CodeLens/Run wiring as plain values — no VSCode, no
 // Fable, no companion process — mirroring how the renderer core's Seam-B suite isolates its own
 // pure dispatch from the browser-only mounting glue.
 

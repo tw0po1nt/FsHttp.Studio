@@ -1,5 +1,5 @@
 // Hand-rolled Node.js interop — only the slice this project touches (SageFs's proven
-// strategy, per the #4 bindings research).
+// bindings strategy).
 module Node
 
 open Fable.Core

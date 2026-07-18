@@ -1,4 +1,4 @@
-// The Run command a CodeLens click invokes (issue #18): opens/reveals the response viewer
+// The Run command a CodeLens click invokes: opens/reveals the response viewer
 // showing `Running…`, re-locates the block (a fresh locate/run pair per Run, matching the
 // companion's own "fresh session per Run" philosophy) to pull its method/URL for the status
 // line, then runs it and posts the outcome into the panel. Latest-click-wins: a generation

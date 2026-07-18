@@ -15,7 +15,7 @@ let private toRangeObj (r: BlockRange) =
        endCol = r.EndCol |}
 
 // Serialising the outcome lives in `BlockRunner.outcomeToWire` so the host response here and the
-// `--worker` child's response (#38) emit one identical shape and can't drift.
+// `--worker` child's response emit one identical shape and can't drift.
 let private runResponse (source: string) (blockIndex: int) : obj = outcomeToWire (run source blockIndex)
 
 /// Handles one decoded request payload and returns the response object to serialize onto

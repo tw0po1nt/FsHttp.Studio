@@ -1,4 +1,4 @@
-// The renderer core (Seam B, spec issue #13 / ticket #17): a presentation-shell-agnostic pure
+// The renderer core (Seam B): a presentation-shell-agnostic pure
 // function of a response envelope that yields the DOM to show. It produces an immutable `Node`
 // tree rather than touching a real DOM, so it compiles to .NET for the Expecto suite (no VSCode,
 // no browser) and to JS for the webview, where `Dom.mount` materialises the same tree into real

@@ -1,6 +1,6 @@
-// Hand-rolled VSCode API interop — only the slice this project touches. The walking skeleton
-// (#14) needed only the status bar; issue #18 (CodeLens → Run → rendered response) adds the
-// CodeLens, command, and webview-panel slices below.
+// Hand-rolled VSCode API interop — only the slice this project touches: the status bar the
+// walking skeleton needed, plus the CodeLens, command, and webview-panel slices the
+// CodeLens → Run → rendered response flow adds.
 module Vscode
 
 open System

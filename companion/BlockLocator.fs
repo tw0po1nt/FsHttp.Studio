@@ -20,7 +20,7 @@ type BlockRange =
 /// A located block's own CE range, plus the range of the top-level statement that contains
 /// it (a `let` binding or a bare expression statement). Run needs the latter: blanking out
 /// another block's bare CE span alone would leave that statement's own trailing
-/// `|> Request.send`/`|> ...` dangling with nothing to pipe from (issue #16).
+/// `|> Request.send`/`|> ...` dangling with nothing to pipe from.
 type LocatedBlock =
     { Block: BlockRange
       Statement: BlockRange }

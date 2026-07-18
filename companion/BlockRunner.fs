@@ -1,7 +1,7 @@
 module Companion.BlockRunner
 
-// Runs one located `http { }` block against a fresh FCS interactive session (issue #7's
-// resolution, ADR-0002's mechanism): fresh session per Run, evaluate the target's preceding
+// Runs one located `http { }` block against a fresh FCS interactive session (ADR-0002's
+// mechanism): fresh session per Run, evaluate the target's preceding
 // setup (opens/#r/lets/helpers) with every *other* located block excluded, then the target's
 // bare CE alone piped to `Request.send`, extracting the raw `Response` by reflection over the
 // BCL `HttpContent` type. This module must never reference FsHttp itself — the user's own
@@ -83,7 +83,7 @@ let private blankStatement (lines: string[]) (r: BlockRange) =
 
 /// Builds the target's preceding setup: everything before the target block, with every
 /// *other* located block's whole enclosing statement blanked out so clicking the target fires
-/// exactly that one request (issue #16's setup-isolation criterion). Blanking preserves line
+/// exactly that one request (the setup-isolation criterion). Blanking preserves line
 /// count and untouched columns, so a compile error's range still lands on the real source
 /// position.
 ///
@@ -91,7 +91,7 @@ let private blankStatement (lines: string[]) (r: BlockRange) =
 /// binding with `()`, so if the target (or later setup) references the value that block
 /// produced — e.g. `let auth = http { ... } |> Request.send` consumed by a downstream block —
 /// evaluation fails with an "undefined identifier" compileError. Each block is treated as
-/// independent by design; cross-block value reuse is out of scope for #16 and would need a
+/// independent by design; cross-block value reuse is out of scope here and would need a
 /// different isolation strategy (tracked for whoever revisits block dependencies).
 let private buildSetup (source: string) (blocks: LocatedBlock list) (target: LocatedBlock) : string =
     let lines = source.Replace("\r\n", "\n").Split('\n')
@@ -198,12 +198,11 @@ let private extractResponse (v: FsiValue) : RunOutcome =
 
 /// Evaluates the `blockIndex`-th block located in `source` (0-based, in source order — matching a
 /// `locate`/`blocks` envelope's ordering) *in the current process* and returns its outcome. A
-/// fresh `FsiEvaluationSession` is created and disposed per call, per issue #7's "fresh session
-/// per Run" resolution.
+/// fresh `FsiEvaluationSession` is created and disposed per call — one fresh session per Run.
 ///
 /// This is the warm fast path. `run` calls it directly when the target's `#r "nuget:"` pins don't
 /// conflict with a version already loaded into this process, and the `--worker` entry point calls
-/// it in a throwaway child process to serve a conflicting pin against a clean ALC (#38).
+/// it in a throwaway child process to serve a conflicting pin against a clean ALC.
 let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
     let located = locateBlocks source
 
@@ -231,7 +230,7 @@ let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
         // AssemblyLoadContext and outlive the session. Two in-process Runs pinning *different*
         // versions of the same package would collide there ("Could not load type … from assembly
         // …"). `run` prevents that by never entering this path for a conflicting pin: it routes
-        // such a Run to a throwaway `--worker` child process whose ALC dies with it (#38). So by
+        // such a Run to a throwaway `--worker` child process whose ALC dies with it. So by
         // the time we reach here, the target's pins are safe to load in-process.
         use session =
             FsiEvaluationSession.Create(fsiConfig, args, inReader, Console.Error, Console.Error, collectible = true)
@@ -269,7 +268,7 @@ let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
                     RuntimeError ex.Message
 
 // ---------------------------------------------------------------------------------------------
-// #38 — multi-version isolation. `#r "nuget:"`-resolved assemblies load into the process-wide
+// Multi-version isolation. `#r "nuget:"`-resolved assemblies load into the process-wide
 // default AssemblyLoadContext and outlive each per-Run FSI session, so a Run pinning a version
 // of a package that a previous in-process Run already loaded at a *different* version collides.
 // The fix keeps the warm in-process fast path (`runInProcessDirect`) and, only when a pin
@@ -361,7 +360,7 @@ let private loadedVersions =
     Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 
 /// True when any of `pins` names a package this process already loaded at a *different* version —
-/// the exact condition an in-process Run would collide on (#38).
+/// the exact condition an in-process Run would collide on.
 let private conflictsWithLoaded (pins: (string * string option) list) : bool =
     lock loadLock (fun () ->
         pins
@@ -427,7 +426,7 @@ let private runInWorker (source: string) (blockIndex: int) : RunOutcome =
 /// Runs the `blockIndex`-th located block (0-based, source order) and returns its outcome. Routes
 /// on whether the target's `#r "nuget:"` pins conflict with a version already loaded in this
 /// process: no conflict -> the warm in-process session; conflict -> a fresh `--worker` child
-/// whose ALC won't collide (#38).
+/// whose ALC won't collide.
 let run (source: string) (blockIndex: int) : RunOutcome =
     let pins = extractPins source
 

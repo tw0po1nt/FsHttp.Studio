@@ -1,9 +1,8 @@
 module Companion.Program
 
-// Walking skeleton (issue #14) proved the framed envelope transport inside the real
-// two-process layout, porting prototype/dotnet-to-js-seam. Block location (issue #15) and
-// block evaluation (issue #16, ADR-0002's FCS session) are both wired via
-// RequestHandler.respond.
+// The companion's entry point and I/O loop: the two-process framed-envelope transport (ported
+// from prototype/dotnet-to-js-seam), wiring block location and block evaluation (ADR-0002's FCS
+// session) through RequestHandler.respond.
 
 open System
 open System.Text.Json
@@ -39,7 +38,7 @@ let private runCompanion () =
 
     loop ()
 
-// The `--worker` child (#38): serves exactly one `{ source, blockIndex }` request against this
+// The `--worker` child: serves exactly one `{ source, blockIndex }` request against this
 // process's own fresh ALC, then exits — taking its `#r "nuget:"` assemblies with it. Bypasses
 // `run`'s conflict routing (a fresh process has nothing loaded to conflict with) and evaluates
 // in-process directly, so a worker can never recursively spawn another worker.

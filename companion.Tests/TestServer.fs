@@ -1,7 +1,7 @@
 module Companion.Tests.TestServer
 
 // A minimal in-process HTTP server for Seam A's "against a local test server" acceptance
-// criteria (issue #16) — avoids depending on any external process or language runtime.
+// criteria — avoids depending on any external process or language runtime.
 
 open System
 open System.Net

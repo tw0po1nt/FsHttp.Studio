@@ -1,5 +1,5 @@
 // Spawns the companion process and speaks its request/response protocol: the walking
-// skeleton's `hello`/`ready` handshake (issue #14), plus `locate`/`run` (issue #18) built on top.
+// skeleton's `hello`/`ready` handshake, plus `locate`/`run` built on top.
 // The companion's own I/O loop (`Program.fs`) reads one frame, responds, then reads the next —
 // so responses always arrive in the order their requests were sent. A single FIFO queue of
 // pending resolvers, dequeued on every non-`ready` frame, is therefore enough to pair each

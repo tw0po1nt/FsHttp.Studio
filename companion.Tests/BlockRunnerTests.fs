@@ -1,6 +1,6 @@
 module Companion.Tests.BlockRunnerTests
 
-// Seam A (issue #16): drives Run as a black box against a real local server — feed .fsx
+// Seam A: drives Run as a black box against a real local server — feed .fsx
 // source and a block index, assert the outcome — matching the ticket's acceptance criteria
 // directly. `BlockLocatorTests` exercises location; `RequestHandlerTests` exercises the
 // envelope dispatch that sits on top of both; this file exercises `BlockRunner.run` itself.
@@ -178,8 +178,8 @@ let tests =
                   | other -> failtestf "Run #%d expected ok, got %A" i other
           }
 
-          test "two Runs in one process with different FsHttp pins both succeed (ALC isolation, #38)" {
-              // #38: `#r "nuget:"`-resolved package assemblies load into the process-wide default
+          test "two Runs in one process with different FsHttp pins both succeed (ALC isolation)" {
+              // `#r "nuget:"`-resolved package assemblies load into the process-wide default
               // AssemblyLoadContext and outlive each per-Run FSI session. A second Run pinning a
               // *different* version of the same package used to collide there ("Could not load
               // type … from assembly …"). Option 1's fix keeps the warm in-process fast path but
@@ -241,7 +241,7 @@ let pinTests =
                   "a version-less #r should parse to (package, None)"
           }
 
-          test "a trailing option after the version is not folded into the version (#41 review)" {
+          test "a trailing option after the version is not folded into the version" {
               // `#r "nuget: FsHttp, 15.0.3, PreRelease"`: the version group must stop at the comma,
               // not capture "15.0.3," — which would never equal a loaded "15.0.3" and would route
               // an identical re-pin to a needless worker.
