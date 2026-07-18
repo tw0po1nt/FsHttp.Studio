@@ -2,7 +2,7 @@
 
 A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsHttp) request straight from your F# script and **renders** the response — images, JSON, HTML — instead of flattening it to text.
 
-> **Status: proof-of-concept, in development.** The v0.1 design is fully specified and its execution model is proven by prototype, but the extension itself is not built yet. See [Project status](#project-status).
+> **Status: v0.1, preparing for release.** The extension is wired end-to-end and its proof-of-concept demo in the F# Discord landed well; the work now is a release-readiness pass toward publishing on the VS Code Marketplace and Open VSX. See [Project status](#project-status).
 
 ## Why
 
@@ -32,16 +32,16 @@ Two processes, one protocol:
 - The **companion** — a long-lived .NET process hosting an FSharp.Compiler.Service interactive session — owns all F# parsing and evaluation. It locates blocks, evaluates the clicked one, and extracts the response.
 - They exchange tagged **envelopes** across the companion's process boundary. That boundary is the editor-agnostic seam: a different editor would reimplement only the host.
 
-The design deliberately extracts the response by *reflection* rather than referencing FsHttp directly, so the host never overrides the user's version pin. The whole chain — block → structured response → rendered image — is proven end-to-end by a throwaway prototype.
+The design deliberately extracts the response by *reflection* rather than referencing FsHttp directly, so the host never overrides the user's version pin. The whole chain — block → structured response → rendered image — is wired end-to-end in the extension.
 
 The architectural decisions and their trade-offs are recorded in [`docs/adr/`](./docs/adr/); the domain vocabulary lives in [`CONTEXT.md`](./CONTEXT.md).
 
 ## Out of scope for v0.1
 
-v0.1 is a proof-of-concept to gauge whether F# developers want this — its acceptance is a live demo in the F# Discord. Deliberately deferred until that reaction lands:
+v0.1 set out to gauge whether F# developers want this — its proof-of-concept demo in the F# Discord landed well. Still deliberately deferred beyond v0.1:
 
 - the **request tree** (grouping, naming, a Testing-API-style tree of your requests),
-- **marketplace publishing** and settings,
+- **settings**,
 - **`.fs`-in-a-project** execution (v0.1 is `.fsx`-only; blocks in compiled `.fs` files show no Run affordance — by design),
 - **request-chaining** (a block that needs a prior request's *response*, e.g. an auth token),
 - the **inline-card** presentation (rendering under the block rather than in a panel),
@@ -49,13 +49,13 @@ v0.1 is a proof-of-concept to gauge whether F# developers want this — its acce
 
 ## Project status
 
-This repo is being built with a [wayfinder](https://github.com/tw0po1nt/FsHttp.Explorer/issues/1) map — the design was charted as decision tickets, then synthesized into a spec:
+This repo was built with a [wayfinder](https://github.com/tw0po1nt/FsHttp.Studio/issues/1) map — the design was charted as decision tickets, then synthesized into a spec:
 
-- **Map** (the shared plan): [#1](https://github.com/tw0po1nt/FsHttp.Explorer/issues/1)
-- **Spec** (what v0.1 is): [#13](https://github.com/tw0po1nt/FsHttp.Explorer/issues/13)
+- **Map** (the shared plan): [#1](https://github.com/tw0po1nt/FsHttp.Studio/issues/1)
+- **Spec** (what v0.1 is): [#13](https://github.com/tw0po1nt/FsHttp.Studio/issues/13)
 - **Glossary:** [`CONTEXT.md`](./CONTEXT.md) · **Decisions:** [`docs/adr/`](./docs/adr/)
 
-Every design decision traces to a resolved ticket on the map. Next up: breaking the spec into implementation tickets, then building.
+Every design decision traces to a resolved ticket on the map. The extension is now wired end-to-end; the current focus is a [release-readiness pass](https://github.com/tw0po1nt/FsHttp.Studio/issues/48) toward publishing on the VS Code Marketplace and Open VSX.
 
 ## Built with
 
