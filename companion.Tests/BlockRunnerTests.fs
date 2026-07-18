@@ -250,6 +250,43 @@ let tests =
               match run source 0 with
               | RuntimeError _ -> ()
               | other -> failtestf "expected runtimeError, got %A" other
+          }
+
+          // Kept last in this sequenced list on purpose: it loads FsHttp *version-less*, recording a
+          // `Versionless` entry in the process-global load map that would route every later
+          // explicitly-pinned Run above to a worker. Run last, that pollution can't reach them.
+          test "a version-less load then a differently-pinned Run does not collide in-process" {
+              // A version-less `#r "nuget: FsHttp"` resolves *some* latest into the process-wide
+              // ALC but names no version. If that load recorded nothing, a later Run pinning a
+              // *different* explicit version would see an empty map, run in-process against the
+              // already-poisoned ALC, and hit the original "Could not load type … from assembly …"
+              // collision. Recording the version-less load as a sentinel routes that later pinned
+              // Run to a fresh worker instead. Both Runs must come back green.
+              use server =
+                  new TestServer(Map [ "/png", bytesHandler 200 "image/png" [] pngBytes ])
+
+              let versionlessSource =
+                  sprintf "#r \"nuget: FsHttp\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n" server.BaseUrl
+
+              match run versionlessSource 0 with
+              | Ok(status, _, _, _, _) -> Expect.equal status 200 "the version-less Run should load latest and run"
+              | other -> failtestf "version-less Run expected ok, got %A" other
+
+              // 13.3.0 is not the latest FsHttp, so this explicit pin differs from whatever the
+              // version-less Run loaded — the exact conflict that used to slip through in-process.
+              let pinnedSource =
+                  sprintf "#r \"nuget: FsHttp, 13.3.0\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n" server.BaseUrl
+
+              match run pinnedSource 0 with
+              | Ok(status, _, _, _, bodyBase64) ->
+                  Expect.equal status 200 "the later differently-pinned Run should run without an ALC collision"
+
+                  Expect.equal
+                      (Convert.FromBase64String bodyBase64)
+                      pngBytes
+                      "the conflict-routed Run's body should be byte-intact"
+              | other ->
+                  failtestf "differently-pinned Run after a version-less load expected ok (no collision), got %A" other
           } ]
 
 // Pure pin parsing (no FSI, no server) — the input `run`'s conflict routing keys off. Kept out of

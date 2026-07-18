@@ -352,36 +352,53 @@ let extractPins (source: string) : (string * string option) list =
            else
                None) ]
 
-// Package ids resolved into this process's default ALC so far, id -> version. Nuget ids are
+/// What a package resolved to when it was loaded into this process's default ALC. `Pinned v` is an
+/// explicit `#r "nuget: pkg, v"`; `Versionless` is a `#r "nuget: pkg"` that resolved *some* latest
+/// we can't name. Tracking the version-less case (rather than nothing) is load-bearing: it still
+/// poisons the ALC, so a later Run explicitly pinning a *different* version would collide against it
+/// in-process (ADR-0006).
+type private LoadedVersion =
+    | Pinned of string
+    | Versionless
+
+// Package ids resolved into this process's default ALC so far, id -> what loaded it. Nuget ids are
 // case-insensitive. Guarded by a lock: the companion's request loop is serial today, but the
 // state is process-global and cheap to make robust against a future concurrent caller.
 let private loadLock = obj ()
 
 let private loadedVersions =
-    Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    Dictionary<string, LoadedVersion>(StringComparer.OrdinalIgnoreCase)
 
-/// True when any of `pins` names a package this process already loaded at a *different* version —
-/// the exact condition an in-process Run would collide on.
+/// True when any of `pins` asks to load a package version this process can't prove matches one it
+/// already loaded — the exact condition an in-process Run would collide on. A version-less pin
+/// (`None`) never forces a worker (ADR-0006's best-effort stance): within one process nuget
+/// resolves `#r "nuget: pkg"` to the same latest every time, so a later version-less Run of an
+/// already-loaded package sees no new version. But an explicit pin against a package we loaded
+/// *version-less* is a conflict — we can't name what that `Versionless` resolved to, so we can't
+/// prove it equals the pin, and assuming it does is exactly the hole that reopened #38's collision.
 let private conflictsWithLoaded (pins: (string * string option) list) : bool =
     lock loadLock (fun () ->
         pins
         |> List.exists (fun (pkg, ver) ->
             match ver with
+            | None -> false
             | Some v ->
                 match loadedVersions.TryGetValue pkg with
-                | true, loaded -> loaded <> v
-                | _ -> false
-            | None -> false))
+                | true, Pinned loaded -> loaded <> v
+                | true, Versionless -> true
+                | false, _ -> false))
 
-/// Records the versions an about-to-run in-process eval will load, so a later differently-pinned
-/// Run is detected as a conflict. Called only on the in-process path — a worker Run loads into
-/// its own process, not ours, so it must not touch this map.
+/// Records what an about-to-run in-process eval will load, so a later differently-pinned Run is
+/// detected as a conflict. A version-less `#r` is recorded as `Versionless` — *not* skipped — so it
+/// participates in that detection. Called only on the in-process path: a worker Run loads into its
+/// own process, not ours, so it must not touch this map.
 let private markLoaded (pins: (string * string option) list) =
     lock loadLock (fun () ->
         for pkg, ver in pins do
-            match ver with
-            | Some v -> loadedVersions.[pkg] <- v
-            | None -> ())
+            loadedVersions.[pkg] <-
+                match ver with
+                | Some v -> Pinned v
+                | None -> Versionless)
 
 /// Bound on how long a `--worker` child may take to produce its response frame before the Run is
 /// force-terminated (coding-standards rule 3: every external process gets a bounded wait + kill
