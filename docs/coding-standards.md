@@ -25,6 +25,18 @@ When you drive a child process (`--worker`, or any `Process.Start`), a crashed c
 
 Process-global mutable state (e.g. `loadedVersions`) guarded by a lock must take that lock **once per logical operation**, not once per access. A check in one `lock` scope followed by an act in another is a TOCTOU gap: correct only while the caller is single-threaded, and it silently isn't the day a second caller appears. If `run` reads `conflictsWithLoaded` then writes `markLoaded`, that check-then-act belongs under one lock. If the state is truly single-threaded and always will be, don't add the lock at all — a half-taken lock advertises a safety it doesn't provide.
 
+## 5. Don't cite issue or PR numbers in source
+
+Source is not the issue tracker. Comments, test names, and identifiers must not carry bare issue/PR numbers (`#38`, `issue #16`, `ticket #17`) — the tracker renumbers and rots, and the number means nothing to someone reading the code. State the *reason* the code exists, not the ticket that asked for it: "fresh session per Run," not "issue #7's fresh-session resolution." Provenance belongs in the commit message and PR, which is exactly where `git blame` sends a reader who wants it.
+
+The one exception is a **`TODO`**, which points at work not yet done — and it carries the **full URL**, never a bare number, so it stays a click away and survives a tracker move:
+
+```fsharp
+// TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/42): bound the worker wait
+```
+
+In-repo references are fine and encouraged — `ADR-0002`, a file path, another module — because they live and move with the code.
+
 ---
 
-*Seeded from the PR #41 (#38) review. Add a rule only when a real review finding shows an unwritten convention bit — keep this short and concrete, per `docs/agents/domain.md`'s lazy-documentation philosophy.*
+*Seeded from a two-axis review. Add a rule only when a real review finding shows an unwritten convention bit — keep this short and concrete, per `docs/agents/domain.md`'s lazy-documentation philosophy.*
