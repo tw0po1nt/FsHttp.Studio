@@ -325,3 +325,49 @@ let pinTests =
                   [ "FsHttp", Some "15.0.3"; "Newtonsoft.Json", Some "13.0.3" ]
                   "each pin should appear once, in source order"
           } ]
+
+// The pure routing decision `run` keys off, exercised directly against explicit loaded-state rather
+// than the process-global map — so every quadrant (including the ones the sequenced integration
+// tests can't isolate, because earlier tests pre-populate that map) is a fast, deterministic unit.
+[<Tests>]
+let conflictTests =
+    testList
+        "BlockRunner.pinConflicts"
+        [ test "a package not loaded here never conflicts — the first load can't collide" {
+              Expect.isFalse (pinConflicts None (Some "15.0.3")) "an explicit pin against nothing loaded is fine"
+              Expect.isFalse (pinConflicts None None) "a version-less pin against nothing loaded is fine"
+          }
+
+          test "two explicit pins conflict exactly when they name different versions" {
+              Expect.isFalse
+                  (pinConflicts (Some(Pinned "15.0.3")) (Some "15.0.3"))
+                  "the same explicit version re-pinned stays in-process"
+
+              Expect.isTrue
+                  (pinConflicts (Some(Pinned "15.0.3")) (Some "13.3.0"))
+                  "a different explicit version is the original collision — route to a worker"
+          }
+
+          test "version-less then version-less stays in-process (same latest resolves)" {
+              Expect.isFalse
+                  (pinConflicts (Some Versionless) None)
+                  "two version-less Runs resolve the same latest, so no new version is loaded"
+          }
+
+          test "a version-less load then an explicit pin conflicts (the reported hole)" {
+              // The `Versionless` load resolved *some* unnamed latest; a later explicit pin can't be
+              // proven equal to it, so it must be routed to a worker rather than run in-process
+              // against the already-poisoned ALC.
+              Expect.isTrue
+                  (pinConflicts (Some Versionless) (Some "13.3.0"))
+                  "an explicit pin against a version-less load must route to a worker"
+          }
+
+          test "an explicit load then a version-less pin conflicts (the reverse hole)" {
+              // Symmetric to the above: a later version-less Run may resolve a different latest than
+              // the version already pinned into the ALC, and we can't prove it won't — so it too must
+              // route to a worker rather than collide in-process.
+              Expect.isTrue
+                  (pinConflicts (Some(Pinned "13.3.0")) None)
+                  "a version-less pin against an explicitly-loaded version must route to a worker"
+          } ]

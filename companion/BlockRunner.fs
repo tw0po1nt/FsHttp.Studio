@@ -355,11 +355,32 @@ let extractPins (source: string) : (string * string option) list =
 /// What a package resolved to when it was loaded into this process's default ALC. `Pinned v` is an
 /// explicit `#r "nuget: pkg, v"`; `Versionless` is a `#r "nuget: pkg"` that resolved *some* latest
 /// we can't name. Tracking the version-less case (rather than nothing) is load-bearing: it still
-/// poisons the ALC, so a later Run explicitly pinning a *different* version would collide against it
-/// in-process (ADR-0006).
-type private LoadedVersion =
+/// poisons the ALC, so a later Run pinning a *different* version would collide against it in-process
+/// (ADR-0006). Public for the routing unit tests.
+type LoadedVersion =
     | Pinned of string
     | Versionless
+
+/// Pure routing decision for one pin against the state a package is already loaded in (`None` = not
+/// loaded here yet). The rule is "route to a worker unless we can *prove* the requested load matches
+/// what's already in the ALC":
+///
+/// - A version-less pin against a version-less load is the same latest (nuget resolves `#r
+///   "nuget: pkg"` to one version per process), so it's safe in-process.
+/// - Two explicit pins conflict exactly when they name different versions.
+/// - Every *mixed* pairing conflicts: a version-less load vs. a later explicit pin, and an explicit
+///   load vs. a later version-less pin, both route to a worker — the version-less side may resolve a
+///   different latest than the named one, and we can't prove it doesn't.
+///
+/// Deliberately conservative: a false conflict costs one cold worker Run; a false match reopens the
+/// original "Could not load type … from assembly …" ALC collision. Correctness wins.
+let pinConflicts (loaded: LoadedVersion option) (pin: string option) : bool =
+    match loaded, pin with
+    | None, _ -> false
+    | Some Versionless, None -> false
+    | Some(Pinned l), Some v -> l <> v
+    | Some(Pinned _), None
+    | Some Versionless, Some _ -> true
 
 // Package ids resolved into this process's default ALC so far, id -> what loaded it. Nuget ids are
 // case-insensitive. Guarded by a lock: the companion's request loop is serial today, but the
@@ -370,23 +391,18 @@ let private loadedVersions =
     Dictionary<string, LoadedVersion>(StringComparer.OrdinalIgnoreCase)
 
 /// True when any of `pins` asks to load a package version this process can't prove matches one it
-/// already loaded — the exact condition an in-process Run would collide on. A version-less pin
-/// (`None`) never forces a worker (ADR-0006's best-effort stance): within one process nuget
-/// resolves `#r "nuget: pkg"` to the same latest every time, so a later version-less Run of an
-/// already-loaded package sees no new version. But an explicit pin against a package we loaded
-/// *version-less* is a conflict — we can't name what that `Versionless` resolved to, so we can't
-/// prove it equals the pin, and assuming it does is exactly the hole that reopened #38's collision.
+/// already loaded — the exact condition an in-process Run would collide on. Folds `pinConflicts`
+/// over the live load map under the lock.
 let private conflictsWithLoaded (pins: (string * string option) list) : bool =
     lock loadLock (fun () ->
         pins
         |> List.exists (fun (pkg, ver) ->
-            match ver with
-            | None -> false
-            | Some v ->
+            let loaded =
                 match loadedVersions.TryGetValue pkg with
-                | true, Pinned loaded -> loaded <> v
-                | true, Versionless -> true
-                | false, _ -> false))
+                | true, v -> Some v
+                | false, _ -> None
+
+            pinConflicts loaded ver))
 
 /// Records what an about-to-run in-process eval will load, so a later differently-pinned Run is
 /// detected as a conflict. A version-less `#r` is recorded as `Versionless` — *not* skipped — so it
