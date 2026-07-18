@@ -210,6 +210,37 @@ let tests =
               | other -> failtestf "second pin expected ok (no ALC collision), got %A" other
           }
 
+          test "a worker that never produces a frame is bounded to a runtimeError, not a wedge" {
+              // A worker whose block hangs — here a request to a server that never answers —
+              // emits no frame at all, so the parent's frame read would block forever without a
+              // bound. `runInWorker` caps the wait and Kill()s the child on expiry, mapping the
+              // Run to a RuntimeError. Driven directly against `runInWorker` on a short bound so
+              // the hung path is exercised deterministically rather than via conflict routing.
+              use release = new System.Threading.ManualResetEventSlim(false)
+              use server = new TestServer(Map [ "/hang", hangingHandler release ])
+
+              let source =
+                  sprintf
+                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nhttp {\n    GET \"%s/hang\"\n}\n"
+                      fsHttpRef
+                      server.BaseUrl
+
+              let sw = Diagnostics.Stopwatch.StartNew()
+              let outcome = runInWorker 5000 source 0
+              sw.Stop()
+              // Unblock the listener thread so the server can shut down cleanly.
+              release.Set()
+
+              match outcome with
+              | RuntimeError _ -> ()
+              | other -> failtestf "expected a bounded runtimeError from the hung worker, got %A" other
+
+              Expect.isLessThan
+                  sw.Elapsed.TotalMilliseconds
+                  60000.0
+                  "the hung worker must return on a bound, not wedge the Run indefinitely"
+          }
+
           test "a network failure returns runtimeError, distinct from compileError" {
               let source =
                   sprintf
