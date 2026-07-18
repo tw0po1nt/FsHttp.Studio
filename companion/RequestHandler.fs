@@ -4,18 +4,9 @@ module Companion.RequestHandler
 // driven directly in tests (Seam A) without spawning the compiled process.
 
 open System.Text.Json
+open Companion.Envelope
 open Companion.BlockLocator
 open Companion.BlockRunner
-
-let private getStringProp (name: string) (root: JsonElement) =
-    match root.TryGetProperty name with
-    | true, v -> v.GetString()
-    | false, _ -> null
-
-let private getIntProp (name: string) (root: JsonElement) =
-    match root.TryGetProperty name with
-    | true, v -> v.GetInt32()
-    | false, _ -> 0
 
 let private toRangeObj (r: BlockRange) =
     {| startLine = r.StartLine
@@ -23,25 +14,9 @@ let private toRangeObj (r: BlockRange) =
        endLine = r.EndLine
        endCol = r.EndCol |}
 
-let private runResponse (source: string) (blockIndex: int) : obj =
-    match run source blockIndex with
-    | Ok(status, reason, headers, contentType, bodyBase64) ->
-        {| tag = "ok"
-           status = status
-           reason = reason
-           headers = dict headers
-           contentType = contentType
-           bodyBase64 = bodyBase64 |}
-    | CompileError diagnostics ->
-        {| tag = "compileError"
-           diagnostics =
-            diagnostics
-            |> List.map (fun d ->
-                {| message = d.Message
-                   range = toRangeObj d.Range |}) |}
-    | RuntimeError message ->
-        {| tag = "runtimeError"
-           message = message |}
+// Serialising the outcome lives in `BlockRunner.outcomeToWire` so the host response here and the
+// `--worker` child's response emit one identical shape and can't drift.
+let private runResponse (source: string) (blockIndex: int) : obj = outcomeToWire (run source blockIndex)
 
 /// Handles one decoded request payload and returns the response object to serialize onto
 /// the frame channel.
@@ -52,15 +27,11 @@ let respond (request: JsonDocument) : obj =
     match tag with
     | "hello" -> {| tag = "ready" |}
     | "locate" ->
-        let source =
-            root |> getStringProp "source" |> Option.ofObj |> Option.defaultValue ""
-
+        let source = root |> getStringProp "source"
         let ranges = locate source |> List.map toRangeObj
         {| tag = "blocks"; ranges = ranges |}
     | "run" ->
-        let source =
-            root |> getStringProp "source" |> Option.ofObj |> Option.defaultValue ""
-
+        let source = root |> getStringProp "source"
         let blockIndex = root |> getIntProp "blockIndex"
         runResponse source blockIndex
     | other ->

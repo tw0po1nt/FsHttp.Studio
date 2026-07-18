@@ -1,4 +1,4 @@
-// The `▶ Run request` CodeLens (issue #18, ADR-0003): one lens per block the companion locates
+// The `▶ Run request` CodeLens (ADR-0003): one lens per block the companion locates
 // in a `.fsx` script, and none at all on `.fs` or while the companion is down — ADR-0003's "no
 // companion ⇒ no lenses" by construction, made legible by the status-bar item rather than
 // looking like silent breakage.

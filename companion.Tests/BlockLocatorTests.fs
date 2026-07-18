@@ -1,6 +1,6 @@
 module Companion.Tests.BlockLocatorTests
 
-// Seam A (issue #15): drives the companion's block location as a black box — feed .fsx
+// Seam A: drives the companion's block location as a black box — feed .fsx
 // source, assert the ranges — matching the acceptance criteria on the ticket directly.
 // `BlockLocatorTests` exercises `BlockLocator.locate` itself; `RequestHandlerTests` exercises
 // the envelope dispatch (`RequestHandler.respond`) that sits on top of it.

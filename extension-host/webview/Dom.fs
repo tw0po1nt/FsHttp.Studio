@@ -1,7 +1,7 @@
 // The browser-only half of Seam B: materialise the renderer core's pure `Node` tree into real
 // DOM. The *shape* is decided (and tested) in the shell-agnostic core; this only walks the tree
 // creating elements, setting attributes, and appending text — the low-risk glue left to the
-// manual smoke rather than an automated suite (spec issue #13's testing plan).
+// manual smoke rather than an automated suite (Seam B's testing plan).
 module Webview.Dom
 
 open Browser

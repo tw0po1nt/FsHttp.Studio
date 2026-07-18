@@ -1,6 +1,6 @@
 module Companion.Tests.BlockRunnerTests
 
-// Seam A (issue #16): drives Run as a black box against a real local server — feed .fsx
+// Seam A: drives Run as a black box against a real local server — feed .fsx
 // source and a block index, assert the outcome — matching the ticket's acceptance criteria
 // directly. `BlockLocatorTests` exercises location; `RequestHandlerTests` exercises the
 // envelope dispatch that sits on top of both; this file exercises `BlockRunner.run` itself.
@@ -178,6 +178,38 @@ let tests =
                   | other -> failtestf "Run #%d expected ok, got %A" i other
           }
 
+          test "two Runs in one process with different FsHttp pins both succeed (ALC isolation)" {
+              // `#r "nuget:"`-resolved package assemblies load into the process-wide default
+              // AssemblyLoadContext and outlive each per-Run FSI session. A second Run pinning a
+              // *different* version of the same package used to collide there ("Could not load
+              // type … from assembly …"). Option 1's fix keeps the warm in-process fast path but
+              // routes a pin that conflicts with an already-loaded version to a fresh worker
+              // process, whose ALC dies with it. Both Runs must come back green regardless of the
+              // order the two versions are exercised in.
+              use server =
+                  new TestServer(Map [ "/png", bytesHandler 200 "image/png" [] pngBytes ])
+
+              let sourceFor (version: string) =
+                  sprintf
+                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n"
+                      version
+                      server.BaseUrl
+
+              match run (sourceFor "15.0.3") 0 with
+              | Ok(status, _, _, _, _) -> Expect.equal status 200 "first pin (15.0.3) should run"
+              | other -> failtestf "first pin expected ok, got %A" other
+
+              match run (sourceFor "13.3.0") 0 with
+              | Ok(status, _, _, _, bodyBase64) ->
+                  Expect.equal status 200 "second, differently-pinned Run (13.3.0) should also run"
+
+                  Expect.equal
+                      (Convert.FromBase64String bodyBase64)
+                      pngBytes
+                      "the conflict-routed Run's body should be byte-intact"
+              | other -> failtestf "second pin expected ok (no ALC collision), got %A" other
+          }
+
           test "a network failure returns runtimeError, distinct from compileError" {
               let source =
                   sprintf
@@ -187,4 +219,41 @@ let tests =
               match run source 0 with
               | RuntimeError _ -> ()
               | other -> failtestf "expected runtimeError, got %A" other
+          } ]
+
+// Pure pin parsing (no FSI, no server) — the input `run`'s conflict routing keys off. Kept out of
+// the sequenced integration list above so it stays a fast, order-independent unit.
+[<Tests>]
+let pinTests =
+    testList
+        "BlockRunner.extractPins"
+        [ test "an explicit pin parses to (package, Some version)" {
+              Expect.equal
+                  (extractPins "#r \"nuget: FsHttp, 15.0.3\"")
+                  [ "FsHttp", Some "15.0.3" ]
+                  "a single explicit pin should carry its version"
+          }
+
+          test "a version-less pin carries no version" {
+              Expect.equal
+                  (extractPins "#r \"nuget: FsHttp\"")
+                  [ "FsHttp", None ]
+                  "a version-less #r should parse to (package, None)"
+          }
+
+          test "a trailing option after the version is not folded into the version" {
+              // `#r "nuget: FsHttp, 15.0.3, PreRelease"`: the version group must stop at the comma,
+              // not capture "15.0.3," — which would never equal a loaded "15.0.3" and would route
+              // an identical re-pin to a needless worker.
+              Expect.equal
+                  (extractPins "#r \"nuget: FsHttp, 15.0.3, PreRelease\"")
+                  [ "FsHttp", Some "15.0.3" ]
+                  "the version must be '15.0.3', with the trailing option and its comma excluded"
+          }
+
+          test "multiple pins parse in source order" {
+              Expect.equal
+                  (extractPins "#r \"nuget: FsHttp, 15.0.3\"\n#r \"nuget: Newtonsoft.Json, 13.0.3\"")
+                  [ "FsHttp", Some "15.0.3"; "Newtonsoft.Json", Some "13.0.3" ]
+                  "each pin should appear once, in source order"
           } ]

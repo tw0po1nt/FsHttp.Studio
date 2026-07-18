@@ -14,6 +14,10 @@ The five canonical roles, each label string equal to its name. See `docs/agents/
 
 Single-context — `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+### Coding standards
+
+F# house rules beyond what Fantomas/`.editorconfig` enforce. See `docs/coding-standards.md`.
+
 ## Terminology
 
 - **"spec", never "PRD".** The document `/to-spec` produces is a spec — that's what it actually is. Per the v1.1 rename rationale for Matt Pocock's skills, drop the "PRD" framing in anything you write (specs, issues, tickets, comments). Some vendored skill files still carry the old "PRD" wording; ignore it and use "spec".

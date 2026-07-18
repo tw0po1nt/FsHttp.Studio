@@ -1,6 +1,7 @@
 module Companion.Envelope
 
 open System.IO
+open System.Text.Json
 
 /// 4-byte big-endian length prefix + JSON payload. Framed, not line-delimited, so an
 /// arbitrarily large base64 body has no line/size ceiling (ADR-0002).
@@ -40,3 +41,28 @@ let tryReadFrame (input: Stream) : byte[] option =
             None
         else
             Some payload
+
+// ---------------------------------------------------------------------------------------------
+// Shared `JsonElement` readers for the envelope wire. Both ends of the channel — the host-facing
+// request loop and the `--worker` child — parse the same shapes, so the readers live here rather
+// than being cloned per module (where the two copies once disagreed on the missing-value default).
+// A missing or JSON-null string reads as ""; a missing int as 0.
+// ---------------------------------------------------------------------------------------------
+
+/// The string value of a JSON element, "" when the element is JSON null.
+let jsonString (e: JsonElement) : string =
+    match e.GetString() with
+    | null -> ""
+    | s -> s
+
+/// Reads a string property by name, "" when absent or JSON null.
+let getStringProp (name: string) (root: JsonElement) : string =
+    match root.TryGetProperty name with
+    | true, v -> jsonString v
+    | false, _ -> ""
+
+/// Reads an int property by name, 0 when absent.
+let getIntProp (name: string) (root: JsonElement) : int =
+    match root.TryGetProperty name with
+    | true, v -> v.GetInt32()
+    | false, _ -> 0

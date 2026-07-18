@@ -2,7 +2,7 @@ module Companion.Tests.RequestHandlerTests
 
 // Exercises the envelope dispatch that sits on top of BlockLocator (see BlockLocatorTests for
 // the location logic itself): a "locate" request round-trips through JSON to a "blocks"
-// response carrying one range per block, mirroring the protocol from spec issue #13.
+// response carrying one range per block, mirroring the response protocol.
 
 open System.Text.Json
 open Expecto
