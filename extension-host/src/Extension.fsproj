@@ -8,7 +8,11 @@
     <Compile Include="Node.fs" />
     <Compile Include="Vscode.fs" />
     <Compile Include="Envelope.fs" />
+    <Compile Include="Protocol.fs" />
     <Compile Include="Companion.fs" />
+    <Compile Include="ResponseViewer.fs" />
+    <Compile Include="CodeLensProvider.fs" />
+    <Compile Include="RunCommand.fs" />
     <Compile Include="Extension.fs" />
   </ItemGroup>
 

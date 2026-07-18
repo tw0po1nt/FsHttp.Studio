@@ -146,6 +146,38 @@ let tests =
               | other -> failtestf "expected compileError, got %A" other
           }
 
+          test "a block streamed body-after-headers stays readable across repeated Runs" {
+              // Regression for "The stream was already consumed. It cannot be read again.":
+              // FsHttp's default `ResponseHeadersRead` returns before the body, leaving a
+              // read-once content on a pooled keep-alive connection. Reusing that connection
+              // on a later Run (FsHttp shares one static HttpClient across every Run's fresh
+              // FSI session) previously threw when `extractResponse` read the already-consumed
+              // stream. A body that streams a beat after its headers is what exercises the path;
+              // an instant body (every other case here) does not. Runs three times to cover the
+              // reuse-the-pooled-connection Run, not just the first.
+              let body = Array.append pngMagic (Array.replicate 40000 0x5Auy)
+
+              use server =
+                  new TestServer(Map [ "/stream.png", streamingBytesHandler "image/png" body ])
+
+              let source =
+                  sprintf
+                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nhttp {\n    GET \"%s/stream.png\"\n}\n"
+                      fsHttpRef
+                      server.BaseUrl
+
+              for i in 1..3 do
+                  match run source 0 with
+                  | Ok(status, _, _, _, bodyBase64) ->
+                      Expect.equal status 200 (sprintf "Run #%d should be a successful 200" i)
+
+                      Expect.equal
+                          (Convert.FromBase64String bodyBase64)
+                          body
+                          (sprintf "Run #%d body should be byte-intact, not a consumed stream" i)
+                  | other -> failtestf "Run #%d expected ok, got %A" i other
+          }
+
           test "a network failure returns runtimeError, distinct from compileError" {
               let source =
                   sprintf

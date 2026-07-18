@@ -4,5 +4,6 @@
   <Project Path="extension-host/renderer/Renderer.fsproj" />
   <Project Path="extension-host/renderer.Tests/Renderer.Tests.fsproj" />
   <Project Path="extension-host/src/Extension.fsproj" />
+  <Project Path="extension-host/src.Tests/Extension.Tests.fsproj" />
   <Project Path="extension-host/webview/Webview.fsproj" />
 </Solution>
