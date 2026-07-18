@@ -62,9 +62,7 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
             match result with
             | RunOk(status, reason, headers, contentType, bodyBase64) ->
                 ResponseViewer.post (resultMessage method url elapsed status reason headers contentType bodyBase64)
-            | RunCompileError diagnostics ->
-                let text = diagnostics |> List.map (fun d -> d.Message) |> String.concat "\n"
-                ResponseViewer.post (errorMessage (sprintf "Compile error:\n%s" text))
+            | RunCompileError diagnostics -> ResponseViewer.post (errorMessage (formatCompileError diagnostics))
             | RunRuntimeError message -> ResponseViewer.post (errorMessage (sprintf "Runtime error: %s" message))
             | RunProtocolError message -> ResponseViewer.post (errorMessage message)
     }

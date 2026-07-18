@@ -23,6 +23,40 @@ let toVscodeLineTests =
           } ]
 
 [<Tests>]
+let formatCompileErrorTests =
+    let diag message r = { Message = message; Range = r }
+
+    testList
+        "formatCompileError"
+        [ test "prefixes the message with its (line,col), shifting the 0-based column to 1-based" {
+              let d = diag "The value or constructor 'auth' is not defined." (range 3 8 3 17)
+
+              Expect.equal
+                  (formatCompileError [ d ])
+                  "Compile error:\n(3,9) The value or constructor 'auth' is not defined."
+                  "col 8 (0-based) prints as 9, matching vscode's Ln/Col"
+          }
+
+          test "an addendum error anchored at line 1 col 0 prints as (1,1)" {
+              let d = diag "The namespace or module 'FsHttp' is not defined." (range 1 0 1 0)
+
+              Expect.equal
+                  (formatCompileError [ d ])
+                  "Compile error:\n(1,1) The namespace or module 'FsHttp' is not defined."
+                  "top-of-script anchor prints as 1-based (1,1)"
+          }
+
+          test "lists each diagnostic on its own line under one header" {
+              let d1 = diag "First error." (range 2 4 2 8)
+              let d2 = diag "Second error." (range 5 0 5 6)
+
+              Expect.equal
+                  (formatCompileError [ d1; d2 ])
+                  "Compile error:\n(2,5) First error.\n(5,1) Second error."
+                  "one header, one line per diagnostic"
+          } ]
+
+[<Tests>]
 let sliceRangeTests =
     testList
         "sliceRange"
