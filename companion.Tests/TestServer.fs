@@ -77,3 +77,29 @@ let textHandler (status: int) (text: string) (ctx: HttpListenerContext) =
 let countingHandler (counter: int ref) (ctx: HttpListenerContext) =
     counter.Value <- counter.Value + 1
     textHandler 200 "hit" ctx
+
+/// Streams `bytes` chunked, flushing the headers a beat *before* the body — the shape that
+/// makes FsHttp's default `ResponseHeadersRead` hand back a read-once body stream still tied to
+/// the live socket. This is what reproduces the "stream was already consumed" bug: a body
+/// that arrives instantly (every other handler here) never exercises that path. Keep-alive is
+/// left on so the connection is pooled and reused across Runs, mirroring the real server.
+let streamingBytesHandler (contentType: string) (bytes: byte[]) (ctx: HttpListenerContext) =
+    ctx.Response.StatusCode <- 200
+    ctx.Response.ContentType <- contentType
+    ctx.Response.SendChunked <- true
+    ctx.Response.KeepAlive <- true
+    // Force the headers onto the wire first, then dribble the body out in chunks.
+    ctx.Response.OutputStream.Flush()
+    Thread.Sleep(50)
+
+    let chunk = 2048
+    let mutable off = 0
+
+    while off < bytes.Length do
+        let n = min chunk (bytes.Length - off)
+        ctx.Response.OutputStream.Write(bytes, off, n)
+        ctx.Response.OutputStream.Flush()
+        Thread.Sleep(10)
+        off <- off + n
+
+    ctx.Response.OutputStream.Close()

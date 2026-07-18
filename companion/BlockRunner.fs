@@ -23,13 +23,26 @@ type RunOutcome =
     | RuntimeError of string
 
 /// Companion-side addendum evaluated after the user's own setup: silences FsHttp's FSI debug
-/// logging and buffers response content globally so the body survives the later
-/// `ReadAsByteArrayAsync` read (FSI's default is read-once). Carries no `#r` of its own — the
-/// user's setup is the only source of a FsHttp package reference (ADR-0002).
+/// logging and forces the whole response body to be read *before* the value we reflect over is
+/// returned. Carries no `#r` of its own — the user's setup is the only source of a FsHttp
+/// package reference (ADR-0002).
+///
+/// `httpCompletionOption = ResponseContentRead` is load-bearing, not a nicety. FsHttp defaults
+/// to `ResponseHeadersRead`: `Request.send` returns as soon as the headers land and the body
+/// stays a *read-once* `HttpConnectionResponseContent` bound to the live (keep-alive) socket.
+/// FsHttp's own `bufferResponseContent = true` is supposed to drain that stream into a replayable
+/// buffer, but because FsHttp reuses a single process-wide static `HttpClient` across every
+/// Run's fresh FSI session, a Run that reuses a pooled keep-alive connection can hand us a
+/// content whose stream is already consumed — and our `ReadAsByteArrayAsync` (`extractResponse`)
+/// then throws "The stream was already consumed. It cannot be read again." (the reliable
+/// trigger is a server that streams the body a beat after its headers). `ResponseContentRead`
+/// makes the BCL read the whole body into memory as part of the send, independent of any later
+/// connection state, so every Run reads it cleanly. `bufferResponseContent` is left on as belt
+/// and braces.
 let private companionAddendum =
     [ "open FsHttp"
       "FsHttp.Fsi.disableDebugLogs()"
-      "GlobalConfig.set (GlobalConfig.defaults |> Config.update (fun c -> { c with bufferResponseContent = true }))" ]
+      "GlobalConfig.set (GlobalConfig.defaults |> Config.update (fun c -> { c with bufferResponseContent = true; httpCompletionOption = System.Net.Http.HttpCompletionOption.ResponseContentRead }))" ]
     |> String.concat "\n"
 
 let private asPairs (h: IEnumerable<KeyValuePair<string, IEnumerable<string>>>) =
