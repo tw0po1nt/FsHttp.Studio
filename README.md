@@ -22,6 +22,13 @@ Open a `.fsx` script with FsHttp requests in it. A **`▶ Run request` CodeLens*
 
 Your `#r "nuget: FsHttp, x.y.z"` version pin is honored exactly.
 
+## Install
+
+**Prerequisite:** a .NET 10 SDK or newer on your `PATH` (a full SDK, not just the runtime; see [How it works](#how-it-works) for why). Get it from [aka.ms/dotnet/download](https://aka.ms/dotnet/download).
+
+- **VS Code Marketplace:** search *FsHttp.Studio* in the Extensions view (`Ctrl`/`Cmd`+`Shift`+`X`), or run `ext install twopoint.fshttp-studio` from Quick Open.
+- **Open VSX** (VSCodium, Cursor, and other non-Marketplace editors): coming soon.
+
 ## How it works
 
 Two processes, one protocol:
