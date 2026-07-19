@@ -56,7 +56,8 @@ let private showRunning () =
     let start = DateTime.Now
 
     let tick () =
-        let secs = int (DateTime.Now - start).TotalSeconds
+        let elapsed = DateTime.Now - start
+        let secs = int elapsed.TotalSeconds
         label.textContent <- sprintf "Running… %ds" secs
 
     pendingTimer <- Some(window.setInterval (tick, 1000))
