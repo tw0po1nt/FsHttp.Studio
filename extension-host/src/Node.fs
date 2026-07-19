@@ -18,6 +18,11 @@ type ChildProcess =
 
 type IChildProcessModule =
     abstract spawn: command: string * args: string[] * options: obj -> ChildProcess
+    /// child_process.execFile(file, args, callback) — runs a short-lived command and buffers its
+    /// output. The callback is `(error, stdout, stderr)`: `error` is null on a zero exit, or a
+    /// Node error (e.g. `ENOENT` when `file` isn't found) otherwise. Used to probe `dotnet
+    /// --list-sdks` at activation without blocking the extension host.
+    abstract execFile: file: string * args: string[] * callback: (obj -> string -> string -> unit) -> unit
 
 [<Import("*", "child_process")>]
 let childProcess: IChildProcessModule = jsNative
