@@ -19,8 +19,23 @@ type ChildProcess =
 type IChildProcessModule =
     abstract spawn: command: string * args: string[] * options: obj -> ChildProcess
 
+    /// child_process.execFile(file, args, options, callback) — runs a short-lived command and
+    /// buffers its output. The callback is `(error, stdout, stderr)`: `error` is null on a zero
+    /// exit, or a Node error otherwise — `ENOENT` when `file` isn't found, or a killed-on-`timeout`
+    /// error when the child outlives the `timeout` option (Node kills it with `killSignal`). Used to
+    /// probe `dotnet --list-sdks` at activation, bounded so a wedged `dotnet` can't hang the probe.
+    abstract execFile:
+        file: string * args: string[] * options: obj * callback: (obj -> string -> string -> unit) -> unit
+
 [<Import("*", "child_process")>]
 let childProcess: IChildProcessModule = jsNative
+
+type IFileSystemModule =
+    /// fs.readFileSync(path, encoding) — reads a file to a string, or throws (e.g. `ENOENT`).
+    abstract readFileSync: path: string * encoding: string -> string
+
+[<Import("*", "fs")>]
+let fs: IFileSystemModule = jsNative
 
 // path.join is variadic; Node won't accept a single array argument, so this spreads
 // the F# array at the JS call site rather than passing it as one positional arg.

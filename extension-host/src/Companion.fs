@@ -62,9 +62,10 @@ let private parseRunResult (json: obj) : RunResult =
     | "runtimeError" -> RunRuntimeError(unbox<string> (json?message: obj))
     | _ -> RunProtocolError(unbox<string> (json?message: obj))
 
-/// `dotnetPath` is the host executable the .NET Install Tool resolved (see Extension.fs / #57) —
-/// never the bare `"dotnet"`, so the companion runs against the acquired runtime rather than
-/// whatever is (or isn't) on PATH.
+/// `dotnetPath` is the SDK-bearing `dotnet` host resolved at activation (see Extension.fs):
+/// the `fshttpStudio.dotnetPath` override if set, otherwise `"dotnet"` off PATH once
+/// `--list-sdks` has confirmed an SDK at or above the companion's target major is present — the
+/// companion needs a full SDK (not just a runtime) for FSI's `#r "nuget:"` restore.
 let start (dotnetPath: string) (companionDllPath: string) (onState: State -> unit) : Handle =
     onState Starting
 

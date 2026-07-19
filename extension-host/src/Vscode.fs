@@ -11,14 +11,9 @@ type StatusBarItem =
     abstract show: unit -> unit
     abstract dispose: unit -> unit
 
-/// vscode.Extension — only `id` is read, to pass as the Install Tool's `requestingExtensionId`.
-type Extension =
-    abstract id: string
-
 type ExtensionContext =
     abstract extensionPath: string
     abstract extensionUri: obj
-    abstract extension: Extension
     abstract subscriptions: ResizeArray<obj>
 
 type Disposable =
@@ -67,6 +62,20 @@ type ICommands =
 [<Import("commands", "vscode")>]
 let commands: ICommands = jsNative
 
+// --- workspace configuration -----------------------------------------------------------------
+
+/// vscode.WorkspaceConfiguration — only `get` is used, to read the `fshttpStudio.dotnetPath`
+/// override. The setting declares a `""` default, so this reads back as a string (empty when
+/// unset); the caller treats blank as "not configured".
+type WorkspaceConfiguration =
+    abstract get: section: string -> string
+
+type IWorkspace =
+    abstract getConfiguration: section: string -> WorkspaceConfiguration
+
+[<Import("workspace", "vscode")>]
+let workspace: IWorkspace = jsNative
+
 // --- webview panel ---------------------------------------------------------------------------
 
 type Webview =
@@ -85,12 +94,16 @@ type WebviewPanel =
 type IWindow =
     abstract createStatusBarItem: alignment: float * priority: float -> StatusBarItem
     abstract createWebviewPanel: viewType: string * title: string * showOptions: float * options: obj -> WebviewPanel
+    /// vscode.window.showWarningMessage(message, item) — one actionable button; the promise
+    /// resolves to the clicked item's label, or `undefined` if dismissed.
+    abstract showWarningMessage: message: string * item: string -> JS.Promise<obj>
 
 [<Import("window", "vscode")>]
 let window: IWindow = jsNative
 
 type IUri =
     abstract joinPath: baseUri: obj * [<ParamArray>] pathSegments: string[] -> obj
+    abstract parse: value: string -> obj
 
 [<Import("Uri", "vscode")>]
 let uri: IUri = jsNative
