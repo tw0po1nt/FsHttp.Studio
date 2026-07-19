@@ -60,3 +60,9 @@ Every design decision traces to a resolved ticket on the map. The extension is n
 ## Built with
 
 F# · [Fable](https://fable.io/) · the VSCode extension API · [FsHttp](https://github.com/fsprojects/FsHttp) · [FSharp.Compiler.Service](https://fsharp.github.io/fsharp-compiler-docs/)
+
+## License
+
+Licensed under the [MIT License](./LICENSE).
+
+The published extension bundles a small set of MIT-licensed components (FSharp.Core, FSharp.Compiler.Service, and Fable's `fable-library`); their notices are reproduced in [`extension-host/THIRD-PARTY-NOTICES.md`](./extension-host/THIRD-PARTY-NOTICES.md).
