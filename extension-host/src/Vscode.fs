@@ -11,9 +11,14 @@ type StatusBarItem =
     abstract show: unit -> unit
     abstract dispose: unit -> unit
 
+/// vscode.Extension — only `id` is read, to pass as the Install Tool's `requestingExtensionId`.
+type Extension =
+    abstract id: string
+
 type ExtensionContext =
     abstract extensionPath: string
     abstract extensionUri: obj
+    abstract extension: Extension
     abstract subscriptions: ResizeArray<obj>
 
 type Disposable =
@@ -57,6 +62,7 @@ let languages: ILanguages = jsNative
 
 type ICommands =
     abstract registerCommand: command: string * callback: System.Action<obj, obj> -> Disposable
+    abstract executeCommand: command: string * arg: obj -> JS.Promise<obj>
 
 [<Import("commands", "vscode")>]
 let commands: ICommands = jsNative

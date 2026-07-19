@@ -62,11 +62,14 @@ let private parseRunResult (json: obj) : RunResult =
     | "runtimeError" -> RunRuntimeError(unbox<string> (json?message: obj))
     | _ -> RunProtocolError(unbox<string> (json?message: obj))
 
-let start (companionDllPath: string) (onState: State -> unit) : Handle =
+/// `dotnetPath` is the host executable the .NET Install Tool resolved (see Extension.fs / #57) —
+/// never the bare `"dotnet"`, so the companion runs against the acquired runtime rather than
+/// whatever is (or isn't) on PATH.
+let start (dotnetPath: string) (companionDllPath: string) (onState: State -> unit) : Handle =
     onState Starting
 
     let options: obj = nonNull (box {| stdio = [| "pipe"; "pipe"; "pipe" |] |})
-    let child = childProcess.spawn ("dotnet", [| companionDllPath |], options)
+    let child = childProcess.spawn (dotnetPath, [| companionDllPath |], options)
     let pending = ResizeArray<obj -> unit>()
 
     let parser =
