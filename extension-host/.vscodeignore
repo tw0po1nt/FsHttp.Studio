@@ -1,0 +1,37 @@
+# What ships in the .vsix is the esbuild bundle under dist/, the icon, and the
+# LICENSE / notices / README. Everything below is excluded. (vsce includes every
+# file not matched here; patterns follow .gitignore semantics.)
+
+# F#/Fable sources & projects — the shipped code is the bundled dist/extension.js
+src/**
+renderer/**
+webview/**
+src.Tests/**
+renderer.Tests/**
+**/*.fs
+**/*.fsproj
+**/*.fsx
+
+# Fable intermediate JS (esbuild folds this into dist/)
+out/**
+
+# Build scripts, tooling, lockfiles, config
+esbuild.mjs
+smoke.mjs
+package-lock.json
+.gitignore
+.vscodeignore
+
+# Source maps and debug symbols — not needed at runtime
+**/*.map
+**/*.pdb
+
+# Companion is framework-dependent and launched via `dotnet Companion.dll`
+# (Companion.fs), so the native apphost launcher is never used.
+dist/companion/Companion
+
+# Icon SVG source — only the built PNG (package.json `icon`) is needed
+media/*.svg
+
+# Redundant with `vsce package --no-dependencies`, but explicit
+node_modules/**
