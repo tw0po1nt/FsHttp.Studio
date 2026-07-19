@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-FsHttp.Studio (© 2026 Matthew Watt, MIT) redistributes the following third-party
+FsHttp.Studio (© 2026 TwoPoint, MIT) redistributes the following third-party
 components inside the published extension package (the `.vsix`). Each is licensed
 under the MIT License; its copyright notice and permission notice are reproduced
 below as required.
