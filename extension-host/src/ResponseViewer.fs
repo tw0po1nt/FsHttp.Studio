@@ -32,6 +32,29 @@ body {
 }
 #root { padding: 12px 14px; }
 
+/* in-flight Run indicator (webview/Main.fs showRunning) */
+.pending {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+.pending-pulse {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--vscode-progressBar-background, var(--vscode-charts-blue, #3794ff));
+  animation: pending-pulse 1s ease-in-out infinite;
+}
+.pending-label { font-variant-numeric: tabular-nums; }
+@keyframes pending-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50%      { opacity: 1;    transform: scale(1.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pending-pulse { animation: none; opacity: 0.8; }
+}
+
 /* status line */
 .status-line {
   display: flex;
