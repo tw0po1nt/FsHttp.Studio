@@ -28,6 +28,7 @@ Your `#r "nuget: FsHttp, x.y.z"` version pin is honored exactly.
 
 - **VS Code Marketplace:** search *FsHttp.Studio* in the Extensions view (`Ctrl`/`Cmd`+`Shift`+`X`), or run `ext install twopoint.fshttp-studio` from Quick Open.
 - **Open VSX** (VSCodium, Cursor, and other non-Marketplace editors): coming soon.
+- **Direct download (`.vsix`):** grab the latest `fshttp-studio-<version>.vsix` from the [Releases page](https://github.com/tw0po1nt/FsHttp.Studio/releases), then install it with *Extensions: Install from VSIX…* (Command Palette) or `code --install-extension fshttp-studio-<version>.vsix`.
 
 ## How it works
 
