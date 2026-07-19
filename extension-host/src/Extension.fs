@@ -14,10 +14,16 @@ let private setStatusText (text: string) =
     | None -> ()
 
 [<Literal>]
-let private getSdkLabel = "Get .NET 10 SDK"
+let private getSdkLabel = "Get the .NET SDK"
 
 [<Literal>]
 let private dotnetDownloadUrl = "https://aka.ms/dotnet/download"
+
+/// SDK floor to fall back on when the companion's runtimeconfig can't be read (a broken install) —
+/// the major the companion's toolchain is pinned to (ADR-0002). The primary source is the shipped
+/// `Companion.runtimeconfig.json`; this only guards a missing/corrupt package.
+[<Literal>]
+let private fallbackRequiredMajor = 10
 
 /// React to a settled JS promise's fulfilment without pulling in a promise CE — used for the
 /// single `showWarningMessage` the SDK-not-found guidance raises.
@@ -49,11 +55,27 @@ let private tryParseSdkMajor (listSdksLine: string) : int option =
         | _ -> None
     | _ -> None
 
-/// True when `dotnet --list-sdks` reports at least one SDK with major version ≥ 10 — the floor
-/// the companion needs for FSI's `#r "nuget:"` restore (an SDK, not just a runtime).
-let private hasSdk10OrLater (listSdksOutput: string) : bool =
+/// The major .NET version the companion was built for, read from the `Companion.runtimeconfig.json`
+/// that ships beside the DLL (`framework.version` "10.0.0" → 10). This is the single source of the
+/// SDK floor: bumping the companion's target framework moves it with no other edits. `None` when the
+/// packaged file can't be read or parsed, which is a broken install.
+let private companionTargetMajor (runtimeConfigPath: string) : int option =
+    try
+        let json: obj = JS.JSON.parse (Node.fs.readFileSync (runtimeConfigPath, "utf8"))
+        let version: string = emitJsExpr json "$0.runtimeOptions.framework.version"
+
+        match version.Split('.') |> Array.tryHead |> Option.map System.Int32.TryParse with
+        | Some(true, major) -> Some major
+        | _ -> None
+    with _ ->
+        None
+
+/// True when `dotnet --list-sdks` reports at least one SDK with major version ≥ `requiredMajor` —
+/// the floor the companion needs for FSI's `#r "nuget:"` restore (an SDK, not just a runtime). The
+/// companion rolls forward onto any newer major, so a floor-or-above match is genuinely runnable.
+let private hasSdkAtLeast (requiredMajor: int) (listSdksOutput: string) : bool =
     listSdksOutput.Split('\n')
-    |> Array.exists (fun line -> tryParseSdkMajor line |> Option.exists (fun major -> major >= 10))
+    |> Array.exists (fun line -> tryParseSdkMajor line |> Option.exists (fun major -> major >= requiredMajor))
 
 let activate (context: ExtensionContext) =
     let item = window.createStatusBarItem (statusBarAlignmentLeft, 100.0)
@@ -73,6 +95,13 @@ let activate (context: ExtensionContext) =
     let companionDll =
         Node.Path.join [| context.extensionPath; "dist"; "companion"; "Companion.dll" |]
 
+    // The SDK floor is the companion's own build target, read from the runtimeconfig shipped beside
+    // the DLL — one source of truth, so a companion TFM bump moves the floor and the guidance with it.
+    let requiredMajor =
+        Node.Path.join [| context.extensionPath; "dist"; "companion"; "Companion.runtimeconfig.json" |]
+        |> companionTargetMajor
+        |> Option.defaultValue fallbackRequiredMajor
+
     let onState state =
         setStatusText (Companion.statusText state)
         CodeLensProvider.setReady (state = Companion.Ready)
@@ -83,14 +112,16 @@ let activate (context: ExtensionContext) =
         RunCommand.setHandle handle
         companionHandle <- Some handle
 
-    // Require a user-installed .NET 10 SDK (the Ionide/C# Dev Kit model), replacing the earlier
+    // Require a user-installed .NET SDK (the Ionide/C# Dev Kit model), replacing the earlier
     // runtime-only acquisition: FSI's `#r "nuget:"` restore drives `dotnet msbuild`, which a runtime
     // lacks. Resolve the `fshttpStudio.dotnetPath` override, else `"dotnet"` off PATH; confirm it
-    // carries a ≥ 10.0 SDK via `--list-sdks` before spawning the companion against it, otherwise guide.
+    // carries an SDK at or above the companion's target major via `--list-sdks` before spawning.
     let dotnetPathOverride = configuredDotnetPath ()
     let dotnetPath = dotnetPathOverride |> Option.defaultValue "dotnet"
 
-    // First-run guidance when no ≥ 10.0 SDK is reachable: we deliberately own this "SDK not found"
+    let requiredSdk = sprintf ".NET %d SDK or newer" requiredMajor
+
+    // First-run guidance when no in-floor SDK is reachable: we deliberately own this "SDK not found"
     // tail — the trade-off Option B accepts — pointing at the download page and the override. When
     // the override is set but didn't resolve to an SDK, say so rather than "none was found".
     let notifyNoSdk () =
@@ -99,11 +130,15 @@ let activate (context: ExtensionContext) =
         let message =
             match dotnetPathOverride with
             | Some path ->
-                "FsHttp.Studio needs a .NET 10 SDK to run requests, but the `fshttpStudio.dotnetPath` setting ("
+                "FsHttp.Studio's `fshttpStudio.dotnetPath` setting ("
                 + path
-                + ") didn't resolve to one. Check the path, or clear the setting to auto-detect a `dotnet` on PATH."
+                + ") didn't resolve to a "
+                + requiredSdk
+                + ". Check the path, or clear the setting to auto-detect a `dotnet` on PATH."
             | None ->
-                "FsHttp.Studio needs a .NET 10 SDK to run requests, but none was found. Install one, "
+                "FsHttp.Studio needs a "
+                + requiredSdk
+                + " to run requests, but none was found. Install one, "
                 + "or set the `fshttpStudio.dotnetPath` setting to your `dotnet` executable."
 
         onResolved (window.showWarningMessage (message, getSdkLabel)) (fun chosen ->
@@ -117,7 +152,7 @@ let activate (context: ExtensionContext) =
         [| "--list-sdks" |],
         nonNull (box {| timeout = 10000 |}),
         (fun err stdout _stderr ->
-            if isNullish err && hasSdk10OrLater stdout then
+            if isNullish err && hasSdkAtLeast requiredMajor stdout then
                 startCompanion dotnetPath
             else
                 notifyNoSdk ())

@@ -34,7 +34,7 @@ Two processes, one protocol:
 
 The design deliberately extracts the response by *reflection* rather than referencing FsHttp directly, so the host never overrides the user's version pin. The whole chain — block → structured response → rendered image — is wired end-to-end in the extension.
 
-The companion runs on the **.NET 10 SDK**, which you install yourself — a full SDK, not just the runtime, because evaluating `#r "nuget: FsHttp, x.y.z"` restores the package through `dotnet msbuild`. Grab it from [aka.ms/dotnet/download](https://aka.ms/dotnet/download) (as F# developers almost always already have). FsHttp.Studio auto-detects `dotnet` on your `PATH`; if your SDK lives elsewhere, point the `fshttpStudio.dotnetPath` setting at your `dotnet` executable.
+The companion runs on the **.NET 10 SDK or newer**, which you install yourself — a full SDK, not just the runtime, because evaluating `#r "nuget: FsHttp, x.y.z"` restores the package through `dotnet msbuild`. Grab it from [aka.ms/dotnet/download](https://aka.ms/dotnet/download) (as F# developers almost always already have). FsHttp.Studio auto-detects `dotnet` on your `PATH`; if your SDK lives elsewhere, point the `fshttpStudio.dotnetPath` setting at your `dotnet` executable.
 
 The architectural decisions and their trade-offs are recorded in [`docs/adr/`](./docs/adr/); the domain vocabulary lives in [`CONTEXT.md`](./CONTEXT.md).
 

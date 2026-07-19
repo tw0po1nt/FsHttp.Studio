@@ -30,6 +30,13 @@ type IChildProcessModule =
 [<Import("*", "child_process")>]
 let childProcess: IChildProcessModule = jsNative
 
+type IFileSystemModule =
+    /// fs.readFileSync(path, encoding) — reads a file to a string, or throws (e.g. `ENOENT`).
+    abstract readFileSync: path: string * encoding: string -> string
+
+[<Import("*", "fs")>]
+let fs: IFileSystemModule = jsNative
+
 // path.join is variadic; Node won't accept a single array argument, so this spreads
 // the F# array at the JS call site rather than passing it as one positional arg.
 [<Import("*", "path")>]
