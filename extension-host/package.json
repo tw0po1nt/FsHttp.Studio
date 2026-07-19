@@ -33,8 +33,11 @@
     "vscode": "^1.66.0"
   },
   "main": "./dist/extension.js",
+  "extensionDependencies": [
+    "ms-dotnettools.vscode-dotnet-runtime"
+  ],
   "activationEvents": [
-    "onStartupFinished"
+    "onLanguage:fsharp"
   ],
   "contributes": {
     "commands": [

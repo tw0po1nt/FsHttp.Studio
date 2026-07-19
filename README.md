@@ -34,6 +34,8 @@ Two processes, one protocol:
 
 The design deliberately extracts the response by *reflection* rather than referencing FsHttp directly, so the host never overrides the user's version pin. The whole chain — block → structured response → rendered image — is wired end-to-end in the extension.
 
+The companion runs on **.NET 10**, which FsHttp.Studio acquires on demand through the [.NET Install Tool](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.vscode-dotnet-runtime) (a required dependency) — no manual SDK install. Already have .NET 10 and prefer to use it? Point the Install Tool at your own runtime via its `dotnetAcquisitionExtension.existingDotnetPath` setting.
+
 The architectural decisions and their trade-offs are recorded in [`docs/adr/`](./docs/adr/); the domain vocabulary lives in [`CONTEXT.md`](./CONTEXT.md).
 
 ## Out of scope for v0.1
