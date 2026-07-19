@@ -63,6 +63,11 @@ jobs:
       - run: npm ci
         working-directory: extension-host
 
+      # Runs the bundled renderer under node — the "bundles and runs" guard the .NET
+      # tests can't cover. Same as ci.yml; a release can't ship a bundle that won't run.
+      - run: npm run smoke
+        working-directory: extension-host
+
       # Builds the single universal .vsix (compile + sync license/readme + vsce package),
       # output extension-host/fshttp-studio-<version>.vsix.
       - run: npm run package
