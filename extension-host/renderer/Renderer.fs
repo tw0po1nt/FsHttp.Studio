@@ -62,8 +62,8 @@ let private jsonQuote (s: string) : string =
 
 // --- formatting ---------------------------------------------------------------------------
 
-/// Bins the status into the CSS class the shell colours on (`status-2xx` … `status-5xx`). The
-/// class — not a hard-coded colour — is what the core commits to, so the shell owns the palette.
+/// Bins the status into the CSS class the shell colors on (`status-2xx` … `status-5xx`). The
+/// class — not a hard-coded color — is what the core commits to, so the shell owns the palette.
 let statusClass (status: int) : string =
     if status >= 200 && status < 300 then "status-2xx"
     elif status >= 300 && status < 400 then "status-3xx"

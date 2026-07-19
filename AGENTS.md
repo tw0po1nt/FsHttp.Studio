@@ -21,3 +21,5 @@ F# house rules beyond what Fantomas/`.editorconfig` enforce. See `docs/coding-st
 ## Terminology
 
 - **"spec", never "PRD".** The document `/to-spec` produces is a spec — that's what it actually is. Per the v1.1 rename rationale for Matt Pocock's skills, drop the "PRD" framing in anything you write (specs, issues, tickets, comments). Some vendored skill files still carry the old "PRD" wording; ignore it and use "spec".
+
+- **American spellings.** Use American English in every piece of prose you write — code comments and identifiers, docs, the README, issues, and commit messages (`color` not `colour`, `serialize` not `serialise`, `behavior` not `behaviour`, `honored` not `honoured`, `canceled` not `cancelled`). CSS and platform API names that are already American (`color`, `--vscode-*`) stay as-is. Vendored files under `.agents/` keep their authors' spelling — don't rewrite them.

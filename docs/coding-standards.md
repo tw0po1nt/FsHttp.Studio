@@ -10,7 +10,7 @@ Each rule is a convention, not a lint: cite it in review, weigh it against the c
 
 ## 2. Cross-boundary wire helpers live in one module
 
-Everything that reads or writes the framed envelope wire — frame I/O, `JsonElement` property readers (`getStringProp`, `getIntProp`, `jstr`), and the outcome ↔ wire mapping — belongs in **`Companion.Envelope`** (or is re-exported from there), not copied into each caller. Two copies of a `JsonElement` reader drift (they already disagreed on whether a missing string is `null` or `""`), and the two ends of a channel that serialise the same shape in different modules fall out of sync silently. One module, opened by both ends. `BlockRunner.outcomeToWire`/`wireToOutcome` are the pattern to follow: a single shape, a single inverse, shared by host and worker.
+Everything that reads or writes the framed envelope wire — frame I/O, `JsonElement` property readers (`getStringProp`, `getIntProp`, `jstr`), and the outcome ↔ wire mapping — belongs in **`Companion.Envelope`** (or is re-exported from there), not copied into each caller. Two copies of a `JsonElement` reader drift (they already disagreed on whether a missing string is `null` or `""`), and the two ends of a channel that serialize the same shape in different modules fall out of sync silently. One module, opened by both ends. `BlockRunner.outcomeToWire`/`wireToOutcome` are the pattern to follow: a single shape, a single inverse, shared by host and worker.
 
 ## 3. Every external process gets a bounded wait and a kill path
 

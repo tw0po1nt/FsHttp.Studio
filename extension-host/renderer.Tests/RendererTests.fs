@@ -201,7 +201,7 @@ let httpErrorTests =
 let statusLineTests =
     testList
         "status line + headers"
-        [ test "the status line carries method, URL, coloured status, round-trip time, and size" {
+        [ test "the status line carries method, URL, colored status, round-trip time, and size" {
               let env =
                   { envelope "text/plain" (utf8 "hi") with
                       Method = "POST"
@@ -224,7 +224,7 @@ let statusLineTests =
               Expect.isNonEmpty (byClass "status-size" node) "size shown"
 
               let statusCode = byClass "status-code" node |> List.exactlyOne
-              Expect.isTrue (hasClass "status-2xx" statusCode) "a 200 should be coloured as 2xx"
+              Expect.isTrue (hasClass "status-2xx" statusCode) "a 200 should be colored as 2xx"
           }
 
           test "the status line sits above the body" {
@@ -257,7 +257,7 @@ let statusLineTests =
 let statusClassTests =
     testList
         "statusClass binning"
-        [ test "status codes bin to their colour class" {
+        [ test "status codes bin to their color class" {
               Expect.equal (statusClass 200) "status-2xx" "2xx"
               Expect.equal (statusClass 301) "status-3xx" "3xx"
               Expect.equal (statusClass 404) "status-4xx" "4xx"

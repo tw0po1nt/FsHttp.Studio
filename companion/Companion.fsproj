@@ -9,7 +9,7 @@
     <RollForward>LatestMajor</RollForward>
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- Keep the whole graph on one FSharp.Core so FCS's hosted compiler and the host agree
-         on assembly identity (F# 10) — see ADR-0002 / issue #10's toolchain pin. -->
+         on assembly identity (F# 10) — see ADR-0002 for the toolchain pin. -->
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   </PropertyGroup>
 

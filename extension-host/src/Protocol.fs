@@ -28,12 +28,12 @@ type RunResult =
 let toVscodeLine (fcsLine: int) : int = fcsLine - 1
 
 /// Formats a Run's compile diagnostics into the response viewer's plain text, prefixing each
-/// message with its `(line,col)` source position so it's locatable by reading (#62 / mode 2).
+/// message with its `(line,col)` source position so it's locatable by reading.
 /// The companion's `BlockRange` is 1-based line, 0-based column (ADR-0003); the column is shifted
 /// to 1-based here so the printed position matches vscode's own Ln/Col status-bar readout — where
 /// the user goes to find it. Deliberately *not* pushed as an editor diagnostic: surfacing why a
 /// Run failed is the response viewer's job, and our per-block isolation can flag source that isn't
-/// actually wrong in the whole file, so squiggling it would mislead (#52 — the editor is Ionide's).
+/// actually wrong in the whole file, so squiggling it would mislead (the editor is Ionide's).
 let formatCompileError (diagnostics: Diagnostic list) : string =
     let formatOne (d: Diagnostic) =
         sprintf "(%d,%d) %s" d.Range.StartLine (d.Range.StartCol + 1) d.Message

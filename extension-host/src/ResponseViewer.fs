@@ -19,7 +19,7 @@ let private toUriString (u: obj) : string = unbox<string> ((u?toString ()): obj)
 // The renderer core commits only to semantic class names (`status-2xx`, `json-string`, `header-row`,
 // …) and — by design (see Renderer.fs) — leaves the palette to the shell. This *is* that palette. It
 // is expressed in VSCode theme variables (`--vscode-*`) so the panel tracks the user's editor theme
-// (light/dark/high-contrast) for free, with literal fallbacks for the few token colours a theme may
+// (light/dark/high-contrast) for free, with literal fallbacks for the few token colors a theme may
 // leave undefined. Kept as a plain string literal (not run through `sprintf`) so its `%` and `{}`
 // characters need no escaping; the nonce is attached where the `<style>` tag is assembled.
 let private responseStyles =
