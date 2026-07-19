@@ -4,7 +4,7 @@ A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsH
 
 ## Why
 
-[FsHttp](https://github.com/fsprojects/FsHttp) pitches itself as a code-first replacement for Postman and `.http` files, and for *describing* requests it's excellent. But the only way to run an `http { }` block today is FSI, and FSI can only **print**. It flattens every response into a string: an image comes back as a byte dump, a JSON payload as one dense unbrowsable line, an HTML page as escaped source. The part that makes a request tool worth using, *seeing* the response, is exactly what the F# workflow can't do. Worse, FSI's printer silently destroys the response body (it's read-once by default), so reaching for the bytes yourself is a trap.
+[FsHttp](https://github.com/fsprojects/FsHttp) pitches itself as a code-first replacement for Postman and `.http` files, using FSI as the driver. But FSI can only **print**. It flattens every response into a string: an image comes back as a byte dump, a JSON payload as one dense unbrowsable line, an HTML page as escaped source. The part that makes a request tool worth using, *seeing* the response, is exactly what the FSI workflow can't do. Worse, FSI's printer silently destroys the response body (it's read-once by default), so reaching for the bytes yourself is a trap.
 
 FsHttp.Studio fills that gap: the request stays as idiomatic, source-controllable F#, and the response gets rendered richly, in the editor.
 
