@@ -62,7 +62,7 @@ let private parseRunResult (json: obj) : RunResult =
     | "runtimeError" -> RunRuntimeError(unbox<string> (json?message: obj))
     | _ -> RunProtocolError(unbox<string> (json?message: obj))
 
-/// `dotnetPath` is the SDK-bearing `dotnet` host resolved at activation (see Extension.fs / #76):
+/// `dotnetPath` is the SDK-bearing `dotnet` host resolved at activation (see Extension.fs):
 /// the `fshttpStudio.dotnetPath` override if set, otherwise `"dotnet"` off PATH once
 /// `--list-sdks` has confirmed a ≥ 10.0 SDK is present — the companion needs a full SDK (not just
 /// a runtime) for FSI's `#r "nuget:"` restore.

@@ -30,7 +30,7 @@ let private isNullish (_x: obj) : bool = jsNative
 
 /// The `fshttpStudio.dotnetPath` override: an explicit path to a `dotnet` executable, or `None`
 /// to auto-detect one on PATH. We own this setting rather than leaning on the .NET Install Tool's
-/// `existingDotnetPath`, so users needn't install that extension just for a config key (#76).
+/// `existingDotnetPath`, so users needn't install that extension just for a config key.
 let private configuredDotnetPath () : string option =
     let path = (workspace.getConfiguration "fshttpStudio").get "dotnetPath"
 
@@ -39,17 +39,21 @@ let private configuredDotnetPath () : string option =
     else
         Some path
 
+/// The major version of the SDK a `dotnet --list-sdks` line names (`10.0.100 [/path]` → `10`), or
+/// `None` for a blank or unparseable line.
+let private tryParseSdkMajor (listSdksLine: string) : int option =
+    match listSdksLine.Trim().Split(' ') |> Array.tryHead with
+    | Some version when version <> "" ->
+        match version.Split('.') |> Array.tryHead |> Option.map System.Int32.TryParse with
+        | Some(true, major) -> Some major
+        | _ -> None
+    | _ -> None
+
 /// True when `dotnet --list-sdks` reports at least one SDK with major version ≥ 10 — the floor
-/// the companion needs for FSI's `#r "nuget:"` restore (SDK, not just runtime; #75/#76).
+/// the companion needs for FSI's `#r "nuget:"` restore (an SDK, not just a runtime).
 let private hasSdk10OrLater (listSdksOutput: string) : bool =
     listSdksOutput.Split('\n')
-    |> Array.exists (fun line ->
-        match line.Trim().Split(' ') |> Array.tryHead with
-        | Some version when version <> "" ->
-            match version.Split('.') |> Array.tryHead |> Option.map System.Int32.TryParse with
-            | Some(true, major) -> major >= 10
-            | _ -> false
-        | _ -> false)
+    |> Array.exists (fun line -> tryParseSdkMajor line |> Option.exists (fun major -> major >= 10))
 
 let activate (context: ExtensionContext) =
     let item = window.createStatusBarItem (statusBarAlignmentLeft, 100.0)
@@ -79,30 +83,39 @@ let activate (context: ExtensionContext) =
         RunCommand.setHandle handle
         companionHandle <- Some handle
 
-    // First-run guidance when no ≥ 10.0 SDK is reachable: we deliberately own this "SDK not found"
-    // tail — the trade-off Option B accepts (#75) — pointing at the download page and the override.
-    let notifyNoSdk () =
-        setStatusText (Companion.statusText Companion.SdkNotFound)
-
-        onResolved
-            (window.showWarningMessage (
-                "FsHttp.Studio needs a .NET 10 SDK to run requests, but none was found. Install one, "
-                + "or set the `fshttpStudio.dotnetPath` setting to your `dotnet` executable.",
-                getSdkLabel
-            ))
-            (fun chosen ->
-                if unbox<string> chosen = getSdkLabel then
-                    commands.executeCommand ("vscode.open", uri.parse dotnetDownloadUrl) |> ignore)
-
-    // Require a user-installed .NET 10 SDK (#75/#76, the Ionide/C# Dev Kit model), replacing #57's
+    // Require a user-installed .NET 10 SDK (the Ionide/C# Dev Kit model), replacing the earlier
     // runtime-only acquisition: FSI's `#r "nuget:"` restore drives `dotnet msbuild`, which a runtime
     // lacks. Resolve the `fshttpStudio.dotnetPath` override, else `"dotnet"` off PATH; confirm it
     // carries a ≥ 10.0 SDK via `--list-sdks` before spawning the companion against it, otherwise guide.
-    let dotnetPath = configuredDotnetPath () |> Option.defaultValue "dotnet"
+    let dotnetPathOverride = configuredDotnetPath ()
+    let dotnetPath = dotnetPathOverride |> Option.defaultValue "dotnet"
 
+    // First-run guidance when no ≥ 10.0 SDK is reachable: we deliberately own this "SDK not found"
+    // tail — the trade-off Option B accepts — pointing at the download page and the override. When
+    // the override is set but didn't resolve to an SDK, say so rather than "none was found".
+    let notifyNoSdk () =
+        setStatusText (Companion.statusText Companion.SdkNotFound)
+
+        let message =
+            match dotnetPathOverride with
+            | Some path ->
+                "FsHttp.Studio needs a .NET 10 SDK to run requests, but the `fshttpStudio.dotnetPath` setting ("
+                + path
+                + ") didn't resolve to one. Check the path, or clear the setting to auto-detect a `dotnet` on PATH."
+            | None ->
+                "FsHttp.Studio needs a .NET 10 SDK to run requests, but none was found. Install one, "
+                + "or set the `fshttpStudio.dotnetPath` setting to your `dotnet` executable."
+
+        onResolved (window.showWarningMessage (message, getSdkLabel)) (fun chosen ->
+            if unbox<string> chosen = getSdkLabel then
+                commands.executeCommand ("vscode.open", uri.parse dotnetDownloadUrl) |> ignore)
+
+    // Bound the probe: a wedged `dotnet` is killed on `timeout` expiry, and the killed-child error
+    // routes to `notifyNoSdk` like any other failure — so a hung host can't stall activation.
     childProcess.execFile (
         dotnetPath,
         [| "--list-sdks" |],
+        nonNull (box {| timeout = 10000 |}),
         (fun err stdout _stderr ->
             if isNullish err && hasSdk10OrLater stdout then
                 startCompanion dotnetPath
