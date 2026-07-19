@@ -8,7 +8,7 @@ A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsH
 
 FsHttp.Studio fills that gap: the request stays as idiomatic, source-controllable F#, and the response gets rendered richly, in the editor.
 
-## What v0.1 does
+## What it does
 
 Open a `.fsx` script with FsHttp requests in it. A **`▶ Run request` CodeLens** appears above each `http { }` block. Click it, and:
 
@@ -36,9 +36,7 @@ The companion runs on the **.NET 10 SDK or newer**, which you install yourself (
 
 The architectural decisions and their trade-offs are recorded in [`docs/adr/`](./docs/adr/); the domain vocabulary lives in [`CONTEXT.md`](./CONTEXT.md).
 
-## Out of scope for v0.1
-
-v0.1 set out to gauge whether F# developers want this; its proof-of-concept demo landed well. Still deliberately deferred beyond v0.1:
+## Future improvements 
 
 - the **request tree** (grouping, naming, a Testing-API-style tree of your requests),
 - **settings**,
@@ -47,12 +45,7 @@ v0.1 set out to gauge whether F# developers want this; its proof-of-concept demo
 - the **inline-card** presentation (rendering under the block rather than in a panel),
 - dedicated **error/timeout/huge-body** rendering.
 
-## Project status
-
-**v0.1, preparing for release.** The extension is wired end-to-end and its proof-of-concept demo landed well; the current focus is a [release-readiness pass](https://github.com/tw0po1nt/FsHttp.Studio/issues/48) toward publishing on the VS Code Marketplace and Open VSX.
-
-- **Spec** (what v0.1 is): [#13](https://github.com/tw0po1nt/FsHttp.Studio/issues/13)
-- **Glossary:** [`CONTEXT.md`](./CONTEXT.md) · **Decisions:** [`docs/adr/`](./docs/adr/)
+Feature requests welcome!
 
 ## Built with
 
