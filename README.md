@@ -74,7 +74,7 @@ A mismatch means the bytes changed on the way to your machine - re-download (a d
 
 ## Try it
 
-Create a `demo.fsx`, paste this in, and click the **`▶ Run request`** CodeLens above any block. Each one hits the [PokéAPI](https://pokeapi.co/) and lands on a different `Content-Type`, so you can see every renderer:
+Create a `demo.fsx`, paste this in, and click the **`▶ Run request`** CodeLens above any block. Each block lands on a different `Content-Type` — mostly via the [PokéAPI](https://pokeapi.co/) — so you can see every renderer:
 
 ```fsharp
 #r "nuget: FsHttp"
@@ -86,9 +86,10 @@ http {
     GET "https://pokeapi.co/api/v2/pokemon/ditto"
 }
 
-// HTML → rendered as a page, not escaped source
+// HTML → rendered as a page (browser default styling; the sandbox blocks the
+// page's own CSS/JS). PokéAPI serves only JSON, so this one steps outside it.
 http {
-    GET "https://pokeapi.co/"
+    GET "https://example.com"
 }
 
 // Image → Pikachu's sprite, displayed inline
