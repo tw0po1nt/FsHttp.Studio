@@ -63,4 +63,4 @@ F# · [Fable](https://fable.io/) · the VSCode extension API · [FsHttp](https:/
 
 Licensed under the [MIT License](./LICENSE).
 
-The published extension bundles a small set of MIT-licensed components (FSharp.Core, FSharp.Compiler.Service, and Fable's `fable-library`); their notices are reproduced in [`extension-host/THIRD-PARTY-NOTICES.md`](./extension-host/THIRD-PARTY-NOTICES.md).
+The published extension bundles a small set of MIT-licensed components (FSharp.Core, FSharp.Compiler.Service, and Fable's `fable-library`); their notices are reproduced in [`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md).

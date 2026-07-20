@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../src/Extension.fsproj" />
+    <ProjectReference Include="../../src/host/Extension.fsproj" />
   </ItemGroup>
 
 </Project>

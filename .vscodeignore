@@ -1,13 +1,11 @@
 # What ships in the .vsix is the esbuild bundle under dist/, the icon, and the
 # LICENSE / notices / README. Everything below is excluded. (vsce includes every
-# file not matched here; patterns follow .gitignore semantics.)
+# file not matched here; patterns follow .gitignore semantics. The package root is
+# the repo root, so this must also exclude the repo-infra dirs that live beside src/.)
 
-# F#/Fable sources & projects — the shipped code is the bundled dist/extension.js
+# F#/Fable sources, projects, and tests — the shipped code is the bundled dist/extension.js
 src/**
-renderer/**
-webview/**
-src.Tests/**
-renderer.Tests/**
+tests/**
 **/*.fs
 **/*.fsproj
 **/*.fsx
@@ -19,8 +17,24 @@ out/**
 esbuild.mjs
 smoke.mjs
 package-lock.json
+Directory.Build.props
+global.json
+FsHttp.Studio.slnx
 .gitignore
 .vscodeignore
+.editorconfig
+
+# Repo infrastructure — docs, CI, editor, agent tooling; none of it ships
+docs/**
+.github/**
+.vscode/**
+.config/**
+.agents/**
+.claude/**
+scripts/**
+AGENTS.md
+CONTEXT.md
+skills-lock.json
 
 # Source maps and debug symbols — not needed at runtime
 **/*.map
