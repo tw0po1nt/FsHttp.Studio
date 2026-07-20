@@ -47,5 +47,11 @@ dist/companion/Companion
 # Icon SVG source — only the built PNG (package.json `icon`) is needed
 media/*.svg
 
+# README-only imagery. The Marketplace and GitHub render these from the repo
+# (vsce rewrites relative image links to the repository), so they don't need to
+# ship inside the .vsix — only media/icon.png (package.json `icon`) does.
+media/hero.png
+media/demo.gif
+
 # Redundant with `vsce package --no-dependencies`, but explicit
 node_modules/**
