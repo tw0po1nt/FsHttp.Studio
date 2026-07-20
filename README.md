@@ -32,6 +32,10 @@ Open a `.fsx` script with FsHttp requests in it. A **`▶ Run request` CodeLens*
 
 Your `#r "nuget: FsHttp, x.y.z"` version pin is honored exactly.
 
+<p align="center">
+  <img src="media/demo.gif" alt="Running a request from an .fsx script and rendering the response in a panel beside the editor" width="900">
+</p>
+
 ## Install
 
 **Prerequisite:** a .NET 10 SDK or newer on your `PATH`. Get it from [aka.ms/dotnet/download](https://aka.ms/dotnet/download).
@@ -67,6 +71,37 @@ if ($actual -ieq $expected) { "OK" } else { "MISMATCH — download is corrupt" }
 ```
 
 A mismatch means the bytes changed on the way to your machine - re-download (a different transport, e.g. `curl -L`/`Invoke-WebRequest` or the `gh` CLI, often slips past whatever mangled it) and verify again before installing.
+
+## Try it
+
+Create a `demo.fsx`, paste this in, and click the **`▶ Run request`** CodeLens above any block. Each one hits the [PokéAPI](https://pokeapi.co/) and lands on a different `Content-Type`, so you can see every renderer:
+
+```fsharp
+#r "nuget: FsHttp"
+
+open FsHttp
+
+// JSON → a collapsible, syntax-highlighted tree
+http {
+    GET "https://pokeapi.co/api/v2/pokemon/ditto"
+}
+
+// HTML → rendered as a page, not escaped source
+http {
+    GET "https://pokeapi.co/"
+}
+
+// Image → Pikachu's sprite, displayed inline
+http {
+    GET "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png"
+}
+
+// Binary → Pikachu's cry (audio/ogg): a "Binary response — <size>" note with a
+// hex preview, instead of the broken byte dump FSI would print
+http {
+    GET "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/25.ogg"
+}
+```
 
 ## How it works
 
