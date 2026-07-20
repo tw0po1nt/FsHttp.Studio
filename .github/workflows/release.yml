@@ -21,7 +21,6 @@ jobs:
 
       - name: Resolve version + tag from the manifest
         id: version
-        working-directory: extension-host
         run: |
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -32,7 +31,7 @@ jobs:
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "::error::Tag $TAG already exists — bump extension-host/package.json version before releasing."
+            echo "::error::Tag $TAG already exists — bump package.json version before releasing."
             exit 1
           fi
 
@@ -44,7 +43,7 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
-          cache-dependency-path: extension-host/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - uses: actions/cache@v4
         with:
@@ -61,17 +60,14 @@ jobs:
       - run: dotnet test FsHttp.Studio.slnx --no-build
 
       - run: npm ci
-        working-directory: extension-host
 
       # Runs the bundled renderer under node — the "bundles and runs" guard the .NET
       # tests can't cover. Same as ci.yml; a release can't ship a bundle that won't run.
       - run: npm run smoke
-        working-directory: extension-host
 
-      # Builds the single universal .vsix (compile + sync license/readme + vsce package),
-      # output extension-host/fshttp-studio-<version>.vsix.
+      # Builds the single universal .vsix (compile + vsce package), output
+      # fshttp-studio-<version>.vsix at the repo root.
       - run: npm run package
-        working-directory: extension-host
 
       - name: Publish draft GitHub Release with the .vsix attached
         uses: softprops/action-gh-release@v2
@@ -82,4 +78,4 @@ jobs:
           draft: true # a human reviews the asset + notes, then clicks Publish
           make_latest: true # takes effect once the draft is published
           generate_release_notes: true
-          files: extension-host/fshttp-studio-${{ steps.version.outputs.version }}.vsix
+          files: fshttp-studio-${{ steps.version.outputs.version }}.vsix

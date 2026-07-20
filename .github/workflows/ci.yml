@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
-          cache-dependency-path: extension-host/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - uses: actions/cache@v4
         with:
@@ -45,12 +45,9 @@ jobs:
       - run: dotnet test FsHttp.Studio.slnx --no-build
 
       - run: npm ci
-        working-directory: extension-host
 
       - run: npm run compile
-        working-directory: extension-host
 
       # Runs the renderer core's Fable/JS output under node — the guard that "compiles under Fable"
       # actually "bundles and runs", which the .NET Seam-B suite structurally can't cover.
       - run: npm run smoke
-        working-directory: extension-host

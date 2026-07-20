@@ -6,7 +6,7 @@
       "type": "shell",
       "command": "npm run compile",
       "options": {
-        "cwd": "${workspaceFolder}/extension-host"
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": [],
       "presentation": {

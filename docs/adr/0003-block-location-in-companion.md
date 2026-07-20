@@ -1,6 +1,8 @@
 # Locate blocks in the companion via FCS; no tree-sitter in v0.1
 
-Block ranges are found by the companion's FCS parse — the same parse it already runs for diagnostics — rather than by a tree-sitter grammar running in the extension host. v0.1 ships no tree-sitter.
+Block ranges are found by the companion's FCS parse rather than by a tree-sitter grammar running in the extension host. v0.1 ships no tree-sitter.
+
+> **Update (2026-07-19):** The reasoning below assumed the companion would run always-on, language-server-style diagnostics — re-parsing every `http {}` block on each edit — so block location could ride that parse "for free." We have since decided the extension does **not** do live diagnostics; the only compile errors it surfaces are the ones from a *Run* that fails (`BlockRunner`'s `CompileError`). That does not reverse this decision: locating blocks in the companion still stands on its remaining legs (one parser, one language toolchain, and the CodeLens's only action — Run — needs the companion anyway). What changes is only the cost framing — block location now pays for its own parse rather than piggybacking a parse that would happen regardless. Still cheap, no longer free. The original reasoning is left intact below as a record of the trade-off as it stood.
 
 ## Considered Options
 

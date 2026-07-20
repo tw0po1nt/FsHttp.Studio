@@ -55,15 +55,13 @@
     }
   },
   "scripts": {
-    "build:companion": "dotnet publish ../companion/Companion.fsproj -c Release -o dist/companion",
-    "build:fable:extension": "dotnet tool run fable src --outDir out",
-    "build:fable:webview": "dotnet tool run fable webview --outDir out/webview",
+    "build:companion": "dotnet publish src/companion/Companion.fsproj -c Release -o dist/companion",
+    "build:fable:extension": "dotnet tool run fable src/host --outDir out",
+    "build:fable:webview": "dotnet tool run fable src/webview --outDir out/webview",
     "build:bundle": "node esbuild.mjs",
     "smoke": "npm run build:fable:webview && node smoke.mjs",
     "compile": "dotnet tool restore && npm run build:companion && npm run build:fable:extension && npm run build:fable:webview && npm run build:bundle",
-    "sync:license": "node -e \"require('fs').copyFileSync('../LICENSE', 'LICENSE')\"",
-    "sync:readme": "node -e \"require('fs').copyFileSync('../README.md', 'README.md')\"",
-    "package": "npm run compile && npm run sync:license && npm run sync:readme && vsce package --no-dependencies"
+    "package": "npm run compile && vsce package --no-dependencies"
   },
   "devDependencies": {
     "esbuild": "^0.28.1",

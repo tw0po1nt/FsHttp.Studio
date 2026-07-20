@@ -1,10 +1,10 @@
 module Companion.BlockLocator
 
-// Finds `http { }` blocks in .fsx source via FCS's untyped-AST parse (ADR-0003, ADR-0004) —
-// the same parse the companion will reuse for diagnostics once it exists. AST-based location
-// is immune to the failure modes a textual/brace-counting scan hits: `http { }` text inside
-// comments or strings is never matched, and an unbalanced brace inside a string literal (which
-// desyncs a brace counter) does not affect a range read straight off the parse tree.
+// Finds `http { }` blocks in .fsx source via FCS's untyped-AST parse (ADR-0003, ADR-0004).
+// AST-based location is immune to the failure modes a textual/brace-counting scan hits:
+// `http { }` text inside comments or strings is never matched, and an unbalanced brace inside
+// a string literal (which desyncs a brace counter) does not affect a range read straight off
+// the parse tree.
 
 open FSharp.Compiler.CodeAnalysis
 open FSharp.Compiler.Syntax

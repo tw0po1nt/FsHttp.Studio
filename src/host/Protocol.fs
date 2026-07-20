@@ -1,6 +1,6 @@
 // Pure wire-protocol types and helpers shared by the companion client (`Companion.fs`) and the
 // CodeLens/Run wiring. Kept free of Fable/VSCode interop so the string/coordinate
-// logic below can be driven directly by a plain .NET test suite (`extension-host/src.Tests`),
+// logic below can be driven directly by a plain .NET test suite (`tests/host.Tests`),
 // the same seam-isolation the renderer core and companion already use.
 module Protocol
 

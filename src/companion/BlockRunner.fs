@@ -157,9 +157,11 @@ let private targetDiagnostic (target: BlockRange) (ceLineCount: int) (d: FSharpD
           EndLine = el
           EndCol = ec } }
 
-/// `PropertyInfo.GetProperty` is nullable-annotated (the name might not exist); every field
-/// this reads is one ADR-0002 already commits to as stable across FsHttp 13-15, so a missing
-/// property is a genuine extraction bug, not a case to recover from.
+/// `PropertyInfo.GetProperty` is nullable-annotated (the name might not exist); the fields this
+/// reads are FsHttp's `Response` record shape, which has been stable across the FsHttp versions
+/// this targets — so a missing property is a genuine extraction bug, not a case to recover from.
+/// (The response body itself is read off the BCL `HttpContent` type, which ADR-0002 commits to as
+/// version-independent.)
 let private prop (name: string) (t: Type) : Reflection.PropertyInfo =
     match t.GetProperty name with
     | null -> failwithf "reflection: property '%s' not found on %s" name t.FullName
