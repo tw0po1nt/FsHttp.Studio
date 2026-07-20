@@ -28,7 +28,7 @@ Your `#r "nuget: FsHttp, x.y.z"` version pin is honored exactly.
 
 ## Install
 
-**Prerequisite:** a .NET 10 SDK or newer on your `PATH` (a full SDK, not just the runtime; see [How it works](#how-it-works) for why). Get it from [aka.ms/dotnet/download](https://aka.ms/dotnet/download).
+**Prerequisite:** a .NET 10 SDK or newer on your `PATH`. Get it from [aka.ms/dotnet/download](https://aka.ms/dotnet/download).
 
 - **VS Code Marketplace:** search *FsHttp.Studio* in the Extensions view (`Ctrl`/`Cmd`+`Shift`+`X`), or run `ext install twopoint.fshttp-studio` from Quick Open.
 - **Open VSX** (VSCodium, Cursor, and other non-Marketplace editors): coming soon.
@@ -38,13 +38,13 @@ Your `#r "nuget: FsHttp, x.y.z"` version pin is honored exactly.
 
 Two processes, one protocol:
 
-- The **extension host**, written in F#, compiled with Fable (Ionide-style), owns the CodeLens, the response viewer, and the shell-agnostic **renderer core** (`Content-Type → DOM`).
+- The **extension host**, written in F#, compiled with Fable, owns the CodeLens, the response viewer, and the shell-agnostic **renderer core** (`Content-Type → DOM`).
 - The **companion**, a long-lived .NET process hosting an FSharp.Compiler.Service interactive session, owns all F# parsing and evaluation. It locates blocks, evaluates the clicked one, and extracts the response.
-- They exchange tagged **envelopes** across the companion's process boundary. That boundary is the editor-agnostic seam: a different editor would reimplement only the host.
+- They exchange tagged **envelopes** across the companion's process boundary. That boundary is editor-agnostic, meaning that a different editor would need to reimplement only the host. If enough people wanted it, this could be extended to editors beyond ones based on VSCode!
 
 The design deliberately extracts the response by *reflection* rather than referencing FsHttp directly, so the host never overrides the user's version pin. The whole chain (block → structured response → rendered image) is wired end-to-end in the extension.
 
-The companion runs on the **.NET 10 SDK or newer**, which you install yourself (a full SDK, not just the runtime), because evaluating `#r "nuget: FsHttp, x.y.z"` restores the package through `dotnet msbuild`. Grab it from [aka.ms/dotnet/download](https://aka.ms/dotnet/download) (as F# developers almost always already have). FsHttp.Studio auto-detects `dotnet` on your `PATH`; if your SDK lives elsewhere, point the `fshttpStudio.dotnetPath` setting at your `dotnet` executable.
+The companion runs on the **.NET 10 SDK or newer**. FsHttp.Studio auto-detects `dotnet` on your `PATH`; if your SDK lives elsewhere, point the `fshttpStudio.dotnetPath` setting at your `dotnet` executable.
 
 The architectural decisions and their trade-offs are recorded in [`docs/adr/`](./docs/adr/); the domain vocabulary lives in [`CONTEXT.md`](./CONTEXT.md).
 
@@ -56,6 +56,7 @@ The architectural decisions and their trade-offs are recorded in [`docs/adr/`](.
 - **request-chaining** (a block that needs a prior request's *response*, e.g. an auth token),
 - the **inline-card** presentation (rendering under the block rather than in a panel),
 - dedicated **error/timeout/huge-body** rendering.
+- Support for other editors
 
 Feature requests welcome!
 
