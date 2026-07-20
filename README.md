@@ -18,7 +18,7 @@ Open a `.fsx` script with FsHttp requests in it. A **`▶ Run request` CodeLens*
 
 - Only *that* block runs, evaluated against a fresh evaluation of its surrounding **setup** (`open`s, `#r`, helpers), never firing the other requests in the file.
 - A **response viewer** panel opens beside your editor and renders the body, dispatched on its `Content-Type`:
-  - **images** display inline (the clearest thing a text printer can never do),
+  - **images** display inline,
   - **JSON** as a collapsible, syntax-highlighted tree,
   - **HTML** as a rendered page,
   - everything else as readable, wrapped text.
