@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="media/hero.png" alt="FsHttp.Studio" width="640">
+</p>
+
 # FsHttp.Studio
 
 A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsHttp) request straight from your F# script and **renders** the response (images, JSON, HTML) instead of flattening it to text.
