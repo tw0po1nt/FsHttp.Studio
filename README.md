@@ -87,7 +87,7 @@ http {
 }
 
 // HTML → rendered as a page (browser default styling; the sandbox blocks the
-// page's own CSS/JS). PokéAPI serves only JSON, so this one steps outside it.
+// page's own CSS/JS).
 http {
     GET "https://example.com"
 }
