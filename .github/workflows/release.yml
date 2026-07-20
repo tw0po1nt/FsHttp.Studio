@@ -69,7 +69,18 @@ jobs:
       # fshttp-studio-<version>.vsix at the repo root.
       - run: npm run package
 
-      - name: Publish draft GitHub Release with the .vsix attached
+      # Ship a checksum alongside the asset so installers can prove their copy
+      # arrived byte-exact — corporate proxies / AV are known to silently rewrite
+      # binary downloads. sha256sum-format so `sha256sum -c` works on Linux/macOS
+      # and `Get-FileHash` verifies it by eye on Windows. Bare filename (no path)
+      # keeps `-c` working when run next to the .vsix.
+      - name: Generate SHA256 checksum
+        run: |
+          VSIX="fshttp-studio-${{ steps.version.outputs.version }}.vsix"
+          sha256sum "$VSIX" > "$VSIX.sha256"
+          cat "$VSIX.sha256"
+
+      - name: Publish draft GitHub Release with the .vsix + checksum attached
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -78,4 +89,6 @@ jobs:
           draft: true # a human reviews the asset + notes, then clicks Publish
           make_latest: true # takes effect once the draft is published
           generate_release_notes: true
-          files: fshttp-studio-${{ steps.version.outputs.version }}.vsix
+          files: |
+            fshttp-studio-${{ steps.version.outputs.version }}.vsix
+            fshttp-studio-${{ steps.version.outputs.version }}.vsix.sha256

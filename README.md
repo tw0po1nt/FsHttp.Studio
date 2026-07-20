@@ -34,6 +34,34 @@ Your `#r "nuget: FsHttp, x.y.z"` version pin is honored exactly.
 - **Open VSX** (VSCodium, Cursor, and other non-Marketplace editors): coming soon.
 - **Direct download (`.vsix`):** grab the latest `fshttp-studio-<version>.vsix` from the [Releases page](https://github.com/tw0po1nt/FsHttp.Studio/releases), then install it with *Extensions: Install from VSIX…* (Command Palette) or `code --install-extension fshttp-studio-<version>.vsix`.
 
+### Verifying your download
+
+Each release also ships a `fshttp-studio-<version>.vsix.sha256` checksum next to the `.vsix`. If *Install from VSIX…* fails with an extraction error like `too many bytes in the stream`, your copy was corrupted in transit — often by a corporate proxy or antivirus that rewrites binary downloads. Verify the file before installing; the check should confirm it matches, or tell you the download is bad.
+
+Download both files into the same folder, then:
+
+**Linux**
+
+```bash
+sha256sum -c fshttp-studio-<version>.vsix.sha256
+```
+
+**macOS**
+
+```bash
+shasum -a 256 -c fshttp-studio-<version>.vsix.sha256
+```
+
+**Windows** (PowerShell) — compare the computed hash against the checksum file:
+
+```powershell
+$expected = (Get-Content fshttp-studio-<version>.vsix.sha256).Split(' ')[0]
+$actual   = (Get-FileHash fshttp-studio-<version>.vsix -Algorithm SHA256).Hash
+if ($actual -ieq $expected) { "OK" } else { "MISMATCH — download is corrupt" }
+```
+
+A mismatch means the bytes changed on the way to your machine — re-download (a different transport, e.g. `curl -L`/`Invoke-WebRequest` or the `gh` CLI, often slips past whatever mangled it) and verify again before installing.
+
 ## How it works
 
 Two processes, one protocol:
