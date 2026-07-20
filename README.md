@@ -5,7 +5,7 @@
 # FsHttp.Studio
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=twopoint.fshttp-studio"><img src="https://img.shields.io/visual-studio-marketplace/v/twopoint.fshttp-studio?label=Marketplace&logo=visualstudiocode&color=0098FF" alt="VS Marketplace version"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=twopoint.fshttp-studio"><img src="https://vsmarketplacebadges.dev/version/twopoint.fshttp-studio.png" alt="VS Marketplace version"></a>
   <a href="https://github.com/tw0po1nt/FsHttp.Studio/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/tw0po1nt/FsHttp.Studio/ci.yml?branch=main&label=CI&logo=github" alt="CI status"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
 </p>
