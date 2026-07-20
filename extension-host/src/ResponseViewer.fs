@@ -10,9 +10,13 @@ open Vscode
 let mutable private panel: WebviewPanel option = None
 
 /// A fresh nonce per HTML build, so the CSP's `script-src 'nonce-…'` only ever allows the one
-/// script tag this module itself writes.
+/// script tag this module itself writes. Drawn from `crypto.getRandomValues` (a CSPRNG) rather
+/// than `Math.random()` so the token is genuinely unguessable — 16 random bytes rendered as 32
+/// hex chars.
 let private nonce () : string =
-    emitJsExpr (nonNull (box 0)) "Array.from({length: 32}, () => Math.floor(Math.random() * 16).toString(16)).join('')"
+    emitJsExpr
+        (nonNull (box 0))
+        "Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('')"
 
 let private toUriString (u: obj) : string = unbox<string> ((u?toString ()): obj)
 
