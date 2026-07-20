@@ -87,9 +87,10 @@ http {
 }
 
 // HTML → rendered as a page (browser default styling; the sandbox blocks the
-// page's own CSS/JS). PokéAPI serves only JSON, so this one steps outside it.
+// page's own CSS/JS). Wikipedia's server-rendered Pikachu article reads fine
+// unstyled — unlike a JS SPA, which would be a hollow shell.
 http {
-    GET "https://example.com"
+    GET "https://en.wikipedia.org/api/rest_v1/page/html/Pikachu"
 }
 
 // Image → Pikachu's sprite, displayed inline
