@@ -4,6 +4,12 @@
 
 # FsHttp.Studio
 
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=twopoint.fshttp-studio"><img src="https://img.shields.io/visual-studio-marketplace/v/twopoint.fshttp-studio?label=Marketplace&logo=visualstudiocode&color=0098FF" alt="VS Marketplace version"></a>
+  <a href="https://github.com/tw0po1nt/FsHttp.Studio/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/tw0po1nt/FsHttp.Studio/ci.yml?branch=main&label=CI&logo=github" alt="CI status"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+</p>
+
 A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsHttp) request straight from your F# script and **renders** the response (images, JSON, HTML) instead of flattening it to text.
 
 ## Why
@@ -30,7 +36,7 @@ Your `#r "nuget: FsHttp, x.y.z"` version pin is honored exactly.
 
 **Prerequisite:** a .NET 10 SDK or newer on your `PATH`. Get it from [aka.ms/dotnet/download](https://aka.ms/dotnet/download).
 
-- **VS Code Marketplace:** search *FsHttp.Studio* in the Extensions view (`Ctrl`/`Cmd`+`Shift`+`X`), or run `ext install twopoint.fshttp-studio` from Quick Open.
+- **VS Code Marketplace:** install from the [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=twopoint.fshttp-studio), search *FsHttp.Studio* in the Extensions view (`Ctrl`/`Cmd`+`Shift`+`X`), or run `ext install twopoint.fshttp-studio` from Quick Open.
 - **Open VSX** (VSCodium, Cursor, and other non-Marketplace editors): coming soon.
 - **Direct download (`.vsix`):** grab the latest `fshttp-studio-<version>.vsix` from the [Releases page](https://github.com/tw0po1nt/FsHttp.Studio/releases), then install it with *Extensions: Install from VSIX…* (Command Palette) or `code --install-extension fshttp-studio-<version>.vsix`.
 
