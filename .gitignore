@@ -32,3 +32,8 @@ out/
 # Claude Code skill symlinks — generated locally by scripts/symlink-skills.sh from the
 # canonical .agents/skills/ tree. Not committed (Claude Code doesn't yet read .agents/skills/).
 .claude/skills/
+
+# ASD-STE100 source PDF for the simplified-technical-english skill — request your own
+# authorized copy per .agents/skills/simplified-technical-english/assets/README.md; ASD's
+# terms do not permit redistribution.
+.agents/skills/simplified-technical-english/assets/*.pdf
