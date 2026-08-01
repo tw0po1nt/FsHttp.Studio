@@ -1,6 +1,6 @@
-// The webview entry: listens for the extension host's postMessage protocol
-// (`running` / `result` / `error`) and mounts the renderer core's output via `Webview.Dom`, or a
-// plain placeholder/error text otherwise.
+// The webview entry point. It listens for the extension host's postMessage protocol, which is
+// `running`, `result`, and `error`. It then mounts the renderer core's output through
+// `Webview.Dom`. For the other messages it shows plain placeholder text or error text.
 module Webview.Main
 
 open System
@@ -24,8 +24,9 @@ let private toEnvelope (raw: obj) : ResponseEnvelope =
       Body = Convert.FromBase64String(unbox<string> (raw?bodyBase64: obj))
       ElapsedMs = unbox<float> (raw?elapsedMs: obj) }
 
-// The in-flight Run indicator ticks a `setInterval`; the id lives here so any terminal message
-// (`result`/`error`) — or a second `running` for the next Run — can stop it before rendering.
+// The in-flight Run indicator ticks a `setInterval`. The id lives here, so that any terminal
+// message (`result` or `error`), or a second `running` for the next Run, can stop the interval
+// before it renders.
 let mutable private pendingTimer: float option = None
 
 let private clearPending () =
@@ -35,9 +36,10 @@ let private clearPending () =
         pendingTimer <- None
     | None -> ()
 
-/// Replaces the panel contents with a pulsing dot and a live "Running… Ns" counter, driven by a
-/// once-a-second interval, so a slow first Run (`#r "nuget:"` restore / `--worker` cold-start) shows
-/// motion instead of looking frozen. Cleared when the run settles.
+/// Replaces the panel contents with a pulsing dot and a live "Running… Ns" counter. An interval
+/// of one second drives the counter, so a slow first Run shows motion and does not look frozen.
+/// A `#r "nuget:"` restore, or a `--worker` cold start, causes such a slow Run. The counter
+/// clears when the Run settles.
 let private showRunning () =
     clearPending ()
     root.innerHTML <- ""

@@ -1,17 +1,19 @@
-// A tiny, dependency-free JSON parser for the renderer core. `System.Text.Json` is unavailable
-// under Fable and `JS.JSON` is unavailable under .NET, but the renderer core must compile to
-// *both* — to JS for the webview and to .NET for the Seam-B Expecto suite. One hand-rolled
-// recursive-descent parser over plain F# serves both, and keeps the JSON tree a pure value the
-// tests can assert against without a DOM.
+// A small JSON parser for the renderer core, with no dependencies. `System.Text.Json` is not
+// available under Fable, and `JS.JSON` is not available under .NET. But the renderer core must
+// compile to *both*: to JS for the webview, and to .NET for the Seam-B Expecto suite. One
+// hand-rolled recursive-descent parser in plain F# serves both. It also keeps the JSON tree a
+// pure value, which the tests can assert against without a DOM.
 module Renderer.Json
 
-// No StringBuilder: Fable 5.9's bundled fable-library omits the zero-arg `StringBuilder.ToString()`
-// its own codegen emits, so a StringBuilder here fails to bundle for the webview (caught by running
-// the Fable output, not by the .NET suite). Accumulating chars in a ResizeArray sidesteps it and
-// bundles cleanly. See the renderer's build smoke.
+// No StringBuilder. Fable 5.9's bundled fable-library omits the zero-argument
+// `StringBuilder.ToString()` that its own codegen emits, so a StringBuilder here fails to bundle
+// for the webview. A run of the Fable output catches this, and the .NET suite does not. A
+// ResizeArray that accumulates chars avoids the problem and bundles cleanly. See the renderer's
+// build smoke.
 
-/// A parsed JSON value. Numbers keep their original source text (`Number`) rather than a float so
-/// the tree renders exactly what the server sent — no `1e3`→`1000` or precision drift.
+/// A parsed JSON value. A number keeps its original source text (`Number`) instead of a float,
+/// so the tree renders exactly what the server sent. There is no `1e3`→`1000` change, and no
+/// precision drift.
 type JsonValue =
     | Null
     | Bool of bool
@@ -20,8 +22,8 @@ type JsonValue =
     | Array of JsonValue list
     | Object of (string * JsonValue) list
 
-// A minimal cursor over the input. Fable has no `ref`-cell perf concerns here; a mutable index
-// kept local to `parse` keeps the recursion straightforward.
+// A minimal cursor over the input. Fable has no `ref`-cell performance concern here. A mutable
+// index local to `parse` keeps the recursion straightforward.
 type private Cursor = { Text: string; mutable Pos: int }
 
 let private peek (c: Cursor) : char option =
@@ -43,7 +45,7 @@ let private expect (c: Cursor) (ch: char) =
     | Some actual -> fail c (sprintf "expected '%c' but found '%c'" ch actual)
     | None -> fail c (sprintf "expected '%c' but reached end of input" ch)
 
-/// Consumes a bare literal (`true`/`false`/`null`) once its first character has been matched.
+/// Consumes a bare literal (`true`, `false`, or `null`) after a match on its first character.
 let private literal (c: Cursor) (word: string) =
     if
         c.Pos + word.Length <= c.Text.Length
@@ -211,9 +213,10 @@ and private parseObject (c: Cursor) : JsonValue =
 
         Object(List.ofSeq members)
 
-/// Parses `text` into a `JsonValue`, returning `None` when it is not valid JSON so the renderer
-/// can fall through to the plain-text fallback rather than throwing (an `application/json`
-/// Content-Type on a malformed body must still render honestly, not crash the panel).
+/// Parses `text` into a `JsonValue`. Returns `None` when `text` is not valid JSON, so the
+/// renderer can fall through to the plain-text fallback instead of a throw. An
+/// `application/json` Content-Type on a malformed body must still render honestly, and must not
+/// crash the panel.
 let tryParse (text: string) : JsonValue option =
     try
         let cursor = { Text = text; Pos = 0 }

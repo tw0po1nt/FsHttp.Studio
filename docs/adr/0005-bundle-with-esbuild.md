@@ -2,8 +2,10 @@
 
 v0.1 bundles both the extension host and the webview script with esbuild.
 
-The bindings research ([#4](https://github.com/tw0po1nt/FsHttp.Studio/issues/4)) recommended webpack and warned esbuild off — but for **one** reason only: esbuild silently broke `web-tree-sitter`'s wasm loading (its ESM→CJS shim leaves `import.meta.url` undefined, so the runtime wasm never resolves). That risk no longer exists. [ADR-0003](./0003-block-location-in-companion.md) moved block location into the companion and ships **no tree-sitter — and no other wasm — in the extension host**, so the sole thing that eliminated esbuild is gone.
+The bindings research ([#4](https://github.com/tw0po1nt/FsHttp.Studio/issues/4)) recommended webpack and rejected esbuild, but for **one** reason only. esbuild silently broke the wasm load in `web-tree-sitter`. Its ESM-to-CJS shim leaves `import.meta.url` undefined, so the runtime wasm never resolves.
 
-With a plain Fable-ESM + webview-script bundle and `vscode` marked external, esbuild is the faster, lower-config modern default — the one VSCode's own extension samples use — and Ionide itself has signalled intent to move off webpack. The choice is low-stakes and roughly a one-file swap if it ever bites.
+That risk no longer exists. [ADR-0003](./0003-block-location-in-companion.md) moved block location into the companion. The extension host now ships **no tree-sitter, and no other wasm**, so the only objection to esbuild is gone.
 
-Recorded specifically so no one "reverts" to webpack on the strength of #4's now-stale recommendation without realising its premise was deleted by ADR-0003.
+The build is a plain Fable-ESM bundle plus a webview script, with `vscode` marked external. For that build, esbuild is the faster modern default, and it needs less configuration. VSCode's own extension samples use it, and Ionide has signaled its intent to leave webpack. The choice is low-risk, and a change back is approximately a one-file swap.
+
+This decision is recorded so that nobody "reverts" to webpack because of the stale recommendation in #4. ADR-0003 deleted the premise of that recommendation.

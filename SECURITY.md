@@ -2,34 +2,39 @@
 
 ## Supported versions
 
-FsHttp.Studio is pre-1.0 and moves fast. Security fixes land on the latest
-released version only; please reproduce any report against the newest
-`fshttp-studio-<version>.vsix` before filing.
+FsHttp.Studio is pre-1.0 and changes quickly. Security fixes go only to the
+latest released version. Before you file a report, reproduce the problem
+against the newest `fshttp-studio-<version>.vsix`.
 
-## Reporting a vulnerability
+## Report a vulnerability
 
-**Please do not open a public issue for security problems.**
+**Do not open a public issue for a security problem.**
 
-Report privately through GitHub's
+Report the vulnerability privately with GitHub's
 [**Report a vulnerability**](https://github.com/tw0po1nt/FsHttp.Studio/security/advisories/new)
-button (Security → Advisories). This opens a private advisory visible only to
-the maintainers. If you can't use GitHub advisories, email
+button (Security → Advisories). The button opens a private advisory that only
+the maintainers can see. If you cannot use GitHub advisories, send email to
 **matt@twopoint.dev** instead.
 
-Please include:
+Include this information:
 
-- the extension version and your editor + OS,
-- what an attacker could do (impact),
-- and the minimal steps or `.fsx` sample to reproduce it.
+- The extension version, your editor, and your operating system.
+- The impact: what an attacker can do.
+- The minimum steps, or the `.fsx` sample, that reproduce the problem.
 
-You'll get an acknowledgement within a few days. Once a fix ships, we're happy
-to credit you in the advisory unless you'd prefer to stay anonymous.
+You will receive an acknowledgment in a few days. After a fix ships, we can
+credit you in the advisory. Tell us if you prefer to stay anonymous.
 
 ## Scope notes
 
-FsHttp.Studio evaluates the F# script you open and runs the HTTP requests it
-contains — that execution is the intended behavior, not a vulnerability. The
-interesting boundaries for reports are the **companion process protocol**, the
-**webview response viewer** (it renders untrusted response bodies — HTML, JSON,
-images — from whatever server your request hit), and anything that lets a
-*response* escape the viewer's sandbox or run code in the extension host.
+FsHttp.Studio evaluates the F# script you open, and runs the HTTP requests in
+that script. This execution is the intended behavior, not a vulnerability.
+
+Report problems at these boundaries:
+
+- The **companion process protocol**, which crosses the companion's process
+  boundary.
+- The **response viewer** webview. It renders untrusted response bodies (HTML,
+  JSON, and images) from the server that answered your request.
+- Any path that lets a *response* escape the viewer's sandbox, or run code in
+  the extension host.

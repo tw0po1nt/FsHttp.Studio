@@ -1,5 +1,5 @@
-// Hand-rolled Node.js interop — only the slice this project touches (SageFs's proven
-// bindings strategy).
+// Hand-rolled Node.js interop. It covers only the part that this project uses, which follows
+// SageFs's proven bindings strategy.
 module Node
 
 open Fable.Core
@@ -19,11 +19,12 @@ type ChildProcess =
 type IChildProcessModule =
     abstract spawn: command: string * args: string[] * options: obj -> ChildProcess
 
-    /// child_process.execFile(file, args, options, callback) — runs a short-lived command and
-    /// buffers its output. The callback is `(error, stdout, stderr)`: `error` is null on a zero
-    /// exit, or a Node error otherwise — `ENOENT` when `file` isn't found, or a killed-on-`timeout`
-    /// error when the child outlives the `timeout` option (Node kills it with `killSignal`). Used to
-    /// probe `dotnet --list-sdks` at activation, bounded so a wedged `dotnet` can't hang the probe.
+    /// child_process.execFile(file, args, options, callback). It runs a short-lived command and
+    /// buffers the output. The callback is `(error, stdout, stderr)`. `error` is null on a zero
+    /// exit, and a Node error otherwise. It is `ENOENT` when `file` does not exist. It is a
+    /// killed-on-`timeout` error when the child outlives the `timeout` option, because Node
+    /// kills the child with `killSignal`. Activation uses this to probe `dotnet --list-sdks`.
+    /// The bound makes sure that a stalled `dotnet` cannot hang the probe.
     abstract execFile:
         file: string * args: string[] * options: obj * callback: (obj -> string -> string -> unit) -> unit
 
@@ -31,14 +32,15 @@ type IChildProcessModule =
 let childProcess: IChildProcessModule = jsNative
 
 type IFileSystemModule =
-    /// fs.readFileSync(path, encoding) — reads a file to a string, or throws (e.g. `ENOENT`).
+    /// fs.readFileSync(path, encoding). It reads a file to a string, or throws, for example
+    /// with `ENOENT`.
     abstract readFileSync: path: string * encoding: string -> string
 
 [<Import("*", "fs")>]
 let fs: IFileSystemModule = jsNative
 
-// path.join is variadic; Node won't accept a single array argument, so this spreads
-// the F# array at the JS call site rather than passing it as one positional arg.
+// path.join is variadic, and Node does not accept a single array argument. This binding
+// therefore spreads the F# array at the JS call site, instead of one positional argument.
 [<Import("*", "path")>]
 let private pathModule: obj = jsNative
 

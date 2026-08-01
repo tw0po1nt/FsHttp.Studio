@@ -1,11 +1,11 @@
-// The extension-host side of the framed envelope transport (ADR-0002). Mirrors
-// companion/Envelope.fs's framing exactly; this side runs in Node/JS via Fable.
+// The extension-host side of the framed envelope transport (ADR-0002). It mirrors the framing
+// in companion/Envelope.fs exactly. This side runs in Node and JS, through Fable.
 module Envelope
 
 open System.Text
 
-/// Incrementally decodes length-prefixed frames out of a stream of Node Buffer chunks,
-/// buffering a partial frame across calls.
+/// Decodes length-prefixed frames incrementally from a stream of Node Buffer chunks. It buffers
+/// a partial frame across calls.
 type FrameParser(onFrame: byte[] -> unit) =
     let mutable buffer: byte[] = [||]
 

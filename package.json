@@ -49,7 +49,7 @@
         "fshttpStudio.dotnetPath": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Absolute path to a `dotnet` executable that carries a .NET 10 (or later) SDK. Leave empty to auto-detect `dotnet` on your `PATH`. Set this when your SDK isn't on `PATH`, or to pin a specific install."
+          "markdownDescription": "Absolute path to a `dotnet` executable that carries a .NET 10 SDK or newer. Leave this empty to detect `dotnet` on your `PATH` automatically. Set it when your SDK is not on `PATH`, or to pin a specific installation."
         }
       }
     }

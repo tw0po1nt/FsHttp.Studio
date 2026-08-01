@@ -1,39 +1,39 @@
 module Companion.BlockLocator
 
-// Finds `http { }` blocks in .fsx source via FCS's untyped-AST parse (ADR-0003, ADR-0004).
-// AST-based location is immune to the failure modes a textual/brace-counting scan hits:
-// `http { }` text inside comments or strings is never matched, and an unbalanced brace inside
-// a string literal (which desyncs a brace counter) does not affect a range read straight off
-// the parse tree.
+// Finds `http { }` blocks in .fsx source with FCS's untyped-AST parse (ADR-0003, ADR-0004).
+// AST-based location avoids the failure modes of a textual brace-counting scan. It never
+// matches `http { }` text inside a comment or a string, and an unbalanced brace inside a
+// string literal does not affect a range that comes directly from the parse tree. That same
+// brace desynchronizes a brace counter.
 
 open FSharp.Compiler.CodeAnalysis
 open FSharp.Compiler.Syntax
 open FSharp.Compiler.Text
 
-/// A source range using FCS's own numbering: 1-based lines, 0-based columns.
+/// A source range in FCS's own numbering: 1-based lines, 0-based columns.
 type BlockRange =
     { StartLine: int
       StartCol: int
       EndLine: int
       EndCol: int }
 
-/// A located block's own CE range, plus the range of the top-level statement that contains
-/// it (a `let` binding or a bare expression statement). Run needs the latter: blanking out
-/// another block's bare CE span alone would leave that statement's own trailing
-/// `|> Request.send`/`|> ...` dangling with nothing to pipe from.
+/// A located block's own CE range, plus the range of the top-level statement that contains the
+/// block. That statement is a `let` binding or a bare expression statement. Run needs the
+/// statement range: if it blanks another block's bare CE span alone, that statement's own
+/// trailing `|> Request.send` stays behind with nothing to pipe from.
 type LocatedBlock =
     { Block: BlockRange
       Statement: BlockRange }
 
-/// Synthetic filename fed to FCS's parser. Only its `.fsx` extension matters — it selects
-/// script-mode parsing (ADR-0004); the source never actually lives on disk under this name.
+/// Synthetic filename given to FCS's parser. Only the `.fsx` extension matters, because it
+/// selects script-mode parsing (ADR-0004). The source never exists on disk under this name.
 [<Literal>]
 let private syntheticFileName = "block-locator-input.fsx"
 
 let private checker = FSharpChecker.Create()
 
-/// Matches a CE builder identifier by name — its bare form (`http`) or the last segment of a
-/// dotted one (`FsHttp.Dsl.http`), mirroring FSAC's TestAdapter matcher.
+/// Matches a CE builder identifier by name: the bare form (`http`), or the last segment of a
+/// dotted form (`FsHttp.Dsl.http`). This mirrors FSAC's TestAdapter matcher.
 let private (|BuilderNamed|_|) (name: string) (expr: SynExpr) =
     match expr with
     | SynExpr.Ident ident when ident.idText = name -> Some()
@@ -43,12 +43,12 @@ let private (|BuilderNamed|_|) (name: string) (expr: SynExpr) =
         | _ -> None
     | _ -> None
 
-/// The nearest enclosing `SynModule` ancestor's range is the whole top-level statement — a
-/// `let` decl's range starts at the `let` keyword and runs to the end of its RHS, and a bare
-/// expression statement's range is the statement itself — in both cases exactly the span that
-/// must be blanked to remove one block's entire effect, not just its CE. Falls back to the
-/// block's own range if no such ancestor exists (shouldn't happen for a top-level `.fsx`
-/// block, but the range is still usable as a no-op blank span if it ever does).
+/// The nearest enclosing `SynModule` ancestor's range is the whole top-level statement. A
+/// `let` declaration's range starts at the `let` keyword and ends at the end of its right-hand
+/// side. A bare expression statement's range is the statement itself. In both cases the range
+/// is exactly the span to blank, which removes one block's whole effect and not only its CE.
+/// Falls back to the block's own range when no such ancestor exists. That case should not
+/// occur for a top-level `.fsx` block, and the range is still usable as a no-op blank span.
 let private enclosingStatementRange (path: SyntaxVisitorPath) (fallback: range) : range =
     path
     |> List.tryPick (function
@@ -56,8 +56,8 @@ let private enclosingStatementRange (path: SyntaxVisitorPath) (fallback: range) 
         | _ -> None)
     |> Option.defaultValue fallback
 
-/// `SynExpr.App.Range` covers `http { ... }` — builder ident and both braces — and excludes
-/// any enclosing `let r =` binding, so it is exactly the span a later Run needs to extract.
+/// `SynExpr.App.Range` covers `http { ... }`, which is the builder identifier and both braces.
+/// It excludes any enclosing `let r =` binding, so it is exactly the span a later Run extracts.
 let private findLocatedBlocks (ast: ParsedInput) : (range * range) list =
     (([], ast)
      ||> ParsedInput.fold (fun acc path node ->
@@ -83,10 +83,10 @@ let private parse (source: string) =
     checker.ParseFile(syntheticFileName, SourceText.ofString source, parsingOptions)
     |> Async.RunSynchronously
 
-/// Parses `source` as a `.fsx` script and returns every `http { }` block found, in source
-/// order, each paired with the range of its enclosing top-level statement. Parsing needs no
-/// project, NuGet resolution, or type-check, so an undefined `http` identifier or an
-/// unresolved `#r` does not prevent location.
+/// Parses `source` as a `.fsx` script and returns every `http { }` block it finds, in source
+/// order. Each block is paired with the range of its enclosing top-level statement. The parse
+/// needs no project, no NuGet resolution, and no type-check, so an undefined `http` identifier
+/// or an unresolved `#r` does not prevent location.
 let locateBlocks (source: string) : LocatedBlock list =
     (parse source).ParseTree
     |> findLocatedBlocks
@@ -94,12 +94,12 @@ let locateBlocks (source: string) : LocatedBlock list =
         { Block = toBlockRange b
           Statement = toBlockRange s })
 
-/// The range of every `http { }` block found in `source`, in source order.
+/// The range of every `http { }` block in `source`, in source order.
 let locate (source: string) : BlockRange list =
     locateBlocks source |> List.map (fun lb -> lb.Block)
 
-/// Reconstructs the exact source text a range covers, using FCS's own numbering (1-based
-/// lines, 0-based columns).
+/// Reconstructs the exact source text that a range covers. Uses FCS's own numbering: 1-based
+/// lines, 0-based columns.
 let sliceRange (source: string) (r: BlockRange) : string =
     let lines = source.Replace("\r\n", "\n").Split('\n')
 

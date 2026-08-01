@@ -1,7 +1,7 @@
-// The `▶ Run request` CodeLens (ADR-0003): one lens per block the companion locates
-// in a `.fsx` script, and none at all on `.fs` or while the companion is down — ADR-0003's "no
-// companion ⇒ no lenses" by construction, made legible by the status-bar item rather than
-// looking like silent breakage.
+// The `▶ Run request` CodeLens (ADR-0003). It shows one lens for each block that the companion
+// locates in a `.fsx` script. It shows no lens on a `.fs` file, and no lens while the companion
+// is down. That is ADR-0003's "no companion, no lenses" by construction. The status-bar item
+// makes the state legible, so it does not look like a silent failure.
 module CodeLensProvider
 
 open Fable.Core
@@ -9,8 +9,8 @@ open Fable.Core.JsInterop
 open Vscode
 open Protocol
 
-/// The command a lens's click invokes; `RunCommand.fs` registers the handler under this id and
-/// `package.json`'s `contributes.commands` declares it.
+/// The command that a click on a lens invokes. `RunCommand.fs` registers the handler under this
+/// id, and `contributes.commands` in `package.json` declares it.
 [<Literal>]
 let commandId = "fshttpStudio.runBlock"
 
@@ -19,12 +19,12 @@ let private emitter = EventEmitter<unit>()
 let mutable private handle: Companion.Handle option = None
 let mutable private ready = false
 
-/// Called once `Extension.fs` has spawned the companion, so `provideCodeLenses` has something
-/// to send `locate` requests to.
+/// Called after `Extension.fs` spawns the companion, so `provideCodeLenses` has a target for
+/// its `locate` requests.
 let setHandle (h: Companion.Handle) = handle <- Some h
 
-/// Called on every companion state transition. Fires `onDidChangeCodeLenses` only on an actual
-/// ready/not-ready flip, so VSCode doesn't re-query on every unrelated status tick.
+/// Called on every companion state transition. It fires `onDidChangeCodeLenses` only on a real
+/// change between ready and not-ready, so VSCode does not re-query on an unrelated status tick.
 let setReady (isReady: bool) =
     if isReady <> ready then
         ready <- isReady

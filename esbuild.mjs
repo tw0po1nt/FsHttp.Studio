@@ -1,5 +1,5 @@
-// ADR-0005: esbuild bundles the extension host (Node target, vscode external) and the
-// webview script (browser target) as two separate entries.
+// ADR-0005: esbuild bundles two separate entries. The first is the extension host, with a Node
+// target and `vscode` marked external. The second is the webview script, with a browser target.
 import * as esbuild from "esbuild";
 
 const watch = process.argv.includes("--watch");

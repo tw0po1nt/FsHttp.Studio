@@ -1,9 +1,10 @@
-// Spawns the companion process and speaks its request/response protocol: the walking
-// skeleton's `hello`/`ready` handshake, plus `locate`/`run` built on top.
-// The companion's own I/O loop (`Program.fs`) reads one frame, responds, then reads the next —
-// so responses always arrive in the order their requests were sent. A single FIFO queue of
-// pending resolvers, dequeued on every non-`ready` frame, is therefore enough to pair each
-// response with the request that caused it; no request id needs to cross the wire.
+// Spawns the companion process and speaks its request and response protocol. That protocol is
+// the walking skeleton's `hello` and `ready` handshake, plus `locate` and `run` on top of it.
+//
+// The companion's own I/O loop (`Program.fs`) reads one frame, responds, and then reads the
+// next frame. Responses therefore always arrive in the order of their requests. One FIFO queue
+// of pending resolvers, dequeued on every frame that is not `ready`, is enough to pair each
+// response with the request that caused it. No request id needs to cross the wire.
 module Companion
 
 open Fable.Core
@@ -62,10 +63,11 @@ let private parseRunResult (json: obj) : RunResult =
     | "runtimeError" -> RunRuntimeError(unbox<string> (json?message: obj))
     | _ -> RunProtocolError(unbox<string> (json?message: obj))
 
-/// `dotnetPath` is the SDK-bearing `dotnet` host resolved at activation (see Extension.fs):
-/// the `fshttpStudio.dotnetPath` override if set, otherwise `"dotnet"` off PATH once
-/// `--list-sdks` has confirmed an SDK at or above the companion's target major is present — the
-/// companion needs a full SDK (not just a runtime) for FSI's `#r "nuget:"` restore.
+/// `dotnetPath` is the SDK-bearing `dotnet` host that activation resolved (see Extension.fs).
+/// It is the `fshttpStudio.dotnetPath` override when the user sets that override. Otherwise it
+/// is `"dotnet"` from PATH, after `--list-sdks` confirms an SDK at or above the companion's
+/// target major version. The companion needs a full SDK, not only a runtime, because FSI's
+/// `#r "nuget:"` restore needs one.
 let start (dotnetPath: string) (companionDllPath: string) (onState: State -> unit) : Handle =
     onState Starting
 
@@ -109,7 +111,7 @@ let private send (handle: Handle) (payloadJson: string) (onResponse: obj -> unit
     handle.Pending.Add(onResponse)
     handle.Process.stdin.write (encodeFrame (encodeUtf8 payloadJson)) |> ignore
 
-/// Sends a `locate` request over the framed envelope and resolves with the block ranges once
+/// Sends a `locate` request over the framed envelope. It resolves with the block ranges after
 /// the companion's `blocks` response arrives.
 let locate (handle: Handle) (source: string) : Async<BlockRange list> =
     Async.FromContinuations(fun (resolve, _reject, _cancel) ->
@@ -119,8 +121,8 @@ let locate (handle: Handle) (source: string) : Async<BlockRange list> =
             let ranges: obj[] = unbox (json?ranges: obj)
             resolve (ranges |> Array.map toBlockRange |> Array.toList)))
 
-/// Sends a `run` request for the `blockIndex`-th located block (0-based, matching a prior
-/// `locate`'s ordering) and resolves with its outcome.
+/// Sends a `run` request for the located block at `blockIndex`, and resolves with its outcome.
+/// The index is 0-based, and it matches the order of an earlier `locate`.
 let run (handle: Handle) (source: string) (blockIndex: int) : Async<RunResult> =
     Async.FromContinuations(fun (resolve, _reject, _cancel) ->
         let payload: obj =

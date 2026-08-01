@@ -1,7 +1,7 @@
 module Companion.Tests.TestServer
 
 // A minimal in-process HTTP server for Seam A's "against a local test server" acceptance
-// criteria — avoids depending on any external process or language runtime.
+// criteria. It depends on no external process, and on no other language runtime.
 
 open System
 open System.Net
@@ -14,8 +14,8 @@ let private getFreePort () =
     l.Stop()
     port
 
-/// Serves `routes` (path -> handler, each responsible for writing and closing the response)
-/// on a free loopback port until disposed.
+/// Serves `routes` on a free loopback port until disposal. Each route is a path and a handler,
+/// and each handler writes and closes its own response.
 type TestServer(routes: Map<string, HttpListenerContext -> unit>) =
     let port = getFreePort ()
     let prefix = sprintf "http://127.0.0.1:%d/" port
@@ -47,14 +47,14 @@ type TestServer(routes: Map<string, HttpListenerContext -> unit>) =
     let thread = Thread(loop, IsBackground = true)
     do thread.Start()
 
-    /// Base URL with no trailing slash, e.g. `http://127.0.0.1:54321`.
+    /// The base URL, with no trailing slash. One example is `http://127.0.0.1:54321`.
     member _.BaseUrl = prefix.TrimEnd('/')
 
     interface IDisposable with
         member _.Dispose() = listener.Close()
 
-/// Writes `bytes` as the response body with the given content type and status, plus any
-/// extra headers.
+/// Writes `bytes` as the response body, with the given content type and status. It also writes
+/// any extra headers.
 let bytesHandler
     (status: int)
     (contentType: string)
@@ -68,21 +68,21 @@ let bytesHandler
     ctx.Response.OutputStream.Write(bytes, 0, bytes.Length)
     ctx.Response.OutputStream.Close()
 
-/// Writes `text` as a `text/plain` response body with the given status.
+/// Writes `text` as a `text/plain` response body, with the given status.
 let textHandler (status: int) (text: string) (ctx: HttpListenerContext) =
     bytesHandler status "text/plain" [] (Text.Encoding.UTF8.GetBytes text) ctx
 
-/// A handler that increments `counter` on every hit, then responds `200 OK`. The listener
-/// loop processes one request at a time, so a plain mutation is safe here.
+/// A handler that increments `counter` on every request, and then responds `200 OK`. The
+/// listener loop processes one request at a time, so a plain mutation is safe here.
 let countingHandler (counter: int ref) (ctx: HttpListenerContext) =
     counter.Value <- counter.Value + 1
     textHandler 200 "hit" ctx
 
-/// A handler that never answers: it blocks on `release` until the test signals it, so the request
-/// send on the other end never completes. Drives the "worker produces no frame and hangs" path —
-/// the send inside the worker stalls, so the worker emits nothing at all. Self-contained against
-/// throws (a dropped connection once the caller is killed, a disposed event) so a background
-/// listener thread can never crash the test process.
+/// A handler that never answers. It blocks on `release` until the test signals it, so the
+/// request send at the other end never completes. It drives the "worker produces no frame and
+/// hangs" path, because the send inside the worker stalls and the worker emits nothing. It
+/// catches its own throws, such as a dropped connection after the caller is killed, or a
+/// disposed event. A background listener thread can therefore never crash the test process.
 let hangingHandler (release: Threading.ManualResetEventSlim) (ctx: HttpListenerContext) =
     try
         release.Wait()
@@ -94,17 +94,17 @@ let hangingHandler (release: Threading.ManualResetEventSlim) (ctx: HttpListenerC
     with _ ->
         ()
 
-/// Streams `bytes` chunked, flushing the headers a beat *before* the body — the shape that
-/// makes FsHttp's default `ResponseHeadersRead` hand back a read-once body stream still tied to
-/// the live socket. This is what reproduces the "stream was already consumed" bug: a body
-/// that arrives instantly (every other handler here) never exercises that path. Keep-alive is
-/// left on so the connection is pooled and reused across Runs, mirroring the real server.
+/// Streams `bytes` in chunks, and flushes the headers a moment *before* the body. That shape
+/// makes FsHttp's default `ResponseHeadersRead` return a read-once body stream that is still
+/// tied to the live socket. It reproduces the "stream was already consumed" bug. A body that
+/// arrives at once, which every other handler here sends, never reaches that path. Keep-alive
+/// stays on, so the connection is pooled and reused across Runs, as a real server does.
 let streamingBytesHandler (contentType: string) (bytes: byte[]) (ctx: HttpListenerContext) =
     ctx.Response.StatusCode <- 200
     ctx.Response.ContentType <- contentType
     ctx.Response.SendChunked <- true
     ctx.Response.KeepAlive <- true
-    // Force the headers onto the wire first, then dribble the body out in chunks.
+    // Force the headers onto the wire first, and then send the body in chunks.
     ctx.Response.OutputStream.Flush()
     Thread.Sleep(50)
 

@@ -1,6 +1,6 @@
-// Hand-rolled VSCode API interop — only the slice this project touches: the status bar the
-// walking skeleton needed, plus the CodeLens, command, and webview-panel slices the
-// CodeLens → Run → rendered response flow adds.
+// Hand-rolled VSCode API interop. It covers only the parts that this project uses: the status
+// bar that the walking skeleton needed, plus the CodeLens, command, and webview-panel parts
+// that the CodeLens → Run → rendered response flow adds.
 module Vscode
 
 open System
@@ -25,25 +25,25 @@ type TextDocument =
     abstract fileName: string
     abstract getText: unit -> string
 
-/// vscode.Range — constructed via the 4-number overload (startLine, startChar, endLine,
-/// endChar); opaque otherwise, since the extension host only ever builds one to hand to a
-/// `CodeLens` and never reads it back.
+/// vscode.Range. The 4-number overload constructs it (startLine, startChar, endLine, endChar).
+/// It is opaque otherwise, because the extension host only builds one to give to a `CodeLens`,
+/// and never reads it back.
 [<Import("Range", "vscode")>]
 type Range(_startLine: float, _startCharacter: float, _endLine: float, _endCharacter: float) = class end
 
-/// vscode.CodeLens — likewise opaque once built: the provider only ever constructs and returns
-/// these, never inspects them again.
+/// vscode.CodeLens. It is opaque once built, because the provider only constructs and returns
+/// these, and never inspects them again.
 [<Import("CodeLens", "vscode")>]
 type CodeLens(_range: Range, _command: obj) = class end
 
 type CodeLensProvider =
-    /// Fires to tell VSCode to re-invoke `provideCodeLenses` even though the document itself
-    /// hasn't changed — the companion transitioning to/from `Ready` is exactly that case
+    /// Fires to tell VSCode to invoke `provideCodeLenses` again, even when the document itself
+    /// did not change. A companion transition into or out of `Ready` is exactly that case
     /// (ADR-0003: no CodeLenses while the companion is absent).
     abstract onDidChangeCodeLenses: obj
     abstract provideCodeLenses: document: TextDocument * token: obj -> JS.Promise<ResizeArray<CodeLens>>
 
-/// vscode.EventEmitter<T> — used to back a provider's `onDidChangeCodeLenses`.
+/// vscode.EventEmitter&lt;T&gt;. It backs a provider's `onDidChangeCodeLenses`.
 [<Import("EventEmitter", "vscode")>]
 type EventEmitter<'T>() =
     member _.event: obj = jsNative
@@ -64,9 +64,10 @@ let commands: ICommands = jsNative
 
 // --- workspace configuration -----------------------------------------------------------------
 
-/// vscode.WorkspaceConfiguration — only `get` is used, to read the `fshttpStudio.dotnetPath`
-/// override. The setting declares a `""` default, so this reads back as a string (empty when
-/// unset); the caller treats blank as "not configured".
+/// vscode.WorkspaceConfiguration. Only `get` is used, to read the `fshttpStudio.dotnetPath`
+/// override. The setting declares a `""` default, so this reads back as a string, and the
+/// string is empty when the user has not set the override. The caller treats a blank string as
+/// "not configured".
 type WorkspaceConfiguration =
     abstract get: section: string -> string
 
@@ -94,8 +95,9 @@ type WebviewPanel =
 type IWindow =
     abstract createStatusBarItem: alignment: float * priority: float -> StatusBarItem
     abstract createWebviewPanel: viewType: string * title: string * showOptions: float * options: obj -> WebviewPanel
-    /// vscode.window.showWarningMessage(message, item) — one actionable button; the promise
-    /// resolves to the clicked item's label, or `undefined` if dismissed.
+    /// vscode.window.showWarningMessage(message, item). It shows one button that the user can
+    /// click. The promise resolves to the clicked item's label, or to `undefined` when the user
+    /// dismisses the message.
     abstract showWarningMessage: message: string * item: string -> JS.Promise<obj>
 
 [<Import("window", "vscode")>]

@@ -1,7 +1,7 @@
-// The response viewer (ADR-0001): a single webview panel, reused across runs,
-// opened Beside the editor. This module owns creating/revealing that one panel and posting
-// messages into it; the webview side (`webview/Main.fs`) owns turning those messages into
-// rendered DOM via the renderer core.
+// The response viewer (ADR-0001). It is a single webview panel, reused across Runs, and opened
+// Beside the editor. This module creates and reveals that one panel, and posts messages into
+// it. The webview side (`webview/Main.fs`) turns those messages into rendered DOM, through the
+// renderer core.
 module ResponseViewer
 
 open Fable.Core.JsInterop
@@ -9,10 +9,10 @@ open Vscode
 
 let mutable private panel: WebviewPanel option = None
 
-/// A fresh nonce per HTML build, so the CSP's `script-src 'nonce-…'` only ever allows the one
-/// script tag this module itself writes. Drawn from `crypto.getRandomValues` (a CSPRNG) rather
-/// than `Math.random()` so the token is genuinely unguessable — 16 random bytes rendered as 32
-/// hex chars.
+/// A fresh nonce for each HTML build, so the CSP's `script-src 'nonce-…'` allows only the one
+/// script tag that this module writes. It comes from `crypto.getRandomValues`, which is a
+/// CSPRNG, and not from `Math.random()`, so the token is genuinely unguessable. It is 16 random
+/// bytes, rendered as 32 hex characters.
 let private nonce () : string =
     emitJsExpr
         (nonNull (box 0))
@@ -20,12 +20,13 @@ let private nonce () : string =
 
 let private toUriString (u: obj) : string = unbox<string> ((u?toString ()): obj)
 
-// The renderer core commits only to semantic class names (`status-2xx`, `json-string`, `header-row`,
-// …) and — by design (see Renderer.fs) — leaves the palette to the shell. This *is* that palette. It
-// is expressed in VSCode theme variables (`--vscode-*`) so the panel tracks the user's editor theme
-// (light/dark/high-contrast) for free, with literal fallbacks for the few token colors a theme may
-// leave undefined. Kept as a plain string literal (not run through `sprintf`) so its `%` and `{}`
-// characters need no escaping; the nonce is attached where the `<style>` tag is assembled.
+// The renderer core commits only to semantic class names, such as `status-2xx`, `json-string`,
+// and `header-row`. By design it leaves the palette to the shell (see Renderer.fs). This *is*
+// that palette. It uses VSCode theme variables (`--vscode-*`), so the panel follows the user's
+// editor theme (light, dark, or high-contrast) for free. Literal fallbacks cover the few token
+// colors that a theme can leave undefined. This stays a plain string literal, and does not go
+// through `sprintf`, so its `%` and `{}` characters need no escape. The nonce attaches where
+// the code assembles the `<style>` tag.
 let private responseStyles =
     """
 body {
@@ -212,8 +213,8 @@ let private buildHtml (webview: Webview) (extensionUri: obj) : string =
         n
         scriptUri
 
-/// Creates the single response viewer panel on first use, or reveals the existing one — never
-/// more than one panel exists at a time (spec's "single response viewer panel").
+/// Creates the single response viewer panel on first use, or reveals the existing panel. Never
+/// more than one panel exists at a time, which is the spec's "single response viewer panel".
 let showBeside (extensionUri: obj) : WebviewPanel =
     match panel with
     | Some p ->
@@ -235,8 +236,8 @@ let showBeside (extensionUri: obj) : WebviewPanel =
         panel <- Some p
         p
 
-/// Posts a message into the panel's webview, a no-op if the panel has since been closed (a
-/// stale in-flight Run completing after the user dismissed the panel).
+/// Posts a message into the panel's webview. It does nothing when the panel is closed already.
+/// A stale in-flight Run that completes after the user dismissed the panel causes that case.
 let post (message: obj) : unit =
     match panel with
     | Some p -> p.webview.postMessage message
