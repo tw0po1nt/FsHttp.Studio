@@ -109,6 +109,12 @@
       "skillPath": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
       "computedHash": "74e894a3509e2676d4cdb771c8eace087092430635e845e02a9cc2f757c552a4"
     },
+    "simplified-technical-english": {
+      "source": "TheAngryByrd/simplified-technical-english-skill",
+      "sourceType": "github",
+      "skillPath": "skills/simplified-technical-english/SKILL.md",
+      "computedHash": "f957a6b79b8498bf5d924bdce8c810a4ee5cd378892c671d3da0f12de5af2ad7"
+    },
     "tdd": {
       "source": "mattpocock/skills",
       "sourceType": "github",

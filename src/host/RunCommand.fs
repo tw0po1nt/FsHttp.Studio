@@ -1,8 +1,9 @@
-// The Run command a CodeLens click invokes: opens/reveals the response viewer
-// showing `Running…`, re-locates the block (a fresh locate/run pair per Run, matching the
-// companion's own "fresh session per Run" philosophy) to pull its method/URL for the status
-// line, then runs it and posts the outcome into the panel. Latest-click-wins: a generation
-// counter discards a superseded run's result rather than racing it onto the panel.
+// The Run command that a CodeLens click invokes. It opens or reveals the response viewer, which
+// shows `Running…`. It then locates the block again, to read its method and URL for the status
+// line. Each Run therefore makes a fresh locate-and-run pair, which matches the companion's own
+// "fresh session per Run" philosophy. It then runs the block and posts the outcome into the
+// panel. The latest click wins: a generation counter discards the result of a superseded Run,
+// instead of a race onto the panel.
 module RunCommand
 
 open Fable.Core.JsInterop
@@ -67,9 +68,9 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
             | RunProtocolError message -> ResponseViewer.post (errorMessage message)
     }
 
-/// Registers the command a `▶ Run request` CodeLens invokes, called with the same `TextDocument`
-/// the lens was computed against and the block's 0-based index into that document's located
-/// blocks (matching `CodeLensProvider.fs`'s `arguments`).
+/// Registers the command that a `▶ Run request` CodeLens invokes. The caller passes the same
+/// `TextDocument` that the lens was computed against, and the block's 0-based index into that
+/// document's located blocks. These match the `arguments` in `CodeLensProvider.fs`.
 let register () : Disposable =
     commands.registerCommand (
         CodeLensProvider.commandId,

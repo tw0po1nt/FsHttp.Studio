@@ -1,16 +1,16 @@
 module Companion.Program
 
-// The companion's entry point and I/O loop: the two-process framed-envelope transport (ported
-// from prototype/dotnet-to-js-seam), wiring block location and block evaluation (ADR-0002's FCS
-// session) through RequestHandler.respond.
+// The companion's entry point and I/O loop. It is the two-process framed-envelope transport,
+// ported from prototype/dotnet-to-js-seam. It wires block location and block evaluation
+// (ADR-0002's FCS session) through RequestHandler.respond.
 
 open System
 open System.Text.Json
 open Companion.Envelope
 
-/// Sets up the frame channel the same way for both entry modes: grab the real stdout FIRST,
-/// then redirect everything else to stderr so only envelopes cross the wire. Returns the raw
-/// stdin/stdout handles and an `emit` that frames a response object onto stdout.
+/// Sets up the frame channel the same way for both entry modes. Take the real stdout FIRST,
+/// then redirect all other output to stderr, so that only envelopes cross the wire. Returns
+/// the raw stdin handle and an `emit` that frames a response object onto stdout.
 let private openFrameChannel () =
     let rawStdout = Console.OpenStandardOutput()
     let rawStdin = Console.OpenStandardInput()
@@ -21,7 +21,7 @@ let private openFrameChannel () =
 
     rawStdin, emit
 
-// The long-lived companion: reads a framed request, responds, repeats until the host closes stdin.
+// The long-lived companion. It reads a framed request and responds, until the host closes stdin.
 let private runCompanion () =
     let rawStdin, emit = openFrameChannel ()
 
@@ -31,17 +31,17 @@ let private runCompanion () =
 
     let rec loop () =
         match tryReadFrame rawStdin with
-        | None -> () // stdin closed: the extension host has gone away
+        | None -> () // stdin closed: the extension host has exited
         | Some payload ->
             handle payload
             loop ()
 
     loop ()
 
-// The `--worker` child: serves exactly one `{ source, blockIndex }` request against this
-// process's own fresh ALC, then exits — taking its `#r "nuget:"` assemblies with it. Bypasses
-// `run`'s conflict routing (a fresh process has nothing loaded to conflict with) and evaluates
-// in-process directly, so a worker can never recursively spawn another worker.
+// The `--worker` child. It serves exactly one `{ source, blockIndex }` request against this
+// process's own fresh ALC, and then exits with its `#r "nuget:"` assemblies. It bypasses
+// `run`'s conflict routing, because a fresh process holds nothing that can conflict. It
+// evaluates in-process directly, so a worker can never spawn another worker recursively.
 let private runWorker () =
     let rawStdin, emit = openFrameChannel ()
 

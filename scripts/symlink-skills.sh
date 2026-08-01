@@ -1,12 +1,12 @@
 #!/bin/bash
  
-# Symlink skills from .agents/skills to .claude/skills
-# This script creates symbolic links for all skill directories/files
+# Symlink skills from .agents/skills to .claude/skills.
+# This script creates a symbolic link for each skill directory and each skill file.
  
 set -e  # Exit on error
  
-# Define source and target directories (project-level)
-# Use absolute paths to avoid symlink resolution issues
+# Define the source and target directories at the project level.
+# Use absolute paths, to avoid problems with symlink resolution.
 SOURCE_DIR="$(cd .agents/skills 2>/dev/null && pwd)" || SOURCE_DIR=".agents/skills"
 TARGET_DIR="$(pwd)/.claude/skills"
  
@@ -16,24 +16,24 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
  
-# Check if source directory exists
+# Check whether the source directory exists.
 if [ ! -d "$SOURCE_DIR" ]; then
     echo -e "${RED}Error: Source directory '$SOURCE_DIR' does not exist in current project${NC}"
     exit 1
 fi
  
-# Create target directory if it doesn't exist
+# Create the target directory when it does not exist.
 if [ ! -d "$TARGET_DIR" ]; then
     echo -e "${YELLOW}Creating target directory: $TARGET_DIR${NC}"
     mkdir -p "$TARGET_DIR"
 fi
  
-# Counter for statistics
+# Counters for the summary.
 linked=0
 skipped=0
 failed=0
  
-# Iterate through each skill in source directory
+# Process each skill in the source directory.
 for skill in "$SOURCE_DIR"/*; do
     if [ ! -e "$skill" ]; then
         continue
@@ -42,10 +42,10 @@ for skill in "$SOURCE_DIR"/*; do
     skill_name=$(basename "$skill")
     target_link="$TARGET_DIR/$skill_name"
     
-    # Check if target already exists
+    # Check whether the target exists already.
     if [ -e "$target_link" ] || [ -L "$target_link" ]; then
         if [ -L "$target_link" ]; then
-            # Check if symlink points to the correct location
+            # Check whether the symlink points to the correct location.
             current_target=$(readlink "$target_link")
             if [ "$current_target" = "$skill" ]; then
                 echo -e "${GREEN}✓${NC} Already linked: $skill_name"
@@ -62,7 +62,7 @@ for skill in "$SOURCE_DIR"/*; do
         fi
     fi
     
-    # Create the symlink
+    # Create the symlink.
     if ln -s "$skill" "$target_link"; then
         echo -e "${GREEN}✓${NC} Linked: $skill_name"
         ((++linked))
@@ -72,7 +72,7 @@ for skill in "$SOURCE_DIR"/*; do
     fi
 done
  
-# Summary
+# Summary.
 echo ""
 echo "================================"
 echo -e "Linked:  ${GREEN}$linked${NC}"

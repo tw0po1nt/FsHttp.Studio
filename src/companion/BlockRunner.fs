@@ -1,12 +1,14 @@
 module Companion.BlockRunner
 
-// Runs one located `http { }` block against a fresh FCS interactive session (ADR-0002's
-// mechanism): fresh session per Run, evaluate the target's preceding
-// setup (opens/#r/lets/helpers) with every *other* located block excluded, then the target's
-// bare CE alone piped to `Request.send`, extracting the raw `Response` by reflection over the
-// BCL `HttpContent` type. This module must never reference FsHttp itself — the user's own
-// `#r "nuget: FsHttp, x.y.z"`, evaluated as part of their own setup text, is the only thing
-// that ever resolves the package, so their version pin always wins.
+// Runs one located `http { }` block against a fresh FCS interactive session, which is
+// ADR-0002's mechanism. Each Run gets a fresh session. The Run first evaluates the target's
+// preceding setup (opens, #r, lets, and helpers) with every *other* located block excluded.
+// It then evaluates the target's bare CE alone, piped to `Request.send`, and extracts the raw
+// `Response` by reflection over the BCL `HttpContent` type.
+//
+// This module must never reference FsHttp itself. The user's own `#r "nuget: FsHttp, x.y.z"`,
+// evaluated as part of their own setup text, is the only thing that resolves the package, so
+// their version pin always wins.
 
 open System
 open System.Diagnostics
@@ -27,23 +29,26 @@ type RunOutcome =
     | CompileError of Diagnostic list
     | RuntimeError of string
 
-/// Companion-side addendum evaluated after the user's own setup: silences FsHttp's FSI debug
-/// logging and forces the whole response body to be read *before* the value we reflect over is
-/// returned. Carries no `#r` of its own — the user's setup is the only source of a FsHttp
-/// package reference (ADR-0002).
+/// Companion-side addendum, evaluated after the user's own setup. It silences FsHttp's FSI
+/// debug logging, and it forces a read of the whole response body *before* the value that we
+/// reflect over returns. It carries no `#r` of its own, because the user's setup is the only
+/// source of an FsHttp package reference (ADR-0002).
 ///
 /// `httpCompletionOption = ResponseContentRead` is load-bearing, not a nicety. FsHttp defaults
-/// to `ResponseHeadersRead`: `Request.send` returns as soon as the headers land and the body
-/// stays a *read-once* `HttpConnectionResponseContent` bound to the live (keep-alive) socket.
-/// FsHttp's own `bufferResponseContent = true` is supposed to drain that stream into a replayable
-/// buffer, but because FsHttp reuses a single process-wide static `HttpClient` across every
-/// Run's fresh FSI session, a Run that reuses a pooled keep-alive connection can hand us a
-/// content whose stream is already consumed — and our `ReadAsByteArrayAsync` (`extractResponse`)
-/// then throws "The stream was already consumed. It cannot be read again." (the reliable
-/// trigger is a server that streams the body a beat after its headers). `ResponseContentRead`
-/// makes the BCL read the whole body into memory as part of the send, independent of any later
-/// connection state, so every Run reads it cleanly. `bufferResponseContent` is left on as belt
-/// and braces.
+/// to `ResponseHeadersRead`. With that default, `Request.send` returns as soon as the headers
+/// arrive, and the body stays a *read-once* `HttpConnectionResponseContent` bound to the live
+/// keep-alive socket.
+///
+/// FsHttp's own `bufferResponseContent = true` must drain that stream into a replayable buffer.
+/// But FsHttp reuses one process-wide static `HttpClient` across every Run's fresh FSI session.
+/// A Run that reuses a pooled keep-alive connection can therefore receive a content whose
+/// stream is already consumed. `ReadAsByteArrayAsync` (`extractResponse`) then throws "The
+/// stream was already consumed. It cannot be read again." A server that streams the body a
+/// moment after its headers is the reliable trigger.
+///
+/// `ResponseContentRead` makes the BCL read the whole body into memory as part of the send,
+/// independent of any later connection state, so every Run reads it cleanly.
+/// `bufferResponseContent` stays on as a second guard.
 let private companionAddendum =
     [ "open FsHttp"
       "FsHttp.Fsi.disableDebugLogs()"
@@ -53,11 +58,11 @@ let private companionAddendum =
 let private asPairs (h: IEnumerable<KeyValuePair<string, IEnumerable<string>>>) =
     h |> Seq.map (fun kv -> kv.Key, String.Join(", ", kv.Value))
 
-/// Blanks a statement's span in place across `lines`, preserving every newline so every other
-/// line's row/column numbers stay aligned with the original source. The `()` placeholder
-/// keeps a `let`-bound statement well-formed without evaluating (and so without firing) the
-/// request it displaces; blanking the *whole* statement (not just the CE) means a trailing
-/// `|> Request.send` on the excluded block's own line has nothing left to dangle onto.
+/// Blanks a statement's span in place across `lines`. It keeps every newline, so every other
+/// line's row and column numbers stay aligned with the original source. The `()` placeholder
+/// keeps a `let`-bound statement well-formed, and does not evaluate the request that it
+/// displaces. It blanks the *whole* statement, not only the CE, so a trailing `|> Request.send`
+/// on the excluded block's own line has nothing left to pipe from.
 let private blankStatement (lines: string[]) (r: BlockRange) =
     let startIdx = r.StartLine - 1
     let endIdx = r.EndLine - 1
@@ -82,18 +87,18 @@ let private blankStatement (lines: string[]) (r: BlockRange) =
         let lastLine = lines.[endIdx]
         lines.[endIdx] <- String(' ', r.EndCol) + lastLine.Substring(r.EndCol)
 
-/// Builds the target's preceding setup: everything before the target block, with every
-/// *other* located block's whole enclosing statement blanked out so clicking the target fires
-/// exactly that one request (the setup-isolation criterion). Blanking preserves line
-/// count and untouched columns, so a compile error's range still lands on the real source
-/// position.
+/// Builds the target's preceding setup. This is everything before the target block, with the
+/// whole enclosing statement of every *other* located block blanked. A click on the target
+/// therefore fires exactly one request, which is the setup-isolation criterion. The blanking
+/// keeps the line count and the untouched columns, so a compile error's range still lands on
+/// the real source position.
 ///
-/// Known boundary of this per-block isolation model: blanking a *let-bound* block replaces its
-/// binding with `()`, so if the target (or later setup) references the value that block
-/// produced — e.g. `let auth = http { ... } |> Request.send` consumed by a downstream block —
-/// evaluation fails with an "undefined identifier" compileError. Each block is treated as
-/// independent by design; cross-block value reuse is out of scope here and would need a
-/// different isolation strategy (tracked for whoever revisits block dependencies).
+/// This per-block isolation model has a known boundary. Blanking a *let-bound* block replaces
+/// its binding with `()`. If the target, or later setup, refers to the value that the block
+/// produced, evaluation fails with an "undefined identifier" compileError. One example is a
+/// downstream block that consumes `let auth = http { ... } |> Request.send`. Each block is
+/// independent by design. Value reuse across blocks is out of scope here, and it needs a
+/// different isolation strategy. This is tracked for whoever revisits block dependencies.
 let private buildSetup (source: string) (blocks: LocatedBlock list) (target: LocatedBlock) : string =
     let lines = source.Replace("\r\n", "\n").Split('\n')
 
@@ -111,13 +116,14 @@ let private buildSetup (source: string) (blocks: LocatedBlock list) (target: Loc
 let private errorDiagnostics (diags: FSharpDiagnostic[]) =
     diags |> Array.filter (fun d -> d.Severity = FSharpDiagnosticSeverity.Error)
 
-/// Maps a diagnostic from the combined setup eval back onto the original source. Its first
-/// `realLineCount` lines *are* the original text (minus blanked-out other blocks), so a
-/// diagnostic within them is already native and needs no translation. A diagnostic beyond them
-/// originates in the appended `companionAddendum` (e.g. `open FsHttp` failing because the
-/// user's script carries no resolvable `#r`) and has no source counterpart, so anchor it at the
-/// top of the script — where the missing reference belongs — rather than a phantom line the UI
-/// would try, and fail, to highlight.
+/// Maps a diagnostic from the combined setup evaluation back onto the original source. The
+/// first `realLineCount` lines *are* the original text, minus the other blocks that the setup
+/// blanked. A diagnostic inside those lines is already native and needs no translation.
+///
+/// A diagnostic past those lines comes from the appended `companionAddendum` and has no source
+/// counterpart. One example is a failed `open FsHttp`, because the user's script carries no
+/// resolvable `#r`. Anchor such a diagnostic at the top of the script, where the missing
+/// reference belongs. A phantom line past the end would fail to highlight in the UI.
 let private setupDiagnostic (realLineCount: int) (d: FSharpDiagnostic) : Diagnostic =
     if d.StartLine > realLineCount then
         { Message = d.Message
@@ -135,9 +141,9 @@ let private setupDiagnostic (realLineCount: int) (d: FSharpDiagnostic) : Diagnos
               EndCol = d.EndColumn } }
 
 /// Maps a diagnostic from the isolated target snippet (`<CE>\n|> Request.send`) back onto the
-/// original source. The snippet's lines 1..N are the CE's own lines verbatim, so only line 1's
-/// column needs the target's start-column offset; the synthetic `|> Request.send` line beyond
-/// the CE has no original counterpart and clamps to the block's end.
+/// original source. The snippet's lines 1 to N are the CE's own lines verbatim, so only the
+/// column on line 1 needs the target's start-column offset. The synthetic `|> Request.send`
+/// line past the CE has no original counterpart, and clamps to the block's end.
 let private targetDiagnostic (target: BlockRange) (ceLineCount: int) (d: FSharpDiagnostic) : Diagnostic =
     let mapPoint line col =
         if line > ceLineCount then
@@ -157,11 +163,11 @@ let private targetDiagnostic (target: BlockRange) (ceLineCount: int) (d: FSharpD
           EndLine = el
           EndCol = ec } }
 
-/// `PropertyInfo.GetProperty` is nullable-annotated (the name might not exist); the fields this
-/// reads are FsHttp's `Response` record shape, which has been stable across the FsHttp versions
-/// this targets — so a missing property is a genuine extraction bug, not a case to recover from.
-/// (The response body itself is read off the BCL `HttpContent` type, which ADR-0002 commits to as
-/// version-independent.)
+/// `PropertyInfo.GetProperty` is nullable-annotated, because the name can be absent. The fields
+/// that this function reads are FsHttp's `Response` record shape, which is stable across the
+/// FsHttp versions that we target. A missing property is therefore a real extraction bug, and
+/// not a case to recover from. The response body itself comes from the BCL `HttpContent` type,
+/// which ADR-0002 commits to as version-independent.
 let private prop (name: string) (t: Type) : Reflection.PropertyInfo =
     match t.GetProperty name with
     | null -> failwithf "reflection: property '%s' not found on %s" name t.FullName
@@ -199,13 +205,14 @@ let private extractResponse (v: FsiValue) : RunOutcome =
 
     Ok(statusInt, reason, headers, ctype, Convert.ToBase64String bytes)
 
-/// Evaluates the `blockIndex`-th block located in `source` (0-based, in source order — matching a
-/// `locate`/`blocks` envelope's ordering) *in the current process* and returns its outcome. A
-/// fresh `FsiEvaluationSession` is created and disposed per call — one fresh session per Run.
+/// Evaluates the block at `blockIndex` in `source` *in the current process*, and returns its
+/// outcome. The index is 0-based and in source order, which matches the order in a `locate` and
+/// `blocks` envelope. Each call creates and disposes a fresh `FsiEvaluationSession`, which
+/// gives one fresh session per Run.
 ///
-/// This is the warm fast path. `run` calls it directly when the target's `#r "nuget:"` pins don't
-/// conflict with a version already loaded into this process, and the `--worker` entry point calls
-/// it in a throwaway child process to serve a conflicting pin against a clean ALC.
+/// This is the warm fast path. `run` calls it directly when the target's `#r "nuget:"` pins do
+/// not conflict with a version already loaded into this process. The `--worker` entry point
+/// also calls it in a throwaway child process, to serve a conflicting pin against a clean ALC.
 let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
     let located = locateBlocks source
 
@@ -216,25 +223,25 @@ let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
         let setupText = buildSetup source located target
         let combinedSetup = setupText + "\n" + companionAddendum
 
-        // Lines 1..setupLineCount of `combinedSetup` are native source; anything the addendum
-        // reports past them has no source position (see `setupDiagnostic`).
+        // Lines 1 to setupLineCount of `combinedSetup` are native source. Anything that the
+        // addendum reports past them has no source position (see `setupDiagnostic`).
         let setupLineCount = setupText.Split('\n').Length
 
         let fsiConfig = FsiEvaluationSession.GetDefaultConfiguration()
         let args = [| "fsi.exe"; "--noninteractive"; "--nologo" |]
         use inReader = new IO.StringReader("")
 
-        // Collectible: the companion is long-lived and creates one session per Run, so each
-        // session's own dynamically-compiled user-code assembly should be reclaimable once
-        // disposed rather than accumulating for the life of the process.
+        // The session is collectible. The companion is long-lived and creates one session per
+        // Run, so the runtime must reclaim each session's own dynamically-compiled user-code
+        // assembly after disposal, instead of an accumulation for the life of the process.
         //
-        // NOTE — `collectible` only isolates the per-session dynamic assembly, not `#r "nuget:"`-
-        // resolved package assemblies, which load into the process-wide default
-        // AssemblyLoadContext and outlive the session. Two in-process Runs pinning *different*
-        // versions of the same package would collide there ("Could not load type … from assembly
-        // …"). `run` prevents that by never entering this path for a conflicting pin: it routes
-        // such a Run to a throwaway `--worker` child process whose ALC dies with it. So by
-        // the time we reach here, the target's pins are safe to load in-process.
+        // NOTE: `collectible` isolates only the per-session dynamic assembly. It does not
+        // isolate the package assemblies that `#r "nuget:"` resolves, which load into the
+        // process-wide default AssemblyLoadContext and outlive the session. Two in-process Runs
+        // that pin *different* versions of the same package would collide there ("Could not
+        // load type … from assembly …"). `run` prevents that, because it never enters this path
+        // for a conflicting pin. It routes such a Run to a throwaway `--worker` child process
+        // whose ALC ends with it. The target's pins are therefore safe to load in-process here.
         use session =
             FsiEvaluationSession.Create(fsiConfig, args, inReader, Console.Error, Console.Error, collectible = true)
 
@@ -271,18 +278,19 @@ let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
                     RuntimeError ex.Message
 
 // ---------------------------------------------------------------------------------------------
-// Multi-version isolation. `#r "nuget:"`-resolved assemblies load into the process-wide
-// default AssemblyLoadContext and outlive each per-Run FSI session, so a Run pinning a version
-// of a package that a previous in-process Run already loaded at a *different* version collides.
-// The fix keeps the warm in-process fast path (`runInProcessDirect`) and, only when a pin
-// actually conflicts, delegates that one Run to a short-lived `--worker` child process — a fresh
-// process, hence a fresh ALC that dies with it. `run` is the router; everything below serves it.
+// Multi-version isolation. The assemblies that `#r "nuget:"` resolves load into the
+// process-wide default AssemblyLoadContext, and they outlive each per-Run FSI session. A Run
+// that pins a version of a package collides when an earlier in-process Run already loaded that
+// package at a *different* version. The fix keeps the warm in-process fast path
+// (`runInProcessDirect`). Only when a pin conflicts does it delegate that one Run to a
+// short-lived `--worker` child process, which is a fresh process with a fresh ALC that ends
+// with it. `run` is the router, and everything below serves it.
 // ---------------------------------------------------------------------------------------------
 
-/// Serialises a `RunOutcome` to the same tagged wire shape the host-facing `run`/`ok`/
-/// `compileError`/`runtimeError` envelope uses. Shared by the `--worker` child (which emits its
-/// outcome over this shape) and `RequestHandler` (which emits the host's response), so the two
-/// channels can't drift apart.
+/// Serializes a `RunOutcome` to the same tagged wire shape that the host-facing `run`, `ok`,
+/// `compileError`, and `runtimeError` envelope uses. The `--worker` child emits its outcome
+/// over this shape, and `RequestHandler` emits the host's response over it. The two channels
+/// therefore cannot drift apart.
 let outcomeToWire (outcome: RunOutcome) : obj =
     match outcome with
     | Ok(status, reason, headers, contentType, bodyBase64) ->
@@ -307,8 +315,8 @@ let outcomeToWire (outcome: RunOutcome) : obj =
         {| tag = "runtimeError"
            message = message |}
 
-/// Parses a `--worker` child's response frame back into a `RunOutcome` — the inverse of
-/// `outcomeToWire` — so delegation is transparent to `run`'s caller.
+/// Parses a `--worker` child's response frame back into a `RunOutcome`. It is the inverse of
+/// `outcomeToWire`, so the delegation is transparent to `run`'s caller.
 let private wireToOutcome (root: JsonElement) : RunOutcome =
     match jsonString (root.GetProperty "tag") with
     | "ok" ->
@@ -335,15 +343,14 @@ let private wireToOutcome (root: JsonElement) : RunOutcome =
         |> CompileError
     | _ -> RuntimeError(jsonString (root.GetProperty "message"))
 
-/// Matches a `#r "nuget: Package[, Version]"` directive, capturing the package id and (if pinned)
-/// the version. Only explicit pins participate in conflict detection — a version-less `#r` is
-/// treated as "whatever resolves" and never triggers a worker (best effort; the demo pins).
+/// Matches a `#r "nuget: Package[, Version]"` directive. It captures the package id, and the
+/// version when the directive pins one.
 let private nugetPinRegex =
     Regex("""#r\s+"nuget:\s*(?<pkg>[^,"\s]+)\s*(?:,\s*(?<ver>[^",\s]+))?""", RegexOptions.Compiled)
 
 /// Extracts the `#r "nuget: Package[, Version]"` pins in a script as `(package, version option)`
-/// pairs, in source order. A version-less `#r` yields `None` (see `nugetPinRegex`). Public for
-/// direct pin-parsing tests; `run` consumes it for conflict routing.
+/// pairs, in source order. A version-less `#r` yields `None` (see `nugetPinRegex`). This is
+/// public for the direct pin-parsing tests, and `run` consumes it for conflict routing.
 let extractPins (source: string) : (string * string option) list =
     [ for m in nugetPinRegex.Matches source do
           let ver = m.Groups.["ver"]
@@ -354,28 +361,30 @@ let extractPins (source: string) : (string * string option) list =
            else
                None) ]
 
-/// What a package resolved to when it was loaded into this process's default ALC. `Pinned v` is an
-/// explicit `#r "nuget: pkg, v"`; `Versionless` is a `#r "nuget: pkg"` that resolved *some* latest
-/// we can't name. Tracking the version-less case (rather than nothing) is load-bearing: it still
-/// poisons the ALC, so a later Run pinning a *different* version would collide against it in-process
-/// (ADR-0006). Public for the routing unit tests.
+/// What a package resolved to when it loaded into this process's default ALC. `Pinned v` is an
+/// explicit `#r "nuget: pkg, v"`. `Versionless` is a `#r "nuget: pkg"` that resolved *some*
+/// latest version that we cannot name. The version-less case is load-bearing, and the map
+/// records it instead of nothing. It still poisons the ALC, so a later Run that pins a
+/// *different* version would collide with it in-process (ADR-0006). This is public for the
+/// routing unit tests.
 type LoadedVersion =
     | Pinned of string
     | Versionless
 
-/// Pure routing decision for one pin against the state a package is already loaded in (`None` = not
-/// loaded here yet). The rule is "route to a worker unless we can *prove* the requested load matches
-/// what's already in the ALC":
+/// Pure routing decision for one pin against the state that a package is already loaded in.
+/// `None` means that this process has not loaded the package yet. The rule is "route to a
+/// worker unless we can *prove* that the requested load matches what the ALC already holds":
 ///
-/// - A version-less pin against a version-less load is the same latest (nuget resolves `#r
-///   "nuget: pkg"` to one version per process), so it's safe in-process.
+/// - A version-less pin against a version-less load is the same latest version, because nuget
+///   resolves `#r "nuget: pkg"` to one version per process. It is therefore safe in-process.
 /// - Two explicit pins conflict exactly when they name different versions.
-/// - Every *mixed* pairing conflicts: a version-less load vs. a later explicit pin, and an explicit
-///   load vs. a later version-less pin, both route to a worker — the version-less side may resolve a
-///   different latest than the named one, and we can't prove it doesn't.
+/// - Every *mixed* pair conflicts. A version-less load with a later explicit pin, and an
+///   explicit load with a later version-less pin, both route to a worker. The version-less side
+///   can resolve a different latest version than the named one, and we cannot prove otherwise.
 ///
-/// Deliberately conservative: a false conflict costs one cold worker Run; a false match reopens the
-/// original "Could not load type … from assembly …" ALC collision. Correctness wins.
+/// This rule is deliberately conservative. A false conflict costs one cold worker Run. A false
+/// match reopens the original "Could not load type … from assembly …" ALC collision.
+/// Correctness wins.
 let pinConflicts (loaded: LoadedVersion option) (pin: string option) : bool =
     match loaded, pin with
     | None, _ -> false
@@ -384,33 +393,33 @@ let pinConflicts (loaded: LoadedVersion option) (pin: string option) : bool =
     | Some(Pinned _), None
     | Some Versionless, Some _ -> true
 
-// Package ids resolved into this process's default ALC so far, id -> what loaded it. Nuget ids are
-// case-insensitive. Guarded by a lock: the companion's request loop is serial today, but the
-// state is process-global and cheap to make robust against a future concurrent caller.
+// The package ids resolved into this process's default ALC so far, as id -> what loaded it.
+// Nuget ids are case-insensitive. A lock guards the map. The companion's request loop is serial
+// today, but the state is process-global and cheap to make safe for a future concurrent caller.
 let private loadLock = obj ()
 
 let private loadedVersions =
     Dictionary<string, LoadedVersion>(StringComparer.OrdinalIgnoreCase)
 
-/// Where `run` sends one Run: the warm in-process session, or a fresh `--worker` child.
+/// Where `run` sends one Run: to the warm in-process session, or to a fresh `--worker` child.
 type private RunRoute =
     | InProcess
     | Worker
 
-/// Routes one Run's `pins` and, on the in-process path, reserves them in the load map — the
-/// conflict *check* and the reservation *act* under a single `lock loadLock` so the two are one
-/// atomic step. Taking the lock once per logical operation (not once per access) is the point: a
-/// check in one lock scope followed by a mark in another leaves a TOCTOU gap where a future
-/// concurrent caller could load a conflicting version between them (coding-standards rule 4). The
-/// request loop is serial today, but the lock exists precisely to stay correct when it isn't.
+/// Routes one Run's `pins`. On the in-process path it also reserves them in the load map. The
+/// conflict *check* and the reservation *act* run under a single `lock loadLock`, so the two
+/// are one atomic step. The lock is taken once for each logical operation, not once for each
+/// access. A check in one lock scope, followed by a mark in another scope, leaves a TOCTOU gap.
+/// A future concurrent caller could load a conflicting version in that gap (coding-standards
+/// rule 4). The request loop is serial today, and the lock exists to stay correct when it is not.
 ///
-/// Reserving *before* the eval runs — rather than after a successful load — is deliberate. The map
-/// is a conservative over-approximation of what the shared ALC may hold: a Run that reaches the
-/// in-process path can resolve its `#r "nuget:"` into that ALC, and once resolved the assembly
-/// outlives the session whether the eval then compile-errors or throws. Over-marking a Run that
-/// never actually loaded only ever over-routes a *later* Run to a (safe, cold) worker; *under*-
-/// marking one that did load reopens the "Could not load type … from assembly …" ALC collision
-/// (ADR-0006). The errors aren't symmetric, so we err toward marking, and mark up front.
+/// The reservation happens *before* the evaluation runs, not after a successful load, and this
+/// is deliberate. The map is a conservative over-approximation of what the shared ALC can hold.
+/// A Run that reaches the in-process path can resolve its `#r "nuget:"` into that ALC, and the
+/// resolved assembly then outlives the session even when the evaluation compile-errors or
+/// throws. An over-mark of a Run that never loaded only over-routes a *later* Run to a safe,
+/// cold worker. An under-mark of a Run that did load reopens the "Could not load type … from
+/// assembly …" ALC collision (ADR-0006). The two errors are not symmetric, so we mark up front.
 let private routeAndReserve (pins: (string * string option) list) : RunRoute =
     lock loadLock (fun () ->
         let conflicts =
@@ -426,8 +435,8 @@ let private routeAndReserve (pins: (string * string option) list) : RunRoute =
         if conflicts then
             Worker
         else
-            // A version-less `#r` is recorded as `Versionless` — *not* skipped — so it still
-            // participates in a later Run's conflict detection.
+            // The map records a version-less `#r` as `Versionless`, and does *not* skip it, so
+            // it still takes part in a later Run's conflict detection.
             for pkg, ver in pins do
                 loadedVersions.[pkg] <-
                     match ver with
@@ -436,24 +445,26 @@ let private routeAndReserve (pins: (string * string option) list) : RunRoute =
 
             InProcess)
 
-/// Bound on how long a `--worker` child may take to produce its response frame before the Run is
-/// force-terminated (coding-standards rule 3: every external process gets a bounded wait + kill
-/// path). Long enough to absorb a cold first-run `#r "nuget:"` restore of a freshly-pinned
-/// version, short enough that a wedged worker — a user block that loops forever, or a request to a
-/// server that never answers — can't hang the Run indefinitely. Public so tests can drive the
-/// hung path on a short bound.
+/// The bound on the time that a `--worker` child can take to produce its response frame. After
+/// this time the Run terminates by force (coding-standards rule 3: every external process gets
+/// a bounded wait and a kill path). The bound is long enough to absorb a cold first-run
+/// `#r "nuget:"` restore of a newly pinned version. It is short enough that a stalled worker
+/// cannot hang the Run indefinitely. A user block that loops forever, or a request to a server
+/// that never answers, both stall a worker. This is public so that tests can drive the hung
+/// path on a short bound.
 let workerTimeoutMs = 120_000
 
-/// Runs one block in a throwaway child process (`dotnet Companion.dll --worker`) so its
-/// `#r "nuget:"` assemblies load into a fresh default ALC that is reclaimed when the process
-/// exits — sidestepping the process-global collision. The child speaks one framed
-/// `{ source, blockIndex }` request in, one outcome envelope out, then exits.
+/// Runs one block in a throwaway child process (`dotnet Companion.dll --worker`), so that its
+/// `#r "nuget:"` assemblies load into a fresh default ALC. The runtime reclaims that ALC when
+/// the process exits, which avoids the process-global collision. The child reads one framed
+/// `{ source, blockIndex }` request, writes one outcome envelope, and then exits.
 ///
-/// The wait is bounded by `timeoutMs`: a worker that never produces its frame in time (a user
-/// block looping forever, a request that never answers), or produces it then stalls before
-/// exiting, is `Kill()`ed and the Run mapped to a `RuntimeError` rather than wedging the caller
-/// forever. `use proc = proc` disposes the handle but does not unblock a wait, so the bound and
-/// the kill — not disposal — are what guarantee the Run always terminates.
+/// `timeoutMs` bounds the wait. `Kill()` terminates a worker that does not produce its frame in
+/// time, and also a worker that produces the frame and then stalls before it exits. The Run
+/// then maps to a `RuntimeError`, instead of a block of the caller forever. A user block that
+/// loops forever, or a request that never answers, both cause the first case. `use proc = proc`
+/// disposes the handle but does not unblock a wait. The bound and the kill, not the disposal,
+/// are what guarantee that the Run always terminates.
 let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome =
     let companionDll = typeof<RunOutcome>.Assembly.Location
 
@@ -470,8 +481,9 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome
         | proc ->
             use proc = proc
 
-            // Best-effort teardown: a worker mid-restore can spawn child `dotnet` processes, so
-            // take the whole tree. Never throw out of a kill — the process may already be gone.
+            // Best-effort teardown. A worker in the middle of a restore can spawn child
+            // `dotnet` processes, so take the whole tree. Never throw out of a kill, because
+            // the process can be gone already.
             let kill () =
                 try
                     if not proc.HasExited then
@@ -487,16 +499,16 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome
             proc.StandardInput.Close()
 
             // The frame read blocks with no native timeout, so cap it on a worker thread. A
-            // *crashed* child closes stdout without a frame -> None -> a clean runtimeError; a
-            // *hung* child produces nothing at all, so the read never returns — `Wait timeoutMs`
-            // caps that and we Kill() on expiry instead of blocking here forever. Killing closes
-            // the pipe, so the read task then completes (as None) and its thread is released. The
-            // child's stderr (FCS/user output) inherits ours, so no drain is needed.
+            // *crashed* child closes stdout without a frame -> None -> a clean runtimeError. A
+            // *hung* child produces nothing at all, so the read never returns. `Wait timeoutMs`
+            // caps that case, and we Kill() on expiry instead of a block here forever. The kill
+            // closes the pipe, so the read task then completes as None and releases its thread.
+            // The child's stderr (FCS and user output) inherits ours, so no drain is necessary.
             let readFrame = Task.Run(fun () -> tryReadFrame proc.StandardOutput.BaseStream)
 
             if not (readFrame.Wait timeoutMs) then
                 kill ()
-                RuntimeError(sprintf "worker: no response within %dms; evaluation process terminated" timeoutMs)
+                RuntimeError(sprintf "worker: no response within %dms. Evaluation process terminated." timeoutMs)
             else
                 let outcome =
                     match readFrame.Result with
@@ -505,9 +517,9 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome
                         wireToOutcome doc.RootElement
                     | None -> RuntimeError "worker: evaluation process produced no response"
 
-                // Frame's in hand; the child should now exit on its own. Bound that wait too — a
-                // worker that emitted its frame then stalled must not wedge `WaitForExit` — and
-                // Kill() it if it overstays.
+                // The frame is in hand, so the child must now exit on its own. Bound that wait
+                // too, because a worker that emitted its frame and then stalled must not block
+                // `WaitForExit`. Kill() the child if it stays past the bound.
                 if not (proc.WaitForExit timeoutMs) then
                     kill ()
 
@@ -515,10 +527,10 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome
     with ex ->
         RuntimeError(sprintf "worker: %s" ex.Message)
 
-/// Runs the `blockIndex`-th located block (0-based, source order) and returns its outcome. Routes
-/// on whether the target's `#r "nuget:"` pins conflict with a version already loaded in this
-/// process: no conflict -> the warm in-process session; conflict -> a fresh `--worker` child
-/// whose ALC won't collide.
+/// Runs the located block at `blockIndex` (0-based, source order) and returns its outcome. It
+/// routes on one condition: whether the target's `#r "nuget:"` pins conflict with a version
+/// already loaded in this process. No conflict -> the warm in-process session. A conflict -> a
+/// fresh `--worker` child, whose ALC cannot collide.
 let run (source: string) (blockIndex: int) : RunOutcome =
     match routeAndReserve (extractPins source) with
     | Worker -> runInWorker workerTimeoutMs source blockIndex

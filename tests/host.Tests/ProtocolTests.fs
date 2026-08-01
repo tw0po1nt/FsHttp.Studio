@@ -1,8 +1,8 @@
 module Extension.Tests.ProtocolTests
 
-// Drives the pure logic behind the CodeLens/Run wiring as plain values — no VSCode, no
-// Fable, no companion process — mirroring how the renderer core's Seam-B suite isolates its own
-// pure dispatch from the browser-only mounting glue.
+// Drives the pure logic behind the CodeLens and Run wiring as plain values, with no VSCode, no
+// Fable, and no companion process. This mirrors how the renderer core's Seam-B suite isolates
+// its own pure dispatch from the browser-only mounting glue.
 
 open Expecto
 open Protocol
@@ -76,14 +76,14 @@ let sliceRangeTests =
                   "should slice the whole block"
           }
 
-          test "normalises CRLF before slicing" {
+          test "normalizes CRLF before slicing" {
               let source = "http {\r\n    GET \"https://example.com\"\r\n}\r\n"
               let r = range 2 4 2 29
 
               Expect.equal
                   (sliceRange source r)
                   "GET \"https://example.com\""
-                  "CRLF line endings shouldn't shift columns"
+                  "CRLF line endings must not shift columns"
           } ]
 
 [<Tests>]
@@ -95,7 +95,7 @@ let extractMethodAndUrlTests =
               Expect.equal (extractMethodAndUrl blockText) ("GET", "https://example.com") "verb + URL"
           }
 
-          test "recognises POST" {
+          test "recognizes POST" {
               let blockText = "http {\n    POST \"https://example.com/create\"\n}"
               Expect.equal (extractMethodAndUrl blockText) ("POST", "https://example.com/create") "verb + URL"
           }

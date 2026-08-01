@@ -10,27 +10,33 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
 </p>
 
-A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsHttp) request straight from your F# script and **renders** the response (images, JSON, HTML) instead of flattening it to text.
+A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsHttp) request from your F# script and **renders** the response (images, JSON, HTML) instead of flattening it to text.
 
 ## Why
 
-[FsHttp](https://github.com/fsprojects/FsHttp) pitches itself as a code-first replacement for Postman and `.http` files, using FSI as the driver. But FSI can only **print**. It flattens every response into a string: an image comes back as a byte dump, a JSON payload as one dense unbrowsable line, an HTML page as escaped source. The part that makes a request tool worth using, *seeing* the response, is exactly what the FSI workflow can't do. Worse, FSI's printer silently destroys the response body (it's read-once by default), so reaching for the bytes yourself is a trap.
+[FsHttp](https://github.com/fsprojects/FsHttp) is a code-first replacement for Postman and `.http` files, and it uses FSI as the driver. But FSI can only **print**. It flattens every response into a string:
 
-FsHttp.Studio fills that gap: the request stays pure F# and the response gets rendered richly in-editor.
+- an image becomes a byte dump,
+- a JSON payload becomes one dense line you cannot browse,
+- an HTML page becomes escaped source.
+
+The part that makes a request tool worth using — *seeing* the response — is the exact part FSI cannot do. FSI's printer also destroys the response body, because that body is read-once by default. Reading the bytes yourself is therefore a trap.
+
+FsHttp.Studio closes that gap. The request stays pure F#, and the editor renders the response richly.
 
 ## What it does
 
-Open a `.fsx` script with FsHttp requests in it. A **`▶ Run request` CodeLens** appears above each `http { }` block. Click it, and:
+Open a `.fsx` script that contains FsHttp requests. A **`▶ Run request` CodeLens** appears above each `http { }` block. Click the CodeLens, and:
 
-- Only *that* block runs, evaluated against a fresh evaluation of its surrounding **setup** (`open`s, `#r`, helpers), never firing the other requests in the file.
-- A **response viewer** panel opens beside your editor and renders the body, dispatched on its `Content-Type`:
+- Only *that* block runs. FsHttp.Studio first evaluates the block's surrounding **setup** (`open`s, `#r`, helpers) afresh, and never runs the other requests in the file.
+- A **response viewer** panel opens beside your editor. The panel renders the body, and dispatches on the body's `Content-Type`:
   - **images** display inline,
-  - **JSON** as a collapsible, syntax-highlighted tree,
-  - **HTML** as a rendered page,
-  - everything else as readable, wrapped text.
-- A thin status line shows method, URL, a color-coded status code, round-trip time and size, with the headers one collapse away.
+  - **JSON** displays as a collapsible, syntax-highlighted tree,
+  - **HTML** displays as a rendered page,
+  - all other content displays as readable, wrapped text.
+- A thin status line shows the method, the URL, a color-coded status code, the round-trip time, and the size. The headers stay one click away in a collapsible section.
 
-Your `#r "nuget: FsHttp, x.y.z"` version pin is honored exactly.
+FsHttp.Studio honors your `#r "nuget: FsHttp, x.y.z"` version pin exactly.
 
 <p align="center">
   <img src="media/demo.gif" alt="Running a request from an .fsx script and rendering the response in a panel beside the editor" width="900">
@@ -38,15 +44,18 @@ Your `#r "nuget: FsHttp, x.y.z"` version pin is honored exactly.
 
 ## Install
 
-**Prerequisite:** a .NET 10 SDK or newer on your `PATH`. Get it from [aka.ms/dotnet/download](https://aka.ms/dotnet/download).
+**Prerequisite:** a .NET 10 SDK or newer on your `PATH`. Download the SDK from [aka.ms/dotnet/download](https://aka.ms/dotnet/download).
 
-- **VS Code Marketplace:** install from the [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=twopoint.fshttp-studio), search *FsHttp.Studio* in the Extensions view (`Ctrl`/`Cmd`+`Shift`+`X`), or run `ext install twopoint.fshttp-studio` from Quick Open.
-- **Open VSX** (VSCodium, Cursor, and other non-Marketplace editors): coming soon.
-- **Direct download (`.vsix`):** grab the latest `fshttp-studio-<version>.vsix` from the [Releases page](https://github.com/tw0po1nt/FsHttp.Studio/releases), then install it with *Extensions: Install from VSIX…* (Command Palette) or `code --install-extension fshttp-studio-<version>.vsix`.
+- **VS Code Marketplace.** Use one of these:
+  - Install the extension from the [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=twopoint.fshttp-studio).
+  - Search for *FsHttp.Studio* in the Extensions view (`Ctrl`/`Cmd`+`Shift`+`X`).
+  - Run `ext install twopoint.fshttp-studio` from Quick Open.
+- **Open VSX** (VSCodium, Cursor, and other editors outside the Marketplace): coming soon.
+- **Direct download (`.vsix`).** Download the latest `fshttp-studio-<version>.vsix` from the [Releases page](https://github.com/tw0po1nt/FsHttp.Studio/releases). Then install it with *Extensions: Install from VSIX…* in the Command Palette, or run `code --install-extension fshttp-studio-<version>.vsix`.
 
-### Verifying your download
+### Verify your download
 
-Each release also ships a `fshttp-studio-<version>.vsix.sha256` checksum next to the `.vsix`. If *Install from VSIX…* fails with an extraction error like `too many bytes in the stream`, your copy was corrupted in transit - often by a corporate proxy or antivirus that rewrites binary downloads. Verify the file before installing; the check should confirm it matches, or tell you the download is bad.
+Each release also ships a `fshttp-studio-<version>.vsix.sha256` checksum file next to the `.vsix`. If *Install from VSIX…* fails with an extraction error such as `too many bytes in the stream`, the download is corrupt. A corporate proxy or an antivirus tool that rewrites binary downloads is the usual cause. Verify the file before you install it. The check either confirms the match or reports a bad download.
 
 Download both files into the same folder, then:
 
@@ -62,7 +71,7 @@ sha256sum -c fshttp-studio-<version>.vsix.sha256
 shasum -a 256 -c fshttp-studio-<version>.vsix.sha256
 ```
 
-**Windows** (PowerShell) - compare the computed hash against the checksum file:
+**Windows** (PowerShell). Compare the computed hash with the checksum file:
 
 ```powershell
 $expected = (Get-Content fshttp-studio-<version>.vsix.sha256).Split(' ')[0]
@@ -70,11 +79,13 @@ $actual   = (Get-FileHash fshttp-studio-<version>.vsix -Algorithm SHA256).Hash
 if ($actual -ieq $expected) { "OK" } else { "MISMATCH — download is corrupt" }
 ```
 
-A mismatch means the bytes changed on the way to your machine - re-download (a different transport, e.g. `curl -L`/`Invoke-WebRequest` or the `gh` CLI, often slips past whatever mangled it) and verify again before installing.
+A mismatch means the bytes changed before they reached your machine. Download the file again, and verify it again before you install it. A different transport often avoids the tool that corrupted the first download. For example, use `curl -L`, `Invoke-WebRequest`, or the `gh` CLI.
 
 ## Try it
 
-Create a `demo.fsx`, paste this in, and click the **`▶ Run request`** CodeLens above any block. Each block lands on a different `Content-Type` — mostly via the [PokéAPI](https://pokeapi.co/) — so you can see every renderer:
+Create a `demo.fsx` file. Paste the code below into it. Then click the **`▶ Run request`** CodeLens above any block.
+
+Each block uses a different `Content-Type`, mostly through the [PokéAPI](https://pokeapi.co/), so you can see every renderer:
 
 ```fsharp
 #r "nuget: FsHttp"
@@ -86,8 +97,8 @@ http {
     GET "https://pokeapi.co/api/v2/pokemon/ditto"
 }
 
-// HTML → rendered as a page (browser default styling; the sandbox blocks the
-// page's own CSS/JS).
+// HTML → rendered as a page. Browser default styling only, because the
+// sandbox blocks the page's own CSS and JS.
 http {
     GET "https://example.com"
 }
@@ -97,8 +108,8 @@ http {
     GET "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png"
 }
 
-// Binary → Pikachu's cry (audio/ogg): a "Binary response — <size>" note with a
-// hex preview, instead of the broken byte dump FSI would print
+// Binary → Pikachu's cry (audio/ogg). Shows a "Binary response — <size>" note
+// with a hex preview, instead of the broken byte dump FSI prints.
 http {
     GET "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/25.ogg"
 }
@@ -109,24 +120,24 @@ http {
 Two processes, one protocol:
 
 - The **extension host**, written in F#, compiled with Fable, owns the CodeLens, the response viewer, and the shell-agnostic **renderer core** (`Content-Type → DOM`).
-- The **companion**, a long-lived .NET process hosting an FSharp.Compiler.Service interactive session, owns all F# parsing and evaluation. It locates blocks, evaluates the clicked one, and extracts the response.
-- They exchange tagged **envelopes** across the companion's process boundary. That boundary is editor-agnostic, meaning that a different editor would need to reimplement only the host. If enough people wanted it, this could be extended to editors beyond ones based on VSCode!
+- The **companion**, a long-lived .NET process that hosts an FSharp.Compiler.Service interactive session, owns all F# parsing and evaluation. It locates blocks, evaluates the block you clicked, and extracts the response.
+- The two sides exchange tagged **envelopes** across the companion's process boundary. That boundary is editor-agnostic, so a different editor must reimplement only the extension host. If enough people want it, FsHttp.Studio can support editors that are not based on VSCode.
 
-The design deliberately extracts the response by *reflection* rather than referencing FsHttp directly, so the host never overrides the user's version pin. The whole chain (block → structured response → rendered image) is wired end-to-end in the extension.
+The companion extracts the response by *reflection* instead of a direct reference to FsHttp, so it never overrides the user's version pin. The extension wires the whole chain end-to-end: block → structured response → rendered image.
 
-The companion runs on the **.NET 10 SDK or newer**. FsHttp.Studio auto-detects `dotnet` on your `PATH`; if your SDK lives elsewhere, point the `fshttpStudio.dotnetPath` setting at your `dotnet` executable.
+The companion runs on the **.NET 10 SDK or newer**. FsHttp.Studio detects `dotnet` on your `PATH` automatically. If your SDK is in another location, set the `fshttpStudio.dotnetPath` setting to your `dotnet` executable.
 
-The architectural decisions and their trade-offs are recorded in [`docs/adr/`](./docs/adr/); the domain vocabulary lives in [`CONTEXT.md`](./CONTEXT.md).
+[`docs/adr/`](./docs/adr/) records the architectural decisions and their trade-offs. [`CONTEXT.md`](./CONTEXT.md) holds the domain vocabulary.
 
-## Future improvements 
+## Future improvements
 
-- the **request tree** (grouping, naming, a Testing-API-style tree of your requests),
-- **settings**,
-- **`.fs`-in-a-project** execution (v0.1 is `.fsx`-only; blocks in compiled `.fs` files show no Run affordance, by design),
-- **request-chaining** (a block that needs a prior request's *response*, e.g. an auth token),
-- the **inline-card** presentation (rendering under the block rather than in a panel),
-- dedicated **error/timeout/huge-body** rendering.
-- Support for other editors
+- The **request tree**: grouping, naming, and a Testing-API-style tree of your requests.
+- **Settings.**
+- **`.fs`-in-a-project** execution. v0.1 supports `.fsx` only. Blocks in compiled `.fs` files show no Run affordance, by design.
+- **Request chaining**, for a block that needs the *response* of an earlier request, such as an auth token.
+- The **inline-card** presentation, which renders under the block instead of in a panel.
+- Dedicated rendering for **errors, timeouts, and very large bodies**.
+- Support for other editors.
 
 Feature requests welcome!
 
@@ -138,4 +149,4 @@ F# · [Fable](https://fable.io/) · the VSCode extension API · [FsHttp](https:/
 
 Licensed under the [MIT License](./LICENSE).
 
-The published extension bundles a small set of MIT-licensed components (FSharp.Core, FSharp.Compiler.Service, and Fable's `fable-library`); their notices are reproduced in [`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md).
+The published extension bundles a small set of MIT-licensed components: FSharp.Core, FSharp.Compiler.Service, and Fable's `fable-library`. [`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md) reproduces their notices.

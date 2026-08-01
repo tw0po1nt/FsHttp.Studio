@@ -1,7 +1,7 @@
-// The browser-only half of Seam B: materialise the renderer core's pure `Node` tree into real
-// DOM. The *shape* is decided (and tested) in the shell-agnostic core; this only walks the tree
-// creating elements, setting attributes, and appending text — the low-risk glue left to the
-// manual smoke rather than an automated suite (Seam B's testing plan).
+// The browser-only half of Seam B. It materializes the renderer core's pure `Node` tree into
+// real DOM. The shell-agnostic core decides and tests the *shape*. This module only walks the
+// tree, creates elements, sets attributes, and appends text. It is the low-risk glue that Seam
+// B's testing plan leaves to the manual smoke, and not to an automated suite.
 module Webview.Dom
 
 open Browser
@@ -22,11 +22,11 @@ let rec private mountNode (node: Node) : Types.Node =
 
         element :> Types.Node
 
-/// Turns a rendered `Node` tree into a detached DOM node ready to append into the panel.
+/// Turns a rendered `Node` tree into a detached DOM node, ready to append into the panel.
 let mount (node: Node) : Types.Node = mountNode node
 
-/// Renders a response envelope and replaces `parent`'s contents with it — the one call the native
-/// panel needs to paint a Run's result.
+/// Renders a response envelope, and replaces the contents of `parent` with it. This is the one
+/// call that the native panel needs to paint a Run's result.
 let renderInto (parent: HTMLElement) (env: ResponseEnvelope) : unit =
     parent.innerHTML <- ""
     parent.appendChild (mount (render env)) |> ignore

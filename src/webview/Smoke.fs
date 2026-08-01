@@ -1,13 +1,16 @@
-// A build-time runtime smoke for the renderer core's *JavaScript* output. The Seam-B Expecto suite
-// proves the render logic on .NET; this proves the same logic actually bundles and runs once Fable
-// compiles it to JS — a gap the .NET suite structurally cannot see. It exists because exactly that
-// gap bit us: Fable 5.9's bundled fable-library omits the zero-arg `StringBuilder.ToString()` its
-// own codegen emits, so a StringBuilder in the core failed to bundle for the webview while every
-// .NET test stayed green. `run` is compiled by Fable, bundled by esbuild, and executed under node
-// in CI (see ../smoke.mjs); it throws — non-zero exit — on the first mismatch.
+// A build-time runtime smoke for the renderer core's *JavaScript* output. The Seam-B Expecto
+// suite proves the render logic on .NET. This module proves that the same logic bundles and runs
+// after Fable compiles it to JS, which is a gap that the .NET suite structurally cannot see.
 //
-// No top-level side effect: `smoke.mjs` imports `run` and calls it, so merely referencing this
-// module (or pulling the webview project into a .NET build) never executes the checks.
+// It exists because that gap caused a real failure. Fable 5.9's bundled fable-library omits the
+// zero-argument `StringBuilder.ToString()` that its own codegen emits. A StringBuilder in the
+// core therefore failed to bundle for the webview, while every .NET test stayed green.
+//
+// Fable compiles `run`, esbuild bundles it, and CI executes it under node (see ../smoke.mjs). It
+// throws on the first mismatch, which gives a non-zero exit.
+//
+// This module has no top-level side effect. `smoke.mjs` imports `run` and calls it. A reference
+// to this module, or a webview project pulled into a .NET build, therefore never runs the checks.
 module Webview.Smoke
 
 open System
@@ -32,8 +35,9 @@ let private check (name: string) (cond: bool) =
     else
         failwithf "renderer JS smoke FAILED: %s" name
 
-/// Exercises the Fable-compiled renderer on one representative envelope per dispatch path and
-/// asserts the resulting DOM shape. Throws on the first failure so the node process exits non-zero.
+/// Drives the Fable-compiled renderer on one representative envelope for each dispatch path,
+/// and asserts the resulting DOM shape. It throws on the first failure, so the node process
+/// exits with a non-zero code.
 let run () : unit =
     printfn "renderer JS smoke:"
 

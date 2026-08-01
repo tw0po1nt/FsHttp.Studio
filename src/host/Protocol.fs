@@ -1,12 +1,12 @@
-// Pure wire-protocol types and helpers shared by the companion client (`Companion.fs`) and the
-// CodeLens/Run wiring. Kept free of Fable/VSCode interop so the string/coordinate
-// logic below can be driven directly by a plain .NET test suite (`tests/host.Tests`),
-// the same seam-isolation the renderer core and companion already use.
+// Pure wire-protocol types and helpers, shared by the companion client (`Companion.fs`) and the
+// CodeLens and Run wiring. This module carries no Fable or VSCode interop, so a plain .NET test
+// suite (`tests/host.Tests`) can drive the string and coordinate logic below directly. The
+// renderer core and the companion already use the same seam isolation.
 module Protocol
 
-/// A source range using FCS's own numbering: 1-based lines, 0-based columns (ADR-0003). Mirrors
-/// `Companion.BlockLocator.BlockRange` on the wire — the two sides never share an assembly, so
-/// the shape is duplicated deliberately rather than reached across the process boundary.
+/// A source range in FCS's own numbering: 1-based lines, 0-based columns (ADR-0003). It mirrors
+/// `Companion.BlockLocator.BlockRange` on the wire. The two sides never share an assembly, so
+/// this duplicate shape is deliberate, and neither side reaches across the process boundary.
 type BlockRange =
     { StartLine: int
       StartCol: int
@@ -15,8 +15,8 @@ type BlockRange =
 
 type Diagnostic = { Message: string; Range: BlockRange }
 
-/// The extension-host-side mirror of the companion's `run` response tags (`ok` /
-/// `compileError` / `runtimeError`), plus a catch-all for a malformed/unknown response.
+/// The extension-host mirror of the companion's `run` response tags: `ok`, `compileError`, and
+/// `runtimeError`. It adds one catch-all case for a malformed or unknown response.
 type RunResult =
     | RunOk of status: int * reason: string * headers: (string * string) list * contentType: string * bodyBase64: string
     | RunCompileError of Diagnostic list
@@ -24,16 +24,19 @@ type RunResult =
     | RunProtocolError of string
 
 /// Converts an FCS-native 1-based line to vscode's 0-based line (ADR-0003's coordinate
-/// convention); columns already agree between the two, so only the line needs adjusting.
+/// convention). The columns already agree, so only the line needs an adjustment.
 let toVscodeLine (fcsLine: int) : int = fcsLine - 1
 
-/// Formats a Run's compile diagnostics into the response viewer's plain text, prefixing each
-/// message with its `(line,col)` source position so it's locatable by reading.
-/// The companion's `BlockRange` is 1-based line, 0-based column (ADR-0003); the column is shifted
-/// to 1-based here so the printed position matches vscode's own Ln/Col status-bar readout — where
-/// the user goes to find it. Deliberately *not* pushed as an editor diagnostic: surfacing why a
-/// Run failed is the response viewer's job, and our per-block isolation can flag source that isn't
-/// actually wrong in the whole file, so squiggling it would mislead (the editor is Ionide's).
+/// Formats a Run's compile diagnostics into the response viewer's plain text. Each message
+/// carries its `(line,col)` source position as a prefix, so a reader can locate it.
+///
+/// The companion's `BlockRange` is a 1-based line and a 0-based column (ADR-0003). This
+/// function shifts the column to 1-based, so the printed position matches vscode's own Ln/Col
+/// status-bar readout, which is where the user looks for it.
+///
+/// This text is deliberately *not* an editor diagnostic. The response viewer owns the report of
+/// why a Run failed. Our per-block isolation can also flag source that is not wrong in the
+/// whole file, so an editor squiggle would mislead the user. Ionide owns the editor.
 let formatCompileError (diagnostics: Diagnostic list) : string =
     let formatOne (d: Diagnostic) =
         sprintf "(%d,%d) %s" d.Range.StartLine (d.Range.StartCol + 1) d.Message
@@ -41,9 +44,9 @@ let formatCompileError (diagnostics: Diagnostic list) : string =
     let body = diagnostics |> List.map formatOne |> String.concat "\n"
     sprintf "Compile error:\n%s" body
 
-/// Reconstructs the exact source text `r` covers. Mirrors the companion's own
-/// `BlockLocator.sliceRange` so the extension host can pull a block's own text (for the status
-/// line's method/URL) without an extra companion round trip.
+/// Reconstructs the exact source text that `r` covers. It mirrors the companion's own
+/// `BlockLocator.sliceRange`, so the extension host can read a block's own text for the status
+/// line's method and URL, without an extra companion round trip.
 let sliceRange (source: string) (r: BlockRange) : string =
     let lines = source.Replace("\r\n", "\n").Split('\n')
 
@@ -62,11 +65,11 @@ let sliceRange (source: string) (r: BlockRange) : string =
 let private httpVerbs =
     [ "GET"; "POST"; "PUT"; "DELETE"; "PATCH"; "HEAD"; "OPTIONS"; "TRACE" ]
 
-/// A block's own text always opens with a bare HTTP-verb call (`GET "url"` — the shape every
-/// companion test fixture uses); a light heuristic over the raw text is enough to pull the verb
-/// and its URL literal for the status line, without parsing the CE. Falls back to empty strings
-/// so an unrecognised shape (a computed URL, an unusual verb) degrades to a blank method/URL
-/// rather than throwing.
+/// A block's own text always starts with a bare HTTP-verb call, such as `GET "url"`. Every
+/// companion test fixture uses that shape. A light heuristic over the raw text is therefore
+/// enough to read the verb and its URL literal for the status line, without a parse of the CE.
+/// Falls back to empty strings, so an unrecognized shape degrades to a blank method and URL
+/// instead of a throw. A computed URL or an unusual verb produces such a shape.
 let extractMethodAndUrl (blockText: string) : string * string =
     let tokens =
         blockText.Split([| ' '; '\n'; '\r'; '\t'; '{'; '}' |], System.StringSplitOptions.RemoveEmptyEntries)

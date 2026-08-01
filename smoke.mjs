@@ -1,10 +1,11 @@
-// Runs the renderer core's JavaScript runtime smoke: bundle the Fable-compiled `Webview.Smoke.run`
-// (which asserts each Content-Type dispatch on the *emitted JS*, not the .NET build) with the same
-// esbuild the extension ships with, then execute it under node. A non-zero exit fails CI.
+// Runs the renderer core's JavaScript runtime smoke. It bundles the Fable-compiled
+// `Webview.Smoke.run` with the same esbuild that the extension ships with, and then executes the
+// bundle under node. `Webview.Smoke.run` asserts each Content-Type dispatch on the *emitted JS*,
+// and not on the .NET build. A non-zero exit fails CI.
 //
-// This is the guard that turns "the core compiles under Fable" into "the core actually bundles and
-// runs" — the distinction that let a StringBuilder Fable 5.9 can't bundle slip past a green .NET
-// suite. Assumes `build:fable:webview` has emitted out/webview/Smoke.js.
+// This guard turns "the core compiles under Fable" into "the core bundles and runs". That
+// distinction is what let a StringBuilder that Fable 5.9 cannot bundle pass a green .NET suite.
+// This script assumes that `build:fable:webview` has emitted out/webview/Smoke.js.
 import * as esbuild from "esbuild";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";

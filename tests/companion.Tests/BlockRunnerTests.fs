@@ -1,17 +1,18 @@
 module Companion.Tests.BlockRunnerTests
 
-// Seam A: drives Run as a black box against a real local server — feed .fsx
-// source and a block index, assert the outcome — matching the ticket's acceptance criteria
-// directly. `BlockLocatorTests` exercises location; `RequestHandlerTests` exercises the
-// envelope dispatch that sits on top of both; this file exercises `BlockRunner.run` itself.
+// Seam A. It drives Run as a black box against a real local server: feed .fsx source and a block
+// index, then assert the outcome. This matches the ticket's acceptance criteria directly.
+// `BlockLocatorTests` drives location. `RequestHandlerTests` drives the envelope dispatch that
+// sits on top of both. This file drives `BlockRunner.run` itself.
 
 open System
 open Expecto
 open Companion.BlockRunner
 open Companion.Tests.TestServer
 
-/// A currently-published FsHttp version (ADR-0002: reflection extraction is stable across
-/// 13-15). Pinned explicitly, and not "latest", so the suite doesn't drift with new releases.
+/// A published FsHttp version. Reflection extraction is stable across versions 13 to 15
+/// (ADR-0002). This pin is explicit, and not "latest", so the suite does not drift with a new
+/// release.
 let private fsHttpRef = "15.0.3"
 
 let private pngMagic =
@@ -19,11 +20,12 @@ let private pngMagic =
 
 let private pngBytes = Array.append pngMagic [| 1uy; 2uy; 3uy; 4uy |]
 
-// Sequenced: every case spins up an FSI session that resolves `#r "nuget: FsHttp"` into the
-// process-wide package-management cache. Run in parallel (Expecto's default), those
-// resolutions race on the same cache files ("The process cannot access the file
-// '…resolvedReferences.paths' because it is being used by another process"), and a lost race
-// surfaces as a spurious CompileError. Serializing them removes the race.
+// These tests are sequenced. Every case starts an FSI session that resolves
+// `#r "nuget: FsHttp"` into the process-wide package-management cache. In parallel, which is
+// Expecto's default, those resolutions race on the same cache files. The race gives "The
+// process cannot access the file '…resolvedReferences.paths' because it is being used by
+// another process", and a lost race then appears as a false CompileError. A sequence removes
+// the race.
 [<Tests>]
 let tests =
     testSequenced
@@ -83,17 +85,18 @@ let tests =
           }
 
           test "without the user's own #r, FsHttp resolves to nothing — there is no companion-forced fallback" {
-              // No `#r "nuget: FsHttp"` at all: if the companion supplied one itself, `open
-              // FsHttp` here would still succeed. It doesn't, proving the pin the "ok" tests
-              // rely on came from the source text, not a fallback the companion injected.
+              // There is no `#r "nuget: FsHttp"` at all. If the companion supplied one itself,
+              // `open FsHttp` here would still succeed. It does not succeed, which proves that
+              // the pin the "ok" tests use comes from the source text, and not from a fallback
+              // that the companion injected.
               let source = "open FsHttp\n\nhttp {\n    GET \"https://example.com\"\n}\n"
               let sourceLineCount = source.Split('\n').Length
 
               match run source 0 with
               | CompileError diagnostics ->
                   // The failure comes from the companion addendum's own `open FsHttp`, which has
-                  // no user-source line; its range must still be anchored inside the real source
-                  // rather than a phantom line past the end (see BlockRunner.setupDiagnostic).
+                  // no user-source line. Its range must still anchor inside the real source, and
+                  // not on a phantom line past the end (see BlockRunner.setupDiagnostic).
                   for d in diagnostics do
                       Expect.isTrue (d.Range.StartLine >= 1) "range should start at a real line"
 
@@ -133,9 +136,9 @@ let tests =
           }
 
           test "a non-compiling setup returns compileError" {
-              // Syntactically valid (so location still finds the block below) but ill-typed,
-              // so the failure comes from setup's type-check rather than from a raw parse
-              // error that would also break locateBlocks' own untyped parse.
+              // This source is syntactically valid, so location still finds the block below.
+              // But it is ill-typed, so the failure comes from the setup's type-check. A raw
+              // parse error would also break locateBlocks' own untyped parse.
               let source =
                   sprintf
                       "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nlet x : int = \"not an int\"\n\nhttp {\n    GET \"https://example.com\"\n}\n"
@@ -147,14 +150,15 @@ let tests =
           }
 
           test "a block streamed body-after-headers stays readable across repeated Runs" {
-              // Regression for "The stream was already consumed. It cannot be read again.":
-              // FsHttp's default `ResponseHeadersRead` returns before the body, leaving a
-              // read-once content on a pooled keep-alive connection. Reusing that connection
-              // on a later Run (FsHttp shares one static HttpClient across every Run's fresh
-              // FSI session) previously threw when `extractResponse` read the already-consumed
-              // stream. A body that streams a beat after its headers is what exercises the path;
-              // an instant body (every other case here) does not. Runs three times to cover the
-              // reuse-the-pooled-connection Run, not just the first.
+              // Regression for "The stream was already consumed. It cannot be read again."
+              // FsHttp's default `ResponseHeadersRead` returns before the body, and leaves a
+              // read-once content on a pooled keep-alive connection. A later Run that reuses
+              // that connection previously threw, because `extractResponse` read the consumed
+              // stream. FsHttp shares one static HttpClient across every Run's fresh FSI
+              // session, which is what makes the reuse possible. A body that streams a moment
+              // after its headers reaches this path, and an immediate body, which every other
+              // case here sends, does not. This test runs three times, so it covers the Run
+              // that reuses the pooled connection, and not only the first Run.
               let body = Array.append pngMagic (Array.replicate 40000 0x5Auy)
 
               use server =
@@ -179,13 +183,13 @@ let tests =
           }
 
           test "two Runs in one process with different FsHttp pins both succeed (ALC isolation)" {
-              // `#r "nuget:"`-resolved package assemblies load into the process-wide default
-              // AssemblyLoadContext and outlive each per-Run FSI session. A second Run pinning a
-              // *different* version of the same package used to collide there ("Could not load
-              // type … from assembly …"). Option 1's fix keeps the warm in-process fast path but
-              // routes a pin that conflicts with an already-loaded version to a fresh worker
-              // process, whose ALC dies with it. Both Runs must come back green regardless of the
-              // order the two versions are exercised in.
+              // The package assemblies that `#r "nuget:"` resolves load into the process-wide
+              // default AssemblyLoadContext, and they outlive each per-Run FSI session. A second
+              // Run that pinned a *different* version of the same package used to collide there
+              // with "Could not load type … from assembly …". The fix keeps the warm in-process
+              // fast path, but routes a pin that conflicts with a loaded version to a fresh
+              // worker process, whose ALC ends with it. Both Runs must pass, in either order of
+              // the two versions.
               use server =
                   new TestServer(Map [ "/png", bytesHandler 200 "image/png" [] pngBytes ])
 
@@ -211,11 +215,12 @@ let tests =
           }
 
           test "a worker that never produces a frame is bounded to a runtimeError, not a wedge" {
-              // A worker whose block hangs — here a request to a server that never answers —
-              // emits no frame at all, so the parent's frame read would block forever without a
-              // bound. `runInWorker` caps the wait and Kill()s the child on expiry, mapping the
-              // Run to a RuntimeError. Driven directly against `runInWorker` on a short bound so
-              // the hung path is exercised deterministically rather than via conflict routing.
+              // A worker whose block hangs emits no frame at all, so the parent's frame read
+              // would block forever without a bound. Here a request to a server that never
+              // answers causes the hang. `runInWorker` caps the wait, calls Kill() on the child
+              // at expiry, and maps the Run to a RuntimeError. This test drives `runInWorker`
+              // directly on a short bound, so it reaches the hung path deterministically,
+              // instead of through conflict routing.
               use release = new System.Threading.ManualResetEventSlim(false)
               use server = new TestServer(Map [ "/hang", hangingHandler release ])
 
@@ -228,7 +233,7 @@ let tests =
               let sw = Diagnostics.Stopwatch.StartNew()
               let outcome = runInWorker 5000 source 0
               sw.Stop()
-              // Unblock the listener thread so the server can shut down cleanly.
+              // Unblock the listener thread, so the server can shut down cleanly.
               release.Set()
 
               match outcome with
@@ -252,16 +257,18 @@ let tests =
               | other -> failtestf "expected runtimeError, got %A" other
           }
 
-          // Kept last in this sequenced list on purpose: it loads FsHttp *version-less*, recording a
-          // `Versionless` entry in the process-global load map that would route every later
-          // explicitly-pinned Run above to a worker. Run last, that pollution can't reach them.
+          // This case stays last in the sequenced list on purpose. It loads FsHttp
+          // *version-less*, which records a `Versionless` entry in the process-global load map.
+          // That entry would route every later explicitly-pinned Run above to a worker. In last
+          // position, the entry cannot reach those Runs.
           test "a version-less load then a differently-pinned Run does not collide in-process" {
-              // A version-less `#r "nuget: FsHttp"` resolves *some* latest into the process-wide
-              // ALC but names no version. If that load recorded nothing, a later Run pinning a
-              // *different* explicit version would see an empty map, run in-process against the
-              // already-poisoned ALC, and hit the original "Could not load type … from assembly …"
-              // collision. Recording the version-less load as a sentinel routes that later pinned
-              // Run to a fresh worker instead. Both Runs must come back green.
+              // A version-less `#r "nuget: FsHttp"` resolves *some* latest version into the
+              // process-wide ALC, but it names no version. If that load recorded nothing, a
+              // later Run that pinned a *different* explicit version would see an empty map. It
+              // would then run in-process against the poisoned ALC, and hit the original "Could
+              // not load type … from assembly …" collision. A sentinel record of the
+              // version-less load routes that later pinned Run to a fresh worker. Both Runs
+              // must pass.
               use server =
                   new TestServer(Map [ "/png", bytesHandler 200 "image/png" [] pngBytes ])
 
@@ -272,8 +279,9 @@ let tests =
               | Ok(status, _, _, _, _) -> Expect.equal status 200 "the version-less Run should load latest and run"
               | other -> failtestf "version-less Run expected ok, got %A" other
 
-              // 13.3.0 is not the latest FsHttp, so this explicit pin differs from whatever the
-              // version-less Run loaded — the exact conflict that used to slip through in-process.
+              // 13.3.0 is not the latest FsHttp, so this explicit pin differs from the version
+              // that the version-less Run loaded. That is the exact conflict that used to pass
+              // through to the in-process path.
               let pinnedSource =
                   sprintf "#r \"nuget: FsHttp, 13.3.0\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n" server.BaseUrl
 
@@ -289,8 +297,9 @@ let tests =
                   failtestf "differently-pinned Run after a version-less load expected ok (no collision), got %A" other
           } ]
 
-// Pure pin parsing (no FSI, no server) — the input `run`'s conflict routing keys off. Kept out of
-// the sequenced integration list above so it stays a fast, order-independent unit.
+// Pure pin parsing, with no FSI and no server. It produces the input that `run`'s conflict
+// routing keys off. It stays outside the sequenced integration list above, so it remains a fast
+// unit that does not depend on order.
 [<Tests>]
 let pinTests =
     testList
@@ -310,9 +319,9 @@ let pinTests =
           }
 
           test "a trailing option after the version is not folded into the version" {
-              // `#r "nuget: FsHttp, 15.0.3, PreRelease"`: the version group must stop at the comma,
-              // not capture "15.0.3," — which would never equal a loaded "15.0.3" and would route
-              // an identical re-pin to a needless worker.
+              // For `#r "nuget: FsHttp, 15.0.3, PreRelease"`, the version group must stop at the
+              // comma. A capture of "15.0.3," would never equal a loaded "15.0.3", and it would
+              // route an identical re-pin to an unnecessary worker.
               Expect.equal
                   (extractPins "#r \"nuget: FsHttp, 15.0.3, PreRelease\"")
                   [ "FsHttp", Some "15.0.3" ]
@@ -326,14 +335,15 @@ let pinTests =
                   "each pin should appear once, in source order"
           } ]
 
-// The pure routing decision `run` keys off, exercised directly against explicit loaded-state rather
-// than the process-global map — so every quadrant (including the ones the sequenced integration
-// tests can't isolate, because earlier tests pre-populate that map) is a fast, deterministic unit.
+// The pure routing decision that `run` keys off. These tests drive it directly against an
+// explicit loaded state, and not against the process-global map. Every quadrant is therefore a
+// fast, deterministic unit. This includes the quadrants that the sequenced integration tests
+// cannot isolate, because earlier tests fill that map first.
 [<Tests>]
 let conflictTests =
     testList
         "BlockRunner.pinConflicts"
-        [ test "a package not loaded here never conflicts — the first load can't collide" {
+        [ test "a package not loaded here never conflicts: the first load cannot collide" {
               Expect.isFalse (pinConflicts None (Some "15.0.3")) "an explicit pin against nothing loaded is fine"
               Expect.isFalse (pinConflicts None None) "a version-less pin against nothing loaded is fine"
           }
@@ -355,18 +365,19 @@ let conflictTests =
           }
 
           test "a version-less load then an explicit pin conflicts (the reported hole)" {
-              // The `Versionless` load resolved *some* unnamed latest; a later explicit pin can't be
-              // proven equal to it, so it must be routed to a worker rather than run in-process
-              // against the already-poisoned ALC.
+              // The `Versionless` load resolved *some* unnamed latest version. We cannot prove
+              // that a later explicit pin equals it, so that pin must route to a worker, and
+              // must not run in-process against the poisoned ALC.
               Expect.isTrue
                   (pinConflicts (Some Versionless) (Some "13.3.0"))
                   "an explicit pin against a version-less load must route to a worker"
           }
 
           test "an explicit load then a version-less pin conflicts (the reverse hole)" {
-              // Symmetric to the above: a later version-less Run may resolve a different latest than
-              // the version already pinned into the ALC, and we can't prove it won't — so it too must
-              // route to a worker rather than collide in-process.
+              // This case is symmetric to the one above. A later version-less Run can resolve a
+              // different latest version than the version already pinned into the ALC, and we
+              // cannot prove otherwise. It must therefore also route to a worker, and must not
+              // collide in-process.
               Expect.isTrue
                   (pinConflicts (Some(Pinned "13.3.0")) None)
                   "a version-less pin against an explicitly-loaded version must route to a worker"

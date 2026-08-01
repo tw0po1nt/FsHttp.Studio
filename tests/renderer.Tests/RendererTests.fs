@@ -1,9 +1,9 @@
 module Renderer.Tests.RendererTests
 
-// Seam B: drives canned response envelopes through the renderer core
-// and asserts the shape of the resulting `Node` tree — no VSCode, no browser, no DOM. Each
-// Content-Type must dispatch to the expected element, a non-2xx renders its body honestly with the
-// code shown, and an undecodable body hits the size/hex fallback rather than throwing.
+// Seam B. It drives canned response envelopes through the renderer core, and asserts the shape
+// of the resulting `Node` tree, with no VSCode, no browser, and no DOM. Each Content-Type must
+// dispatch to the expected element. A non-2xx response must render its body honestly and show
+// the code. A body that does not decode must reach the size-and-hex fallback, and must not throw.
 
 open System.Text
 open Expecto
@@ -12,7 +12,7 @@ open Renderer.NodeQuery
 
 let private utf8 (s: string) = Encoding.UTF8.GetBytes s
 
-/// A canned envelope with sensible request context, overridable per test.
+/// A canned envelope with a sensible request context. Each test can override the fields.
 let private envelope contentType (body: byte[]) =
     { Method = "GET"
       Url = "https://example.com/thing"
@@ -149,7 +149,7 @@ let binaryTests =
           }
 
           test "an unknown content type over genuinely binary bytes does not throw and falls back" {
-              // e.g. a mislabeled or absent content type on image-like bytes.
+              // For example, a wrong content type, or no content type, on image-like bytes.
               let body = Array.append pngBytes [| 0uy; 0uy; 200uy; 3uy |]
               let node = renderBody (envelope "" body)
 
@@ -228,7 +228,8 @@ let statusLineTests =
           }
 
           test "the status line sits above the body" {
-              // The response wrapper's children are status line, headers, then body — in order.
+              // The response wrapper's children are the status line, the headers, and then the
+              // body, in that order.
               let node = render (envelope "text/plain" (utf8 "x"))
 
               match node with

@@ -1,5 +1,9 @@
 # v0.1 supports .fsx scripts only, with no Run affordance on .fs
 
-Both block detection and execution target `.fsx` scripts only. A block living in a compiled `.fs` file shows no Run request CodeLens at all — deliberately, not as a bug.
+Both block detection and block execution target `.fsx` scripts only. A block in a compiled `.fs` file shows no Run request CodeLens. This is deliberate, and not a bug.
 
-A self-contained script *is* the FSI input, so both evaluation paths take it for free. A block in a `.fs` file instead draws its `#r`/`open`s/bindings from the compiled project context a fresh FSI session lacks; supporting it means reconstructing that context from the project's NuGet graph — a project-load subsystem out of proportion to a proof-of-concept. A present-but-broken CodeLens on `.fs` would read as buggy, whereas its absence plus README framing reads as scoped. Recorded so no one "fixes" the missing `.fs` affordance without understanding the cost behind it.
+A self-contained script *is* the FSI input, so both evaluation paths get it for free. A block in a `.fs` file instead draws its `#r` references, `open`s, and bindings from the compiled project context. A fresh FSI session does not have that context. Support for `.fs` files means we must rebuild that context from the project's NuGet graph. That is a project-load subsystem, and it is out of proportion to a proof-of-concept.
+
+A CodeLens that is present but broken on `.fs` would look like a defect. An absent CodeLens, with the explanation in the README, reads as a scope decision instead.
+
+This decision is recorded so that nobody "fixes" the missing `.fs` affordance without an understanding of the cost.

@@ -1,7 +1,7 @@
 module Companion.RequestHandler
 
-// Pure request -> response dispatch, factored out of Program.fs's I/O loop so it can be
-// driven directly in tests (Seam A) without spawning the compiled process.
+// Pure request -> response dispatch. It is separate from Program.fs's I/O loop, so a test
+// (Seam A) can drive it directly and does not have to spawn the compiled process.
 
 open System.Text.Json
 open Companion.Envelope
@@ -14,12 +14,12 @@ let private toRangeObj (r: BlockRange) =
        endLine = r.EndLine
        endCol = r.EndCol |}
 
-// Serializing the outcome lives in `BlockRunner.outcomeToWire` so the host response here and the
-// `--worker` child's response emit one identical shape and can't drift.
+// `BlockRunner.outcomeToWire` serializes the outcome, so the host response here and the
+// `--worker` child's response emit one identical shape and cannot drift apart.
 let private runResponse (source: string) (blockIndex: int) : obj = outcomeToWire (run source blockIndex)
 
-/// Handles one decoded request payload and returns the response object to serialize onto
-/// the frame channel.
+/// Handles one decoded request payload. Returns the response object that the caller
+/// serializes onto the frame channel.
 let respond (request: JsonDocument) : obj =
     let root = request.RootElement
     let tag = root |> getStringProp "tag"

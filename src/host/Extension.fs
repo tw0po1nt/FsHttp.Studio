@@ -19,24 +19,26 @@ let private getSdkLabel = "Get the .NET SDK"
 [<Literal>]
 let private dotnetDownloadUrl = "https://aka.ms/dotnet/download"
 
-/// SDK floor to fall back on when the companion's runtimeconfig can't be read (a broken install) —
-/// the major the companion's toolchain is pinned to (ADR-0002). The primary source is the shipped
-/// `Companion.runtimeconfig.json`; this only guards a missing/corrupt package.
+/// The SDK floor to fall back on when the companion's runtimeconfig is unreadable, which means
+/// a broken install. It is the major version that the companion's toolchain pins (ADR-0002).
+/// The shipped `Companion.runtimeconfig.json` is the primary source. This value guards only a
+/// missing or corrupt package.
 [<Literal>]
 let private fallbackRequiredMajor = 10
 
-/// React to a settled JS promise's fulfilment without pulling in a promise CE — used for the
-/// single `showWarningMessage` the SDK-not-found guidance raises.
+/// Reacts to a fulfilled JS promise without a promise CE. The single `showWarningMessage` that
+/// the SDK-not-found guidance raises uses it.
 [<Emit("$0.then($1)")>]
 let private onResolved (_p: JS.Promise<'T>) (_onOk: 'T -> unit) : unit = jsNative
 
-/// JS `== null` (null *or* undefined) — how `execFile` signals success on its error argument.
+/// JS `== null`, which matches null *or* undefined. `execFile` signals success this way on its
+/// error argument.
 [<Emit("$0 == null")>]
 let private isNullish (_x: obj) : bool = jsNative
 
-/// The `fshttpStudio.dotnetPath` override: an explicit path to a `dotnet` executable, or `None`
-/// to auto-detect one on PATH. We own this setting rather than leaning on the .NET Install Tool's
-/// `existingDotnetPath`, so users needn't install that extension just for a config key.
+/// The `fshttpStudio.dotnetPath` override. It is an explicit path to a `dotnet` executable, or
+/// `None` to detect one on PATH automatically. We own this setting instead of the .NET Install
+/// Tool's `existingDotnetPath`, so a user does not have to install that extension for one key.
 let private configuredDotnetPath () : string option =
     let path = (workspace.getConfiguration "fshttpStudio").get "dotnetPath"
 
@@ -45,8 +47,8 @@ let private configuredDotnetPath () : string option =
     else
         Some path
 
-/// The major version of the SDK a `dotnet --list-sdks` line names (`10.0.100 [/path]` → `10`), or
-/// `None` for a blank or unparseable line.
+/// The major version of the SDK that a `dotnet --list-sdks` line names (`10.0.100 [/path]` →
+/// `10`). Returns `None` for a blank line, or for a line that this function cannot parse.
 let private tryParseSdkMajor (listSdksLine: string) : int option =
     match listSdksLine.Trim().Split(' ') |> Array.tryHead with
     | Some version when version <> "" ->
@@ -55,10 +57,11 @@ let private tryParseSdkMajor (listSdksLine: string) : int option =
         | _ -> None
     | _ -> None
 
-/// The major .NET version the companion was built for, read from the `Companion.runtimeconfig.json`
-/// that ships beside the DLL (`framework.version` "10.0.0" → 10). This is the single source of the
-/// SDK floor: bumping the companion's target framework moves it with no other edits. `None` when the
-/// packaged file can't be read or parsed, which is a broken install.
+/// The major .NET version that the companion targets. It comes from the
+/// `Companion.runtimeconfig.json` that ships beside the DLL (`framework.version` "10.0.0" →
+/// 10). This is the single source of the SDK floor, so a change to the companion's target
+/// framework moves the floor with no other edits. Returns `None` when this function cannot read
+/// or parse the packaged file, which means a broken install.
 let private companionTargetMajor (runtimeConfigPath: string) : int option =
     try
         let json: obj = JS.JSON.parse (Node.fs.readFileSync (runtimeConfigPath, "utf8"))
@@ -70,9 +73,10 @@ let private companionTargetMajor (runtimeConfigPath: string) : int option =
     with _ ->
         None
 
-/// True when `dotnet --list-sdks` reports at least one SDK with major version ≥ `requiredMajor` —
-/// the floor the companion needs for FSI's `#r "nuget:"` restore (an SDK, not just a runtime). The
-/// companion rolls forward onto any newer major, so a floor-or-above match is genuinely runnable.
+/// True when `dotnet --list-sdks` reports at least one SDK with a major version ≥
+/// `requiredMajor`. That is the floor the companion needs for FSI's `#r "nuget:"` restore, and
+/// it needs an SDK, not only a runtime. The companion rolls forward onto any newer major
+/// version, so a match at the floor or above is genuinely runnable.
 let private hasSdkAtLeast (requiredMajor: int) (listSdksOutput: string) : bool =
     listSdksOutput.Split('\n')
     |> Array.exists (fun line -> tryParseSdkMajor line |> Option.exists (fun major -> major >= requiredMajor))
@@ -95,8 +99,9 @@ let activate (context: ExtensionContext) =
     let companionDll =
         Node.Path.join [| context.extensionPath; "dist"; "companion"; "Companion.dll" |]
 
-    // The SDK floor is the companion's own build target, read from the runtimeconfig shipped beside
-    // the DLL — one source of truth, so a companion TFM bump moves the floor and the guidance with it.
+    // The SDK floor is the companion's own build target. It comes from the runtimeconfig that
+    // ships beside the DLL, which gives one source of truth. A change to the companion's TFM
+    // therefore moves both the floor and the guidance.
     let requiredMajor =
         Node.Path.join [| context.extensionPath; "dist"; "companion"; "Companion.runtimeconfig.json" |]
         |> companionTargetMajor
@@ -112,18 +117,20 @@ let activate (context: ExtensionContext) =
         RunCommand.setHandle handle
         companionHandle <- Some handle
 
-    // Require a user-installed .NET SDK (the Ionide/C# Dev Kit model), replacing the earlier
-    // runtime-only acquisition: FSI's `#r "nuget:"` restore drives `dotnet msbuild`, which a runtime
-    // lacks. Resolve the `fshttpStudio.dotnetPath` override, else `"dotnet"` off PATH; confirm it
-    // carries an SDK at or above the companion's target major via `--list-sdks` before spawning.
+    // Require an SDK that the user installed, which is the Ionide and C# Dev Kit model. This
+    // replaces the earlier runtime-only acquisition, because FSI's `#r "nuget:"` restore drives
+    // `dotnet msbuild`, and a runtime does not carry msbuild. Resolve the
+    // `fshttpStudio.dotnetPath` override, or else take `"dotnet"` from PATH. Before the spawn,
+    // confirm with `--list-sdks` that it carries an SDK at or above the companion's target major.
     let dotnetPathOverride = configuredDotnetPath ()
     let dotnetPath = dotnetPathOverride |> Option.defaultValue "dotnet"
 
     let requiredSdk = sprintf ".NET %d SDK or newer" requiredMajor
 
-    // First-run guidance when no in-floor SDK is reachable: we deliberately own this "SDK not found"
-    // tail — the trade-off Option B accepts — pointing at the download page and the override. When
-    // the override is set but didn't resolve to an SDK, say so rather than "none was found".
+    // First-run guidance when no SDK at or above the floor is reachable. We deliberately own
+    // this "SDK not found" path, which is the trade-off that Option B accepts, and we point the
+    // user at the download page and the override. When the override is set but did not resolve
+    // to an SDK, report that, instead of "none was found".
     let notifyNoSdk () =
         setStatusText (Companion.statusText Companion.SdkNotFound)
 
@@ -132,21 +139,22 @@ let activate (context: ExtensionContext) =
             | Some path ->
                 "FsHttp.Studio's `fshttpStudio.dotnetPath` setting ("
                 + path
-                + ") didn't resolve to a "
+                + ") did not resolve to a "
                 + requiredSdk
-                + ". Check the path, or clear the setting to auto-detect a `dotnet` on PATH."
+                + ". Correct the path, or clear the setting to detect a `dotnet` on PATH automatically."
             | None ->
                 "FsHttp.Studio needs a "
                 + requiredSdk
-                + " to run requests, but none was found. Install one, "
+                + " to run requests, but found none. Install one, "
                 + "or set the `fshttpStudio.dotnetPath` setting to your `dotnet` executable."
 
         onResolved (window.showWarningMessage (message, getSdkLabel)) (fun chosen ->
             if unbox<string> chosen = getSdkLabel then
                 commands.executeCommand ("vscode.open", uri.parse dotnetDownloadUrl) |> ignore)
 
-    // Bound the probe: a wedged `dotnet` is killed on `timeout` expiry, and the killed-child error
-    // routes to `notifyNoSdk` like any other failure — so a hung host can't stall activation.
+    // Bound the probe. Node kills a stalled `dotnet` when `timeout` expires, and the
+    // killed-child error routes to `notifyNoSdk` like any other failure. A hung host therefore
+    // cannot stall activation.
     childProcess.execFile (
         dotnetPath,
         [| "--list-sdks" |],
