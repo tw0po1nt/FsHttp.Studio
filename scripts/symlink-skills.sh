@@ -49,7 +49,7 @@ for skill in "$SOURCE_DIR"/*; do
             current_target=$(readlink "$target_link")
             if [ "$current_target" = "$skill" ]; then
                 echo -e "${GREEN}✓${NC} Already linked: $skill_name"
-                ((linked++))
+                ((++linked))
                 continue
             else
                 echo -e "${YELLOW}⚠${NC} Symlink exists but points elsewhere: $skill_name (removing old link)"
@@ -57,7 +57,7 @@ for skill in "$SOURCE_DIR"/*; do
             fi
         else
             echo -e "${YELLOW}⚠${NC} Target exists but is not a symlink: $skill_name (skipping)"
-            ((skipped++))
+            ((++skipped))
             continue
         fi
     fi
@@ -65,10 +65,10 @@ for skill in "$SOURCE_DIR"/*; do
     # Create the symlink
     if ln -s "$skill" "$target_link"; then
         echo -e "${GREEN}✓${NC} Linked: $skill_name"
-        ((linked++))
+        ((++linked))
     else
         echo -e "${RED}✗${NC} Failed to link: $skill_name"
-        ((failed++))
+        ((++failed))
     fi
 done
  
