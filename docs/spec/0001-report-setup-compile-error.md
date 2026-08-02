@@ -1,6 +1,6 @@
 # Report the compile error of the Setup, not an error in the block
 
-Spec for #94. Filed from wayfinder ticket 009 on the v0.2 map ("Run works everywhere").
+Spec for #94.
 
 ## Problem Statement
 
