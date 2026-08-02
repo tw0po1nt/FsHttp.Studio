@@ -6,6 +6,10 @@
 
 Issues live as GitHub issues on `tw0po1nt/FsHttp.Studio`. Manage them with the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
+### Spec writing
+
+A spec's full text lives in `docs/spec/`, not in the issue body. See `docs/agents/spec-writing.md`.
+
 ### Triage labels
 
 The five canonical triage roles. Each label string is equal to its role name. See `docs/agents/triage-labels.md`.
@@ -20,7 +24,7 @@ F# house rules that go beyond the rules Fantomas and `.editorconfig` enforce. Se
 
 ### Technical prose
 
-Use the `simplified-technical-english` skill for technical prose.
+Running the `simplified-technical-english` skill on every piece of prose you write is mandatory, not optional. See `docs/agents/technical-prose.md`.
 
 ## Terminology
 
