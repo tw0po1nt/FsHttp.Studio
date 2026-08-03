@@ -158,7 +158,7 @@ let httpUrl = "https://example.com/http/notablock"
               Expect.isEmpty (locate source) "no builder calls, so no blocks"
           }
 
-          test "locateBlocks pairs a let-bound block with its whole statement, including a trailing pipe" {
+          test "locateBlocks pairs a let-bound block with its whole declaration, including a trailing pipe" {
               let source =
                   """
 let a =
@@ -171,9 +171,9 @@ let a =
 
               let blocks = locateBlocks source
               Expect.hasLength blocks 1 "one block expected"
-              let statementText = slice source blocks.[0].Statement
-              Expect.stringStarts statementText "let a =" "statement range starts at the let keyword"
-              Expect.stringEnds statementText "|> ignore" "statement range extends through the trailing pipe"
+              let blankText = slice source blocks.[0].Blank
+              Expect.stringStarts blankText "let a =" "blank span starts at the let keyword"
+              Expect.stringEnds blankText "|> ignore" "blank span extends through the trailing pipe"
           }
 
           test "locateBlocks pairs a bare block statement with itself" {
@@ -187,7 +187,25 @@ http {
 
               let blocks = locateBlocks source
               Expect.hasLength blocks 1 "one block expected"
-              let statementText = slice source blocks.[0].Statement
-              Expect.stringStarts statementText "http {" "statement range starts at the builder head"
-              Expect.stringEnds statementText "|> Request.send" "statement range extends through the trailing pipe"
+              let blankText = slice source blocks.[0].Blank
+              Expect.stringStarts blankText "http {" "blank span starts at the builder head"
+              Expect.stringEnds blankText "|> Request.send" "blank span extends through the trailing pipe"
+          }
+
+          test "locateBlocks blanks only a class member's right side, not the whole type" {
+              let source =
+                  """
+type Api() =
+    member _.Get() =
+        http {
+            GET "https://example.com/member"
+        }
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 1 "one block expected"
+              let blankText = slice source blocks.[0].Blank
+              Expect.stringStarts blankText "http {" "member blank span is the right side only, not the member head"
+              Expect.isFalse (blankText.Contains "member _.Get") "blank span does not reach the member head"
+              Expect.isFalse (blankText.Contains "type Api") "blank span does not reach the type header"
           } ]

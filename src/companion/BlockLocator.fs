@@ -5,6 +5,11 @@ module Companion.BlockLocator
 // matches `http { }` text inside a comment or a string, and an unbalanced brace inside a
 // string literal does not affect a range that comes directly from the parse tree. That same
 // brace desynchronizes a brace counter.
+//
+// This module also classifies each block's Route: how a Run would reach it, from the untyped
+// syntax tree alone (docs/spec/0002-reach-a-block-anywhere.md, Decision 2). Classification
+// needs no type-check, no project load, and no NuGet resolution, so it is decidable from a
+// bare parse.
 
 open FSharp.Compiler.CodeAnalysis
 open FSharp.Compiler.Syntax
@@ -17,13 +22,51 @@ type BlockRange =
       EndLine: int
       EndCol: int }
 
-/// A located block's own CE range, plus the range of the top-level statement that contains the
-/// block. That statement is a `let` binding or a bare expression statement. Run needs the
-/// statement range: if it blanks another block's bare CE span alone, that statement's own
-/// trailing `|> Request.send` stays behind with nothing to pipe from.
+/// The refusal families the spec's Decision 2 table names. F4 is not here: it is a Run
+/// outcome, not a classify verdict (position 11c: the untyped tree cannot know that a Run
+/// blanked away the name a block depends on).
+type RefusalFamily =
+    /// The position is decided at run time: a loop body, an `if` branch, a `match` clause, a
+    /// `try`/`with` handler.
+    | F1
+    /// We would have to invent a value: a function with arguments, a class member.
+    | F2
+    /// The position is not module-scoped: an inner `let`, a lambda-valued binding.
+    | F3
+    /// The binding's value is not the block: a tuple binding, a block inside another block's
+    /// expression.
+    | F5
+
+/// How a Run reaches a block, decided from the untyped syntax tree alone.
+type Route =
+    /// A bare expression statement, at any module depth. The Run inserts `let <name> = `
+    /// immediately before the block and invokes `<name>`.
+    | R1
+    /// The value of a module-level binding, at unit arity. `Invocation` is the binding's
+    /// derived name, e.g. `getSnorlax ()`.
+    | R2 of invocation: string
+    /// A position neither route reaches. `reason` is a plain sentence, safe to show a user;
+    /// it must not interpolate an FCS type name (Decision 11).
+    | Refused of family: RefusalFamily * reason: string
+
+/// A located block's own CE range, the route a Run takes to reach it, the span to blank when
+/// it is *not* the target, its enclosing-module qualifier, and its `private` keyword spans.
+/// Keep the name `LocatedBlock`: it is the glossary's word (docs/spec/0002, Decision 3).
 type LocatedBlock =
-    { Block: BlockRange
-      Statement: BlockRange }
+    {
+        Block: BlockRange
+        Route: Route
+        /// The span to blank when this block is a *sibling* of the target. A module-level
+        /// binding blanks its whole declaration (keeps the value-leakage guard). A member or
+        /// inner binding blanks its right side only, because a blanked `member _.Get() = …`
+        /// leaves a type with no members, and that does not parse.
+        Blank: BlockRange
+        /// The enclosing nested-module chain, outermost first. The invocation qualifier.
+        Qualifier: string list
+        /// The `private` keyword spans to blank on this block's own path: its own binding's, and
+        /// each enclosing module's. Empty when nothing on the path is `private`.
+        PrivateSpans: BlockRange list
+    }
 
 /// Synthetic filename given to FCS's parser. Only the `.fsx` extension matters, because it
 /// selects script-mode parsing (ADR-0004). The source never exists on disk under this name.
@@ -43,36 +86,180 @@ let private (|BuilderNamed|_|) (name: string) (expr: SynExpr) =
         | _ -> None
     | _ -> None
 
-/// The nearest enclosing `SynModule` ancestor's range is the whole top-level statement. A
-/// `let` declaration's range starts at the `let` keyword and ends at the end of its right-hand
-/// side. A bare expression statement's range is the statement itself. In both cases the range
-/// is exactly the span to blank, which removes one block's whole effect and not only its CE.
-/// Falls back to the block's own range when no such ancestor exists. That case should not
-/// occur for a top-level `.fsx` block, and the range is still usable as a no-op blank span.
-let private enclosingStatementRange (path: SyntaxVisitorPath) (fallback: range) : range =
-    path
-    |> List.tryPick (function
-        | SyntaxNode.SynModule decl -> Some decl.Range
-        | _ -> None)
-    |> Option.defaultValue fallback
+let private samePos (a: pos) (b: pos) = a.Line = b.Line && a.Column = b.Column
 
-/// `SynExpr.App.Range` covers `http { ... }`, which is the builder identifier and both braces.
-/// It excludes any enclosing `let r =` binding, so it is exactly the span a later Run extracts.
-let private findLocatedBlocks (ast: ParsedInput) : (range * range) list =
-    (([], ast)
-     ||> ParsedInput.fold (fun acc path node ->
-         match node with
-         | SyntaxNode.SynExpr(SynExpr.App(
-             funcExpr = BuilderNamed "http"; argExpr = SynExpr.ComputationExpr _; range = appRange)) ->
-             (appRange, enclosingStatementRange path appRange) :: acc
-         | _ -> acc))
+/// True when `node` is a leading ancestor of the block: an expression whose own range starts
+/// exactly where the block starts, so the block is its leading part and not one argument among
+/// others. The Setup boundary (Decision 1) truncates at the block's own end, which drops such an
+/// ancestor's trailing suffix intact — `http { } |> Request.send`'s pipe App starts at the
+/// block, so truncation drops `|> Request.send` with no routing branch needed for case 12.
+let private leadingAt (blockStart: pos) (node: SyntaxNode) =
+    match node with
+    | SyntaxNode.SynExpr e ->
+        let r = e.Range
+        samePos r.Start blockStart
+    | _ -> false
+
+/// R2's transparency is narrower than `leadingAt`: only a type annotation or parens may sit
+/// between a binding and the block for the binding's *value* to be the block. Returns the
+/// remaining path once every such wrapper is consumed.
+let rec private valueIsBlock (path: SyntaxNode list) =
+    match path with
+    | SyntaxNode.SynExpr(SynExpr.Typed _) :: rest
+    | SyntaxNode.SynExpr(SynExpr.Paren _) :: rest -> valueIsBlock rest
+    | rest -> rest
+
+/// The enclosing nested-module chain, outermost first. `List.rev` turns the innermost-first
+/// order that `path` walks in (from the block outward) into the outermost-first order the
+/// spec asks for.
+let private qualifierOf (path: SyntaxNode list) =
+    path
+    |> List.choose (function
+        | SyntaxNode.SynModule(SynModuleDecl.NestedModule(moduleInfo = SynComponentInfo(longId = ids))) ->
+            Some(ids |> List.map (fun i -> i.idText) |> String.concat ".")
+        | _ -> None)
     |> List.rev
+
+let private accessRange (a: SynAccess option) =
+    match a with
+    | Some(SynAccess.Private r) -> [ r ]
+    | _ -> []
+
+/// Every `private` keyword on the target's own path that would put the invocation out of
+/// reach: its own binding's, and each enclosing module's. Each invocation is a separate FSI
+/// interaction, so a `private` binding — or a binding inside a `private` module — is not
+/// accessible from it (Decision 6). `internal` needs no treatment: an `internal` binding is
+/// accessible from a later interaction, so it is deliberately not matched here.
+let private privateSpansOn (ownBinding: SynAccess option) (path: SyntaxNode list) =
+    accessRange ownBinding
+    @ (path
+       |> List.collect (function
+           | SyntaxNode.SynModule(SynModuleDecl.NestedModule(moduleInfo = SynComponentInfo(accessibility = a))) ->
+               accessRange a
+           | _ -> []))
+
+/// `private` can sit on the binding *or* on its head pattern — `let private x = …` puts it on
+/// `SynPat.Named`, not on `SynBinding.accessibility` — so a read of the binding alone misses it
+/// silently (Decision 6's first trap).
+let private patternAccess (headPat: SynPat) =
+    match headPat with
+    | SynPat.Named(accessibility = a)
+    | SynPat.LongIdent(accessibility = a) -> a
+    | _ -> None
+
+type private NameResult =
+    | Invocable of string
+    | NeedsArguments
+    | NoName
+
+/// The name and arity a binding's head pattern offers for the R2 invocation.
+let private derivedName (headPat: SynPat) =
+    match headPat with
+    | SynPat.Named(ident = SynIdent(ident = id)) -> Invocable id.idText
+    | SynPat.LongIdent(longDotId = SynLongIdent(id = ids); argPats = SynArgPats.Pats args) ->
+        let name = ids |> List.map (fun i -> i.idText) |> String.concat "."
+
+        match args with
+        | [] -> Invocable name
+        | [ SynPat.Paren(pat = SynPat.Const(constant = SynConst.Unit)) ]
+        | [ SynPat.Const(constant = SynConst.Unit) ] -> Invocable(name + " ()")
+        | _ -> NeedsArguments
+    | _ -> NoName
+
+let private f1 why = Refused(F1, why)
+
+/// The whole routing decision, from the untyped path alone (Decision 2). `path` is
+/// innermost-first, as `ParsedInput.fold` builds it. Returns the route, plus the binding's own
+/// `SynAccess` when the block routes through a binding, for `privateSpansOn` to read.
+let private classify (blockStart: pos) (path: SyntaxNode list) : Route * SynAccess option =
+    // Consume the ancestors the Setup boundary (Decision 1) will drop. A tuple is deliberately
+    // *not* consumed: for its first element the range coincides with the block, and for its
+    // second it does not, so letting that asymmetry through would route the two halves of
+    // `let a, b = http { }, http { }` differently. One shape gets one verdict.
+    let rec skipLeading p =
+        match p with
+        | SyntaxNode.SynExpr(SynExpr.Tuple _) :: _ -> p
+        | n :: rest when leadingAt blockStart n -> skipLeading rest
+        | _ -> p
+
+    match skipLeading path with
+    | SyntaxNode.SynModule(SynModuleDecl.Expr _) :: _ -> R1, None
+
+    | SyntaxNode.SynExpr(SynExpr.Tuple _) :: _ ->
+        Refused(F5, "a tuple binding binds several values, so its value is not the block"), None
+
+    | SyntaxNode.SynBinding(SynBinding(headPat = headPat; accessibility = access)) :: parents ->
+        // The binding's value must actually be the block (only Typed/Paren may intervene), and
+        // the binding must be module-level: an inner `let` or a member is out of reach.
+        let valueIsTheBlock = valueIsBlock path |> List.isEmpty |> not
+        let access = if access.IsSome then access else patternAccess headPat
+
+        match parents with
+        | SyntaxNode.SynModule(SynModuleDecl.Let _) :: _ when valueIsTheBlock ->
+            match derivedName headPat with
+            | Invocable invocation -> R2 invocation, access
+            | NeedsArguments -> Refused(F2, "the function takes arguments we would have to invent"), access
+            | NoName -> Refused(F3, "the binding's head pattern gives no name to invoke"), access
+        | SyntaxNode.SynMemberDefn _ :: _
+        | SyntaxNode.SynTypeDefn _ :: _ ->
+            Refused(F2, "a class member needs an instance we would have to invent"), access
+        | _ -> Refused(F3, "an inner binding is not reachable from a later FSI interaction"), access
+
+    | SyntaxNode.SynExpr(SynExpr.ForEach _) :: _
+    | SyntaxNode.SynExpr(SynExpr.For _) :: _
+    | SyntaxNode.SynExpr(SynExpr.While _) :: _ -> f1 "a loop body describes many requests", None
+    | SyntaxNode.SynExpr(SynExpr.IfThenElse _) :: _ -> f1 "a branch is decided at runtime", None
+    | SyntaxNode.SynMatchClause _ :: _
+    | SyntaxNode.SynExpr(SynExpr.Match _) :: _
+    | SyntaxNode.SynExpr(SynExpr.MatchLambda _) :: _ -> f1 "a match clause is decided at runtime", None
+    | SyntaxNode.SynExpr(SynExpr.TryWith _) :: _
+    | SyntaxNode.SynExpr(SynExpr.TryFinally _) :: _ -> f1 "a handler is decided at runtime", None
+    | SyntaxNode.SynExpr(SynExpr.Lambda _) :: _ -> Refused(F3, "the binding's value is a lambda, not the block"), None
+    | SyntaxNode.SynExpr(SynExpr.LetOrUse _) :: _ ->
+        Refused(F3, "an inner let is not reachable from a later FSI interaction"), None
+    | _ -> Refused(F5, "the block sits inside another expression, so its value is not the block"), None
+
+/// The smallest enclosing statement that can hold an expression (Decision 5). A module-level
+/// binding blanks its whole declaration, which keeps the value-leakage protection: the binding
+/// disappears, and a consumer fails with a clean "not defined" instead of leaking a value. A
+/// member or inner binding blanks its right side only, because erasing `member _.Get() = …`
+/// entirely leaves a type with no members and does not parse. Falls back to the block's own
+/// range when no enclosing statement exists, which should not occur for a block that FCS parsed
+/// out of a `.fsx` file.
+let rec private blankSpan (blockRange: range) (path: SyntaxNode list) =
+    match path with
+    | SyntaxNode.SynBinding(SynBinding(expr = rhs)) :: parents ->
+        match parents with
+        | SyntaxNode.SynModule(SynModuleDecl.Let(range = r)) :: _ -> r
+        | _ -> rhs.Range
+    | SyntaxNode.SynModule(decl) :: _ -> decl.Range
+    | _ :: rest -> blankSpan blockRange rest
+    | [] -> blockRange
 
 let private toBlockRange (r: range) : BlockRange =
     { StartLine = r.StartLine
       StartCol = r.StartColumn
       EndLine = r.EndLine
       EndCol = r.EndColumn }
+
+/// `SynExpr.App.Range` covers `http { ... }`, which is the builder identifier and both braces.
+/// It excludes any enclosing `let r =` binding, so it is exactly the span a later Run extracts.
+let private findLocatedBlocks (ast: ParsedInput) : LocatedBlock list =
+    (([], ast)
+     ||> ParsedInput.fold (fun acc path node ->
+         match node with
+         | SyntaxNode.SynExpr(SynExpr.App(
+             funcExpr = BuilderNamed "http"; argExpr = SynExpr.ComputationExpr _; range = appRange)) ->
+             let route, access = classify appRange.Start path
+
+             { Block = toBlockRange appRange
+               Route = route
+               Blank = toBlockRange (blankSpan appRange path)
+               Qualifier = qualifierOf path
+               PrivateSpans = privateSpansOn access path |> List.map toBlockRange }
+             :: acc
+         | _ -> acc))
+    |> List.rev
 
 let private parse (source: string) =
     let parsingOptions =
@@ -84,15 +271,11 @@ let private parse (source: string) =
     |> Async.RunSynchronously
 
 /// Parses `source` as a `.fsx` script and returns every `http { }` block it finds, in source
-/// order. Each block is paired with the range of its enclosing top-level statement. The parse
-/// needs no project, no NuGet resolution, and no type-check, so an undefined `http` identifier
-/// or an unresolved `#r` does not prevent location.
+/// order, with its route and its supporting spans. The parse needs no project, no NuGet
+/// resolution, and no type-check, so an undefined `http` identifier or an unresolved `#r` does
+/// not prevent location.
 let locateBlocks (source: string) : LocatedBlock list =
-    (parse source).ParseTree
-    |> findLocatedBlocks
-    |> List.map (fun (b, s) ->
-        { Block = toBlockRange b
-          Statement = toBlockRange s })
+    (parse source).ParseTree |> findLocatedBlocks
 
 /// The range of every `http { }` block in `source`, in source order.
 let locate (source: string) : BlockRange list =

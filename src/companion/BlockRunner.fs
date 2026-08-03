@@ -104,7 +104,7 @@ let private buildSetup (source: string) (blocks: LocatedBlock list) (target: Loc
 
     blocks
     |> List.filter (fun b -> b.Block <> target.Block)
-    |> List.iter (fun b -> blankStatement lines b.Statement)
+    |> List.iter (fun b -> blankStatement lines b.Blank)
 
     let prefixLines = lines.[0 .. target.Block.StartLine - 2]
 
