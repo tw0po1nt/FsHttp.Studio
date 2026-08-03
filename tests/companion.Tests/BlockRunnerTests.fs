@@ -20,6 +20,16 @@ let private pngMagic =
 
 let private pngBytes = Array.append pngMagic [| 1uy; 2uy; 3uy; 4uy |]
 
+/// Asserts that a diagnostic points somewhere the editor can actually highlight. A setup
+/// diagnostic may be anchored rather than native, so the line is not fixed, but it must still
+/// land inside the script: a phantom line past the end fails to highlight in the UI.
+let private expectLineInFile (source: string) (d: Diagnostic) =
+    let lineCount = source.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').Length
+
+    Expect.isTrue
+        (d.Range.StartLine >= 1 && d.Range.StartLine <= lineCount)
+        (sprintf "range line %d should be inside the script's %d lines" d.Range.StartLine lineCount)
+
 // These tests are sequenced. Every case starts an FSI session that resolves
 // `#r "nuget: FsHttp"` into the process-wide package-management cache. In parallel, which is
 // Expecto's default, those resolutions race on the same cache files. The race gives "The
@@ -147,6 +157,89 @@ let tests =
               match run source 0 with
               | CompileError diagnostics -> Expect.isNonEmpty diagnostics "at least one diagnostic expected"
               | other -> failtestf "expected compileError, got %A" other
+          }
+
+          test "a setup that fails to parse reports the setup's own compileError, not a phantom error naming http" {
+              // `EvalInteractionNonThrowing` returns `Choice1Of2` (no exception) for a Setup
+              // that fails to *parse*, and discards the failure into the diagnostics array. The
+              // companion used to read that array only in the `Choice2Of2` branch, so this
+              // Setup was silently treated as good, and the block below went on to report "The
+              // value or constructor 'http' is not defined" instead. The Setup here is a `let`
+              // followed by two lines that each start with `|>`, wrapped in a function body.
+              // The wrapper is what keeps `locateBlocks`' own untyped parse successful: the
+              // bare top-level form fails that parse too, so no block is located and the Run
+              // never reaches the Setup at all.
+              let source =
+                  "let f () =\n    let x = 1\n    |> ignore\n    |> ignore\n    x\n\nhttp {\n    GET \"https://example.com\"\n}\n"
+
+              match run source 0 with
+              | CompileError diagnostics ->
+                  Expect.isNonEmpty diagnostics "at least one diagnostic expected"
+
+                  Expect.isTrue
+                      (diagnostics
+                       |> List.exists (fun d -> d.Range.StartLine = 2 || d.Range.StartLine = 3))
+                      "at least one diagnostic should keep its real location on the broken `let`/`|>` lines, not fall back to a phantom line"
+
+                  for d in diagnostics do
+                      expectLineInFile source d
+
+                      Expect.stringContains
+                          d.Message
+                          "Setup failed to evaluate"
+                          "the message should say the fault is in the Setup"
+
+                      Expect.isFalse
+                          (d.Message.Contains "http")
+                          "the message must not name 'http' -- that would be the symptom of the discarded-diagnostics defect, not the true fault"
+              | other -> failtestf "expected compileError, got %A" other
+          }
+
+          test "a block in a for-loop body reports the setup's own parse error, anchored in the file, not http" {
+              // The `for ... do` head has no body once the setup slice ends at the block's
+              // start, so the Setup fails to parse. Before the fix this fell into the same
+              // discarded-diagnostics defect as the test above, and the block reported "The
+              // value or constructor 'http' is not defined" instead of the true fault. Every
+              // diagnostic here starts at or past the companion's addendum, so this is the case
+              // that exercises the line-1 anchor, and with it the reason the message names the
+              // Setup at all.
+              let source =
+                  "for name in [ \"pidgey\"; \"rattata\" ] do\n    http {\n        GET \"https://example.com\"\n    }\n"
+
+              match run source 0 with
+              | CompileError diagnostics ->
+                  Expect.isNonEmpty diagnostics "at least one diagnostic expected"
+
+                  for d in diagnostics do
+                      // The companion anchors an addendum-origin diagnostic at line 1 (see
+                      // BlockRunner.setupDiagnostic), so this case asserts only that the
+                      // location stays inside the file, not a specific line.
+                      expectLineInFile source d
+
+                      Expect.stringContains
+                          d.Message
+                          "Setup failed to evaluate"
+                          "an anchored diagnostic must name the Setup, or line 1 reads as a fault on the user's own first line"
+
+                      Expect.isFalse (d.Message.Contains "http") "the message must not name 'http'"
+              | other -> failtestf "expected compileError, got %A" other
+          }
+
+          test "a setup that throws at run time returns runtimeError, not compileError" {
+              // The Setup here compiles: it produces zero error diagnostics and fails only when
+              // it runs. The diagnostics-first check must therefore fall through to the
+              // exception branch. This guards the boundary from the other side: a check that
+              // treated any non-success Setup as a compile error would misreport this case, and
+              // the two outcomes must stay distinct.
+              let source =
+                  sprintf
+                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nlet x : int = failwith \"setup blew up\"\n\nhttp {\n    GET \"https://example.com\"\n}\n"
+                      fsHttpRef
+
+              match run source 0 with
+              | RuntimeError message ->
+                  Expect.stringContains message "setup blew up" "the exception message should survive"
+              | other -> failtestf "expected runtimeError, got %A" other
           }
 
           test "a block streamed body-after-headers stays readable across repeated Runs" {

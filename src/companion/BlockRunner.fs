@@ -116,24 +116,34 @@ let private buildSetup (source: string) (blocks: LocatedBlock list) (target: Loc
 let private errorDiagnostics (diags: FSharpDiagnostic[]) =
     diags |> Array.filter (fun d -> d.Severity = FSharpDiagnosticSeverity.Error)
 
-/// Maps a diagnostic from the combined setup evaluation back onto the original source. The
-/// first `realLineCount` lines *are* the original text, minus the other blocks that the setup
-/// blanked. A diagnostic inside those lines is already native and needs no translation.
+/// Maps a diagnostic from the combined setup evaluation back onto the original source, and
+/// names the setup in its message.
+///
+/// The first `realLineCount` lines *are* the original text, minus the other blocks that the
+/// setup blanked. A diagnostic inside those lines is already native and needs no translation.
 ///
 /// A diagnostic past those lines comes from the appended `companionAddendum` and has no source
 /// counterpart. One example is a failed `open FsHttp`, because the user's script carries no
 /// resolvable `#r`. Anchor such a diagnostic at the top of the script, where the missing
 /// reference belongs. A phantom line past the end would fail to highlight in the UI.
+///
+/// *Every* diagnostic from here keeps its compiler text verbatim behind a `Setup failed to
+/// evaluate:` prefix, not only an anchored one. See
+/// `docs/spec/0001-report-setup-compile-error.md`, Decision 3.
 let private setupDiagnostic (realLineCount: int) (d: FSharpDiagnostic) : Diagnostic =
+    // Without this, a diagnostic anchored at line 1 (see below) reads as a fault on that line
+    // instead of a Setup failure.
+    let message = sprintf "Setup failed to evaluate: %s" d.Message
+
     if d.StartLine > realLineCount then
-        { Message = d.Message
+        { Message = message
           Range =
             { StartLine = 1
               StartCol = 0
               EndLine = 1
               EndCol = 0 } }
     else
-        { Message = d.Message
+        { Message = message
           Range =
             { StartLine = d.StartLine
               StartCol = d.StartColumn
@@ -247,35 +257,43 @@ let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
 
         let setupResult, setupDiags = session.EvalInteractionNonThrowing(combinedSetup)
 
-        match setupResult with
-        | Choice2Of2 ex ->
-            match
-                errorDiagnostics setupDiags
-                |> Array.map (setupDiagnostic setupLineCount)
-                |> Array.toList
-            with
-            | [] -> RuntimeError ex.Message
-            | errors -> CompileError errors
-        | Choice1Of2 _ ->
-            let ceLineCount = target.Block.EndLine - target.Block.StartLine + 1
-            let targetCode = ceText + "\n|> Request.send"
-            let targetResult, targetDiags = session.EvalExpressionNonThrowing(targetCode)
+        // `Choice1Of2` means only that the Setup threw no exception; it does not mean the
+        // Setup has no errors. FSI can return `Choice1Of2` for a Setup that fails to parse or
+        // type-check, and discard the failure into the diagnostics array instead of the
+        // `Choice`. The array is therefore the only reliable signal, and it is read *before*
+        // the `Choice`, independent of which branch the `Choice` took. A Setup failure also
+        // stops the Run: evaluating the block against a Setup that never took effect only
+        // produces a second, misleading error. See
+        // `docs/spec/0001-report-setup-compile-error.md`, Decisions 1 and 2.
+        match
+            errorDiagnostics setupDiags
+            |> Array.map (setupDiagnostic setupLineCount)
+            |> Array.toList
+        with
+        | [] ->
+            match setupResult with
+            | Choice2Of2 ex -> RuntimeError ex.Message
+            | Choice1Of2 _ ->
+                let ceLineCount = target.Block.EndLine - target.Block.StartLine + 1
+                let targetCode = ceText + "\n|> Request.send"
+                let targetResult, targetDiags = session.EvalExpressionNonThrowing(targetCode)
 
-            match targetResult with
-            | Choice2Of2 ex ->
-                match
-                    errorDiagnostics targetDiags
-                    |> Array.map (targetDiagnostic target.Block ceLineCount)
-                    |> Array.toList
-                with
-                | [] -> RuntimeError ex.Message
-                | errors -> CompileError errors
-            | Choice1Of2 None -> RuntimeError "expression returned no value"
-            | Choice1Of2(Some v) ->
-                try
-                    extractResponse v
-                with ex ->
-                    RuntimeError ex.Message
+                match targetResult with
+                | Choice2Of2 ex ->
+                    match
+                        errorDiagnostics targetDiags
+                        |> Array.map (targetDiagnostic target.Block ceLineCount)
+                        |> Array.toList
+                    with
+                    | [] -> RuntimeError ex.Message
+                    | errors -> CompileError errors
+                | Choice1Of2 None -> RuntimeError "expression returned no value"
+                | Choice1Of2(Some v) ->
+                    try
+                        extractResponse v
+                    with ex ->
+                        RuntimeError ex.Message
+        | errors -> CompileError errors
 
 // ---------------------------------------------------------------------------------------------
 // Multi-version isolation. The assemblies that `#r "nuget:"` resolves load into the
