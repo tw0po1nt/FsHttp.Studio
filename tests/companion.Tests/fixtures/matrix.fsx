@@ -10,90 +10,59 @@ let baseUrl = "http://127.0.0.1:8391/api/v2"
 
 
 // Case 1 -- bare, top-level
-http {
-    GET "http://127.0.0.1:8391/api/v2/pokemon/pikachu"
-}
+http { GET "http://127.0.0.1:8391/api/v2/pokemon/pikachu" }
 
 
 // Case 2 -- references a preceding pure let
-http {
-    GET $"{baseUrl}/pokemon/pikachu"
-}
+http { GET $"{baseUrl}/pokemon/pikachu" }
 
 
 // Case 3 -- two independent bare blocks (isolation)
-http {
-    GET "http://127.0.0.1:8391/api/v2/pokemon/bulbasaur"
-}
+http { GET "http://127.0.0.1:8391/api/v2/pokemon/bulbasaur" }
 
-http {
-    GET "http://127.0.0.1:8391/api/v2/pokemon/charmander"
-}
+http { GET "http://127.0.0.1:8391/api/v2/pokemon/charmander" }
 
 
 // Case 4 -- right-hand side of a let (block on the next line)
-let squirtle =
-    http {
-        GET "http://127.0.0.1:8391/api/v2/pokemon/squirtle"
-    }
+let squirtle = http { GET "http://127.0.0.1:8391/api/v2/pokemon/squirtle" }
 
 
 // Case 5 -- right-hand side of a let (block starts on the same line)
-let eevee = http {
-    GET "http://127.0.0.1:8391/api/v2/pokemon/eevee"
-}
+let eevee = http { GET "http://127.0.0.1:8391/api/v2/pokemon/eevee" }
 
 
 // Case 6 -- body of a ()-callable function
 let getSnorlax () =
-    http {
-        GET "http://127.0.0.1:8391/api/v2/pokemon/snorlax"
-    }
+    http { GET "http://127.0.0.1:8391/api/v2/pokemon/snorlax" }
 
 
 // Case 7 -- single block nested in a module
 module Gen1 =
-    http {
-        GET "http://127.0.0.1:8391/api/v2/pokemon/mewtwo"
-    }
+    http { GET "http://127.0.0.1:8391/api/v2/pokemon/mewtwo" }
 
 
 // Case 8 -- block in a module that also has a preceding member
 module Gen2 =
     let region = "johto"
 
-    http {
-        GET $"http://127.0.0.1:8391/api/v2/pokemon/{region}"
-    }
+    http { GET $"http://127.0.0.1:8391/api/v2/pokemon/{region}" }
 
 
 // Case 9 -- inside a for-loop
 for name in [ "pidgey"; "rattata" ] do
-    http {
-        GET $"http://127.0.0.1:8391/api/v2/pokemon/{name}"
-    }
+    http { GET $"http://127.0.0.1:8391/api/v2/pokemon/{name}" }
 
 
 // Case 10 -- inside an if-branch
 if System.DateTime.Now.Hour < 12 then
-    http {
-        GET "http://127.0.0.1:8391/api/v2/pokemon/hoothoot"
-    }
+    http { GET "http://127.0.0.1:8391/api/v2/pokemon/hoothoot" }
 
 
 // Case 11 -- a block that needs a value another block bound
-let dexId =
-    http {
-        GET "http://127.0.0.1:8391/api/v2/pokemon/gengar"
-    }
+let dexId = http { GET "http://127.0.0.1:8391/api/v2/pokemon/gengar" }
 
-http {
-    GET $"http://127.0.0.1:8391/api/v2/pokemon-species/{dexId}"
-}
+http { GET $"http://127.0.0.1:8391/api/v2/pokemon-species/{dexId}" }
 
 
 // Case 12 -- block already followed by |> Request.send
-http {
-    GET "http://127.0.0.1:8391/api/v2/pokemon/lapras"
-}
-|> Request.send
+http { GET "http://127.0.0.1:8391/api/v2/pokemon/lapras" } |> Request.send
