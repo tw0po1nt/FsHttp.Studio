@@ -22,29 +22,35 @@ type BlockRange =
       EndLine: int
       EndCol: int }
 
-/// The refusal families the spec's Decision 2 table names. F4 is not here: it is a Run
-/// outcome, not a classify verdict (position 11c: the untyped tree cannot know that a Run
-/// blanked away the name a block depends on).
+/// Why a position reaches neither route. The spec's Decision 2 table calls these the refusal
+/// families and tags them F1 to F5, which each case records below. The table's F4 is not here:
+/// it is a Run outcome, not a classify verdict (position 11c: the untyped tree cannot know that
+/// a Run blanked away the name a block depends on).
 type RefusalFamily =
-    /// The position is decided at run time: a loop body, an `if` branch, a `match` clause, a
-    /// `try`/`with` handler.
-    | F1
-    /// We would have to invent a value: a function with arguments, a class member.
-    | F2
-    /// The position is not module-scoped: an inner `let`, a lambda-valued binding.
-    | F3
-    /// The binding's value is not the block: a tuple binding, a block inside another block's
-    /// expression.
-    | F5
+    /// A loop body, an `if` branch, a `match` clause, a `try`/`with` handler. Which block the
+    /// position describes is not decided until the script runs. The spec's table calls this F1.
+    | DecidedAtRunTime
+    /// A function with arguments, or a class member. Reaching the block would need an argument
+    /// or an instance that nothing in the script supplies. The spec's table calls this F2.
+    | NeedsAnInventedValue
+    /// An inner `let`, or a lambda-valued binding. The name is not in scope for a later FSI
+    /// interaction, so the invocation cannot reach it. The spec's table calls this F3.
+    | NotModuleScoped
+    /// A tuple binding, or a block inside another block's expression. The binding is reachable,
+    /// but what it binds is not this block. The spec's table calls this F5.
+    | ValueIsNotTheBlock
 
-/// How a Run reaches a block, decided from the untyped syntax tree alone.
+/// How a Run reaches a block, decided from the untyped syntax tree alone. The two routes differ
+/// in where the invocation's name comes from: the Run supplies one, or the binding already has
+/// one.
 type Route =
-    /// A bare expression statement, at any module depth. The Run inserts `let <name> = `
-    /// immediately before the block and invokes `<name>`.
-    | R1
-    /// The value of a module-level binding, at unit arity. `Invocation` is the binding's
-    /// derived name, e.g. `getSnorlax ()`.
-    | R2 of invocation: string
+    /// A bare expression statement, at any module depth. Nothing names the block, so the Run
+    /// inserts `let <name> = ` immediately before it and invokes `<name>`. The spec calls this
+    /// route R1.
+    | NamedByTheRun
+    /// The value of a module-level binding, at unit arity. The binding already names the block,
+    /// so the Run invokes that name: `getSnorlax ()`. The spec calls this route R2.
+    | NamedByTheBinding of invocation: string
     /// A position neither route reaches. `reason` is a plain sentence, safe to show a user;
     /// it must not interpolate an FCS type name (Decision 11).
     | Refused of family: RefusalFamily * reason: string
@@ -162,7 +168,7 @@ type private NameResult =
     | NeedsArguments
     | NoName
 
-/// The name and arity a binding's head pattern offers for the R2 invocation.
+/// The name and arity a binding's head pattern offers for the NamedByTheBinding invocation.
 let private derivedName (headPat: SynPat) =
     match headPat with
     | SynPat.Named(ident = SynIdent(ident = id)) -> Invocable id.idText
@@ -204,38 +210,44 @@ let private classify (blockStart: pos) (path: SyntaxNode list) : Route * SynAcce
         match parents with
         | SyntaxNode.SynModule(SynModuleDecl.Let _) :: _ ->
             match derivedName headPat with
-            | Invocable invocation -> R2 invocation, access
-            | NeedsArguments -> Refused(F2, "the function takes arguments we would have to invent"), access
+            | Invocable invocation -> NamedByTheBinding invocation, access
+            | NeedsArguments ->
+                Refused(NeedsAnInventedValue, "the function takes arguments we would have to invent"), access
             // A wildcard or a destructuring pattern binds no single name, so there is nothing to
             // invoke and no value the invocation could name. The spec's table has no row for this
             // shape; F5 is its nearest family, beside the tuple binding it resembles.
-            | NoName -> Refused(F5, "the binding does not give a name to invoke"), access
+            | NoName -> Refused(ValueIsNotTheBlock, "the binding does not give a name to invoke"), access
         | SyntaxNode.SynMemberDefn _ :: _
         | SyntaxNode.SynTypeDefn _ :: _ ->
-            Refused(F2, "a class member needs an instance we would have to invent"), access
-        | _ -> Refused(F3, "an inner binding is not reachable from a later FSI interaction"), access
+            Refused(NeedsAnInventedValue, "a class member needs an instance we would have to invent"), access
+        | _ -> Refused(NotModuleScoped, "an inner binding is not reachable from a later FSI interaction"), access
 
     | _ ->
         match afterBoundary with
-        | SyntaxNode.SynModule(SynModuleDecl.Expr _) :: _ -> R1, None
+        | SyntaxNode.SynModule(SynModuleDecl.Expr _) :: _ -> NamedByTheRun, None
 
         | SyntaxNode.SynExpr(SynExpr.Tuple _) :: _ ->
-            Refused(F5, "a tuple binding binds several values, so its value is not the block"), None
+            Refused(ValueIsNotTheBlock, "a tuple binding binds several values, so its value is not the block"), None
 
         | SyntaxNode.SynExpr(SynExpr.ForEach _) :: _
         | SyntaxNode.SynExpr(SynExpr.For _) :: _
-        | SyntaxNode.SynExpr(SynExpr.While _) :: _ -> Refused(F1, "a loop body describes many requests"), None
-        | SyntaxNode.SynExpr(SynExpr.IfThenElse _) :: _ -> Refused(F1, "a branch is decided at runtime"), None
+        | SyntaxNode.SynExpr(SynExpr.While _) :: _ ->
+            Refused(DecidedAtRunTime, "a loop body describes many requests"), None
+        | SyntaxNode.SynExpr(SynExpr.IfThenElse _) :: _ ->
+            Refused(DecidedAtRunTime, "a branch is decided at runtime"), None
         | SyntaxNode.SynMatchClause _ :: _
         | SyntaxNode.SynExpr(SynExpr.Match _) :: _
-        | SyntaxNode.SynExpr(SynExpr.MatchLambda _) :: _ -> Refused(F1, "a match clause is decided at runtime"), None
+        | SyntaxNode.SynExpr(SynExpr.MatchLambda _) :: _ ->
+            Refused(DecidedAtRunTime, "a match clause is decided at runtime"), None
         | SyntaxNode.SynExpr(SynExpr.TryWith _) :: _
-        | SyntaxNode.SynExpr(SynExpr.TryFinally _) :: _ -> Refused(F1, "a handler is decided at runtime"), None
+        | SyntaxNode.SynExpr(SynExpr.TryFinally _) :: _ ->
+            Refused(DecidedAtRunTime, "a handler is decided at runtime"), None
         | SyntaxNode.SynExpr(SynExpr.Lambda _) :: _ ->
-            Refused(F3, "the binding's value is a lambda, not the block"), None
+            Refused(NotModuleScoped, "the binding's value is a lambda, not the block"), None
         | SyntaxNode.SynExpr(SynExpr.LetOrUse _) :: _ ->
-            Refused(F3, "an inner let is not reachable from a later FSI interaction"), None
-        | _ -> Refused(F5, "the block sits inside another expression, so its value is not the block"), None
+            Refused(NotModuleScoped, "an inner let is not reachable from a later FSI interaction"), None
+        | _ ->
+            Refused(ValueIsNotTheBlock, "the block sits inside another expression, so its value is not the block"), None
 
 /// The smallest enclosing statement that can hold an expression (Decision 5). A module-level
 /// binding blanks its whole declaration, which keeps the value-leakage protection: the binding

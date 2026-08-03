@@ -17,14 +17,14 @@ open Companion.BlockLocator
 let private fixture name =
     Path.Combine(__SOURCE_DIRECTORY__, "fixtures", name) |> File.ReadAllText
 
-let private isR1 =
+let private isNamedByTheRun =
     function
-    | R1 -> true
+    | NamedByTheRun -> true
     | _ -> false
 
-let private isR2 (invocation: string) =
+let private isNamedByTheBinding (invocation: string) =
     function
-    | R2 inv -> inv = invocation
+    | NamedByTheBinding inv -> inv = invocation
     | _ -> false
 
 let private isRefused (family: RefusalFamily) =
@@ -59,20 +59,20 @@ let tests =
               Expect.hasLength blocks 14 "matrix.fsx has 14 blocks (case 3 and case 11 are two blocks each)"
 
               let assertRoute = assertRoute blocks
-              assertRoute 0 "#1 bare, top level" isR1
-              assertRoute 1 "#2 bare, uses a preceding let" isR1
-              assertRoute 2 "#3 two independent bare blocks (first)" isR1
-              assertRoute 3 "#3 two independent bare blocks (second)" isR1
-              assertRoute 4 "#4 right side of a let, block on the next line" (isR2 "squirtle")
-              assertRoute 5 "#5 right side of a let, block on the same line" (isR2 "eevee")
-              assertRoute 6 "#6 body of a ()-callable function" (isR2 "getSnorlax ()")
-              assertRoute 7 "#7 single block in a module" isR1
-              assertRoute 8 "#8 block in a module with a preceding member" isR1
-              assertRoute 9 "#9 in a for body" (isRefused F1)
-              assertRoute 10 "#10 in an if branch" (isRefused F1)
-              assertRoute 11 "#11p producer, let dexId = http { }" (isR2 "dexId")
-              assertRoute 12 "#11c consumer, uses another block's value" isR1
-              assertRoute 13 "#12 piped to Request.send in the script" isR1
+              assertRoute 0 "#1 bare, top level" isNamedByTheRun
+              assertRoute 1 "#2 bare, uses a preceding let" isNamedByTheRun
+              assertRoute 2 "#3 two independent bare blocks (first)" isNamedByTheRun
+              assertRoute 3 "#3 two independent bare blocks (second)" isNamedByTheRun
+              assertRoute 4 "#4 right side of a let, block on the next line" (isNamedByTheBinding "squirtle")
+              assertRoute 5 "#5 right side of a let, block on the same line" (isNamedByTheBinding "eevee")
+              assertRoute 6 "#6 body of a ()-callable function" (isNamedByTheBinding "getSnorlax ()")
+              assertRoute 7 "#7 single block in a module" isNamedByTheRun
+              assertRoute 8 "#8 block in a module with a preceding member" isNamedByTheRun
+              assertRoute 9 "#9 in a for body" (isRefused DecidedAtRunTime)
+              assertRoute 10 "#10 in an if branch" (isRefused DecidedAtRunTime)
+              assertRoute 11 "#11p producer, let dexId = http { }" (isNamedByTheBinding "dexId")
+              assertRoute 12 "#11c consumer, uses another block's value" isNamedByTheRun
+              assertRoute 13 "#12 piped to Request.send in the script" isNamedByTheRun
           }
 
           test "extra.fsx: the shapes the matrix does not have get the route the spec's table names" {
@@ -80,25 +80,30 @@ let tests =
               Expect.hasLength blocks 19 "extra.fsx has 19 blocks"
 
               let assertRoute = assertRoute blocks
-              assertRoute 0 "#13 let private x = http { }" (isR2 "secret")
-              assertRoute 1 "internal binding (Further Notes measurement, not a numbered position)" (isR2 "semiSecret")
-              assertRoute 2 "#14 module private, bare block" isR1
-              assertRoute 3 "#15 nested modules, Outer.Inner.deep" (isR2 "deep")
-              assertRoute 4 "#16 attributed binding, [<Obsolete>] let …" (isR2 "attributed")
-              assertRoute 5 "#22 class member" (isRefused F2)
-              assertRoute 6 "#19 function with arguments" (isRefused F2)
-              assertRoute 7 "#20 lambda-valued binding" (isRefused F3)
-              assertRoute 8 "#21 inner let in a function body" (isRefused F3)
-              assertRoute 9 "#17 match clause (first)" (isRefused F1)
-              assertRoute 10 "#17 match clause (second)" (isRefused F1)
-              assertRoute 11 "#18 try/with handler (try body)" (isRefused F1)
-              assertRoute 12 "#18 try/with handler (with handler)" (isRefused F1)
-              assertRoute 13 "#23 tuple binding (first element)" (isRefused F5)
-              assertRoute 14 "#23 tuple binding (second element)" (isRefused F5)
-              assertRoute 15 "#24 outer binding that holds a nested block" (isR2 "nested")
-              assertRoute 16 "#24 block inside another block's expression" (isRefused F5)
-              assertRoute 17 "sweeper block (structural, not a numbered position)" isR1
-              assertRoute 18 "module Tail bare block (boundary probe, not a numbered position)" isR1
+              assertRoute 0 "#13 let private x = http { }" (isNamedByTheBinding "secret")
+
+              assertRoute
+                  1
+                  "internal binding (Further Notes measurement, not a numbered position)"
+                  (isNamedByTheBinding "semiSecret")
+
+              assertRoute 2 "#14 module private, bare block" isNamedByTheRun
+              assertRoute 3 "#15 nested modules, Outer.Inner.deep" (isNamedByTheBinding "deep")
+              assertRoute 4 "#16 attributed binding, [<Obsolete>] let …" (isNamedByTheBinding "attributed")
+              assertRoute 5 "#22 class member" (isRefused NeedsAnInventedValue)
+              assertRoute 6 "#19 function with arguments" (isRefused NeedsAnInventedValue)
+              assertRoute 7 "#20 lambda-valued binding" (isRefused NotModuleScoped)
+              assertRoute 8 "#21 inner let in a function body" (isRefused NotModuleScoped)
+              assertRoute 9 "#17 match clause (first)" (isRefused DecidedAtRunTime)
+              assertRoute 10 "#17 match clause (second)" (isRefused DecidedAtRunTime)
+              assertRoute 11 "#18 try/with handler (try body)" (isRefused DecidedAtRunTime)
+              assertRoute 12 "#18 try/with handler (with handler)" (isRefused DecidedAtRunTime)
+              assertRoute 13 "#23 tuple binding (first element)" (isRefused ValueIsNotTheBlock)
+              assertRoute 14 "#23 tuple binding (second element)" (isRefused ValueIsNotTheBlock)
+              assertRoute 15 "#24 outer binding that holds a nested block" (isNamedByTheBinding "nested")
+              assertRoute 16 "#24 block inside another block's expression" (isRefused ValueIsNotTheBlock)
+              assertRoute 17 "sweeper block (structural, not a numbered position)" isNamedByTheRun
+              assertRoute 18 "module Tail bare block (boundary probe, not a numbered position)" isNamedByTheRun
           }
 
           // Positions 13 to 15 are the rows that exist to exercise `Qualifier` and

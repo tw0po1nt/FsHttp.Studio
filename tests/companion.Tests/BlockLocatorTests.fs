@@ -221,7 +221,7 @@ let wrapped = (http { GET "https://example.com/paren" })
 
               let blocks = locateBlocks source
               Expect.hasLength blocks 1 "one block expected"
-              Expect.equal blocks.[0].Route (R2 "wrapped") "parentheses are transparent to R2"
+              Expect.equal blocks.[0].Route (NamedByTheBinding "wrapped") "parentheses are transparent to R2"
           }
 
           test "an annotated binding value still routes R2" {
@@ -232,7 +232,7 @@ let annotated: FsHttp.Domain.HeaderContext = http { GET "https://example.com/typ
 
               let blocks = locateBlocks source
               Expect.hasLength blocks 1 "one block expected"
-              Expect.equal blocks.[0].Route (R2 "annotated") "a type annotation is transparent to R2"
+              Expect.equal blocks.[0].Route (NamedByTheBinding "annotated") "a type annotation is transparent to R2"
           }
 
           // Parens are transparent to R2 only. R1 inserts `let <name> = ` at the block's own
@@ -245,7 +245,7 @@ let annotated: FsHttp.Domain.HeaderContext = http { GET "https://example.com/typ
 
               let blocks = locateBlocks source
               Expect.hasLength blocks 1 "one block expected"
-              Expect.notEqual blocks.[0].Route R1 "parentheses are not transparent to R1"
+              Expect.notEqual blocks.[0].Route NamedByTheRun "parentheses are not transparent to R1"
           }
 
           // A head pattern that binds no single name gives the invocation nothing to call. The
@@ -261,7 +261,11 @@ let _ = http { GET "https://example.com/wildcard" }
 
               match blocks.[0].Route with
               | Refused(family, reason) ->
-                  Expect.equal family F5 "a wildcard binding is module-scoped, so it is not F3"
+                  Expect.equal
+                      family
+                      ValueIsNotTheBlock
+                      "a wildcard binding is module-scoped, so it is not NotModuleScoped"
+
                   Expect.isFalse (reason.Contains "Syn") "the reason must not name an FCS type"
               | other -> failtestf "expected a refusal, got %A" other
           }
