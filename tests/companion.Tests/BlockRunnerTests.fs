@@ -149,6 +149,58 @@ let tests =
               | other -> failtestf "expected compileError, got %A" other
           }
 
+          test "a setup that fails to parse reports the setup's own compileError, not a phantom error naming http" {
+              // Regression for #94: `EvalInteractionNonThrowing` returns `Choice1Of2` (no
+              // exception) for a Setup that fails to *parse*, and discards the failure into the
+              // diagnostics array. The companion used to read that array only in the
+              // `Choice2Of2` branch, so this Setup was silently treated as good, and the block
+              // below went on to report "The value or constructor 'http' is not defined"
+              // instead. This wraps the minimal repro from #94 -- a `let`, then two lines that
+              // each start with `|>` -- in a function body, which is the shape that keeps
+              // `locateBlocks`' own untyped parse successful (a bare top-level version of the
+              // #94 repro fails that parse too, and never reaches the block at all).
+              let source =
+                  "let f () =\n    let x = 1\n    |> ignore\n    |> ignore\n    x\n\nhttp {\n    GET \"https://example.com\"\n}\n"
+
+              match run source 0 with
+              | CompileError diagnostics ->
+                  Expect.isNonEmpty diagnostics "at least one diagnostic expected"
+
+                  Expect.isTrue
+                      (diagnostics |> List.exists (fun d -> d.Range.StartLine = 2 || d.Range.StartLine = 3))
+                      "at least one diagnostic should keep its real location on the broken `let`/`|>` lines, not fall back to a phantom line"
+
+                  for d in diagnostics do
+                      Expect.isTrue (d.Range.StartLine >= 1) "range should point at a real line"
+                      Expect.stringContains d.Message "Setup failed to evaluate" "the message should say the fault is in the Setup"
+
+                      Expect.isFalse
+                          (d.Message.Contains "http")
+                          "the message must not name 'http' -- that would be the symptom of the discarded-diagnostics defect, not the true fault"
+              | other -> failtestf "expected compileError, got %A" other
+          }
+
+          test "case 9 of the #90 matrix (block in a for-loop body): the setup's own parse error is reported, not http" {
+              // The `for ... do` head has no body once the setup slice ends at the block's
+              // start, so the Setup fails to parse. Before the fix this fell into the same
+              // discarded-diagnostics defect as the test above, and the block reported "The
+              // value or constructor 'http' is not defined" instead of the true fault.
+              let source =
+                  "for name in [ \"pidgey\"; \"rattata\" ] do\n    http {\n        GET \"https://example.com\"\n    }\n"
+
+              match run source 0 with
+              | CompileError diagnostics ->
+                  Expect.isNonEmpty diagnostics "at least one diagnostic expected"
+
+                  for d in diagnostics do
+                      // The companion anchors an addendum-origin diagnostic at line 1 (see
+                      // BlockRunner.setupDiagnostic), so this case only asserts the location
+                      // stays inside the file, not a specific line.
+                      Expect.isTrue (d.Range.StartLine >= 1) "range should point at a real line"
+                      Expect.isFalse (d.Message.Contains "http") "the message must not name 'http'"
+              | other -> failtestf "expected compileError, got %A" other
+          }
+
           test "a block streamed body-after-headers stays readable across repeated Runs" {
               // Regression for "The stream was already consumed. It cannot be read again."
               // FsHttp's default `ResponseHeadersRead` returns before the body, and leaves a

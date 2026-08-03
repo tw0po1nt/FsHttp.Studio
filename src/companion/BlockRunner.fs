@@ -125,15 +125,20 @@ let private errorDiagnostics (diags: FSharpDiagnostic[]) =
 /// resolvable `#r`. Anchor such a diagnostic at the top of the script, where the missing
 /// reference belongs. A phantom line past the end would fail to highlight in the UI.
 let private setupDiagnostic (realLineCount: int) (d: FSharpDiagnostic) : Diagnostic =
+    // States that the Setup failed before the compiler's own text. A diagnostic that the
+    // companion anchors at line 1 (see below) would otherwise read as a fault on that line
+    // instead of a Setup failure (spec 0001, Decision 3).
+    let message = sprintf "Setup failed to evaluate: %s" d.Message
+
     if d.StartLine > realLineCount then
-        { Message = d.Message
+        { Message = message
           Range =
             { StartLine = 1
               StartCol = 0
               EndLine = 1
               EndCol = 0 } }
     else
-        { Message = d.Message
+        { Message = message
           Range =
             { StartLine = d.StartLine
               StartCol = d.StartColumn
@@ -247,35 +252,42 @@ let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
 
         let setupResult, setupDiags = session.EvalInteractionNonThrowing(combinedSetup)
 
-        match setupResult with
-        | Choice2Of2 ex ->
-            match
-                errorDiagnostics setupDiags
-                |> Array.map (setupDiagnostic setupLineCount)
-                |> Array.toList
-            with
-            | [] -> RuntimeError ex.Message
-            | errors -> CompileError errors
-        | Choice1Of2 _ ->
-            let ceLineCount = target.Block.EndLine - target.Block.StartLine + 1
-            let targetCode = ceText + "\n|> Request.send"
-            let targetResult, targetDiags = session.EvalExpressionNonThrowing(targetCode)
+        // `Choice1Of2` means only that the Setup threw no exception; it does not mean the
+        // Setup has no errors. FSI can return `Choice1Of2` for a Setup that fails to parse or
+        // type-check, and discard the failure into the diagnostics array instead of the
+        // `Choice`. The array is therefore the only reliable signal, and it is read *before*
+        // the `Choice`, independent of which branch the `Choice` took (spec 0001, Decision 1).
+        // A Setup failure also stops the Run: evaluating the block against a Setup that never
+        // took effect only produces a second, misleading error (spec 0001, Decision 2).
+        match
+            errorDiagnostics setupDiags
+            |> Array.map (setupDiagnostic setupLineCount)
+            |> Array.toList
+        with
+        | errors when not (List.isEmpty errors) -> CompileError errors
+        | _ ->
+            match setupResult with
+            | Choice2Of2 ex -> RuntimeError ex.Message
+            | Choice1Of2 _ ->
+                let ceLineCount = target.Block.EndLine - target.Block.StartLine + 1
+                let targetCode = ceText + "\n|> Request.send"
+                let targetResult, targetDiags = session.EvalExpressionNonThrowing(targetCode)
 
-            match targetResult with
-            | Choice2Of2 ex ->
-                match
-                    errorDiagnostics targetDiags
-                    |> Array.map (targetDiagnostic target.Block ceLineCount)
-                    |> Array.toList
-                with
-                | [] -> RuntimeError ex.Message
-                | errors -> CompileError errors
-            | Choice1Of2 None -> RuntimeError "expression returned no value"
-            | Choice1Of2(Some v) ->
-                try
-                    extractResponse v
-                with ex ->
-                    RuntimeError ex.Message
+                match targetResult with
+                | Choice2Of2 ex ->
+                    match
+                        errorDiagnostics targetDiags
+                        |> Array.map (targetDiagnostic target.Block ceLineCount)
+                        |> Array.toList
+                    with
+                    | [] -> RuntimeError ex.Message
+                    | errors -> CompileError errors
+                | Choice1Of2 None -> RuntimeError "expression returned no value"
+                | Choice1Of2(Some v) ->
+                    try
+                        extractResponse v
+                    with ex ->
+                        RuntimeError ex.Message
 
 // ---------------------------------------------------------------------------------------------
 // Multi-version isolation. The assemblies that `#r "nuget:"` resolves load into the
