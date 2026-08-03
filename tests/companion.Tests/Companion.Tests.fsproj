@@ -10,9 +10,18 @@
 
   <ItemGroup>
     <Compile Include="BlockLocatorTests.fs" />
+    <Compile Include="PositionMatrixTests.fs" />
     <Compile Include="TestServer.fs" />
     <Compile Include="BlockRunnerTests.fs" />
     <Compile Include="RequestHandlerTests.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The spec's own position-matrix corpora (docs/spec/0002-reach-a-block-anywhere.md, Seam
+         1). `PositionMatrixTests` reads these from the source tree via `__SOURCE_DIRECTORY__`,
+         so they need no copy-to-output. -->
+    <None Include="fixtures\matrix.fsx" />
+    <None Include="fixtures\extra.fsx" />
   </ItemGroup>
 
   <ItemGroup>

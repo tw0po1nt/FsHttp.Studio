@@ -46,6 +46,10 @@ _Avoid_: server, backend, host.
 The tagged message that the companion and the extension host exchange across their process boundary. An envelope carries a Run request, a set of block ranges, or a Run outcome.
 _Avoid_: message, payload, packet.
 
+**Invocation**:
+The F# call that a Run emits to reach its target block once the setup is loaded, qualified by the block's enclosing modules: `getSnorlax ()`, `Outer.Inner.deep`. An invocation is one step inside a Run, not a synonym for it. This is the one sanctioned use of "invoke", because the Run's own _Avoid_ list reserves that word against naming the whole cycle.
+_Avoid_: call, dispatch.
+
 ### Run outcomes
 
 **HTTP error response**:
