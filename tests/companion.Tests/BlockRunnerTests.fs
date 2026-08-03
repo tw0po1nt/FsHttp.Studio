@@ -167,12 +167,17 @@ let tests =
                   Expect.isNonEmpty diagnostics "at least one diagnostic expected"
 
                   Expect.isTrue
-                      (diagnostics |> List.exists (fun d -> d.Range.StartLine = 2 || d.Range.StartLine = 3))
+                      (diagnostics
+                       |> List.exists (fun d -> d.Range.StartLine = 2 || d.Range.StartLine = 3))
                       "at least one diagnostic should keep its real location on the broken `let`/`|>` lines, not fall back to a phantom line"
 
                   for d in diagnostics do
                       Expect.isTrue (d.Range.StartLine >= 1) "range should point at a real line"
-                      Expect.stringContains d.Message "Setup failed to evaluate" "the message should say the fault is in the Setup"
+
+                      Expect.stringContains
+                          d.Message
+                          "Setup failed to evaluate"
+                          "the message should say the fault is in the Setup"
 
                       Expect.isFalse
                           (d.Message.Contains "http")
