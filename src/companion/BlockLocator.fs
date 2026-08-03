@@ -61,7 +61,8 @@ type LocatedBlock =
         /// inner binding blanks its right side only, because a blanked `member _.Get() = …`
         /// leaves a type with no members, and that does not parse.
         Blank: BlockRange
-        /// The enclosing nested-module chain, outermost first. The invocation qualifier.
+        /// The enclosing module chain, outermost first: the invocation's qualifier. It covers the
+        /// nested `module M =` declarations and the file's own `module M` header, if it has one.
         Qualifier: string list
         /// The `private` keyword spans to blank on this block's own path: its own binding's, and
         /// each enclosing module's. Empty when nothing on the path is `private`.
@@ -101,23 +102,36 @@ let private leadingAt (blockStart: pos) (node: SyntaxNode) =
     | _ -> false
 
 /// R2's transparency is narrower than `leadingAt`: only a type annotation or parens may sit
-/// between a binding and the block for the binding's *value* to be the block. Returns the
-/// remaining path once every such wrapper is consumed.
-let rec private valueIsBlock (path: SyntaxNode list) =
+/// between a binding and the block for the binding's *value* to be the block (Decision 2).
+/// Returns the remaining path once every such wrapper is consumed. A parenthesis starts at its
+/// own `(`, before the block, so `leadingAt` never reaches one — this is the only thing that
+/// does. It stays narrow on purpose: R1 inserts `let <name> = ` at the block's own start, and a
+/// parenthesis between the statement and the block would put that insertion inside the parens.
+let rec private skipValueWrappers (path: SyntaxNode list) =
     match path with
     | SyntaxNode.SynExpr(SynExpr.Typed _) :: rest
-    | SyntaxNode.SynExpr(SynExpr.Paren _) :: rest -> valueIsBlock rest
+    | SyntaxNode.SynExpr(SynExpr.Paren _) :: rest -> skipValueWrappers rest
     | rest -> rest
 
-/// The enclosing nested-module chain, outermost first. `List.rev` turns the innermost-first
-/// order that `path` walks in (from the block outward) into the outermost-first order the
-/// spec asks for.
-let private qualifierOf (path: SyntaxNode list) =
+/// Every enclosing module on the block's path, innermost first, with the module's own
+/// accessibility. A nested `module M =` is one, and so is the file's own `module M` header,
+/// which puts the same name in front of the invocation and can carry the same `private`. A
+/// script with no header parses as an anonymous module, and a namespace holds no bindings, so
+/// neither is one.
+let private enclosingModules (path: SyntaxNode list) =
     path
     |> List.choose (function
-        | SyntaxNode.SynModule(SynModuleDecl.NestedModule(moduleInfo = SynComponentInfo(longId = ids))) ->
-            Some(ids |> List.map (fun i -> i.idText) |> String.concat ".")
+        | SyntaxNode.SynModule(SynModuleDecl.NestedModule(
+            moduleInfo = SynComponentInfo(longId = ids; accessibility = access))) -> Some(ids, access)
+        | SyntaxNode.SynModuleOrNamespace(SynModuleOrNamespace(
+            longId = ids; kind = SynModuleOrNamespaceKind.NamedModule; accessibility = access)) -> Some(ids, access)
         | _ -> None)
+
+/// The enclosing module chain, outermost first. `List.rev` turns the innermost-first order that
+/// `path` walks in (from the block outward) into the outermost-first order the spec asks for.
+let private qualifierOf (path: SyntaxNode list) =
+    enclosingModules path
+    |> List.map (fun (ids, _) -> ids |> List.map (fun i -> i.idText) |> String.concat ".")
     |> List.rev
 
 let private accessRange (a: SynAccess option) =
@@ -132,11 +146,7 @@ let private accessRange (a: SynAccess option) =
 /// accessible from a later interaction, so it is deliberately not matched here.
 let private privateSpansOn (ownBinding: SynAccess option) (path: SyntaxNode list) =
     accessRange ownBinding
-    @ (path
-       |> List.collect (function
-           | SyntaxNode.SynModule(SynModuleDecl.NestedModule(moduleInfo = SynComponentInfo(accessibility = a))) ->
-               accessRange a
-           | _ -> []))
+    @ (enclosingModules path |> List.collect (snd >> accessRange))
 
 /// `private` can sit on the binding *or* on its head pattern — `let private x = …` puts it on
 /// `SynPat.Named`, not on `SynBinding.accessibility` — so a read of the binding alone misses it
@@ -166,8 +176,6 @@ let private derivedName (headPat: SynPat) =
         | _ -> NeedsArguments
     | _ -> NoName
 
-let private f1 why = Refused(F1, why)
-
 /// The whole routing decision, from the untyped path alone (Decision 2). `path` is
 /// innermost-first, as `ParsedInput.fold` builds it. Returns the route, plus the binding's own
 /// `SynAccess` when the block routes through a binding, for `privateSpansOn` to read.
@@ -182,42 +190,52 @@ let private classify (blockStart: pos) (path: SyntaxNode list) : Route * SynAcce
         | n :: rest when leadingAt blockStart n -> skipLeading rest
         | _ -> p
 
-    match skipLeading path with
-    | SyntaxNode.SynModule(SynModuleDecl.Expr _) :: _ -> R1, None
+    let afterBoundary = skipLeading path
 
-    | SyntaxNode.SynExpr(SynExpr.Tuple _) :: _ ->
-        Refused(F5, "a tuple binding binds several values, so its value is not the block"), None
-
+    // Look for an R2 binding through the wrappers R2 alone tolerates. Every other position
+    // classifies from `afterBoundary`, so a parenthesis stays opaque everywhere but here.
+    match skipValueWrappers afterBoundary with
     | SyntaxNode.SynBinding(SynBinding(headPat = headPat; accessibility = access)) :: parents ->
-        // The binding's value must actually be the block (only Typed/Paren may intervene), and
-        // the binding must be module-level: an inner `let` or a member is out of reach.
-        let valueIsTheBlock = valueIsBlock path |> List.isEmpty |> not
+        // Reaching a binding through `skipValueWrappers` is what makes the block the binding's
+        // value. What is left to decide is whether the binding is module-level: an inner `let`
+        // or a member is out of reach from a later FSI interaction.
         let access = if access.IsSome then access else patternAccess headPat
 
         match parents with
-        | SyntaxNode.SynModule(SynModuleDecl.Let _) :: _ when valueIsTheBlock ->
+        | SyntaxNode.SynModule(SynModuleDecl.Let _) :: _ ->
             match derivedName headPat with
             | Invocable invocation -> R2 invocation, access
             | NeedsArguments -> Refused(F2, "the function takes arguments we would have to invent"), access
-            | NoName -> Refused(F3, "the binding's head pattern gives no name to invoke"), access
+            // A wildcard or a destructuring pattern binds no single name, so there is nothing to
+            // invoke and no value the invocation could name. The spec's table has no row for this
+            // shape; F5 is its nearest family, beside the tuple binding it resembles.
+            | NoName -> Refused(F5, "the binding does not give a name to invoke"), access
         | SyntaxNode.SynMemberDefn _ :: _
         | SyntaxNode.SynTypeDefn _ :: _ ->
             Refused(F2, "a class member needs an instance we would have to invent"), access
         | _ -> Refused(F3, "an inner binding is not reachable from a later FSI interaction"), access
 
-    | SyntaxNode.SynExpr(SynExpr.ForEach _) :: _
-    | SyntaxNode.SynExpr(SynExpr.For _) :: _
-    | SyntaxNode.SynExpr(SynExpr.While _) :: _ -> f1 "a loop body describes many requests", None
-    | SyntaxNode.SynExpr(SynExpr.IfThenElse _) :: _ -> f1 "a branch is decided at runtime", None
-    | SyntaxNode.SynMatchClause _ :: _
-    | SyntaxNode.SynExpr(SynExpr.Match _) :: _
-    | SyntaxNode.SynExpr(SynExpr.MatchLambda _) :: _ -> f1 "a match clause is decided at runtime", None
-    | SyntaxNode.SynExpr(SynExpr.TryWith _) :: _
-    | SyntaxNode.SynExpr(SynExpr.TryFinally _) :: _ -> f1 "a handler is decided at runtime", None
-    | SyntaxNode.SynExpr(SynExpr.Lambda _) :: _ -> Refused(F3, "the binding's value is a lambda, not the block"), None
-    | SyntaxNode.SynExpr(SynExpr.LetOrUse _) :: _ ->
-        Refused(F3, "an inner let is not reachable from a later FSI interaction"), None
-    | _ -> Refused(F5, "the block sits inside another expression, so its value is not the block"), None
+    | _ ->
+        match afterBoundary with
+        | SyntaxNode.SynModule(SynModuleDecl.Expr _) :: _ -> R1, None
+
+        | SyntaxNode.SynExpr(SynExpr.Tuple _) :: _ ->
+            Refused(F5, "a tuple binding binds several values, so its value is not the block"), None
+
+        | SyntaxNode.SynExpr(SynExpr.ForEach _) :: _
+        | SyntaxNode.SynExpr(SynExpr.For _) :: _
+        | SyntaxNode.SynExpr(SynExpr.While _) :: _ -> Refused(F1, "a loop body describes many requests"), None
+        | SyntaxNode.SynExpr(SynExpr.IfThenElse _) :: _ -> Refused(F1, "a branch is decided at runtime"), None
+        | SyntaxNode.SynMatchClause _ :: _
+        | SyntaxNode.SynExpr(SynExpr.Match _) :: _
+        | SyntaxNode.SynExpr(SynExpr.MatchLambda _) :: _ -> Refused(F1, "a match clause is decided at runtime"), None
+        | SyntaxNode.SynExpr(SynExpr.TryWith _) :: _
+        | SyntaxNode.SynExpr(SynExpr.TryFinally _) :: _ -> Refused(F1, "a handler is decided at runtime"), None
+        | SyntaxNode.SynExpr(SynExpr.Lambda _) :: _ ->
+            Refused(F3, "the binding's value is a lambda, not the block"), None
+        | SyntaxNode.SynExpr(SynExpr.LetOrUse _) :: _ ->
+            Refused(F3, "an inner let is not reachable from a later FSI interaction"), None
+        | _ -> Refused(F5, "the block sits inside another expression, so its value is not the block"), None
 
 /// The smallest enclosing statement that can hold an expression (Decision 5). A module-level
 /// binding blanks its whole declaration, which keeps the value-leakage protection: the binding

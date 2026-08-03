@@ -1,6 +1,7 @@
-// SchlenkR's 12-case run-behavior file from #90's first comment, verbatim in structure, with
-// every URL pointed at the harness's counting server and the `#r` pinned so the run is
-// reproducible. Block order in this file IS the index order the harness reports.
+// The twelve-case run-behavior corpus that docs/spec/0002-reach-a-block-anywhere.md draws its
+// positions 1 to 12 from, verbatim in structure, with every URL pointed at a counting server and
+// the `#r` pinned so a run is reproducible. Block order in this file IS the index order that
+// `locateBlocks` reports, and PositionMatrixTests asserts against those indices.
 
 #r "nuget: FsHttp, 15.0.3"
 

@@ -58,12 +58,12 @@ let private companionAddendum =
 let private asPairs (h: IEnumerable<KeyValuePair<string, IEnumerable<string>>>) =
     h |> Seq.map (fun kv -> kv.Key, String.Join(", ", kv.Value))
 
-/// Blanks a statement's span in place across `lines`. It keeps every newline, so every other
+/// Blanks a block's `Blank` span in place across `lines`. It keeps every newline, so every other
 /// line's row and column numbers stay aligned with the original source. The `()` placeholder
-/// keeps a `let`-bound statement well-formed, and does not evaluate the request that it
-/// displaces. It blanks the *whole* statement, not only the CE, so a trailing `|> Request.send`
-/// on the excluded block's own line has nothing left to pipe from.
-let private blankStatement (lines: string[]) (r: BlockRange) =
+/// keeps a `let`-bound declaration well-formed, and does not evaluate the request that it
+/// displaces. The span reaches past the CE itself, so a trailing `|> Request.send` on the
+/// excluded block's own line has nothing left to pipe from.
+let private blankSpan (lines: string[]) (r: BlockRange) =
     let startIdx = r.StartLine - 1
     let endIdx = r.EndLine - 1
 
@@ -104,7 +104,7 @@ let private buildSetup (source: string) (blocks: LocatedBlock list) (target: Loc
 
     blocks
     |> List.filter (fun b -> b.Block <> target.Block)
-    |> List.iter (fun b -> blankStatement lines b.Blank)
+    |> List.iter (fun b -> blankSpan lines b.Blank)
 
     let prefixLines = lines.[0 .. target.Block.StartLine - 2]
 

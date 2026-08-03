@@ -38,11 +38,23 @@ let private assertRoute (blocks: LocatedBlock list) (index: int) (position: stri
     | None -> failtestf "%s: no block at index %d (%d blocks located)" position index blocks.Length
     | Some b -> Expect.isTrue (expected b.Route) (sprintf "%s: got %A" position b.Route)
 
+/// Asserts block `index`'s enclosing-module qualifier, outermost first.
+let private assertQualifier (blocks: LocatedBlock list) (index: int) (position: string) (expected: string list) =
+    match List.tryItem index blocks with
+    | None -> failtestf "%s: no block at index %d (%d blocks located)" position index blocks.Length
+    | Some b -> Expect.equal b.Qualifier expected (sprintf "%s: qualifier" position)
+
+/// Asserts how many `private` keywords sit on block `index`'s own path.
+let private assertPrivateSpans (blocks: LocatedBlock list) (index: int) (position: string) (expected: int) =
+    match List.tryItem index blocks with
+    | None -> failtestf "%s: no block at index %d (%d blocks located)" position index blocks.Length
+    | Some b -> Expect.hasLength b.PrivateSpans expected (sprintf "%s: private spans" position)
+
 [<Tests>]
 let tests =
     testList
         "PositionMatrix"
-        [ test "matrix.fsx: each of #90's twelve cases gets the route the spec's table names" {
+        [ test "matrix.fsx: each of the twelve original cases gets the route the spec's table names" {
               let blocks = locateBlocks (fixture "matrix.fsx")
               Expect.hasLength blocks 14 "matrix.fsx has 14 blocks (case 3 and case 11 are two blocks each)"
 
@@ -83,8 +95,30 @@ let tests =
               assertRoute 12 "#18 try/with handler (with handler)" (isRefused F1)
               assertRoute 13 "#23 tuple binding (first element)" (isRefused F5)
               assertRoute 14 "#23 tuple binding (second element)" (isRefused F5)
-              assertRoute 15 "nested-module runnable block (C3 hazard fixture, not a numbered position)" (isR2 "nested")
+              assertRoute 15 "#24 outer binding that holds a nested block" (isR2 "nested")
               assertRoute 16 "#24 block inside another block's expression" (isRefused F5)
               assertRoute 17 "sweeper block (structural, not a numbered position)" isR1
-              assertRoute 18 "module Tail bare block (C1 boundary probe, not a numbered position)" isR1
+              assertRoute 18 "module Tail bare block (boundary probe, not a numbered position)" isR1
+          }
+
+          // Positions 13 to 15 are the rows that exist to exercise `Qualifier` and
+          // `PrivateSpans`, so the route alone does not cover what the spec asks of them.
+          test "extra.fsx: the qualifier and the private spans match the enclosing module chain" {
+              let blocks = locateBlocks (fixture "extra.fsx")
+
+              let assertQualifier = assertQualifier blocks
+              let assertPrivateSpans = assertPrivateSpans blocks
+
+              assertQualifier 0 "#13 let private x = http { }" []
+              assertPrivateSpans 0 "#13 let private x = http { }" 1
+
+              assertPrivateSpans 1 "internal binding stays unblanked" 0
+
+              assertQualifier 2 "#14 module private, bare block" [ "Vault" ]
+              assertPrivateSpans 2 "#14 module private, bare block" 1
+
+              assertQualifier 3 "#15 nested modules, Outer.Inner.deep" [ "Outer"; "Inner" ]
+              assertPrivateSpans 3 "#15 nested modules, Outer.Inner.deep" 0
+
+              assertQualifier 18 "module Tail bare block" [ "Tail" ]
           } ]

@@ -208,4 +208,90 @@ type Api() =
               Expect.stringStarts blankText "http {" "member blank span is the right side only, not the member head"
               Expect.isFalse (blankText.Contains "member _.Get") "blank span does not reach the member head"
               Expect.isFalse (blankText.Contains "type Api") "blank span does not reach the type header"
+          }
+
+          // Decision 2: "Only a type annotation or parentheses can be between the binding and the
+          // block." Parens start at their own `(`, before the block, so the boundary rule that
+          // consumes an ancestor starting at the block never reaches one.
+          test "a parenthesized binding value still routes R2" {
+              let source =
+                  """
+let wrapped = (http { GET "https://example.com/paren" })
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 1 "one block expected"
+              Expect.equal blocks.[0].Route (R2 "wrapped") "parentheses are transparent to R2"
+          }
+
+          test "an annotated binding value still routes R2" {
+              let source =
+                  """
+let annotated: FsHttp.Domain.HeaderContext = http { GET "https://example.com/typed" }
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 1 "one block expected"
+              Expect.equal blocks.[0].Route (R2 "annotated") "a type annotation is transparent to R2"
+          }
+
+          // Parens are transparent to R2 only. R1 inserts `let <name> = ` at the block's own
+          // start, which parentheses around a bare statement would swallow.
+          test "a parenthesized bare block is not R1" {
+              let source =
+                  """
+(http { GET "https://example.com/paren-bare" })
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 1 "one block expected"
+              Expect.notEqual blocks.[0].Route R1 "parentheses are not transparent to R1"
+          }
+
+          // A head pattern that binds no single name gives the invocation nothing to call. The
+          // spec's table has no row for it, and F5 is the family beside the tuple binding.
+          test "a wildcard binding is refused, and not as an out-of-module position" {
+              let source =
+                  """
+let _ = http { GET "https://example.com/wildcard" }
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 1 "one block expected"
+
+              match blocks.[0].Route with
+              | Refused(family, reason) ->
+                  Expect.equal family F5 "a wildcard binding is module-scoped, so it is not F3"
+                  Expect.isFalse (reason.Contains "Syn") "the reason must not name an FCS type"
+              | other -> failtestf "expected a refusal, got %A" other
+          }
+
+          // Decision 2 qualifies by "the enclosing nested modules", and Decision 6 blanks
+          // `private` on "each enclosing module". A file's own `module M` header is one of both:
+          // it puts `M.` in front of the invocation and can carry the same `private`.
+          test "a file-header module contributes its name and its private keyword" {
+              let source =
+                  """module private Head
+
+let inHead = http { GET "https://example.com/head" }
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 1 "one block expected"
+              Expect.equal blocks.[0].Qualifier [ "Head" ] "the header module qualifies the invocation"
+              Expect.hasLength blocks.[0].PrivateSpans 1 "the header module's private is on the path"
+              Expect.equal (slice source blocks.[0].PrivateSpans.[0]) "private" "the span covers the keyword itself"
+          }
+
+          // A script with no header parses as an anonymous module, whose synthetic name must not
+          // reach the qualifier.
+          test "a headerless script has no qualifier" {
+              let source =
+                  """
+let bare = http { GET "https://example.com/bare" }
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 1 "one block expected"
+              Expect.isEmpty blocks.[0].Qualifier "an anonymous module contributes no name"
           } ]
