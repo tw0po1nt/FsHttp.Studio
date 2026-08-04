@@ -97,6 +97,45 @@ let private blankSpan (lines: string[]) (r: BlockRange) =
         let lastLine = lines.[endIdx]
         lines.[endIdx] <- String(' ', r.EndCol) + lastLine.Substring(r.EndCol)
 
+/// Blanks a span to pure spaces, in place across `lines`. Unlike `blankSpan` above, this leaves
+/// no `()` placeholder: the two uses below remove a keyword or an annotation, not an expression's
+/// value, and the surrounding syntax stays valid with nothing in its place (Decisions 6 and 7).
+let private blankToSpaces (lines: string[]) (r: BlockRange) =
+    let startIdx = r.StartLine - 1
+    let endIdx = r.EndLine - 1
+
+    if startIdx = endIdx then
+        let line = lines.[startIdx]
+        let before = line.Substring(0, r.StartCol)
+        let after = line.Substring(r.EndCol)
+        lines.[startIdx] <- before + String(' ', r.EndCol - r.StartCol) + after
+    else
+        let firstLine = lines.[startIdx]
+        lines.[startIdx] <- firstLine.Substring(0, r.StartCol) + String(' ', firstLine.Length - r.StartCol)
+
+        for i in startIdx + 1 .. endIdx - 1 do
+            lines.[i] <- String(' ', lines.[i].Length)
+
+        let lastLine = lines.[endIdx]
+        lines.[endIdx] <- String(' ', r.EndCol) + lastLine.Substring(r.EndCol)
+
+/// True when `outer` fully contains `inner`: at or before its start, and at or after its end.
+/// Guards Decision 5's first hazard -- a sibling whose blank span contains the target must never
+/// be blanked, or the blank would delete the very block the user clicked. `let a, b = http { },
+/// http { }` gives both blocks one statement span; a block nested inside another block's own
+/// expression gives the same shape, and it is the one hazard 1 shape that is actually runnable
+/// (extra.fsx case 24).
+let private containsBlock (outer: BlockRange) (inner: BlockRange) =
+    let startsAtOrBefore =
+        outer.StartLine < inner.StartLine
+        || (outer.StartLine = inner.StartLine && outer.StartCol <= inner.StartCol)
+
+    let endsAtOrAfter =
+        outer.EndLine > inner.EndLine
+        || (outer.EndLine = inner.EndLine && outer.EndCol >= inner.EndCol)
+
+    startsAtOrBefore && endsAtOrAfter
+
 /// The R1 route names nothing, so the Run invents a name. Backtick-quoted so that no legal user
 /// identifier can ever collide with it by accident (ADR-0007 records the deliberate one: a user
 /// binding of the same backtick-quoted name in the same scope still collides, and the Run does
@@ -210,9 +249,18 @@ let private buildSetupText
     : string * ColumnShift option =
     let lines = source.Replace("\r\n", "\n").Split('\n')
 
+    // Hazard 1 (Decision 5): a sibling's blank span can contain the target itself -- a block
+    // nested inside another block's own expression shares its outer binding's declaration span.
+    // Blanking that span would delete the target along with the sibling, so it is excluded here,
+    // not filtered by identity alone.
     blocks
-    |> List.filter (fun b -> b.Block <> target.Block)
+    |> List.filter (fun b -> b.Block <> target.Block && not (containsBlock b.Blank target.Block))
     |> List.iter (fun b -> blankSpan lines b.Blank)
+
+    // Decisions 6 and 7: blank the target's own `private` keywords and its own type annotation,
+    // to spaces, before the R1 insertion below can move any column on the same line.
+    target.PrivateSpans |> List.iter (blankToSpaces lines)
+    target.TypeAnnotation |> Option.iter (blankToSpaces lines)
 
     let shift = shiftFor target
 

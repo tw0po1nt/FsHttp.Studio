@@ -73,6 +73,12 @@ type LocatedBlock =
         /// The `private` keyword spans to blank on this block's own path: its own binding's, and
         /// each enclosing module's. Empty when nothing on the path is `private`.
         PrivateSpans: BlockRange list
+        /// The R2 target's own type annotation, colon included, when the binding has one.
+        /// `None` on every other route: the truncation in Decision 1 can drop a trailing pipe,
+        /// leaving an annotation that describes the untruncated value, and Decision 7 blanks it
+        /// on the target's own binding only. The span starts after the head pattern (and any
+        /// arguments), so blanking it keeps the bound name.
+        TypeAnnotation: BlockRange option
     }
 
 /// Synthetic filename given to FCS's parser. Only the `.fsx` extension matters, because it
@@ -171,6 +177,18 @@ let private patternAccess (headPat: SynPat) =
     | SynPat.LongIdent(accessibility = a) -> a
     | _ -> None
 
+/// The R2 target's own type annotation span, colon included: from the end of the head pattern
+/// (and its arguments, if any) to the end of the type (Decision 7). Measured directly: FCS's own
+/// `SynBindingReturnInfo.Range` covers only the type name (`Response`, not `: Response`), so a
+/// blank of that range alone would leave a bare `:` with nothing after it, which does not parse.
+/// Starting from the head pattern's own end keeps the bound name untouched.
+let private typeAnnotationSpan (headPat: SynPat) (returnInfo: SynBindingReturnInfo option) : range option =
+    let headPatRange = headPat.Range
+    let headPatEnd = headPatRange.End
+
+    returnInfo
+    |> Option.map (fun (SynBindingReturnInfo(range = r)) -> Range.mkRange r.FileName headPatEnd r.End)
+
 type private NameResult =
     | Invocable of string
     | NeedsArguments
@@ -194,8 +212,9 @@ let private derivedName (headPat: SynPat) =
 
 /// The whole routing decision, from the untyped path alone (Decision 2). `path` is
 /// innermost-first, as `ParsedInput.fold` builds it. Returns the route, plus the binding's own
-/// `SynAccess` when the block routes through a binding, for `privateSpansOn` to read.
-let private classify (blockStart: pos) (path: SyntaxNode list) : Route * SynAccess option =
+/// `SynAccess` when the block routes through a binding, for `privateSpansOn` to read, plus the
+/// R2 target's own type annotation span, for `TypeAnnotation` (Decision 7).
+let private classify (blockStart: pos) (path: SyntaxNode list) : Route * SynAccess option * range option =
     // Consume the ancestors the Setup boundary (Decision 1) will drop. A tuple is deliberately
     // *not* consumed: for its first element the range coincides with the block, and for its
     // second it does not, so letting that asymmetry through would route the two halves of
@@ -211,7 +230,7 @@ let private classify (blockStart: pos) (path: SyntaxNode list) : Route * SynAcce
     // Look for an R2 binding through the wrappers R2 alone tolerates. Every other position
     // classifies from `afterBoundary`, so a parenthesis stays opaque everywhere but here.
     match skipValueWrappers afterBoundary with
-    | SyntaxNode.SynBinding(SynBinding(headPat = headPat; accessibility = access)) :: parents ->
+    | SyntaxNode.SynBinding(SynBinding(headPat = headPat; accessibility = access; returnInfo = returnInfo)) :: parents ->
         // Reaching a binding through `skipValueWrappers` is what makes the block the binding's
         // value. What is left to decide is whether the binding is module-level: an inner `let`
         // or a member is out of reach from a later FSI interaction.
@@ -220,44 +239,48 @@ let private classify (blockStart: pos) (path: SyntaxNode list) : Route * SynAcce
         match parents with
         | SyntaxNode.SynModule(SynModuleDecl.Let _) :: _ ->
             match derivedName headPat with
-            | Invocable invocation -> NamedByTheBinding invocation, access
+            | Invocable invocation -> NamedByTheBinding invocation, access, typeAnnotationSpan headPat returnInfo
             | NeedsArguments ->
-                Refused(NeedsAnInventedValue, "the function takes arguments we would have to invent"), access
+                Refused(NeedsAnInventedValue, "the function takes arguments we would have to invent"), access, None
             // A wildcard or a destructuring pattern binds no single name, so there is nothing to
             // invoke and no value the invocation could name. The spec's table has no row for this
             // shape; F5 is its nearest family, beside the tuple binding it resembles.
-            | NoName -> Refused(ValueIsNotTheBlock, "the binding does not give a name to invoke"), access
+            | NoName -> Refused(ValueIsNotTheBlock, "the binding does not give a name to invoke"), access, None
         | SyntaxNode.SynMemberDefn _ :: _
         | SyntaxNode.SynTypeDefn _ :: _ ->
-            Refused(NeedsAnInventedValue, "a class member needs an instance we would have to invent"), access
-        | _ -> Refused(NotModuleScoped, "an inner binding is not reachable from a later FSI interaction"), access
+            Refused(NeedsAnInventedValue, "a class member needs an instance we would have to invent"), access, None
+        | _ -> Refused(NotModuleScoped, "an inner binding is not reachable from a later FSI interaction"), access, None
 
     | _ ->
         match afterBoundary with
-        | SyntaxNode.SynModule(SynModuleDecl.Expr _) :: _ -> NamedByTheRun, None
+        | SyntaxNode.SynModule(SynModuleDecl.Expr _) :: _ -> NamedByTheRun, None, None
 
         | SyntaxNode.SynExpr(SynExpr.Tuple _) :: _ ->
-            Refused(ValueIsNotTheBlock, "a tuple binding binds several values, so its value is not the block"), None
+            Refused(ValueIsNotTheBlock, "a tuple binding binds several values, so its value is not the block"),
+            None,
+            None
 
         | SyntaxNode.SynExpr(SynExpr.ForEach _) :: _
         | SyntaxNode.SynExpr(SynExpr.For _) :: _
         | SyntaxNode.SynExpr(SynExpr.While _) :: _ ->
-            Refused(DecidedAtRunTime, "a loop body describes many requests"), None
+            Refused(DecidedAtRunTime, "a loop body describes many requests"), None, None
         | SyntaxNode.SynExpr(SynExpr.IfThenElse _) :: _ ->
-            Refused(DecidedAtRunTime, "a branch is decided at runtime"), None
+            Refused(DecidedAtRunTime, "a branch is decided at runtime"), None, None
         | SyntaxNode.SynMatchClause _ :: _
         | SyntaxNode.SynExpr(SynExpr.Match _) :: _
         | SyntaxNode.SynExpr(SynExpr.MatchLambda _) :: _ ->
-            Refused(DecidedAtRunTime, "a match clause is decided at runtime"), None
+            Refused(DecidedAtRunTime, "a match clause is decided at runtime"), None, None
         | SyntaxNode.SynExpr(SynExpr.TryWith _) :: _
         | SyntaxNode.SynExpr(SynExpr.TryFinally _) :: _ ->
-            Refused(DecidedAtRunTime, "a handler is decided at runtime"), None
+            Refused(DecidedAtRunTime, "a handler is decided at runtime"), None, None
         | SyntaxNode.SynExpr(SynExpr.Lambda _) :: _ ->
-            Refused(NotModuleScoped, "the binding's value is a lambda, not the block"), None
+            Refused(NotModuleScoped, "the binding's value is a lambda, not the block"), None, None
         | SyntaxNode.SynExpr(SynExpr.LetOrUse _) :: _ ->
-            Refused(NotModuleScoped, "an inner let is not reachable from a later FSI interaction"), None
+            Refused(NotModuleScoped, "an inner let is not reachable from a later FSI interaction"), None, None
         | _ ->
-            Refused(ValueIsNotTheBlock, "the block sits inside another expression, so its value is not the block"), None
+            Refused(ValueIsNotTheBlock, "the block sits inside another expression, so its value is not the block"),
+            None,
+            None
 
 /// The smallest enclosing statement that can hold an expression (Decision 5). A module-level
 /// binding blanks its whole declaration, which keeps the value-leakage protection: the binding
@@ -290,13 +313,14 @@ let private findLocatedBlocks (ast: ParsedInput) : LocatedBlock list =
          match node with
          | SyntaxNode.SynExpr(SynExpr.App(
              funcExpr = BuilderNamed "http"; argExpr = SynExpr.ComputationExpr _; range = appRange)) ->
-             let route, access = classify appRange.Start path
+             let route, access, typeAnnotation = classify appRange.Start path
 
              { Block = toBlockRange appRange
                Route = route
                Blank = toBlockRange (blankSpan appRange path)
                Qualifier = qualifierOf path
-               PrivateSpans = privateSpansOn access path |> List.map toBlockRange }
+               PrivateSpans = privateSpansOn access path |> List.map toBlockRange
+               TypeAnnotation = typeAnnotation |> Option.map toBlockRange }
              :: acc
          | _ -> acc))
     |> List.rev

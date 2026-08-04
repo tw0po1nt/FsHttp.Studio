@@ -183,6 +183,146 @@ let tests =
               | other -> failtestf "expected ok, got %A" other
           }
 
+          test "a private binding runs: `private` is blanked on the target's own path (Decision 6)" {
+              // Each invocation is a separate FSI interaction, so an un-blanked `private` binding
+              // would fail with "not accessible from this code location". `PrivateSpans` carries
+              // the keyword's own span; this proves the Run actually blanks it.
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
+              let source =
+                  script (sprintf "let private secret =\n    http {\n        GET \"%s/hit\"\n    }\n" server.BaseUrl)
+
+              match run source 0 with
+              | Ok(status, _, _, _, _) ->
+                  Expect.equal status 200 "a private binding should still run"
+                  Expect.equal hitCounter.Value 1 "it should send exactly one request"
+              | other -> failtestf "expected ok, got %A" other
+          }
+
+          test "a block in a `module private` runs: the module's own `private` is blanked too (Decision 6)" {
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
+              let source =
+                  script (sprintf "module private Vault =\n    http {\n        GET \"%s/hit\"\n    }\n" server.BaseUrl)
+
+              match run source 0 with
+              | Ok(status, _, _, _, _) ->
+                  Expect.equal status 200 "a block in a private module should still run"
+                  Expect.equal hitCounter.Value 1 "it should send exactly one request"
+              | other -> failtestf "expected ok, got %A" other
+          }
+
+          test "an internal binding runs with no treatment (Decision 6's measurement)" {
+              // `internal` needs no blanking: an `internal` binding is accessible from a later
+              // FSI interaction. This test records that measurement -- it must pass with
+              // `PrivateSpans` staying empty for this shape (already asserted in
+              // PositionMatrixTests), and not because of any blanking here.
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
+              let source =
+                  script (
+                      sprintf "let internal semiSecret =\n    http {\n        GET \"%s/hit\"\n    }\n" server.BaseUrl
+                  )
+
+              match run source 0 with
+              | Ok(status, _, _, _, _) ->
+                  Expect.equal status 200 "an internal binding should run"
+                  Expect.equal hitCounter.Value 1 "it should send exactly one request"
+              | other -> failtestf "expected ok, got %A" other
+          }
+
+          test "an attributed binding runs: the keyword search does not stop at the attribute line" {
+              // `[<Obsolete>]` puts the declaration's own range on the attribute line, above the
+              // `let`. A read of the binding that starts searching from the wrong line would miss
+              // its own `private`/type-annotation spans silently. This binding carries neither,
+              // but it guards the search against the attribute line all the same.
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
+              let source =
+                  script (
+                      sprintf
+                          "[<System.Obsolete(\"prototype\")>]\nlet attributed =\n    http {\n        GET \"%s/hit\"\n    }\n"
+                          server.BaseUrl
+                  )
+
+              match run source 0 with
+              | Ok(status, _, _, _, _) ->
+                  Expect.equal status 200 "an attributed binding should run"
+                  Expect.equal hitCounter.Value 1 "it should send exactly one request"
+              | other -> failtestf "expected ok, got %A" other
+          }
+
+          test "a type annotation the truncation contradicts does not stop the Run (Decision 7)" {
+              // The Setup boundary (Decision 1) drops the trailing `|> Request.send`, so the
+              // annotated binding keeps a `Response` annotation describing the truncated `http { }`
+              // value, not the untruncated pipe. Left un-blanked, the Setup would report a
+              // false compile error against a binding the user wrote correctly.
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
+              let source =
+                  script (
+                      sprintf
+                          "let x : Response =\n    http {\n        GET \"%s/hit\"\n    }\n    |> Request.send\n"
+                          server.BaseUrl
+                  )
+
+              match run source 0 with
+              | Ok(status, _, _, _, _) ->
+                  Expect.equal status 200 "the annotated binding should still run"
+                  Expect.equal hitCounter.Value 1 "it should send exactly one request, not two"
+              | other -> failtestf "expected ok, got %A" other
+          }
+
+          test "the clicked block survives a sibling whose blank span contains it (Hazard 1)" {
+              // extra.fsx case 24. The inner block's own `Blank` span is `nested`'s whole
+              // declaration, which *contains* the outer block being run. Blanking that span as a
+              // sibling would delete the very block the user clicked. `containsBlock` must skip
+              // it, not just filter by block identity.
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/outer", countingHandler hitCounter ])
+
+              let source =
+                  script (
+                      sprintf
+                          "let nested =\n    http {\n        GET \"%s/outer\"\n        header \"X-Inner\" (string (sprintf \"%%A\" (http { GET \"https://example.com/inner\" })).Length)\n    }\n"
+                          server.BaseUrl
+                  )
+
+              match run source 0 with
+              | Ok(status, _, _, _, _) ->
+                  Expect.equal status 200 "the outer, targeted block must survive the containing sibling span"
+                  Expect.equal hitCounter.Value 1 "only the target's own request should fire"
+              | other -> failtestf "expected ok, got %A" other
+          }
+
+          test "a class-member block does not break a different block's Run that names the type (Hazard 2)" {
+              // Decision 5's second hazard: the blank span for a block inside a class member must
+              // stop at the member's own right side, not the whole type definition (ticket #111
+              // already narrows it). This proves the Run itself survives it as a sibling: the
+              // block below both the type and the member still runs, with the type's own name
+              // still resolvable in between.
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/below", countingHandler hitCounter ])
+
+              let source =
+                  script (
+                      sprintf
+                          "type Api() =\n    member _.Get() =\n        http {\n            GET \"https://example.com/member\"\n        }\n\nlet _usesApi : Api = Api()\n\nhttp {\n    GET \"%s/below\"\n}\n"
+                          server.BaseUrl
+                  )
+
+              match run source 1 with
+              | Ok(status, _, _, _, _) ->
+                  Expect.equal status 200 "the block below the class and its member should still run"
+                  Expect.equal hitCounter.Value 1 "it should send exactly one request"
+              | other -> failtestf "expected ok, got %A" other
+          }
+
           test "a block piped to Request.send in the script still sends exactly one request" {
               // Matrix case 12. The Setup boundary (Decision 1) truncates at the block's own
               // end, which drops the script's own trailing `|> Request.send` -- the invocation
