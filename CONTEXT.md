@@ -15,7 +15,7 @@ A `.fsx` F# script file. It is the only source surface that v0.1 supports. Block
 _Avoid_: file, document.
 
 **Setup**:
-The code that a Run evaluates before it sends the target block. It starts at the first line of the script. It stops at the end of the target block's own expression. It thus contains the target block, because a Run reaches a block where the user wrote it. It contains no other block, because FsHttp.Studio blanks each other block first. It contains nothing after the target block. FsHttp.Studio evaluates the Setup afresh for each Run.
+The code that a Run evaluates to reach the target block. It starts at the first line of the script, and stops at the end of the target block's own expression. It thus contains the target block, because a Run reaches a block where the user wrote it. It contains no other block, because FsHttp.Studio blanks each other block first. It contains nothing after the target block. FsHttp.Studio evaluates the Setup afresh for each Run.
 _Avoid_: context, preamble, prelude.
 
 **Run**:

@@ -379,12 +379,14 @@ depends on"*. Setup now includes the block. Use the `/domain-modeling` skill, wh
 Proposed text:
 
 > **Setup**:
-> The code that a Run evaluates before it sends the target block. It starts at the first line of the
-> script. It stops at the end of the target block's own expression. It thus contains the target
-> block, because a Run reaches a block where the user wrote it. It contains no other block, because
+> The code that a Run evaluates to reach the target block. It starts at the first line of the script,
+> and stops at the end of the target block's own expression. It thus contains the target block,
+> because a Run reaches a block where the user wrote it. It contains no other block, because
 > FsHttp.Studio blanks each other block first. It contains nothing after the target block.
 > FsHttp.Studio evaluates the Setup afresh for each Run.
 > _Avoid_: context, preamble, prelude.
+
+The first sentence avoids "send", which the **Run** entry's `_Avoid_` list rules out.
 
 Keep the `_Avoid_` list without changes. Keep the **Run** entry without changes: a Run is the
 evaluation of one block against a fresh evaluation of its Setup.
@@ -394,8 +396,8 @@ spec.
 
 **`README.md`**, the bullet that starts *"Only that block runs"*. Proposed text:
 
-> - Only *that* block runs. FsHttp.Studio evaluates your script from the top down to the end of that
->   block, with every other request blanked out, and stops there. Nothing after the block runs.
+> - Only *that* block runs. FsHttp.Studio blanks every other block, and then evaluates your script
+>   from the top down to the end of that block. It stops there. Nothing after the block runs.
 
 ## Testing Decisions
 

@@ -28,7 +28,7 @@ FsHttp.Studio closes that gap. The request stays pure F#, and the editor renders
 
 Open a `.fsx` script that contains FsHttp requests. A **`▶ Run request` CodeLens** appears above each `http { }` block. Click the CodeLens, and:
 
-- Only *that* block runs. FsHttp.Studio evaluates your script from the top down to the end of that block, with every other request blanked out, and stops there. Nothing after the block runs.
+- Only *that* block runs. FsHttp.Studio blanks every other block, and then evaluates your script from the top down to the end of that block. It stops there. Nothing after the block runs.
 - A **response viewer** panel opens beside your editor. The panel renders the body, and dispatches on the body's `Content-Type`:
   - **images** display inline,
   - **JSON** displays as a collapsible, syntax-highlighted tree,
