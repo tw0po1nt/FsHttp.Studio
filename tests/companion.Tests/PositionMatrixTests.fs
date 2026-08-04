@@ -50,6 +50,33 @@ let private assertPrivateSpans (blocks: LocatedBlock list) (index: int) (positio
     | None -> failtestf "%s: no block at index %d (%d blocks located)" position index blocks.Length
     | Some b -> Expect.hasLength b.PrivateSpans expected (sprintf "%s: private spans" position)
 
+/// The source text a span covers, newlines included.
+let private textOf (source: string) (r: BlockRange) =
+    let lines = source.Replace("\r\n", "\n").Split('\n')
+
+    if r.StartLine = r.EndLine then
+        lines.[r.StartLine - 1].Substring(r.StartCol, r.EndCol - r.StartCol)
+    else
+        [ yield lines.[r.StartLine - 1].Substring(r.StartCol)
+          for i in r.StartLine .. r.EndLine - 2 -> lines.[i]
+          yield lines.[r.EndLine - 1].Substring(0, r.EndCol) ]
+        |> String.concat "\n"
+
+/// Asserts the source text of block `index`'s type annotation span, colon included. The text is
+/// what Decision 7 asks for, and the range alone does not show it: a span that swallowed the
+/// bound name, or that dropped the colon and left it behind, both hold a plausible-looking range.
+let private assertTypeAnnotation
+    (source: string)
+    (blocks: LocatedBlock list)
+    (index: int)
+    (position: string)
+    (expected: string option)
+    =
+    match List.tryItem index blocks with
+    | None -> failtestf "%s: no block at index %d (%d blocks located)" position index blocks.Length
+    | Some b ->
+        Expect.equal (b.TypeAnnotation |> Option.map (textOf source)) expected (sprintf "%s: type annotation" position)
+
 [<Tests>]
 let tests =
     testList
@@ -125,5 +152,27 @@ let tests =
               assertQualifier 3 "#15 nested modules, Outer.Inner.deep" [ "Outer"; "Inner" ]
               assertPrivateSpans 3 "#15 nested modules, Outer.Inner.deep" 0
 
+              assertPrivateSpans 4 "#16 attributed binding, private below the attribute line" 1
+
               assertQualifier 18 "module Tail bare block" [ "Tail" ]
+          }
+
+          // Decision 7 asks for two things the route cannot show: the span covers the colon, and
+          // it exists on the R2 route alone. Position 16 is the row that carries an annotation.
+          test "extra.fsx: the type annotation span covers the colon and the type, on R2 alone" {
+              let source = fixture "extra.fsx"
+              let blocks = locateBlocks source
+              let assertTypeAnnotation = assertTypeAnnotation source blocks
+
+              assertTypeAnnotation 4 "#16 attributed binding, let private attributed: Response" (Some ": Response")
+
+              // An R2 binding with no annotation has no span to blank.
+              assertTypeAnnotation 0 "#13 let private x = http { }" None
+
+              // A refused binding keeps its annotation, and an argument's own annotation is not
+              // the binding's return type.
+              assertTypeAnnotation 6 "#19 function with arguments" None
+
+              // R1 names nothing, so there is no binding to read an annotation off.
+              assertTypeAnnotation 17 "sweeper block, bare and top level" None
           } ]
