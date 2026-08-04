@@ -133,11 +133,19 @@ let private enclosingModules (path: SyntaxNode list) =
             longId = ids; kind = SynModuleOrNamespaceKind.NamedModule; accessibility = access)) -> Some(ids, access)
         | _ -> None)
 
+/// One identifier, spelled the way an invocation can name it. `Ident.idText` carries the *text*
+/// of a name and never its backticks, so a name that is not a plain identifier — ``get pikachu``,
+/// or a keyword such as ``type`` — comes back in a spelling that does not parse. Restore the
+/// backticks that such a name needs. A plain identifier passes through unchanged, so the common
+/// case reads exactly as the user wrote it.
+let private invocationSpelling (id: Ident) =
+    PrettyNaming.NormalizeIdentifierBackticks id.idText
+
 /// The enclosing module chain, outermost first. `List.rev` turns the innermost-first order that
 /// `path` walks in (from the block outward) into the outermost-first order the spec asks for.
 let private qualifierOf (path: SyntaxNode list) =
     enclosingModules path
-    |> List.map (fun (ids, _) -> ids |> List.map (fun i -> i.idText) |> String.concat ".")
+    |> List.map (fun (ids, _) -> ids |> List.map invocationSpelling |> String.concat ".")
     |> List.rev
 
 let private accessRange (a: SynAccess option) =
@@ -168,12 +176,14 @@ type private NameResult =
     | NeedsArguments
     | NoName
 
-/// The name and arity a binding's head pattern offers for the NamedByTheBinding invocation.
+/// The name and arity a binding's head pattern offers for the NamedByTheBinding invocation. The
+/// name is spelled for an invocation (`invocationSpelling`), so a backtick-quoted binding keeps
+/// its backticks here and stays one term when `BlockRunner` qualifies it.
 let private derivedName (headPat: SynPat) =
     match headPat with
-    | SynPat.Named(ident = SynIdent(ident = id)) -> Invocable id.idText
+    | SynPat.Named(ident = SynIdent(ident = id)) -> Invocable(invocationSpelling id)
     | SynPat.LongIdent(longDotId = SynLongIdent(id = ids); argPats = SynArgPats.Pats args) ->
-        let name = ids |> List.map (fun i -> i.idText) |> String.concat "."
+        let name = ids |> List.map invocationSpelling |> String.concat "."
 
         match args with
         | [] -> Invocable name

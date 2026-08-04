@@ -1,10 +1,13 @@
 module Companion.BlockRunner
 
 // Runs one located `http { }` block against a fresh FCS interactive session, which is
-// ADR-0002's mechanism. Each Run gets a fresh session. The Run first evaluates the target's
-// preceding setup (opens, #r, lets, and helpers) with every *other* located block excluded.
-// It then evaluates the target's bare CE alone, piped to `Request.send`, and extracts the raw
-// `Response` by reflection over the BCL `HttpContent` type.
+// ADR-0002's mechanism. Each Run gets a fresh session. The Run reaches the block where the user
+// wrote it (docs/spec/0002-reach-a-block-anywhere.md): the Setup interaction evaluates the
+// script from line 1 through the end of the target block's own expression, with every *other*
+// located block's `Blank` span excluded, and the target block itself included and named. A
+// second interaction then invokes the target by that name, applies the response-reading guard,
+// pipes to `Request.send`, and extracts the raw `Response` by reflection over the BCL
+// `HttpContent` type.
 //
 // This module must never reference FsHttp itself. The user's own `#r "nuget: FsHttp, x.y.z"`,
 // evaluated as part of their own setup text, is the only thing that resolves the package, so
@@ -29,6 +32,13 @@ type RunOutcome =
     | CompileError of Diagnostic list
     | RuntimeError of string
 
+/// The response-reading guard, as generated F# source. Two places emit it: the addendum below
+/// applies it to `GlobalConfig.defaults`, and the invocation applies it to the block's own value
+/// (Decision 10). Both interpolate this one string, so the two settings cannot drift apart.
+/// `companionAddendum` carries the reason that each setting is load-bearing.
+let private responseReadingGuard =
+    "Config.update (fun c -> { c with bufferResponseContent = true; httpCompletionOption = System.Net.Http.HttpCompletionOption.ResponseContentRead })"
+
 /// Companion-side addendum, evaluated after the user's own setup. It silences FsHttp's FSI
 /// debug logging, and it forces a read of the whole response body *before* the value that we
 /// reflect over returns. It carries no `#r` of its own, because the user's setup is the only
@@ -52,7 +62,7 @@ type RunOutcome =
 let private companionAddendum =
     [ "open FsHttp"
       "FsHttp.Fsi.disableDebugLogs()"
-      "GlobalConfig.set (GlobalConfig.defaults |> Config.update (fun c -> { c with bufferResponseContent = true; httpCompletionOption = System.Net.Http.HttpCompletionOption.ResponseContentRead }))" ]
+      sprintf "GlobalConfig.set (GlobalConfig.defaults |> %s)" responseReadingGuard ]
     |> String.concat "\n"
 
 let private asPairs (h: IEnumerable<KeyValuePair<string, IEnumerable<string>>>) =
@@ -87,55 +97,184 @@ let private blankSpan (lines: string[]) (r: BlockRange) =
         let lastLine = lines.[endIdx]
         lines.[endIdx] <- String(' ', r.EndCol) + lastLine.Substring(r.EndCol)
 
-/// Builds the target's preceding setup. This is everything before the target block, with the
-/// whole enclosing statement of every *other* located block blanked. A click on the target
-/// therefore fires exactly one request, which is the setup-isolation criterion. The blanking
-/// keeps the line count and the untouched columns, so a compile error's range still lands on
-/// the real source position.
+/// The R1 route names nothing, so the Run invents a name. Backtick-quoted so that no legal user
+/// identifier can ever collide with it by accident (ADR-0007 records the deliberate one: a user
+/// binding of the same backtick-quoted name in the same scope still collides, and the Run does
+/// not avoid it).
+[<Literal>]
+let private reservedTargetName = "__fsHttpStudio_target"
+
+/// Inserted at the block's own start column, on the block's own line (Decision 2's R1 rule).
+/// Its own length is the column residue that `unshiftPos` and `shiftForward` carry as `Offset`
+/// (Decision 9). Every user of that residue reads the length from here, so the reserved name is
+/// free to change without a second edit.
+let private r1InsertText = sprintf "let ``%s`` = " reservedTargetName
+
+/// The invocation's own name, unqualified: what the R1 route inserted, or what the R2 route's
+/// binding already offers. `Refused` never reaches this — `runInProcessDirect` returns before
+/// building any text for it.
+let private baseInvocation (route: Route) : string =
+    match route with
+    | NamedByTheRun -> sprintf "``%s``" reservedTargetName
+    | NamedByTheBinding invocation -> invocation
+    | Refused _ -> invalidArg "route" "a refused route builds no invocation"
+
+/// The `()` a unit-arity binding's invocation carries: `getSnorlax ()`'s own suffix.
+[<Literal>]
+let private unitArgSuffix = " ()"
+
+/// Prefixes the invocation's own name with the enclosing-module qualifier (outermost first),
+/// and leaves a trailing arity suffix after the qualified name, not before it:
+/// `Outer.getSnorlax ()`, not `Outer.getSnorlax()`.
 ///
-/// This per-block isolation model has a known boundary. Blanking a *let-bound* block replaces
-/// its binding with `()`. If the target, or later setup, refers to the value that the block
-/// produced, evaluation fails with an "undefined identifier" compileError. One example is a
-/// downstream block that consumes `let auth = http { ... } |> Request.send`. Each block is
-/// independent by design. Value reuse across blocks is out of scope here, and it needs a
-/// different isolation strategy. This is tracked for whoever revisits block dependencies.
-let private buildSetup (source: string) (blocks: LocatedBlock list) (target: LocatedBlock) : string =
+/// The split is on the `" ()"` *suffix*, and not on the first space. A binding's own name can
+/// itself hold a space — `BlockLocator` spells ``let ``get pikachu`` = …``'s name back with its
+/// backticks — and splitting such a name at its first space would emit `Outer.``get pikachu```
+/// as two juxtaposed terms, which reads as a function application and does not compile.
+let private qualifyInvocation (qualifier: string list) (invocation: string) : string =
+    let name, arity =
+        if invocation.EndsWith unitArgSuffix then
+            invocation.Substring(0, invocation.Length - unitArgSuffix.Length), unitArgSuffix
+        else
+            invocation, ""
+
+    ((qualifier @ [ name ]) |> String.concat ".") + arity
+
+/// What the R1 insertion does to one line's columns (Decision 9). The R2 route names nothing and
+/// inserts no text, so it carries no shift at all — every `ColumnShift option` below is `None`
+/// there, and every translation is the identity.
+type private ColumnShift =
+    {
+        /// The block's own start line: the one line the insertion touches.
+        Line: int
+        /// The column the insertion starts at, which is the block's own start column.
+        InsertCol: int
+        /// The inserted text's own width: what a column at or past the insertion carries.
+        Offset: int
+    }
+
+let private shiftFor (target: LocatedBlock) : ColumnShift option =
+    match target.Route with
+    | NamedByTheRun ->
+        Some
+            { Line = target.Block.StartLine
+              InsertCol = target.Block.StartCol
+              Offset = r1InsertText.Length }
+    | NamedByTheBinding _
+    | Refused _ -> None
+
+/// Moves an *original*-source column forward across the R1 insertion, so a boundary computed in
+/// source coordinates (the block's own end column, for the truncation point) lands on the same
+/// character in the edited Setup text. Identity off the shifted line, and left of the insertion.
+let private shiftForward (shift: ColumnShift option) (line: int, col: int) =
+    match shift with
+    | Some s when line = s.Line && col >= s.InsertCol -> line, col + s.Offset
+    | _ -> line, col
+
+/// Moves a Setup-interaction-coordinate column back to the original source (Decision 9). A
+/// column before the insertion point is untouched. A column inside the inserted text itself has
+/// no original counterpart, and clamps to the insertion point. A column at or past the inserted
+/// text's end is the block's own text, shifted forward by `offset`, so it subtracts back out.
+let private unshiftPos (shift: ColumnShift option) (line: int, col: int) =
+    match shift with
+    | Some s when line = s.Line ->
+        if col < s.InsertCol then line, col
+        elif col < s.InsertCol + s.Offset then line, s.InsertCol
+        else line, col - s.Offset
+    | _ -> line, col
+
+/// True when a *Setup-coordinate* position falls inside the R1 inserted text itself, which is
+/// the companion's own generated `let <name> = `. Such a position has no user-source counterpart,
+/// and `unshiftPos` clamps it to the insertion point — which is also the block's own start
+/// column, so it would otherwise pass `withinBlock` and be misreported as the user's fault.
+/// Decision 8 puts the companion's own generated text on the Setup side of the split, so this
+/// test runs on the *raw* position, before the clamp erases the distinction.
+let private withinInsertion (shift: ColumnShift option) (line: int, col: int) =
+    match shift with
+    | Some s -> line = s.Line && col >= s.InsertCol && col < s.InsertCol + s.Offset
+    | None -> false
+
+/// Builds the Setup text (Decision 1): everything from line 1 through the end of the target
+/// block's own expression, truncated at its end column, with every *other* located block's
+/// `Blank` span replaced first. A click on the target therefore fires exactly one request, which
+/// is the isolation criterion, and the code after the target never runs at all — it is not part
+/// of either FSI interaction, not even blanked.
+///
+/// The R1 route inserts `let <name> = ` at the block's own start (Decision 2) before the
+/// truncation point is computed, because that insertion can land on the same line the boundary
+/// truncates.
+let private buildSetupText
+    (source: string)
+    (blocks: LocatedBlock list)
+    (target: LocatedBlock)
+    : string * ColumnShift option =
     let lines = source.Replace("\r\n", "\n").Split('\n')
 
     blocks
     |> List.filter (fun b -> b.Block <> target.Block)
     |> List.iter (fun b -> blankSpan lines b.Blank)
 
-    let prefixLines = lines.[0 .. target.Block.StartLine - 2]
+    let shift = shiftFor target
 
-    let startLineText =
-        lines.[target.Block.StartLine - 1].Substring(0, target.Block.StartCol)
+    match shift with
+    | Some s ->
+        let idx = s.Line - 1
+        let line = lines.[idx]
+        lines.[idx] <- line.Substring(0, s.InsertCol) + r1InsertText + line.Substring(s.InsertCol)
+    | None -> ()
 
-    Array.append prefixLines [| startLineText |] |> String.concat "\n"
+    let cutLine, cutCol = shiftForward shift (target.Block.EndLine, target.Block.EndCol)
+    let cutIdx = cutLine - 1
+
+    let prefixLines = lines.[0 .. cutIdx - 1]
+    let lastLineText = lines.[cutIdx].Substring(0, cutCol)
+
+    Array.append prefixLines [| lastLineText |] |> String.concat "\n", shift
+
+/// The second interaction: invokes the target by its qualified name, and applies the
+/// response-reading guard to its value before sending (Decision 10). The Setup builds the
+/// block's context *inside* itself, and thus before the companion addendum's `GlobalConfig.set`
+/// runs, so the context would otherwise still carry FsHttp's `ResponseHeadersRead` default and
+/// leave the body a read-once stream. `Config.update` re-applies the guard on the built value,
+/// which is idempotent with the addendum's own guard.
+let private invocationText (target: LocatedBlock) : string =
+    let qualified = baseInvocation target.Route |> qualifyInvocation target.Qualifier
+
+    sprintf "%s |> %s |> Request.send" qualified responseReadingGuard
 
 let private errorDiagnostics (diags: FSharpDiagnostic[]) =
     diags |> Array.filter (fun d -> d.Severity = FSharpDiagnosticSeverity.Error)
 
-/// Maps a diagnostic from the combined setup evaluation back onto the original source, and
-/// names the setup in its message.
+/// True when `point` (already unshifted to original-source coordinates) falls inside `block`'s
+/// own span: at or after its start, and strictly before its end.
+let private withinBlock (block: BlockRange) (line: int, col: int) =
+    let atOrAfterStart =
+        line > block.StartLine || (line = block.StartLine && col >= block.StartCol)
+
+    let beforeEnd = line < block.EndLine || (line = block.EndLine && col < block.EndCol)
+    atOrAfterStart && beforeEnd
+
+/// Maps a diagnostic from the combined Setup evaluation back onto the original source, and
+/// names the Setup in its message. Every position first passes through `unshiftPos`, which is
+/// the identity off the R1 insertion line and off the R2 route (`shift = None`).
 ///
 /// The first `realLineCount` lines *are* the original text, minus the other blocks that the
 /// setup blanked. A diagnostic inside those lines is already native and needs no translation.
 ///
-/// A diagnostic past those lines comes from the appended `companionAddendum` and has no source
-/// counterpart. One example is a failed `open FsHttp`, because the user's script carries no
-/// resolvable `#r`. Anchor such a diagnostic at the top of the script, where the missing
+/// A diagnostic past those lines comes from the appended `companionAddendum`, or from the
+/// invocation interaction (`realLineCount = 0` there — see `runInProcessDirect`), and has no
+/// source counterpart. One example is a failed `open FsHttp`, because the user's script carries
+/// no resolvable `#r`. Anchor such a diagnostic at the top of the script, where the missing
 /// reference belongs. A phantom line past the end would fail to highlight in the UI.
 ///
 /// *Every* diagnostic from here keeps its compiler text verbatim behind a `Setup failed to
 /// evaluate:` prefix, not only an anchored one. See
 /// `docs/spec/0001-report-setup-compile-error.md`, Decision 3.
-let private setupDiagnostic (realLineCount: int) (d: FSharpDiagnostic) : Diagnostic =
-    // Without this, a diagnostic anchored at line 1 (see below) reads as a fault on that line
-    // instead of a Setup failure.
+let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d: FSharpDiagnostic) : Diagnostic =
     let message = sprintf "Setup failed to evaluate: %s" d.Message
+    let sl, sc = unshiftPos shift (d.StartLine, d.StartColumn)
 
-    if d.StartLine > realLineCount then
+    if sl > realLineCount then
         { Message = message
           Range =
             { StartLine = 1
@@ -143,28 +282,21 @@ let private setupDiagnostic (realLineCount: int) (d: FSharpDiagnostic) : Diagnos
               EndLine = 1
               EndCol = 0 } }
     else
+        let el, ec = unshiftPos shift (d.EndLine, d.EndColumn)
+
         { Message = message
           Range =
-            { StartLine = d.StartLine
-              StartCol = d.StartColumn
-              EndLine = d.EndLine
-              EndCol = d.EndColumn } }
+            { StartLine = sl
+              StartCol = sc
+              EndLine = el
+              EndCol = ec } }
 
-/// Maps a diagnostic from the isolated target snippet (`<CE>\n|> Request.send`) back onto the
-/// original source. The snippet's lines 1 to N are the CE's own lines verbatim, so only the
-/// column on line 1 needs the target's start-column offset. The synthetic `|> Request.send`
-/// line past the CE has no original counterpart, and clamps to the block's end.
-let private targetDiagnostic (target: BlockRange) (ceLineCount: int) (d: FSharpDiagnostic) : Diagnostic =
-    let mapPoint line col =
-        if line > ceLineCount then
-            target.EndLine, target.EndCol
-        else
-            let origLine = target.StartLine + line - 1
-            let origCol = if line = 1 then target.StartCol + col else col
-            origLine, origCol
-
-    let sl, sc = mapPoint d.StartLine d.StartColumn
-    let el, ec = mapPoint d.EndLine d.EndColumn
+/// A diagnostic that starts inside the target block's own span keeps the compiler's text
+/// unchanged, at its own (unshifted) position (Decision 8) — no introductory sentence, because
+/// the fault is in the user's block, not in text the companion generated.
+let private blockDiagnostic (shift: ColumnShift option) (d: FSharpDiagnostic) : Diagnostic =
+    let sl, sc = unshiftPos shift (d.StartLine, d.StartColumn)
+    let el, ec = unshiftPos shift (d.EndLine, d.EndColumn)
 
     { Message = d.Message
       Range =
@@ -172,6 +304,28 @@ let private targetDiagnostic (target: BlockRange) (ceLineCount: int) (d: FSharpD
           StartCol = sc
           EndLine = el
           EndCol = ec } }
+
+/// Splits a Setup-interaction diagnostic between the two treatments above, by whether its
+/// (unshifted) start position lands inside the target's own block span (Decision 8).
+///
+/// A diagnostic that starts inside the R1 inserted text is the one exception, and it takes the
+/// Setup treatment. The fault there is in the companion's own generated `let <name> = `, not in
+/// anything the user wrote — a user binding of the reserved name in the same scope, which
+/// ADR-0007 records as the deliberate collision, reports its duplicate definition exactly there.
+/// The test runs before `unshiftPos`, because the clamp moves such a position onto the block's
+/// own start column and it would otherwise read as the user's fault.
+let private splitDiagnostic
+    (shift: ColumnShift option)
+    (blockRange: BlockRange)
+    (realLineCount: int)
+    (d: FSharpDiagnostic)
+    : Diagnostic =
+    let raw = d.StartLine, d.StartColumn
+
+    if not (withinInsertion shift raw) && withinBlock blockRange (unshiftPos shift raw) then
+        blockDiagnostic shift d
+    else
+        setupDiagnostic realLineCount shift d
 
 /// `PropertyInfo.GetProperty` is nullable-annotated, because the name can be absent. The fields
 /// that this function reads are FsHttp's `Response` record shape, which is stable across the
@@ -228,13 +382,18 @@ let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
 
     match List.tryItem blockIndex located with
     | None -> RuntimeError(sprintf "block index %d out of range (%d blocks located)" blockIndex located.Length)
+    // A refused target is never evaluated at all (Decision 11) — not the Setup, not the
+    // companion addendum, nothing. The refusal-lens policy replaces this outcome with a
+    // `refused` run tag; until that lands, a plain, readable sentence is the interim contract.
+    | Some { Route = Refused(_, reason) } ->
+        RuntimeError(sprintf "FsHttp.Studio cannot run a block in this position: %s." reason)
     | Some target ->
-        let ceText = sliceRange source target.Block
-        let setupText = buildSetup source located target
+        let setupText, shift = buildSetupText source located target
         let combinedSetup = setupText + "\n" + companionAddendum
 
-        // Lines 1 to setupLineCount of `combinedSetup` are native source. Anything that the
-        // addendum reports past them has no source position (see `setupDiagnostic`).
+        // Lines 1 to setupLineCount of `combinedSetup` are native source (the target's own
+        // block among them — Decision 1). Anything the addendum reports past them has no source
+        // position (see `setupDiagnostic`).
         let setupLineCount = setupText.Split('\n').Length
 
         let fsiConfig = FsiEvaluationSession.GetDefaultConfiguration()
@@ -265,24 +424,34 @@ let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
         // stops the Run: evaluating the block against a Setup that never took effect only
         // produces a second, misleading error. See
         // `docs/spec/0001-report-setup-compile-error.md`, Decisions 1 and 2.
+        //
+        // The target block's own text is now *inside* this interaction (Decision 1), so its
+        // diagnostics arrive here too. `splitDiagnostic` tells a fault in the user's block from
+        // a fault in the Setup around it (Decision 8), by whether the diagnostic's start
+        // position — unshifted back past the R1 insertion, if any — lands inside the block's own
+        // span.
         match
             errorDiagnostics setupDiags
-            |> Array.map (setupDiagnostic setupLineCount)
+            |> Array.map (splitDiagnostic shift target.Block setupLineCount)
             |> Array.toList
         with
         | [] ->
             match setupResult with
             | Choice2Of2 ex -> RuntimeError ex.Message
             | Choice1Of2 _ ->
-                let ceLineCount = target.Block.EndLine - target.Block.StartLine + 1
-                let targetCode = ceText + "\n|> Request.send"
-                let targetResult, targetDiags = session.EvalExpressionNonThrowing(targetCode)
+                let targetResult, targetDiags =
+                    session.EvalExpressionNonThrowing(invocationText target)
 
                 match targetResult with
                 | Choice2Of2 ex ->
+                    // The invocation is the companion's own generated text, with no user-source
+                    // position of its own, so every diagnostic here gets the Setup treatment,
+                    // anchored at the top of the script (`realLineCount = 0` forces the anchor
+                    // on every line). `targetDiagnostic` is gone: there is no longer a separate
+                    // block interaction to map a native position back from.
                     match
                         errorDiagnostics targetDiags
-                        |> Array.map (targetDiagnostic target.Block ceLineCount)
+                        |> Array.map (setupDiagnostic 0 None)
                         |> Array.toList
                     with
                     | [] -> RuntimeError ex.Message

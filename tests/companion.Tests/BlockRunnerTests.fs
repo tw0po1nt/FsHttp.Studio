@@ -15,6 +15,13 @@ open Companion.Tests.TestServer
 /// release.
 let private fsHttpRef = "15.0.3"
 
+/// A script with the preamble every case here needs: the suite's own pinned `#r`, and the `open`
+/// that puts `http` in scope. `body` is the part a case actually varies. One helper keeps the pin
+/// identical across cases, and a case that pins a *different* version writes its own source, so
+/// that the conflict it drives stays visible in the test itself.
+let private script (body: string) =
+    sprintf "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\n%s" fsHttpRef body
+
 let private pngMagic =
     [| 0x89uy; 0x50uy; 0x4Euy; 0x47uy; 0x0Duy; 0x0Auy; 0x1Auy; 0x0Auy |]
 
@@ -45,11 +52,7 @@ let tests =
               use server =
                   new TestServer(Map [ "/png", bytesHandler 200 "image/png" [ "X-Custom", "hello" ] pngBytes ])
 
-              let source =
-                  sprintf
-                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n"
-                      fsHttpRef
-                      server.BaseUrl
+              let source = script (sprintf "http {\n    GET \"%s/png\"\n}\n" server.BaseUrl)
 
               match run source 0 with
               | Ok(status, _reason, headers, contentType, bodyBase64) ->
@@ -73,11 +76,7 @@ let tests =
           test "a non-2xx HTTP response is a successful run, not an error" {
               use server = new TestServer(Map [ "/missing", textHandler 404 "not found" ])
 
-              let source =
-                  sprintf
-                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nhttp {\n    GET \"%s/missing\"\n}\n"
-                      fsHttpRef
-                      server.BaseUrl
+              let source = script (sprintf "http {\n    GET \"%s/missing\"\n}\n" server.BaseUrl)
 
               match run source 0 with
               | Ok(status, _, _, _, _) -> Expect.equal status 404 "the non-2xx status should come through as ok"
@@ -122,26 +121,226 @@ let tests =
               use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
 
               let source =
-                  sprintf
-                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nlet a =\n    http {\n        GET \"%s/hit\"\n    }\n    |> Request.send\n    |> ignore\n\nhttp {\n    GET \"%s/hit\"\n}\n"
-                      fsHttpRef
-                      server.BaseUrl
-                      server.BaseUrl
+                  script (
+                      sprintf
+                          "let a =\n    http {\n        GET \"%s/hit\"\n    }\n    |> Request.send\n    |> ignore\n\nhttp {\n    GET \"%s/hit\"\n}\n"
+                          server.BaseUrl
+                          server.BaseUrl
+                  )
 
               match run source 1 with
               | Ok _ -> Expect.equal hitCounter.Value 1 "only the target block's own request should have fired"
               | other -> failtestf "expected ok, got %A" other
           }
 
-          test "a non-compiling target block returns compileError with a source range" {
+          // The Run reaches the block where the user wrote it (docs/spec/0002), instead of
+          // extracting it. Each of these shapes sends exactly one request, which is the
+          // isolation criterion that Decision 4 protects.
+          for name, sourceFor in
+              [ "bare, top-level block", fun (url: string) -> sprintf "http {\n    GET \"%s\"\n}\n" url
+                "block in a nested module",
+                fun url ->
+                    sprintf
+                        "module Outer =\n    module Inner =\n        http {\n            GET \"%s\"\n        }\n"
+                        url
+                "let-bound block", fun url -> sprintf "let pikachu =\n    http {\n        GET \"%s\"\n    }\n" url
+                "()-callable function's block",
+                fun url -> sprintf "let getSnorlax () =\n    http {\n        GET \"%s\"\n    }\n" url ] do
+              test (sprintf "%s: reaches the block and sends exactly one request" name) {
+                  let hitCounter = ref 0
+                  use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
+                  let source = script (sourceFor (server.BaseUrl + "/hit"))
+
+                  match run source 0 with
+                  | Ok(status, _, _, _, _) ->
+                      Expect.equal status 200 (sprintf "%s should run to a successful response" name)
+                      Expect.equal hitCounter.Value 1 (sprintf "%s should send exactly one request" name)
+                  | other -> failtestf "%s: expected ok, got %A" name other
+              }
+
+          test "a backtick-quoted binding name keeps its backticks in the invocation (R2 route)" {
+              // `Ident.idText` carries a name's text and never its backticks, so this binding's
+              // derived name arrived as the bare `get pikachu`. Qualified and piped, that reads
+              // as an application of `get` to `pikachu`, and a block the user wrote perfectly
+              // well failed to compile. `BlockLocator` spells the name back for an invocation,
+              // and `qualifyInvocation` splits on the `" ()"` arity suffix rather than on the
+              // first space, so a name that holds a space stays one term.
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
               let source =
-                  sprintf "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nhttp {\n    GET undefinedBaseUrl\n}\n" fsHttpRef
+                  script (
+                      sprintf
+                          "module Outer =\n    let ``get pikachu`` =\n        http {\n            GET \"%s/hit\"\n        }\n"
+                          server.BaseUrl
+                  )
+
+              match run source 0 with
+              | Ok(status, _, _, _, _) ->
+                  Expect.equal status 200 "a backtick-quoted binding should reach its block"
+                  Expect.equal hitCounter.Value 1 "it should send exactly one request"
+              | other -> failtestf "expected ok, got %A" other
+          }
+
+          test "a block piped to Request.send in the script still sends exactly one request" {
+              // Matrix case 12. The Setup boundary (Decision 1) truncates at the block's own
+              // end, which drops the script's own trailing `|> Request.send` -- the invocation
+              // interaction supplies its own. Two sends here would mean the boundary let the
+              // user's own pipe through as well as the companion's.
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
+              let source =
+                  script (sprintf "http {\n    GET \"%s/hit\"\n}\n|> Request.send\n" server.BaseUrl)
+
+              match run source 0 with
+              | Ok _ -> Expect.equal hitCounter.Value 1 "the script's own trailing pipe must not send a second request"
+              | other -> failtestf "expected ok, got %A" other
+          }
+
+          test "the code after the target block does not run" {
+              // The Setup boundary (Decision 1) stops at the end of the target block's own
+              // expression. A second declaration below the block, in the same module, is
+              // outside that boundary entirely -- not blanked, just never evaluated.
+              let firstHits = ref 0
+              let secondHits = ref 0
+
+              use server =
+                  new TestServer(Map [ "/first", countingHandler firstHits; "/second", countingHandler secondHits ])
+
+              let source =
+                  script (
+                      sprintf
+                          "module M =\n    http {\n        GET \"%s/first\"\n    }\n\n    System.Net.Http.HttpClient().GetAsync(\"%s/second\").Result |> ignore\n"
+                          server.BaseUrl
+                          server.BaseUrl
+                  )
+
+              match run source 0 with
+              | Ok _ ->
+                  Expect.equal firstHits.Value 1 "the target block should have sent its own request"
+                  Expect.equal secondHits.Value 0 "the code after the target block must not run"
+              | other -> failtestf "expected ok, got %A" other
+          }
+
+          test "a diagnostic on the block's first line reports the true column on the R1 route" {
+              // R1 inserts `let ``__fsHttpStudio_target`` = ` at the block's own start, on the
+              // block's own line (Decision 2), which shifts every later column on that one line
+              // forward. A diagnostic there must report the column the user actually wrote,
+              // with the shift subtracted back out (Decision 9), not the raw FSI column.
+              let source = script "http { GET undefinedBaseUrl }\n"
+
+              let blockLine = "http { GET undefinedBaseUrl }"
+              let expectedCol = blockLine.IndexOf "undefinedBaseUrl"
+
+              match run source 0 with
+              | CompileError diagnostics ->
+                  Expect.isNonEmpty diagnostics "at least one diagnostic expected"
+
+                  let d =
+                      diagnostics
+                      |> List.tryFind (fun d -> d.Message.Contains "undefinedBaseUrl")
+                      |> Option.defaultValue diagnostics.[0]
+
+                  Expect.equal d.Range.StartLine 4 "the diagnostic should land on the block's own line"
+
+                  Expect.equal
+                      d.Range.StartCol
+                      expectedCol
+                      "the reported column should be the true source column, with the R1 insertion's shift subtracted"
+              | other -> failtestf "expected compileError, got %A" other
+          }
+
+          test "a diagnostic on a later line of the block keeps its column unchanged on the R1 route" {
+              // The R1 insertion touches only the block's own start line. A diagnostic on a
+              // later line of the same block needs no shift at all.
+              let source =
+                  script "http {\n    GET \"https://example.com\"\n    header undefinedHeaderName \"x\"\n}\n"
+
+              let headerLine = "    header undefinedHeaderName \"x\""
+              let expectedCol = headerLine.IndexOf "undefinedHeaderName"
+
+              match run source 0 with
+              | CompileError diagnostics ->
+                  Expect.isNonEmpty diagnostics "at least one diagnostic expected"
+
+                  let d =
+                      diagnostics
+                      |> List.tryFind (fun d -> d.Message.Contains "undefinedHeaderName")
+                      |> Option.defaultValue diagnostics.[0]
+
+                  Expect.equal d.Range.StartLine 6 "the diagnostic should land on the header line"
+                  Expect.equal d.Range.StartCol expectedCol "a later line's column must pass through unshifted"
+              | other -> failtestf "expected compileError, got %A" other
+          }
+
+          test "a let-bound block's streamed body stays readable across repeated Runs (R2 route)" {
+              // The R1 variant of this regression already exists below. R2's own Setup text is
+              // a plain `let`, which is exactly the shape Decision 10 calls out: the Setup
+              // builds the block's context as part of evaluating that `let`, before the
+              // companion addendum's `GlobalConfig.set` runs, so the response-reading guard must
+              // be re-applied at invocation time or the same "stream was already consumed"
+              // regression returns.
+              let body = Array.append pngMagic (Array.replicate 40000 0x5Auy)
+
+              use server =
+                  new TestServer(Map [ "/stream.png", streamingBytesHandler "image/png" body ])
+
+              let source =
+                  script (sprintf "let a =\n    http {\n        GET \"%s/stream.png\"\n    }\n" server.BaseUrl)
+
+              for i in 1..3 do
+                  match run source 0 with
+                  | Ok(status, _, _, _, bodyBase64) ->
+                      Expect.equal status 200 (sprintf "Run #%d should be a successful 200" i)
+
+                      Expect.equal
+                          (Convert.FromBase64String bodyBase64)
+                          body
+                          (sprintf "Run #%d body should be byte-intact, not a consumed stream" i)
+                  | other -> failtestf "Run #%d expected ok, got %A" i other
+          }
+
+          test "a non-compiling target block returns compileError with a source range" {
+              let source = script "http {\n    GET undefinedBaseUrl\n}\n"
 
               match run source 0 with
               | CompileError diagnostics ->
                   Expect.isNonEmpty diagnostics "at least one diagnostic expected"
                   let d = diagnostics.[0]
                   Expect.isTrue (d.Range.StartLine > 0) "range should point at a real line"
+
+                  Expect.isFalse
+                      (d.Message.Contains "Setup failed to evaluate")
+                      "a block diagnostic must keep the compiler's own text, not the Setup introduction (Decision 8)"
+              | other -> failtestf "expected compileError, got %A" other
+          }
+
+          test "a diagnostic inside the R1 inserted text takes the Setup treatment, not the block's" {
+              // R1 inserts `let ``__fsHttpStudio_target`` = ` at the block's own start column,
+              // and that column is also where `unshiftPos` clamps a position landing inside the
+              // inserted text. Such a position therefore passes the block test, and the
+              // compiler's bare text would reach the user as though they had written it.
+              // ADR-0007 records this exact collision: a user binding of the reserved name in
+              // the same scope, which reports a duplicate definition on the inserted name.
+              // The fault is in the companion's own generated text, so Decision 8 gives it the
+              // Setup treatment.
+              let source =
+                  script
+                      "module M =\n    let ``__fsHttpStudio_target`` = 1\n\n    http {\n        GET \"https://example.com\"\n    }\n"
+
+              match run source 0 with
+              | CompileError diagnostics ->
+                  Expect.isNonEmpty diagnostics "at least one diagnostic expected"
+
+                  Expect.isTrue
+                      (diagnostics
+                       |> List.forall (fun d -> d.Message.Contains "Setup failed to evaluate"))
+                      "a fault in the companion's own inserted text must carry the Setup introduction, not read as the user's"
+
+                  for d in diagnostics do
+                      expectLineInFile source d
               | other -> failtestf "expected compileError, got %A" other
           }
 
@@ -150,9 +349,7 @@ let tests =
               // But it is ill-typed, so the failure comes from the setup's type-check. A raw
               // parse error would also break locateBlocks' own untyped parse.
               let source =
-                  sprintf
-                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nlet x : int = \"not an int\"\n\nhttp {\n    GET \"https://example.com\"\n}\n"
-                      fsHttpRef
+                  script "let x : int = \"not an int\"\n\nhttp {\n    GET \"https://example.com\"\n}\n"
 
               match run source 0 with
               | CompileError diagnostics -> Expect.isNonEmpty diagnostics "at least one diagnostic expected"
@@ -169,6 +366,14 @@ let tests =
               // The wrapper is what keeps `locateBlocks`' own untyped parse successful: the
               // bare top-level form fails that parse too, so no block is located and the Run
               // never reaches the Setup at all.
+              //
+              // The target block's own text is now part of the same Setup interaction (Decision
+              // 1), and the parse recovery from the broken `let f` cascades far enough that the
+              // compiler also reports "'http' is not defined" at the block's own position. That
+              // one diagnostic is a genuine block diagnostic under Decision 8's split rule (it
+              // starts inside the block's span), so this test scopes its assertions to the
+              // diagnostics that carry the Setup introduction, and does not require every
+              // diagnostic to.
               let source =
                   "let f () =\n    let x = 1\n    |> ignore\n    |> ignore\n    x\n\nhttp {\n    GET \"https://example.com\"\n}\n"
 
@@ -176,53 +381,51 @@ let tests =
               | CompileError diagnostics ->
                   Expect.isNonEmpty diagnostics "at least one diagnostic expected"
 
+                  let setupDiagnostics =
+                      diagnostics
+                      |> List.filter (fun d -> d.Message.Contains "Setup failed to evaluate")
+
+                  Expect.isNonEmpty
+                      setupDiagnostics
+                      "the setup's own failure must be reported, not swallowed by the cascading block diagnostic"
+
                   Expect.isTrue
-                      (diagnostics
+                      (setupDiagnostics
                        |> List.exists (fun d -> d.Range.StartLine = 2 || d.Range.StartLine = 3))
-                      "at least one diagnostic should keep its real location on the broken `let`/`|>` lines, not fall back to a phantom line"
+                      "at least one Setup diagnostic should keep its real location on the broken `let`/`|>` lines, not fall back to a phantom line"
 
-                  for d in diagnostics do
+                  for d in setupDiagnostics do
                       expectLineInFile source d
-
-                      Expect.stringContains
-                          d.Message
-                          "Setup failed to evaluate"
-                          "the message should say the fault is in the Setup"
 
                       Expect.isFalse
                           (d.Message.Contains "http")
-                          "the message must not name 'http' -- that would be the symptom of the discarded-diagnostics defect, not the true fault"
+                          "a Setup diagnostic's message must not name 'http' -- that would be the symptom of the discarded-diagnostics defect, not the true fault"
               | other -> failtestf "expected compileError, got %A" other
           }
 
-          test "a block in a for-loop body reports the setup's own parse error, anchored in the file, not http" {
-              // The `for ... do` head has no body once the setup slice ends at the block's
-              // start, so the Setup fails to parse. Before the fix this fell into the same
-              // discarded-diagnostics defect as the test above, and the block reported "The
-              // value or constructor 'http' is not defined" instead of the true fault. Every
-              // diagnostic here starts at or past the companion's addendum, so this is the case
-              // that exercises the line-1 anchor, and with it the reason the message names the
-              // Setup at all.
+          test "a block in a for-loop body is refused: a runtime error that names the position, with no request sent" {
+              // A loop body is decided at run time (Decision 2's F1 family), so `classify`
+              // refuses it and the Run never evaluates the script at all (Decision 11) -- not
+              // the Setup, and not a request to the server.
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
               let source =
-                  "for name in [ \"pidgey\"; \"rattata\" ] do\n    http {\n        GET \"https://example.com\"\n    }\n"
+                  sprintf
+                      "for name in [ \"pidgey\"; \"rattata\" ] do\n    http {\n        GET \"%s/hit\"\n    }\n"
+                      server.BaseUrl
 
               match run source 0 with
-              | CompileError diagnostics ->
-                  Expect.isNonEmpty diagnostics "at least one diagnostic expected"
+              | RuntimeError message ->
+                  Expect.isFalse (message.Contains "http") "the message must not name 'http'"
 
-                  for d in diagnostics do
-                      // The companion anchors an addendum-origin diagnostic at line 1 (see
-                      // BlockRunner.setupDiagnostic), so this case asserts only that the
-                      // location stays inside the file, not a specific line.
-                      expectLineInFile source d
+                  Expect.stringContains
+                      message
+                      "a loop body describes many requests"
+                      "the message must name the position that was refused, not just report a failure"
 
-                      Expect.stringContains
-                          d.Message
-                          "Setup failed to evaluate"
-                          "an anchored diagnostic must name the Setup, or line 1 reads as a fault on the user's own first line"
-
-                      Expect.isFalse (d.Message.Contains "http") "the message must not name 'http'"
-              | other -> failtestf "expected compileError, got %A" other
+                  Expect.equal hitCounter.Value 0 "a refused position must not send a request"
+              | other -> failtestf "expected runtimeError for a refused position, got %A" other
           }
 
           test "a setup that throws at run time returns runtimeError, not compileError" {
@@ -232,9 +435,7 @@ let tests =
               // treated any non-success Setup as a compile error would misreport this case, and
               // the two outcomes must stay distinct.
               let source =
-                  sprintf
-                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nlet x : int = failwith \"setup blew up\"\n\nhttp {\n    GET \"https://example.com\"\n}\n"
-                      fsHttpRef
+                  script "let x : int = failwith \"setup blew up\"\n\nhttp {\n    GET \"https://example.com\"\n}\n"
 
               match run source 0 with
               | RuntimeError message ->
@@ -258,10 +459,7 @@ let tests =
                   new TestServer(Map [ "/stream.png", streamingBytesHandler "image/png" body ])
 
               let source =
-                  sprintf
-                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nhttp {\n    GET \"%s/stream.png\"\n}\n"
-                      fsHttpRef
-                      server.BaseUrl
+                  script (sprintf "http {\n    GET \"%s/stream.png\"\n}\n" server.BaseUrl)
 
               for i in 1..3 do
                   match run source 0 with
@@ -317,11 +515,7 @@ let tests =
               use release = new System.Threading.ManualResetEventSlim(false)
               use server = new TestServer(Map [ "/hang", hangingHandler release ])
 
-              let source =
-                  sprintf
-                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nhttp {\n    GET \"%s/hang\"\n}\n"
-                      fsHttpRef
-                      server.BaseUrl
+              let source = script (sprintf "http {\n    GET \"%s/hang\"\n}\n" server.BaseUrl)
 
               let sw = Diagnostics.Stopwatch.StartNew()
               let outcome = runInWorker 5000 source 0
@@ -340,10 +534,7 @@ let tests =
           }
 
           test "a network failure returns runtimeError, distinct from compileError" {
-              let source =
-                  sprintf
-                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nhttp {\n    GET \"http://127.0.0.1:1/nope\"\n}\n"
-                      fsHttpRef
+              let source = script "http {\n    GET \"http://127.0.0.1:1/nope\"\n}\n"
 
               match run source 0 with
               | RuntimeError _ -> ()
