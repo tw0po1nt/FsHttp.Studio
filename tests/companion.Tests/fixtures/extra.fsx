@@ -33,9 +33,13 @@ module Outer =
         let deep = http { GET "http://127.0.0.1:8391/api/v2/deep" }
 
 
-// [16] attributed binding -- the declaration range includes the attribute line
+// [16] attributed binding -- the declaration range includes the attribute line. It carries a
+// `private` keyword and a type annotation as well, so a span read that anchored on the attribute
+// line instead of the `let` would come back empty here, and nothing else in this file would say
+// so. The annotation is also the one Decision 7 blanks: the truncation drops the trailing pipe.
 [<Obsolete("prototype")>]
-let attributed = http { GET "http://127.0.0.1:8391/api/v2/attributed" }
+let private attributed: Response =
+    http { GET "http://127.0.0.1:8391/api/v2/attributed" } |> Request.send
 
 
 // [22] class member -- F2, needs an instance. Also Decision 5's second hazard: blanking this as a

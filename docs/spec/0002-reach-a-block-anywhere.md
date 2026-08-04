@@ -148,6 +148,7 @@ Keep the name `LocatedBlock`. It is the glossary's word. Extend it:
 | `Blank` | The span to blank when this block is **not** the target. Replaces `Statement` |
 | `Qualifier` | The enclosing nested-module names, outermost first |
 | `PrivateSpans` | The `private` keywords to blank on the target's own path |
+| `TypeAnnotation` | The target binding's own type annotation, with its colon. The R2 route only. Refer to Decision 7 |
 
 Put the classification in `BlockLocator`, beside the location that it reads. Put the text building
 in `BlockRunner`. The refusal-lens spec needs the verdict without a Run, and this seam gives it

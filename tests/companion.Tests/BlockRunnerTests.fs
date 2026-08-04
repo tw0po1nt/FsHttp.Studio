@@ -236,16 +236,18 @@ let tests =
 
           test "an attributed binding runs: the keyword search does not stop at the attribute line" {
               // `[<Obsolete>]` puts the declaration's own range on the attribute line, above the
-              // `let`. A read of the binding that starts searching from the wrong line would miss
-              // its own `private`/type-annotation spans silently. This binding carries neither,
-              // but it guards the search against the attribute line all the same.
+              // `let`. A search that started from that range's first line would find neither the
+              // `private` keyword nor the type annotation, and would blank neither. So the binding
+              // carries both: an un-blanked `private` fails with "not accessible from this code
+              // location", and an un-blanked `Response` contradicts the truncated value. Either
+              // failure means the search anchored on the attribute line instead of the `let`.
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
 
               let source =
                   script (
                       sprintf
-                          "[<System.Obsolete(\"prototype\")>]\nlet attributed =\n    http {\n        GET \"%s/hit\"\n    }\n"
+                          "[<System.Obsolete(\"prototype\")>]\nlet private attributed : Response =\n    http {\n        GET \"%s/hit\"\n    }\n    |> Request.send\n"
                           server.BaseUrl
                   )
 
@@ -302,8 +304,8 @@ let tests =
 
           test "a class-member block does not break a different block's Run that names the type (Hazard 2)" {
               // Decision 5's second hazard: the blank span for a block inside a class member must
-              // stop at the member's own right side, not the whole type definition (ticket #111
-              // already narrows it). This proves the Run itself survives it as a sibling: the
+              // stop at the member's own right side, which is where `BlockLocator` already narrows
+              // it, not the whole type definition. This proves the Run survives it as a sibling: the
               // block below both the type and the member still runs, with the type's own name
               // still resolvable in between.
               let hitCounter = ref 0

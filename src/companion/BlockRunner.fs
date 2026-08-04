@@ -68,56 +68,43 @@ let private companionAddendum =
 let private asPairs (h: IEnumerable<KeyValuePair<string, IEnumerable<string>>>) =
     h |> Seq.map (fun kv -> kv.Key, String.Join(", ", kv.Value))
 
-/// Blanks a block's `Blank` span in place across `lines`. It keeps every newline, so every other
-/// line's row and column numbers stay aligned with the original source. The `()` placeholder
-/// keeps a `let`-bound declaration well-formed, and does not evaluate the request that it
-/// displaces. The span reaches past the CE itself, so a trailing `|> Request.send` on the
-/// excluded block's own line has nothing left to pipe from.
+/// Blanks a span in place across `lines`. It keeps every newline, so every other line's row and
+/// column numbers stay aligned with the original source. `fill` builds the replacement for the
+/// span's own first line, from that line's width. The two callers below differ in `fill` and in
+/// nothing else, so one walk serves both, and neither can drift from the other by a column.
+let private blankRange (fill: int -> string) (lines: string[]) (r: BlockRange) =
+    let startIdx = r.StartLine - 1
+    let endIdx = r.EndLine - 1
+
+    if startIdx = endIdx then
+        let line = lines.[startIdx]
+
+        lines.[startIdx] <-
+            line.Substring(0, r.StartCol)
+            + fill (r.EndCol - r.StartCol)
+            + line.Substring(r.EndCol)
+    else
+        let firstLine = lines.[startIdx]
+        lines.[startIdx] <- firstLine.Substring(0, r.StartCol) + fill (firstLine.Length - r.StartCol)
+
+        for i in startIdx + 1 .. endIdx - 1 do
+            lines.[i] <- String(' ', lines.[i].Length)
+
+        let lastLine = lines.[endIdx]
+        lines.[endIdx] <- String(' ', r.EndCol) + lastLine.Substring(r.EndCol)
+
+/// Blanks a block's `Blank` span. The `()` placeholder keeps a `let`-bound declaration
+/// well-formed, and does not evaluate the request that it displaces. The span reaches past the CE
+/// itself, so a trailing `|> Request.send` on the excluded block's own line has nothing left to
+/// pipe from.
 let private blankSpan (lines: string[]) (r: BlockRange) =
-    let startIdx = r.StartLine - 1
-    let endIdx = r.EndLine - 1
+    blankRange (fun width -> "()" + String(' ', max 0 (width - 2))) lines r
 
-    if startIdx = endIdx then
-        let line = lines.[startIdx]
-        let before = line.Substring(0, r.StartCol)
-        let spanLen = r.EndCol - r.StartCol
-        let placeholder = "()" + String(' ', max 0 (spanLen - 2))
-        let after = line.Substring(r.EndCol)
-        lines.[startIdx] <- before + placeholder + after
-    else
-        let firstLine = lines.[startIdx]
-        let before = firstLine.Substring(0, r.StartCol)
-        let spanLen = firstLine.Length - r.StartCol
-        let placeholder = "()" + String(' ', max 0 (spanLen - 2))
-        lines.[startIdx] <- before + placeholder
-
-        for i in startIdx + 1 .. endIdx - 1 do
-            lines.[i] <- String(' ', lines.[i].Length)
-
-        let lastLine = lines.[endIdx]
-        lines.[endIdx] <- String(' ', r.EndCol) + lastLine.Substring(r.EndCol)
-
-/// Blanks a span to pure spaces, in place across `lines`. Unlike `blankSpan` above, this leaves
-/// no `()` placeholder: the two uses below remove a keyword or an annotation, not an expression's
-/// value, and the surrounding syntax stays valid with nothing in its place (Decisions 6 and 7).
+/// Blanks a span to pure spaces, with no `()` placeholder: the two uses below remove a keyword or
+/// an annotation, not an expression's value, and the surrounding syntax stays valid with nothing
+/// in its place (Decisions 6 and 7).
 let private blankToSpaces (lines: string[]) (r: BlockRange) =
-    let startIdx = r.StartLine - 1
-    let endIdx = r.EndLine - 1
-
-    if startIdx = endIdx then
-        let line = lines.[startIdx]
-        let before = line.Substring(0, r.StartCol)
-        let after = line.Substring(r.EndCol)
-        lines.[startIdx] <- before + String(' ', r.EndCol - r.StartCol) + after
-    else
-        let firstLine = lines.[startIdx]
-        lines.[startIdx] <- firstLine.Substring(0, r.StartCol) + String(' ', firstLine.Length - r.StartCol)
-
-        for i in startIdx + 1 .. endIdx - 1 do
-            lines.[i] <- String(' ', lines.[i].Length)
-
-        let lastLine = lines.[endIdx]
-        lines.[endIdx] <- String(' ', r.EndCol) + lastLine.Substring(r.EndCol)
+    blankRange (fun width -> String(' ', width)) lines r
 
 /// True when `outer` fully contains `inner`: at or before its start, and at or after its end.
 /// Guards Decision 5's first hazard -- a sibling whose blank span contains the target must never
@@ -251,10 +238,11 @@ let private buildSetupText
 
     // Hazard 1 (Decision 5): a sibling's blank span can contain the target itself -- a block
     // nested inside another block's own expression shares its outer binding's declaration span.
-    // Blanking that span would delete the target along with the sibling, so it is excluded here,
-    // not filtered by identity alone.
+    // Blanking that span would delete the target along with the sibling. Containment is the whole
+    // test, and it needs no identity test beside it. Every route's blank span contains its own
+    // block, so this filter already drops the target itself.
     blocks
-    |> List.filter (fun b -> b.Block <> target.Block && not (containsBlock b.Blank target.Block))
+    |> List.filter (fun b -> not (containsBlock b.Blank target.Block))
     |> List.iter (fun b -> blankSpan lines b.Blank)
 
     // Decisions 6 and 7: blank the target's own `private` keywords and its own type annotation,
