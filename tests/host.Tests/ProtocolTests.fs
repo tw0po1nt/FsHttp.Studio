@@ -88,6 +88,26 @@ let sliceRangeTests =
           } ]
 
 [<Tests>]
+let runRefusedTests =
+    testList
+        "RunRefused"
+        [ test "round-trips a code with no name" {
+              match RunRefused("loopBody", None) with
+              | RunRefused(code, name) ->
+                  Expect.equal code "loopBody" "the code should round-trip"
+                  Expect.equal name None "loopBody carries no name"
+              | other -> failtestf "expected RunRefused, got %A" other
+          }
+
+          test "round-trips a code with a name" {
+              match RunRefused("unboundBlockValue", Some "dexId") with
+              | RunRefused(code, name) ->
+                  Expect.equal code "unboundBlockValue" "the code should round-trip"
+                  Expect.equal name (Some "dexId") "the name should round-trip"
+              | other -> failtestf "expected RunRefused, got %A" other
+          } ]
+
+[<Tests>]
 let extractMethodAndUrlTests =
     testList
         "extractMethodAndUrl"

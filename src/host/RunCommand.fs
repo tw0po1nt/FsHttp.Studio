@@ -66,6 +66,10 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
             | RunCompileError diagnostics -> ResponseViewer.post (errorMessage (formatCompileError diagnostics))
             | RunRuntimeError message -> ResponseViewer.post (errorMessage (sprintf "Runtime error: %s" message))
             | RunProtocolError message -> ResponseViewer.post (errorMessage message)
+            // A stopgap: #121 gives a refused Run its own non-error notice in the viewer. Until
+            // then, the companion never actually emits this tag (`Companion.parseRunResult` has
+            // no `"refused"` branch yet), so this arm exists only to keep the match exhaustive.
+            | RunRefused(code, _name) -> ResponseViewer.post (errorMessage (sprintf "Refused: %s" code))
     }
 
 /// Registers the command that a `▶ Run request` CodeLens invokes. The caller passes the same

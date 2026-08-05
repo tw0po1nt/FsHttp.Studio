@@ -31,6 +31,11 @@ type RunOutcome =
     | Ok of status: int * reason: string * headers: (string * string) list * contentType: string * bodyBase64: string
     | CompileError of Diagnostic list
     | RuntimeError of string
+    /// `classify` refused the target before any evaluation ran (Decision 5 of
+    /// docs/spec/0003-lens-tells-the-truth.md). `code` is the wire spelling
+    /// (`BlockLocator.codeToWire`). `name` carries the blanked binding's name for
+    /// `unboundBlockValue` only; every other code carries `None`.
+    | Refused of code: string * name: string option
 
 /// The response-reading guard, as generated F# source. Two places emit it: the addendum below
 /// applies it to `GlobalConfig.defaults`, and the invocation applies it to the block's own value
@@ -137,13 +142,13 @@ let private reservedTargetName = "__fsHttpStudio_target"
 let private r1InsertText = sprintf "let ``%s`` = " reservedTargetName
 
 /// The invocation's own name, unqualified: what the R1 route inserted, or what the R2 route's
-/// binding already offers. `Refused` never reaches this — `runInProcessDirect` returns before
-/// building any text for it.
+/// binding already offers. A `Refused` route never reaches this — `run`'s gate returns before
+/// `runInProcessDirect` is ever called for a refused target.
 let private baseInvocation (route: Route) : string =
     match route with
     | NamedByTheRun -> sprintf "``%s``" reservedTargetName
     | NamedByTheBinding invocation -> invocation
-    | Refused _ -> invalidArg "route" "a refused route builds no invocation"
+    | BlockLocator.Refused _ -> invalidArg "route" "a refused route builds no invocation"
 
 /// The `()` a unit-arity binding's invocation carries: `getSnorlax ()`'s own suffix.
 [<Literal>]
@@ -187,7 +192,7 @@ let private shiftFor (target: LocatedBlock) : ColumnShift option =
               InsertCol = target.Block.StartCol
               Offset = r1InsertText.Length }
     | NamedByTheBinding _
-    | Refused _ -> None
+    | BlockLocator.Refused _ -> None
 
 /// Moves an *original*-source column forward across the R1 insertion, so a boundary computed in
 /// source coordinates (the block's own end column, for the truncation point) lands on the same
@@ -418,11 +423,6 @@ let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
 
     match List.tryItem blockIndex located with
     | None -> RuntimeError(sprintf "block index %d out of range (%d blocks located)" blockIndex located.Length)
-    // A refused target is never evaluated at all (Decision 11) — not the Setup, not the
-    // companion addendum, nothing. The refusal-lens policy replaces this outcome with a
-    // `refused` run tag; until that lands, a plain, readable sentence is the interim contract.
-    | Some { Route = Refused code } ->
-        RuntimeError(sprintf "FsHttp.Studio cannot run a block in this position: %s." (reasonFor code))
     | Some target ->
         let setupText, shift = buildSetupText source located target
         let combinedSetup = setupText + "\n" + companionAddendum
@@ -537,6 +537,11 @@ let outcomeToWire (outcome: RunOutcome) : obj =
     | RuntimeError message ->
         {| tag = "runtimeError"
            message = message |}
+    | Refused(code, None) -> {| tag = "refused"; code = code |}
+    | Refused(code, Some name) ->
+        {| tag = "refused"
+           code = code
+           name = name |}
 
 /// Parses a `--worker` child's response frame back into a `RunOutcome`. It is the inverse of
 /// `outcomeToWire`, so the delegation is transparent to `run`'s caller.
@@ -564,6 +569,13 @@ let private wireToOutcome (root: JsonElement) : RunOutcome =
                     EndLine = r.GetProperty("endLine").GetInt32()
                     EndCol = r.GetProperty("endCol").GetInt32() } } ]
         |> CompileError
+    | "refused" ->
+        let name =
+            match root.TryGetProperty "name" with
+            | true, v when v.ValueKind <> JsonValueKind.Null -> Some(jsonString v)
+            | _ -> None
+
+        Refused(jsonString (root.GetProperty "code"), name)
     | _ -> RuntimeError(jsonString (root.GetProperty "message"))
 
 /// Matches a `#r "nuget: Package[, Version]"` directive. It captures the package id, and the
@@ -623,6 +635,15 @@ let private loadLock = obj ()
 
 let private loadedVersions =
     Dictionary<string, LoadedVersion>(StringComparer.OrdinalIgnoreCase)
+
+/// What `pkg` is marked as loaded to, or `None` when nothing has reserved it. Public for the
+/// routing tests only, mirroring `LoadedVersion`'s own reason for being public: a test can prove
+/// that a refused Run left a pin unmarked, with no access to the private map itself.
+let loadedVersionOf (pkg: string) : LoadedVersion option =
+    lock loadLock (fun () ->
+        match loadedVersions.TryGetValue pkg with
+        | true, v -> Some v
+        | false, _ -> None)
 
 /// Where `run` sends one Run: to the warm in-process session, or to a fresh `--worker` child.
 type private RunRoute =
@@ -750,11 +771,24 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome
     with ex ->
         RuntimeError(sprintf "worker: %s" ex.Message)
 
-/// Runs the located block at `blockIndex` (0-based, source order) and returns its outcome. It
-/// routes on one condition: whether the target's `#r "nuget:"` pins conflict with a version
-/// already loaded in this process. No conflict -> the warm in-process session. A conflict -> a
-/// fresh `--worker` child, whose ALC cannot collide.
+/// Runs the located block at `blockIndex` (0-based, source order) and returns its outcome.
+///
+/// The gate runs first (Decision 5 of docs/spec/0003-lens-tells-the-truth.md): a target that
+/// `classify` refuses returns `Refused` here, before `routeAndReserve` marks any pin and before
+/// any worker process starts. `routeAndReserve` marks each of the Run's pins in `loadedVersions`
+/// up front, before any evaluation, so a refusal that reached it would mark pins that no session
+/// ever loads, and slow a later Run for nothing.
+///
+/// An out-of-range `blockIndex` has no route to refuse on, so it falls through unchanged to
+/// `runInProcessDirect`'s own out-of-range `RuntimeError`.
+///
+/// Past the gate, `run` routes on one further condition: whether the target's `#r "nuget:"` pins
+/// conflict with a version already loaded in this process. No conflict -> the warm in-process
+/// session. A conflict -> a fresh `--worker` child, whose ALC cannot collide.
 let run (source: string) (blockIndex: int) : RunOutcome =
-    match routeAndReserve (extractPins source) with
-    | Worker -> runInWorker workerTimeoutMs source blockIndex
-    | InProcess -> runInProcessDirect source blockIndex
+    match List.tryItem blockIndex (locateBlocks source) with
+    | Some { Route = BlockLocator.Refused code } -> RunOutcome.Refused(codeToWire code, None)
+    | _ ->
+        match routeAndReserve (extractPins source) with
+        | Worker -> runInWorker workerTimeoutMs source blockIndex
+        | InProcess -> runInProcessDirect source blockIndex

@@ -28,6 +28,10 @@ type RunResult =
     | RunCompileError of Diagnostic list
     | RunRuntimeError of string
     | RunProtocolError of string
+    /// The companion's `classify` refused the target before it evaluated anything. `code` is the
+    /// wire spelling (`BlockLocator.codeToWire`). `name` carries the blanked binding's name for
+    /// `unboundBlockValue` only.
+    | RunRefused of code: string * name: string option
 
 /// Converts an FCS-native 1-based line to vscode's 0-based line (ADR-0003's coordinate
 /// convention). The columns already agree, so only the line needs an adjustment.
