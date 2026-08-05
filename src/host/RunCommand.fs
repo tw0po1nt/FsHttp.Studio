@@ -66,12 +66,20 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
             | RunCompileError diagnostics -> ResponseViewer.post (errorMessage (formatCompileError diagnostics))
             | RunRuntimeError message -> ResponseViewer.post (errorMessage (sprintf "Runtime error: %s" message))
             | RunProtocolError message -> ResponseViewer.post (errorMessage message)
-            // `refusalMessage` keys the shipped sentence off the code alone, which is all the
-            // companion sends. `name` has no producer yet, so nothing reads it here.
+            // `Refusals` is the one module that owns every shipped refusal sentence
+            // (docs/spec/0003, Decision 2). `unboundBlockValue` carries no lens title and no
+            // `catalog` row, so its detail comes from `unboundBlockValueDetail` instead of
+            // `forCode`.
             //
             // TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/121): a refusal is not an
             // error, but the viewer has no other channel yet. That ticket gives it one.
-            | RunRefused(code, _name) -> ResponseViewer.post (errorMessage (refusalMessage code))
+            | RunRefused(code, name) ->
+                let detail =
+                    match code, name with
+                    | "unboundBlockValue", Some blockedName -> Refusals.unboundBlockValueDetail blockedName
+                    | _ -> (Refusals.forCode code).Detail
+
+                ResponseViewer.post (errorMessage detail)
     }
 
 /// Registers the command that a `▶ Run request` CodeLens invokes. The caller passes the same
