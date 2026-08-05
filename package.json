@@ -37,12 +37,6 @@
     "onLanguage:fsharp"
   ],
   "contributes": {
-    "commands": [
-      {
-        "command": "fshttpStudio.runBlock",
-        "title": "FsHttp.Studio: Run request"
-      }
-    ],
     "configuration": {
       "title": "FsHttp.Studio",
       "properties": {

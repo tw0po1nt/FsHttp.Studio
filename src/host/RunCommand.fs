@@ -75,11 +75,12 @@ let register () : Disposable =
     commands.registerCommand (
         CodeLensProvider.commandId,
         System.Action<obj, obj>(fun documentArg indexArg ->
-            match handle with
-            | None -> ()
-            | Some h ->
-                let document = unbox<TextDocument> documentArg
-                let blockIndex = unbox<int> indexArg
+            match (documentArg, indexArg, handle) with
+            | null, null, _
+            | _, _, None -> ()
+            | doc, idx, Some h ->
+                let document = unbox<TextDocument> doc
+                let blockIndex = unbox<int> idx
 
                 generation <- generation + 1
                 let myGeneration = generation
