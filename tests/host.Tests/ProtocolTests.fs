@@ -88,23 +88,56 @@ let sliceRangeTests =
           } ]
 
 [<Tests>]
-let runRefusedTests =
+let refusalMessageTests =
+    // The wire spellings are the companion's `BlockLocator.codeToWire` table. The two sides
+    // share no assembly, so this list is the host's copy of that contract, and the drift these
+    // tests guard is a code that gains a spelling here but no sentence.
+    let wireCodes =
+        [ "loopBody"
+          "ifBranch"
+          "matchClause"
+          "exceptionHandler"
+          "needsArguments"
+          "classMember"
+          "innerBinding"
+          "lambdaValue"
+          "noNameToCall"
+          "tupleBinding"
+          "insideAnotherRequest"
+          "unaddressable" ]
+
     testList
-        "RunRefused"
-        [ test "round-trips a code with no name" {
-              match RunRefused("loopBody", None) with
-              | RunRefused(code, name) ->
-                  Expect.equal code "loopBody" "the code should round-trip"
-                  Expect.equal name None "loopBody carries no name"
-              | other -> failtestf "expected RunRefused, got %A" other
+        "refusalMessage"
+        [ test "every wire code gets its own sentence" {
+              let messages = wireCodes |> List.map refusalMessage
+
+              messages
+              |> List.iter (fun m -> Expect.isNotEmpty m "each code needs a sentence")
+
+              Expect.equal
+                  (messages |> List.distinct |> List.length)
+                  wireCodes.Length
+                  "two codes that share a sentence would hide one verdict behind the other"
           }
 
-          test "round-trips a code with a name" {
-              match RunRefused("unboundBlockValue", Some "dexId") with
-              | RunRefused(code, name) ->
-                  Expect.equal code "unboundBlockValue" "the code should round-trip"
-                  Expect.equal name (Some "dexId") "the name should round-trip"
-              | other -> failtestf "expected RunRefused, got %A" other
+          test "an unrecognized code degrades to the unaddressable sentence" {
+              Expect.equal
+                  (refusalMessage "somethingLaterVersionsAdd")
+                  (refusalMessage "unaddressable")
+                  "an unknown code must not show a blank or a raw wire spelling"
+          }
+
+          test "no sentence shows the raw wire spelling" {
+              wireCodes
+              |> List.iter (fun code ->
+                  Expect.isFalse ((refusalMessage code).Contains code) (sprintf "%s must read as prose" code))
+          }
+
+          test "a sentence blames the position, not the user's script" {
+              let message = refusalMessage "loopBody"
+
+              Expect.stringContains message "a loop body describes many requests" "it names the position's shape"
+              Expect.isFalse (message.Contains "error") "a refusal is not an error"
           } ]
 
 [<Tests>]

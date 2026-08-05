@@ -418,9 +418,7 @@ let private extractResponse (v: FsiValue) : RunOutcome =
 /// This is the warm fast path. `run` calls it directly when the target's `#r "nuget:"` pins do
 /// not conflict with a version already loaded into this process. The `--worker` entry point
 /// also calls it in a throwaway child process, to serve a conflicting pin against a clean ALC.
-let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
-    let located = locateBlocks source
-
+let private runLocated (source: string) (located: LocatedBlock list) (blockIndex: int) : RunOutcome =
     match List.tryItem blockIndex located with
     | None -> RuntimeError(sprintf "block index %d out of range (%d blocks located)" blockIndex located.Length)
     | Some target ->
@@ -499,6 +497,12 @@ let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
                     with ex ->
                         RuntimeError ex.Message
         | errors -> CompileError errors
+
+/// `runLocated` against a fresh locate of `source`. This is the `--worker` child's entry point,
+/// which receives source text and nothing else. In the parent, `run` has already located the
+/// blocks to decide the gate, so it calls `runLocated` directly rather than parse a second time.
+let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
+    runLocated source (locateBlocks source) blockIndex
 
 // ---------------------------------------------------------------------------------------------
 // Multi-version isolation. The assemblies that `#r "nuget:"` resolves load into the
@@ -780,15 +784,21 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome
 /// ever loads, and slow a later Run for nothing.
 ///
 /// An out-of-range `blockIndex` has no route to refuse on, so it falls through unchanged to
-/// `runInProcessDirect`'s own out-of-range `RuntimeError`.
+/// `runLocated`'s own out-of-range `RuntimeError`.
+///
+/// The gate has to locate the blocks to decide, so the in-process path takes that same list on
+/// to `runLocated`. A Run parses the source once in this process, not once per stage. The
+/// `--worker` path cannot share it: the child is a separate process, and it locates its own.
 ///
 /// Past the gate, `run` routes on one further condition: whether the target's `#r "nuget:"` pins
 /// conflict with a version already loaded in this process. No conflict -> the warm in-process
 /// session. A conflict -> a fresh `--worker` child, whose ALC cannot collide.
 let run (source: string) (blockIndex: int) : RunOutcome =
-    match List.tryItem blockIndex (locateBlocks source) with
+    let located = locateBlocks source
+
+    match List.tryItem blockIndex located with
     | Some { Route = BlockLocator.Refused code } -> RunOutcome.Refused(codeToWire code, None)
     | _ ->
         match routeAndReserve (extractPins source) with
         | Worker -> runInWorker workerTimeoutMs source blockIndex
-        | InProcess -> runInProcessDirect source blockIndex
+        | InProcess -> runLocated source located blockIndex

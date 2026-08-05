@@ -581,6 +581,9 @@ let tests =
               | Refused(code, _) -> Expect.equal code "loopBody" "the loop body should still be the refusal"
               | other -> failtestf "expected Refused, got %A" other
 
+              // An unmarked pin is also the proof that no worker process started. routeAndReserve
+              // is the only chooser of the worker route, and it marks every pin it routes, so a
+              // pin it never marked is a Run it never routed.
               Expect.equal (loadedVersionOf package) None "a refused Run must never reserve a pin in loadedVersions"
           }
 
