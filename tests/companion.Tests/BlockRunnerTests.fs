@@ -581,10 +581,7 @@ let tests =
               | Refused(code, _) -> Expect.equal code "loopBody" "the loop body should still be the refusal"
               | other -> failtestf "expected Refused, got %A" other
 
-              Expect.equal
-                  (loadedVersionOf package)
-                  None
-                  "a refused Run must never reserve a pin in loadedVersions"
+              Expect.equal (loadedVersionOf package) None "a refused Run must never reserve a pin in loadedVersions"
           }
 
           test "a setup that throws at run time returns runtimeError, not compileError" {

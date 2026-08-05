@@ -124,7 +124,8 @@ let tests =
               let request =
                   JsonSerializer.Serialize(
                       {| tag = "run"
-                         source = "for name in [ \"pidgey\" ] do\n    http {\n        GET \"https://example.com\"\n    }\n"
+                         source =
+                          "for name in [ \"pidgey\" ] do\n    http {\n        GET \"https://example.com\"\n    }\n"
                          blockIndex = 0 |}
                   )
 
