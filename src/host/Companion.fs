@@ -9,6 +9,7 @@ module Companion
 
 open Fable.Core
 open Fable.Core.JsInterop
+open Js
 open Node
 open Envelope
 open Protocol
@@ -35,7 +36,14 @@ let private toBlockRange (r: obj) : BlockRange =
     { StartLine = unbox<int> (r?startLine: obj)
       StartCol = unbox<int> (r?startCol: obj)
       EndLine = unbox<int> (r?endLine: obj)
-      EndCol = unbox<int> (r?endCol: obj) }
+      EndCol = unbox<int> (r?endCol: obj)
+      Refusal =
+        let refusal: obj = r?refusal
+
+        if isNullish refusal then
+            None
+        else
+            Some(unbox<string> refusal) }
 
 let private toHeaders (h: obj) : (string * string) list =
     let keys: string[] = JsInterop.emitJsExpr h "Object.keys($0)"

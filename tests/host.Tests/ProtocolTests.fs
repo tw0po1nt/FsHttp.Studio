@@ -11,7 +11,8 @@ let private range startLine startCol endLine endCol =
     { StartLine = startLine
       StartCol = startCol
       EndLine = endLine
-      EndCol = endCol }
+      EndCol = endCol
+      Refusal = None }
 
 [<Tests>]
 let toVscodeLineTests =

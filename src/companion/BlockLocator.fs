@@ -84,6 +84,24 @@ let reasonFor (code: RefusalCode) =
     | InsideAnotherRequest -> "the block sits inside another block's own expression"
     | Unaddressable -> "the block sits in a position that a Run cannot reach"
 
+/// The wire spelling of a refusal code: camelCase, matching the shipped vocabulary
+/// (docs/spec/0003-lens-tells-the-truth.md, Decision 2). The host maps this string to a lens
+/// title and a toast; an unrecognized string degrades to the `unaddressable` title.
+let codeToWire (code: RefusalCode) : string =
+    match code with
+    | LoopBody -> "loopBody"
+    | IfBranch -> "ifBranch"
+    | MatchClause -> "matchClause"
+    | ExceptionHandler -> "exceptionHandler"
+    | NeedsArguments -> "needsArguments"
+    | ClassMember -> "classMember"
+    | InnerBinding -> "innerBinding"
+    | LambdaValue -> "lambdaValue"
+    | NoNameToCall -> "noNameToCall"
+    | TupleBinding -> "tupleBinding"
+    | InsideAnotherRequest -> "insideAnotherRequest"
+    | Unaddressable -> "unaddressable"
+
 /// How a Run reaches a block, decided from the untyped syntax tree alone. The two routes differ
 /// in where the invocation's name comes from: the Run supplies one, or the binding already has
 /// one.
@@ -98,6 +116,15 @@ type Route =
     /// A position neither route reaches. The code is the whole verdict: `reasonFor` turns it into
     /// a sentence, and the host turns it into a lens title.
     | Refused of code: RefusalCode
+
+/// The `locate` response's `refusal` property for a block's route: `None` for either route a Run
+/// reaches, `Some` of the code's wire spelling for a refusal. A supported block's wire entry
+/// omits the property entirely (Decision 4); this is what decides which entries do.
+let refusalOf (route: Route) : string option =
+    match route with
+    | Refused code -> Some(codeToWire code)
+    | NamedByTheRun
+    | NamedByTheBinding _ -> None
 
 /// A located block's own CE range, the route a Run takes to reach it, the span to blank when
 /// it is *not* the target, its enclosing-module qualifier, and its `private` keyword spans.
@@ -451,10 +478,6 @@ let private parse (source: string) =
 /// not prevent location.
 let locateBlocks (source: string) : LocatedBlock list =
     (parse source).ParseTree |> findLocatedBlocks
-
-/// The range of every `http { }` block in `source`, in source order.
-let locate (source: string) : BlockRange list =
-    locateBlocks source |> List.map (fun lb -> lb.Block)
 
 /// Reconstructs the exact source text that a range covers. Uses FCS's own numbering: 1-based
 /// lines, 0-based columns.

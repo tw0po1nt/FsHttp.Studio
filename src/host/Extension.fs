@@ -2,6 +2,7 @@ module Extension
 
 open Fable.Core
 open Fable.Core.JsInterop
+open Js
 open Vscode
 open Node
 
@@ -30,11 +31,6 @@ let private fallbackRequiredMajor = 10
 /// the SDK-not-found guidance raises uses it.
 [<Emit("$0.then($1)")>]
 let private onResolved (_p: JS.Promise<'T>) (_onOk: 'T -> unit) : unit = jsNative
-
-/// JS `== null`, which matches null *or* undefined. `execFile` signals success this way on its
-/// error argument.
-[<Emit("$0 == null")>]
-let private isNullish (_x: obj) : bool = jsNative
 
 /// The `fshttpStudio.dotnetPath` override. It is an explicit path to a `dotnet` executable, or
 /// `None` to detect one on PATH automatically. We own this setting instead of the .NET Install
