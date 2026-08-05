@@ -13,8 +13,9 @@ type BlockRange =
         StartCol: int
         EndLine: int
         EndCol: int
-        /// The block's refusal code from `classify` (docs/spec/0003-lens-tells-the-truth.md,
-        /// Decision 2), or `None` for a block a Run can reach. Not yet acted on.
+        /// The block's refusal code from `classify`, spelled as Decision 2 spells it, or `None`
+        /// for a block a Run can reach. An entry that omits the property decodes to `None`
+        /// (docs/spec/0003-lens-tells-the-truth.md, Decision 4). Not yet acted on.
         Refusal: string option
     }
 

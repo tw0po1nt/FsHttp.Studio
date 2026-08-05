@@ -479,10 +479,6 @@ let private parse (source: string) =
 let locateBlocks (source: string) : LocatedBlock list =
     (parse source).ParseTree |> findLocatedBlocks
 
-/// The range of every `http { }` block in `source`, in source order.
-let locate (source: string) : BlockRange list =
-    locateBlocks source |> List.map (fun lb -> lb.Block)
-
 /// Reconstructs the exact source text that a range covers. Uses FCS's own numbering: 1-based
 /// lines, 0-based columns.
 let sliceRange (source: string) (r: BlockRange) : string =

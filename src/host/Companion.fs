@@ -9,6 +9,7 @@ module Companion
 
 open Fable.Core
 open Fable.Core.JsInterop
+open Js
 open Node
 open Envelope
 open Protocol
@@ -30,12 +31,6 @@ let statusText =
 type Handle =
     { Process: ChildProcess
       Pending: ResizeArray<obj -> unit> }
-
-/// JS `== null`, which matches null *or* undefined. A `refusal` property that `locate`'s
-/// response omits reads back this way, and not as `Unchecked.defaultof<obj>` (Extension.fs:37
-/// has the same guard, for the same reason).
-[<Emit("$0 == null")>]
-let private isNullish (_x: obj) : bool = jsNative
 
 let private toBlockRange (r: obj) : BlockRange =
     { StartLine = unbox<int> (r?startLine: obj)

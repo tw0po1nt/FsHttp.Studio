@@ -2,8 +2,8 @@ module Companion.Tests.BlockLocatorTests
 
 // Seam A. It drives the companion's block location as a black box: feed .fsx source, then
 // assert the ranges. This matches the acceptance criteria on the ticket directly.
-// `BlockLocatorTests` drives `BlockLocator.locate` itself. `RequestHandlerTests` drives the
-// envelope dispatch (`RequestHandler.respond`) that sits on top of it.
+// `BlockLocatorTests` drives `BlockLocator.locateBlocks` itself. `RequestHandlerTests` drives
+// the envelope dispatch (`RequestHandler.respond`) that sits on top of it.
 
 open Expecto
 open Companion.BlockLocator
@@ -11,6 +11,11 @@ open Companion.BlockLocator
 /// Asserts *what* a range covers, and not only its coordinates. That is the property that the
 /// acceptance criteria care about.
 let private slice = sliceRange
+
+/// The range of every block in `source`, in source order. These tests assert over ranges alone,
+/// so they drop the rest of each `LocatedBlock` here rather than at every call site.
+let private locate (source: string) : BlockRange list =
+    locateBlocks source |> List.map (fun lb -> lb.Block)
 
 [<Tests>]
 let tests =
