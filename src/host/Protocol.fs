@@ -8,10 +8,15 @@ module Protocol
 /// `Companion.BlockLocator.BlockRange` on the wire. The two sides never share an assembly, so
 /// this duplicate shape is deliberate, and neither side reaches across the process boundary.
 type BlockRange =
-    { StartLine: int
-      StartCol: int
-      EndLine: int
-      EndCol: int }
+    {
+        StartLine: int
+        StartCol: int
+        EndLine: int
+        EndCol: int
+        /// The block's refusal code from `classify` (docs/spec/0003-lens-tells-the-truth.md,
+        /// Decision 2), or `None` for a block a Run can reach. Not yet acted on.
+        Refusal: string option
+    }
 
 type Diagnostic = { Message: string; Range: BlockRange }
 

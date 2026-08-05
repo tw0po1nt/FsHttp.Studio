@@ -31,11 +31,24 @@ type Handle =
     { Process: ChildProcess
       Pending: ResizeArray<obj -> unit> }
 
+/// JS `== null`, which matches null *or* undefined. A `refusal` property that `locate`'s
+/// response omits reads back this way, and not as `Unchecked.defaultof<obj>` (Extension.fs:37
+/// has the same guard, for the same reason).
+[<Emit("$0 == null")>]
+let private isNullish (_x: obj) : bool = jsNative
+
 let private toBlockRange (r: obj) : BlockRange =
     { StartLine = unbox<int> (r?startLine: obj)
       StartCol = unbox<int> (r?startCol: obj)
       EndLine = unbox<int> (r?endLine: obj)
-      EndCol = unbox<int> (r?endCol: obj) }
+      EndCol = unbox<int> (r?endCol: obj)
+      Refusal =
+        let refusal: obj = r?refusal
+
+        if isNullish refusal then
+            None
+        else
+            Some(unbox<string> refusal) }
 
 let private toHeaders (h: obj) : (string * string) list =
     let keys: string[] = JsInterop.emitJsExpr h "Object.keys($0)"

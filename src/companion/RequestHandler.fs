@@ -8,11 +8,25 @@ open Companion.Envelope
 open Companion.BlockLocator
 open Companion.BlockRunner
 
-let private toRangeObj (r: BlockRange) =
-    {| startLine = r.StartLine
-       startCol = r.StartCol
-       endLine = r.EndLine
-       endCol = r.EndCol |}
+/// A block's wire entry in the `locate` response. A refused block's entry carries its refusal
+/// code; a supported block's entry omits the `refusal` property entirely, so the two branches
+/// build two differently-shaped anonymous records (docs/spec/0003-lens-tells-the-truth.md,
+/// Decision 4).
+let private toRangeObj (block: LocatedBlock) : obj =
+    let r = block.Block
+
+    match refusalOf block.Route with
+    | Some refusal ->
+        {| startLine = r.StartLine
+           startCol = r.StartCol
+           endLine = r.EndLine
+           endCol = r.EndCol
+           refusal = refusal |}
+    | None ->
+        {| startLine = r.StartLine
+           startCol = r.StartCol
+           endLine = r.EndLine
+           endCol = r.EndCol |}
 
 // `BlockRunner.outcomeToWire` serializes the outcome, so the host response here and the
 // `--worker` child's response emit one identical shape and cannot drift apart.
@@ -28,7 +42,7 @@ let respond (request: JsonDocument) : obj =
     | "hello" -> {| tag = "ready" |}
     | "locate" ->
         let source = root |> getStringProp "source"
-        let ranges = locate source |> List.map toRangeObj
+        let ranges = locateBlocks source |> List.map toRangeObj
         {| tag = "blocks"; ranges = ranges |}
     | "run" ->
         let source = root |> getStringProp "source"

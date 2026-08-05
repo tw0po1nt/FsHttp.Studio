@@ -40,6 +40,37 @@ let tests =
                   "endLine is not before startLine"
           }
 
+          test "locate request: a supported block's range has no refusal property" {
+              let request =
+                  JsonSerializer.Serialize(
+                      {| tag = "locate"
+                         source = "http {\n    GET \"https://example.com/1\"\n}\n" |}
+                  )
+
+              let response = respondTo request
+              let first = response.GetProperty("ranges").[0]
+
+              Expect.isFalse
+                  (first.TryGetProperty("refusal") |> fst)
+                  "a supported block's entry should carry no refusal property"
+          }
+
+          test "locate request: a refused block's range carries its refusal code" {
+              let request =
+                  JsonSerializer.Serialize(
+                      {| tag = "locate"
+                         source = "for i in 1 .. 3 do\n    http {\n        GET \"https://example.com/1\"\n    }\n" |}
+                  )
+
+              let response = respondTo request
+              let first = response.GetProperty("ranges").[0]
+
+              Expect.equal
+                  (first.GetProperty("refusal").GetString())
+                  "loopBody"
+                  "a loop body should be refused with loopBody"
+          }
+
           test "locate request on source with no blocks returns an empty ranges array" {
               let request =
                   JsonSerializer.Serialize
