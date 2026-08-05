@@ -97,6 +97,28 @@ let nested =
     }
 
 
+// A wildcard binding -- F3, noNameToCall (docs/spec/0003, Decision 2). The pattern gives the
+// invocation no single name, which the twelve-case table has no room for under the shapes above.
+let _ = http { GET "http://127.0.0.1:8391/api/v2/wildcard" }
+
+
+// A bare block holding another bare block in its own expression -- F5, insideAnotherRequest,
+// derived by range containment rather than by a syntax-tree branch (docs/spec/0003, Decision 3).
+// Case 24 above exercises the same code through an R2 outer binding; this one exercises it
+// through an R1 outer block instead.
+http {
+    GET "http://127.0.0.1:8391/api/v2/outer-bare"
+    header "X-Inner" (string (sprintf "%A" (http { GET "http://127.0.0.1:8391/api/v2/inner-bare" })).Length)
+}
+
+
+// A block inside a list expression -- F5, unaddressable (docs/spec/0003, Decision 2). No branch
+// of `classify` enumerates a list, and no other block contains this one, so it is the catch-all in
+// the one shape that reaches it without also reaching Decision 3's containment test. It is the
+// code an unrecognized wire string degrades to at the host, so it is the one worth pinning.
+let listed = [ http { GET "http://127.0.0.1:8391/api/v2/listed" } ]
+
+
 // The sweeper -- a plain bare block whose Setup has to blank every hazard above it.
 http { GET "http://127.0.0.1:8391/api/v2/sweeper" }
 

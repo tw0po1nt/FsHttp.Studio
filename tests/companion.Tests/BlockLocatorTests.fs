@@ -248,8 +248,7 @@ let annotated: FsHttp.Domain.HeaderContext = http { GET "https://example.com/typ
               Expect.notEqual blocks.[0].Route NamedByTheRun "parentheses are not transparent to R1"
           }
 
-          // A head pattern that binds no single name gives the invocation nothing to call. The
-          // spec's table has no row for it, and F5 is the family beside the tuple binding.
+          // A head pattern that binds no single name gives the invocation nothing to call.
           test "a wildcard binding is refused, and not as an out-of-module position" {
               let source =
                   """
@@ -260,13 +259,9 @@ let _ = http { GET "https://example.com/wildcard" }
               Expect.hasLength blocks 1 "one block expected"
 
               match blocks.[0].Route with
-              | Refused(family, reason) ->
-                  Expect.equal
-                      family
-                      ValueIsNotTheBlock
-                      "a wildcard binding is module-scoped, so it is not NotModuleScoped"
-
-                  Expect.isFalse (reason.Contains "Syn") "the reason must not name an FCS type"
+              | Refused code ->
+                  Expect.equal code NoNameToCall "a wildcard binding gives no name to invoke"
+                  Expect.isFalse ((reasonFor code).Contains "Syn") "the reason must not name an FCS type"
               | other -> failtestf "expected a refusal, got %A" other
           }
 
@@ -298,4 +293,101 @@ let bare = http { GET "https://example.com/bare" }
               let blocks = locateBlocks source
               Expect.hasLength blocks 1 "one block expected"
               Expect.isEmpty blocks.[0].Qualifier "an anonymous module contributes no name"
+          }
+
+          // A runnable route is `NamedByTheRun` or `NamedByTheBinding`: neither carries a
+          // `RefusalCode`, so a block that classify does not refuse carries no code at all.
+          test "a runnable block's route carries no refusal code" {
+              let source =
+                  """
+http { GET "https://example.com/bare-run" }
+
+let named = http { GET "https://example.com/named-run" }
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 2 "two blocks expected"
+
+              blocks
+              |> List.iter (fun b ->
+                  match b.Route with
+                  | Refused code -> failtestf "expected a runnable route, got a refusal: %A" code
+                  | _ -> ())
+          }
+
+          // docs/spec/0003-lens-tells-the-truth.md, Decision 3: `insideAnotherRequest` comes
+          // from range containment over `locateBlocks`'s full output, not from a syntax-tree
+          // branch. The inner block here reaches classify's catch-all on its own -- there is no
+          // `SynBinding`, no loop, no branch, no match, no lambda on its path -- so containment
+          // is the only thing that can tell it apart from `unaddressable`.
+          test "a block nested inside another block's expression is insideAnotherRequest" {
+              let source =
+                  """
+http {
+    GET "https://example.com/outer"
+    header "X-Inner" (string (sprintf "%A" (http { GET "https://example.com/inner" })).Length)
+}
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 2 "two blocks expected: the outer and the nested one"
+
+              Expect.equal blocks.[0].Route NamedByTheRun "the outer block is runnable"
+
+              match blocks.[1].Route with
+              | Refused InsideAnotherRequest -> ()
+              | other -> failtestf "expected InsideAnotherRequest, got %A" other
+          }
+
+          // The title is shape-grained (docs/spec/0003, Decision 2), so a try and a match must
+          // not answer with each other's shape. FCS gives both a `SynMatchClause`, and the
+          // handler's parent is the only thing that separates them.
+          test "a try/with handler is an exceptionHandler, and a match clause is a matchClause" {
+              let source =
+                  """
+let tried =
+    try
+        http { GET "https://example.com/tried" }
+    with _ ->
+        http { GET "https://example.com/caught" }
+
+let matched =
+    match System.DateTime.Now.Hour with
+    | 0 -> http { GET "https://example.com/matched" }
+    | _ -> http { GET "https://example.com/other" }
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 4 "four blocks expected"
+
+              let routeOf i = blocks.[i].Route
+              Expect.equal (routeOf 0) (Refused ExceptionHandler) "the try body is a handler position"
+              Expect.equal (routeOf 1) (Refused ExceptionHandler) "the with handler is a handler position too"
+              Expect.equal (routeOf 2) (Refused MatchClause) "a real match clause stays a match clause"
+              Expect.equal (routeOf 3) (Refused MatchClause) "a real match clause stays a match clause"
+          }
+
+          // Decision 11 asks that a refusal's sentence never interpolate an FCS type name. One
+          // code was the only one under that guard while the sentences lived at their twelve
+          // construction sites; `reasonFor` makes it one table, so the guard covers all twelve.
+          test "every refusal code has a plain reason that names no FCS type" {
+              let codes =
+                  [ LoopBody
+                    IfBranch
+                    MatchClause
+                    ExceptionHandler
+                    NeedsArguments
+                    ClassMember
+                    InnerBinding
+                    LambdaValue
+                    NoNameToCall
+                    TupleBinding
+                    InsideAnotherRequest
+                    Unaddressable ]
+
+              codes
+              |> List.iter (fun code ->
+                  let reason = reasonFor code
+                  Expect.isNotEmpty reason (sprintf "%A has a reason" code)
+                  Expect.isFalse (reason.Contains "Syn") (sprintf "%A must not name an FCS type" code))
           } ]
