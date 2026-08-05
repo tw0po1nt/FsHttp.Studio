@@ -27,9 +27,9 @@ let private isNamedByTheBinding (invocation: string) =
     | NamedByTheBinding inv -> inv = invocation
     | _ -> false
 
-let private isRefused (family: RefusalFamily) =
+let private isRefused (code: RefusalCode) =
     function
-    | Refused(f, _) -> f = family
+    | Refused(c, _) -> c = code
     | _ -> false
 
 /// Asserts block `index`'s route against `expected`, naming the spec position in the failure.
@@ -95,8 +95,8 @@ let tests =
               assertRoute 6 "#6 body of a ()-callable function" (isNamedByTheBinding "getSnorlax ()")
               assertRoute 7 "#7 single block in a module" isNamedByTheRun
               assertRoute 8 "#8 block in a module with a preceding member" isNamedByTheRun
-              assertRoute 9 "#9 in a for body" (isRefused DecidedAtRunTime)
-              assertRoute 10 "#10 in an if branch" (isRefused DecidedAtRunTime)
+              assertRoute 9 "#9 in a for body" (isRefused LoopBody)
+              assertRoute 10 "#10 in an if branch" (isRefused IfBranch)
               assertRoute 11 "#11p producer, let dexId = http { }" (isNamedByTheBinding "dexId")
               assertRoute 12 "#11c consumer, uses another block's value" isNamedByTheRun
               assertRoute 13 "#12 piped to Request.send in the script" isNamedByTheRun
@@ -104,7 +104,7 @@ let tests =
 
           test "extra.fsx: the shapes the matrix does not have get the route the spec's table names" {
               let blocks = locateBlocks (fixture "extra.fsx")
-              Expect.hasLength blocks 19 "extra.fsx has 19 blocks"
+              Expect.hasLength blocks 22 "extra.fsx has 22 blocks"
 
               let assertRoute = assertRoute blocks
               assertRoute 0 "#13 let private x = http { }" (isNamedByTheBinding "secret")
@@ -117,20 +117,43 @@ let tests =
               assertRoute 2 "#14 module private, bare block" isNamedByTheRun
               assertRoute 3 "#15 nested modules, Outer.Inner.deep" (isNamedByTheBinding "deep")
               assertRoute 4 "#16 attributed binding, [<Obsolete>] let …" (isNamedByTheBinding "attributed")
-              assertRoute 5 "#22 class member" (isRefused NeedsAnInventedValue)
-              assertRoute 6 "#19 function with arguments" (isRefused NeedsAnInventedValue)
-              assertRoute 7 "#20 lambda-valued binding" (isRefused NotModuleScoped)
-              assertRoute 8 "#21 inner let in a function body" (isRefused NotModuleScoped)
-              assertRoute 9 "#17 match clause (first)" (isRefused DecidedAtRunTime)
-              assertRoute 10 "#17 match clause (second)" (isRefused DecidedAtRunTime)
-              assertRoute 11 "#18 try/with handler (try body)" (isRefused DecidedAtRunTime)
-              assertRoute 12 "#18 try/with handler (with handler)" (isRefused DecidedAtRunTime)
-              assertRoute 13 "#23 tuple binding (first element)" (isRefused ValueIsNotTheBlock)
-              assertRoute 14 "#23 tuple binding (second element)" (isRefused ValueIsNotTheBlock)
+              assertRoute 5 "#22 class member" (isRefused ClassMember)
+              assertRoute 6 "#19 function with arguments" (isRefused NeedsArguments)
+              assertRoute 7 "#20 lambda-valued binding" (isRefused LambdaValue)
+              assertRoute 8 "#21 inner let in a function body" (isRefused InnerBinding)
+              assertRoute 9 "#17 match clause (first)" (isRefused MatchClause)
+              assertRoute 10 "#17 match clause (second)" (isRefused MatchClause)
+              assertRoute 11 "#18 try/with handler (try body)" (isRefused ExceptionHandler)
+
+              // FCS represents a `with` case as a `SynMatchClause`, the same node a `match`
+              // expression's own clauses use, and `classify` tests `SynMatchClause` before
+              // `TryWith` (Decision 2's own table lists `SynMatchClause` under `matchClause`).
+              // The handler's own clause therefore takes that branch, not `exceptionHandler`,
+              // which stays reachable through the try body alone (the row just above).
+              assertRoute 12 "#18 try/with handler (with handler)" (isRefused MatchClause)
+              assertRoute 13 "#23 tuple binding (first element)" (isRefused TupleBinding)
+              assertRoute 14 "#23 tuple binding (second element)" (isRefused TupleBinding)
               assertRoute 15 "#24 outer binding that holds a nested block" (isNamedByTheBinding "nested")
-              assertRoute 16 "#24 block inside another block's expression" (isRefused ValueIsNotTheBlock)
-              assertRoute 17 "sweeper block (structural, not a numbered position)" isNamedByTheRun
-              assertRoute 18 "module Tail bare block (boundary probe, not a numbered position)" isNamedByTheRun
+
+              assertRoute 16 "#24 block inside another block's expression" (isRefused InsideAnotherRequest)
+
+              assertRoute
+                  17
+                  "wildcard binding gives no name to invoke (0003, not a numbered reach-spec position)"
+                  (isRefused NoNameToCall)
+
+              assertRoute
+                  18
+                  "bare outer block holding a nested bare block (0003, not a numbered reach-spec position)"
+                  isNamedByTheRun
+
+              assertRoute
+                  19
+                  "bare block nested inside another bare block's expression (0003, not a numbered reach-spec position)"
+                  (isRefused InsideAnotherRequest)
+
+              assertRoute 20 "sweeper block (structural, not a numbered position)" isNamedByTheRun
+              assertRoute 21 "module Tail bare block (boundary probe, not a numbered position)" isNamedByTheRun
           }
 
           // Positions 13 to 15 are the rows that exist to exercise `Qualifier` and
@@ -154,7 +177,7 @@ let tests =
 
               assertPrivateSpans 4 "#16 attributed binding, private below the attribute line" 1
 
-              assertQualifier 18 "module Tail bare block" [ "Tail" ]
+              assertQualifier 21 "module Tail bare block" [ "Tail" ]
           }
 
           // Decision 7 asks for two things the route cannot show: the span covers the colon, and
@@ -174,5 +197,5 @@ let tests =
               assertTypeAnnotation 6 "#19 function with arguments" None
 
               // R1 names nothing, so there is no binding to read an annotation off.
-              assertTypeAnnotation 17 "sweeper block, bare and top level" None
+              assertTypeAnnotation 20 "sweeper block, bare and top level" None
           } ]

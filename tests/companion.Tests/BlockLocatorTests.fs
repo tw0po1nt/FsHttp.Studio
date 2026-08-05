@@ -248,8 +248,7 @@ let annotated: FsHttp.Domain.HeaderContext = http { GET "https://example.com/typ
               Expect.notEqual blocks.[0].Route NamedByTheRun "parentheses are not transparent to R1"
           }
 
-          // A head pattern that binds no single name gives the invocation nothing to call. The
-          // spec's table has no row for it, and F5 is the family beside the tuple binding.
+          // A head pattern that binds no single name gives the invocation nothing to call.
           test "a wildcard binding is refused, and not as an out-of-module position" {
               let source =
                   """
@@ -260,12 +259,8 @@ let _ = http { GET "https://example.com/wildcard" }
               Expect.hasLength blocks 1 "one block expected"
 
               match blocks.[0].Route with
-              | Refused(family, reason) ->
-                  Expect.equal
-                      family
-                      ValueIsNotTheBlock
-                      "a wildcard binding is module-scoped, so it is not NotModuleScoped"
-
+              | Refused(code, reason) ->
+                  Expect.equal code NoNameToCall "a wildcard binding gives no name to invoke"
                   Expect.isFalse (reason.Contains "Syn") "the reason must not name an FCS type"
               | other -> failtestf "expected a refusal, got %A" other
           }
@@ -298,4 +293,48 @@ let bare = http { GET "https://example.com/bare" }
               let blocks = locateBlocks source
               Expect.hasLength blocks 1 "one block expected"
               Expect.isEmpty blocks.[0].Qualifier "an anonymous module contributes no name"
+          }
+
+          // A runnable route is `NamedByTheRun` or `NamedByTheBinding`: neither carries a
+          // `RefusalCode`, so a block that classify does not refuse carries no code at all.
+          test "a runnable block's route carries no refusal code" {
+              let source =
+                  """
+http { GET "https://example.com/bare-run" }
+
+let named = http { GET "https://example.com/named-run" }
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 2 "two blocks expected"
+
+              blocks
+              |> List.iter (fun b ->
+                  match b.Route with
+                  | Refused(code, _) -> failtestf "expected a runnable route, got a refusal: %A" code
+                  | _ -> ())
+          }
+
+          // docs/spec/0003-lens-tells-the-truth.md, Decision 3: `insideAnotherRequest` comes
+          // from range containment over `locateBlocks`'s full output, not from a syntax-tree
+          // branch. The inner block here reaches classify's catch-all on its own -- there is no
+          // `SynBinding`, no loop, no branch, no match, no lambda on its path -- so containment
+          // is the only thing that can tell it apart from `unaddressable`.
+          test "a block nested inside another block's expression is insideAnotherRequest" {
+              let source =
+                  """
+http {
+    GET "https://example.com/outer"
+    header "X-Inner" (string (sprintf "%A" (http { GET "https://example.com/inner" })).Length)
+}
+"""
+
+              let blocks = locateBlocks source
+              Expect.hasLength blocks 2 "two blocks expected: the outer and the nested one"
+
+              Expect.equal blocks.[0].Route NamedByTheRun "the outer block is runnable"
+
+              match blocks.[1].Route with
+              | Refused(InsideAnotherRequest, _) -> ()
+              | other -> failtestf "expected InsideAnotherRequest, got %A" other
           } ]
