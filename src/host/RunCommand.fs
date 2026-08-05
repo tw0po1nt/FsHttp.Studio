@@ -76,7 +76,8 @@ let register () : Disposable =
         CodeLensProvider.commandId,
         System.Action<obj, obj>(fun documentArg indexArg ->
             match (documentArg, indexArg, handle) with
-            | null, null, _
+            | null, _, _
+            | _, null, _
             | _, _, None -> ()
             | doc, idx, Some h ->
                 let document = unbox<TextDocument> doc
