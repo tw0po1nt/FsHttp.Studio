@@ -67,8 +67,10 @@ type RefusalCode =
 /// `InnerBinding` branches — would otherwise drift into two different sentences for one verdict.
 /// No sentence interpolates an FCS type name (Decision 11). These are the *companion's* words, and
 /// not the shipped ones: Decision 2 of docs/spec/0003-lens-tells-the-truth.md gives every lens
-/// title and toast to the host, keyed by the code alone. They surface only in the interim
-/// `RuntimeError` text and in logs, so they use the glossary's **block** throughout.
+/// title and toast to the host, keyed by the code alone, and `Protocol.refusalMessage` holds the
+/// sentences a user actually reads. Nothing on the wire carries these, so they are the
+/// companion's own diagnostics: they use the glossary's **block** throughout, and the exhaustive
+/// match keeps one sentence per code as the codes change.
 let reasonFor (code: RefusalCode) =
     match code with
     | LoopBody -> "a loop body describes many requests"

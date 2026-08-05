@@ -545,10 +545,10 @@ let tests =
               | other -> failtestf "expected compileError, got %A" other
           }
 
-          test "a block in a for-loop body is refused: a runtime error that names the position, with no request sent" {
+          test "a block in a for-loop body is refused with its code, and sends nothing" {
               // A loop body is decided at run time (Decision 2's F1 family), so `classify`
-              // refuses it and the Run never evaluates the script at all (Decision 11) -- not
-              // the Setup, and not a request to the server.
+              // refuses it before `run` reserves any pin or evaluates anything -- not the
+              // Setup, and not a request to the server (docs/spec/0003, Decision 5).
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
 
@@ -558,16 +558,33 @@ let tests =
                       server.BaseUrl
 
               match run source 0 with
-              | RuntimeError message ->
-                  Expect.isFalse (message.Contains "http") "the message must not name 'http'"
-
-                  Expect.stringContains
-                      message
-                      "a loop body describes many requests"
-                      "the message must name the position that was refused, not just report a failure"
-
+              | Refused(code, name) ->
+                  Expect.equal code "loopBody" "the loop body's own wire code should come back"
+                  Expect.equal name None "loopBody carries no name"
                   Expect.equal hitCounter.Value 0 "a refused position must not send a request"
-              | other -> failtestf "expected runtimeError for a refused position, got %A" other
+              | other -> failtestf "expected Refused for a refused position, got %A" other
+          }
+
+          test "a refused Run leaves its script's #r pin unmarked in loadedVersions" {
+              // routeAndReserve marks each Run's pins in loadedVersions up front, before any
+              // evaluation, so a refusal that reached it would over-mark a pin no session ever
+              // loaded (docs/spec/0003, Decision 5). A fictitious package name keeps this test
+              // isolated from every other case's real FsHttp pin.
+              let package = "FsHttp.Studio.Tests.RefusalGateFixture"
+
+              let source =
+                  sprintf
+                      "#r \"nuget: %s, 1.2.3\"\nfor name in [ \"pidgey\" ] do\n    http {\n        GET \"http://example.invalid\"\n    }\n"
+                      package
+
+              match run source 0 with
+              | Refused(code, _) -> Expect.equal code "loopBody" "the loop body should still be the refusal"
+              | other -> failtestf "expected Refused, got %A" other
+
+              // An unmarked pin is also the proof that no worker process started. routeAndReserve
+              // is the only chooser of the worker route, and it marks every pin it routes, so a
+              // pin it never marked is a Run it never routed.
+              Expect.equal (loadedVersionOf package) None "a refused Run must never reserve a pin in loadedVersions"
           }
 
           test "a setup that throws at run time returns runtimeError, not compileError" {

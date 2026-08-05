@@ -69,6 +69,12 @@ let private parseRunResult (json: obj) : RunResult =
         |> Array.toList
         |> RunCompileError
     | "runtimeError" -> RunRuntimeError(unbox<string> (json?message: obj))
+    | "refused" ->
+        // The companion omits `name` for every code it produces today, so a missing property
+        // decodes to `None` rather than to `undefined` (the same shape as `refusal` above).
+        let name: obj = json?name
+
+        RunRefused(unbox<string> (json?code: obj), (if isNullish name then None else Some(unbox<string> name)))
     | _ -> RunProtocolError(unbox<string> (json?message: obj))
 
 /// `dotnetPath` is the SDK-bearing `dotnet` host that activation resolved (see Extension.fs).

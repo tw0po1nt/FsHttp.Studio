@@ -118,4 +118,21 @@ let tests =
 
               let response = respondTo request
               Expect.equal (response.GetProperty("tag").GetString()) "runtimeError" "tag should be runtimeError"
+          }
+
+          test "run request on a refused block returns a refused envelope with its code" {
+              let request =
+                  JsonSerializer.Serialize(
+                      {| tag = "run"
+                         source =
+                          "for name in [ \"pidgey\" ] do\n    http {\n        GET \"https://example.com\"\n    }\n"
+                         blockIndex = 0 |}
+                  )
+
+              let response = respondTo request
+              Expect.equal (response.GetProperty("tag").GetString()) "refused" "tag should be refused"
+              Expect.equal (response.GetProperty("code").GetString()) "loopBody" "code should name the shape"
+
+              let hasName, _ = response.TryGetProperty "name"
+              Expect.isFalse hasName "a code with no name should omit the property entirely"
           } ]
