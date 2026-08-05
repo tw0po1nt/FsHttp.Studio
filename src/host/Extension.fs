@@ -91,6 +91,7 @@ let activate (context: ExtensionContext) =
     )
 
     context.subscriptions.Add(box (RunCommand.register ()))
+    context.subscriptions.Add(box (RunCommand.registerExplain ()))
 
     let companionDll =
         Node.Path.join [| context.extensionPath; "dist"; "companion"; "Companion.dll" |]

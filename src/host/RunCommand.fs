@@ -100,3 +100,29 @@ let register () : Disposable =
 
                 runOne h document blockIndex myGeneration |> Async.StartImmediate)
     )
+
+/// Registers the command that a `⊘ Cannot run: …` CodeLens invokes (docs/spec/0003, Decision 8).
+/// It reads the block's own refusal code and shows a warning toast with the matching text. It
+/// touches neither the response viewer nor the generation counter: no Run was ever going to
+/// start.
+let registerExplain () : Disposable =
+    commands.registerCommand (
+        CodeLensProvider.explainCommandId,
+        System.Action<obj, obj>(fun documentArg indexArg ->
+            match (documentArg, indexArg, handle) with
+            | null, _, _
+            | _, null, _
+            | _, _, None -> ()
+            | doc, idx, Some h ->
+                let document = unbox<TextDocument> doc
+                let blockIndex = unbox<int> idx
+
+                async {
+                    let! ranges = Companion.locate h (document.getText ())
+
+                    match List.tryItem blockIndex ranges |> Option.bind (fun r -> r.Refusal) with
+                    | Some code -> window.showWarningMessage ((Refusals.forCode code).Detail) |> ignore
+                    | None -> ()
+                }
+                |> Async.StartImmediate)
+    )

@@ -9,10 +9,16 @@ open Fable.Core.JsInterop
 open Vscode
 open Protocol
 
-/// The command that a click on a lens invokes. `RunCommand.fs` registers the handler under this
-/// id, and `contributes.commands` in `package.json` declares it.
+/// The command that a click on a runnable lens invokes. `RunCommand.fs` registers the handler
+/// under this id.
 [<Literal>]
 let commandId = "fshttpStudio.runBlock"
+
+/// The command that a click on a refused lens invokes. `RunCommand.fs` registers the handler
+/// under this id. Not declared in `package.json`'s `contributes.commands` (docs/spec/0003,
+/// Decision 8): it needs to work for a lens click only, and never appear in the command palette.
+[<Literal>]
+let explainCommandId = "fshttpStudio.explainBlockRefusal"
 
 let private emitter = EventEmitter<unit>()
 
@@ -35,13 +41,18 @@ let private buildCodeLens (document: TextDocument) (i: int) (r: BlockRange) : Co
     let col = float r.StartCol
     let range = Range(line, col, line, col)
 
-    let command: obj =
+    let title, command =
+        match r.Refusal with
+        | Some code -> (Refusals.forCode code).Title, explainCommandId
+        | None -> "▶ Run request", commandId
+
+    let commandObj: obj =
         createObj
-            [ "title" ==> "▶ Run request"
-              "command" ==> commandId
+            [ "title" ==> title
+              "command" ==> command
               "arguments" ==> [| box document; box i |] ]
 
-    CodeLens(range, command)
+    CodeLens(range, commandObj)
 
 let private noLenses () : Async<ResizeArray<CodeLens>> = async { return ResizeArray() }
 

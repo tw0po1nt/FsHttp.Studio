@@ -10,6 +10,7 @@
     <Compile Include="Vscode.fs" />
     <Compile Include="Envelope.fs" />
     <Compile Include="Protocol.fs" />
+    <Compile Include="Refusals.fs" />
     <Compile Include="Companion.fs" />
     <Compile Include="ResponseViewer.fs" />
     <Compile Include="CodeLensProvider.fs" />
