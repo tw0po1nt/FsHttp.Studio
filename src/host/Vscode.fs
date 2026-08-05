@@ -99,6 +99,9 @@ type IWindow =
     /// click. The promise resolves to the clicked item's label, or to `undefined` when the user
     /// dismisses the message.
     abstract showWarningMessage: message: string * item: string -> JS.Promise<obj>
+    /// vscode.window.showWarningMessage(message). No button: a refusal toast (docs/spec/0003,
+    /// Decision 8) states the reason and needs no reply.
+    abstract showWarningMessage: message: string -> JS.Promise<obj>
 
 [<Import("window", "vscode")>]
 let window: IWindow = jsNative

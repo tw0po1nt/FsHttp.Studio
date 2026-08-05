@@ -34,36 +34,6 @@ type RunResult =
     /// `unboundBlockValue` only.
     | RunRefused of code: string * name: string option
 
-/// One plain sentence per refusal code, for the response viewer. `CONTEXT.md` gives every
-/// user-facing title and toast to the extension host, keyed by the code alone, so these — and
-/// not the companion's own `BlockLocator.reasonFor` sentences — are the shipped words. The two
-/// sides never share an assembly, so this table is a deliberate mirror, like `BlockRange`.
-///
-/// A refusal is not an error. Each sentence names the *position's shape*, and says nothing is
-/// wrong with the user's script. An unrecognized code degrades to the `unaddressable` sentence,
-/// which is the same fallback the lens title uses.
-///
-/// TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/121): the viewer renders this through
-/// its error channel today, which is the one part still at odds with "a refusal is not an
-/// error". That ticket gives a refused Run its own non-error notice.
-let refusalMessage (code: string) : string =
-    let reason =
-        match code with
-        | "loopBody" -> "a loop body describes many requests"
-        | "ifBranch" -> "a branch is decided at runtime"
-        | "matchClause" -> "a match clause is decided at runtime"
-        | "exceptionHandler" -> "a handler is decided at runtime"
-        | "needsArguments" -> "the function takes arguments we would have to invent"
-        | "classMember" -> "a class member needs an instance we would have to invent"
-        | "innerBinding" -> "an inner binding is not reachable from a later FSI interaction"
-        | "lambdaValue" -> "the binding's value is a lambda, not the block"
-        | "noNameToCall" -> "the binding does not give a name to invoke"
-        | "tupleBinding" -> "a tuple binding binds several values, so its value is not the block"
-        | "insideAnotherRequest" -> "the block sits inside another block's own expression"
-        | _ -> "the block sits in a position that a Run cannot reach"
-
-    sprintf "This block cannot be run on its own: %s." reason
-
 /// Converts an FCS-native 1-based line to vscode's 0-based line (ADR-0003's coordinate
 /// convention). The columns already agree, so only the line needs an adjustment.
 let toVscodeLine (fcsLine: int) : int = fcsLine - 1
