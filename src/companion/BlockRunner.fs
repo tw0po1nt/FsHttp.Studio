@@ -225,21 +225,6 @@ let private withinInsertion (shift: ColumnShift option) (line: int, col: int) =
     | Some s -> line = s.Line && col >= s.InsertCol && col < s.InsertCol + s.Offset
     | None -> false
 
-/// The name a blanked sibling's own statement removed, when it had one to remove. Only a
-/// `NamedByTheBinding` sibling binds a name a later interaction could reference (position 11c);
-/// an `R1` sibling's bare statement names nothing, so blanking it leaves no name for a consumer
-/// to have depended on. The arity suffix (`unitArgSuffix`) is stripped: an unbound-value
-/// diagnostic names the value, never its call syntax.
-let private blankedNameOf (b: LocatedBlock) : string option =
-    match b.Route with
-    | NamedByTheBinding invocation ->
-        if invocation.EndsWith unitArgSuffix then
-            Some(invocation.Substring(0, invocation.Length - unitArgSuffix.Length))
-        else
-            Some invocation
-    | NamedByTheRun
-    | BlockLocator.Refused _ -> None
-
 /// Builds the Setup text (Decision 1): everything from line 1 through the end of the target
 /// block's own expression, truncated at its end column, with every *other* located block's
 /// `Blank` span replaced first. A click on the target therefore fires exactly one request, which
@@ -269,7 +254,9 @@ let private buildSetupText
         blocks |> List.filter (fun b -> not (containsBlock b.Blank target.Block))
 
     blankedSiblings |> List.iter (fun b -> blankSpan lines b.Blank)
-    let blankedNames = blankedSiblings |> List.choose blankedNameOf |> Set.ofList
+
+    let blankedNames =
+        blankedSiblings |> List.collect (fun b -> b.BoundNames) |> Set.ofList
 
     // Decisions 6 and 7: blank the target's own `private` keywords and its own type annotation,
     // to spaces, before the R1 insertion below can move any column on the same line.
@@ -312,11 +299,18 @@ let private errorDiagnostics (diags: FSharpDiagnostic[]) =
 [<Literal>]
 let private unboundValueErrorNumber = 39
 
-/// The identifier text a diagnostic's own (single-line) range covers in `lines`, read back
-/// against the Setup text itself -- never parsed out of the (localized) message. `None` when the
-/// range does not describe one line inside `lines`, which a multi-line unbound-value diagnostic
-/// never should, but a defensive read still declines to guess.
-let private diagnosticText (lines: string[]) (d: FSharpDiagnostic) : string option =
+/// The wire spelling of the case 11c refusal. It is a Run outcome and not a `RefusalCode`, so
+/// `BlockLocator.codeToWire` does not carry it (docs/spec/0003-lens-tells-the-truth.md,
+/// Decision 7) and it is named here instead of spelled inline at the one place that emits it.
+[<Literal>]
+let private unboundBlockValueCode = "unboundBlockValue"
+
+/// The source text a diagnostic's own (single-line) range covers in `lines`, read back against
+/// the Setup text itself -- never parsed out of the (localized) *message*, which this
+/// deliberately does not touch. `None` when the range does not describe one line inside `lines`,
+/// which a multi-line unbound-value diagnostic never should, but a defensive read still declines
+/// to guess.
+let private textUnderDiagnostic (lines: string[]) (d: FSharpDiagnostic) : string option =
     if d.StartLine = d.EndLine && d.StartLine >= 1 && d.StartLine <= lines.Length then
         let line = lines.[d.StartLine - 1]
 
@@ -381,11 +375,25 @@ let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d:
 /// Reads `setupLines`, not `combinedSetup`'s own text, because a diagnostic's position here is
 /// still in Setup-interaction coordinates and `setupLines` is exactly that interaction's text
 /// (the companion addendum carries no user name to unbind, so it never contributes a match).
+///
+/// Several blanked names can be unbound at once. The refusal names the *first* one in diagnostic
+/// order, which is the first one the compiler reached, because the detail sentence speaks about
+/// one value. The rest are the same limit reported twice, so naming them adds nothing.
 let private blankedNameRefusal
     (setupLines: string[])
     (blankedNames: Set<string>)
     (errors: FSharpDiagnostic[])
     : string option =
+    // A backtick-quoted binding — ``get pikachu`` — is written with its backticks at both the
+    // definition and the reference, so the diagnostic's range reads them back too, while
+    // `BoundNames` holds the name without them. Strip them before the lookup, and report the
+    // bare name: it is the name the user reads in the refusal sentence, not F# call syntax.
+    let unquote (text: string) =
+        if text.Length >= 4 && text.StartsWith "``" && text.EndsWith "``" then
+            text.Substring(2, text.Length - 4)
+        else
+            text
+
     if errors.Length = 0 then
         None
     else
@@ -393,7 +401,9 @@ let private blankedNameRefusal
             errors
             |> Array.map (fun d ->
                 if d.ErrorNumber = unboundValueErrorNumber then
-                    diagnosticText setupLines d |> Option.filter blankedNames.Contains
+                    textUnderDiagnostic setupLines d
+                    |> Option.map unquote
+                    |> Option.filter blankedNames.Contains
                 else
                     None)
 
@@ -544,7 +554,7 @@ let private runLocated (source: string) (located: LocatedBlock list) (blockIndex
         let setupErrors = errorDiagnostics setupDiags
 
         match blankedNameRefusal setupLines blankedNames setupErrors with
-        | Some name -> Refused("unboundBlockValue", Some name)
+        | Some name -> Refused(unboundBlockValueCode, Some name)
         | None ->
             match
                 setupErrors

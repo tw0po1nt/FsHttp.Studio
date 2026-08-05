@@ -152,6 +152,14 @@ type LocatedBlock =
         /// on the target's own binding only. The span starts after the head pattern (and any
         /// arguments), so blanking it keeps the bound name.
         TypeAnnotation: BlockRange option
+        /// Every module-scoped name that blanking this block's `Blank` span takes away, spelled
+        /// as the source writes it, minus any backticks. Empty unless `Blank` covers a whole
+        /// module-level `let` declaration: a member's or an inner binding's blank keeps its own
+        /// head pattern, so it removes no name. This is what a *consumer* of this block loses
+        /// when the Run blanks it (case 11c), so it follows the head pattern and not the
+        /// `Route`: a binding that no route reaches — `let getUser id = …`, refused as
+        /// `NeedsArguments` — still binds a name, and blanking it still takes that name away.
+        BoundNames: string list
     }
 
 /// Synthetic filename given to FCS's parser. Only the `.fsx` extension matters, because it
@@ -401,6 +409,52 @@ let rec private blankSpan (blockRange: range) (path: SyntaxNode list) =
     | _ :: rest -> blankSpan blockRange rest
     | [] -> blockRange
 
+/// Every name a head pattern binds into its enclosing scope, spelled as the source writes it.
+/// `Ident.idText` carries the text without backticks, which is what an unbound-value diagnostic's
+/// own range reads back to, so this is deliberately *not* `invocationSpelling`: these names are
+/// matched against compiler output and shown to a user, never used to build an invocation.
+///
+/// A `SynPat.LongIdent`'s argument patterns are its parameters, which bind inside the binding and
+/// not beside it, so the walk takes the head name alone and does not descend into them. That
+/// treats a union-case destructure — `let Some x = …` — as binding `Some`, which is wrong but
+/// inert: no diagnostic names a constructor as an unbound *value*.
+let rec private headPatternNames (pat: SynPat) : string list =
+    match pat with
+    | SynPat.Named(ident = SynIdent(ident = id)) -> [ id.idText ]
+    | SynPat.LongIdent(longDotId = SynLongIdent(id = ids)) ->
+        match List.tryLast ids with
+        | Some id -> [ id.idText ]
+        | None -> []
+    | SynPat.Typed(pat = inner)
+    | SynPat.Paren(pat = inner)
+    | SynPat.Attrib(pat = inner) -> headPatternNames inner
+    | SynPat.As(lhsPat = l; rhsPat = r) -> headPatternNames l @ headPatternNames r
+    | SynPat.Tuple(elementPats = pats)
+    | SynPat.ArrayOrList(elementPats = pats)
+    | SynPat.Ands(pats = pats) -> pats |> List.collect headPatternNames
+    | SynPat.Record(fieldPats = fields) ->
+        fields |> List.collect (fun (NamePatPairField(pat = p)) -> headPatternNames p)
+    | SynPat.Or(lhsPat = l; rhsPat = r) -> headPatternNames l @ headPatternNames r
+    | _ -> []
+
+/// The names that blanking this block's span takes out of module scope, for `LocatedBlock`'s
+/// `BoundNames`. It walks the same path `blankSpan` walks, and answers on the same branch: where
+/// `blankSpan` erases a whole module-level `let`, the declaration's head pattern names go with
+/// it, and everywhere else the blank keeps the head pattern and so removes no name.
+///
+/// The walk reaches the binding through any intervening expression node, so a tuple binding —
+/// `let a, b = http { … }, http { … }`, which `classify` refuses before it ever sees the binding
+/// — still reports both `a` and `b`. Blanking is what decides this, not routing.
+let rec private blankedNames (path: SyntaxNode list) : string list =
+    match path with
+    | SyntaxNode.SynBinding(SynBinding(headPat = headPat)) :: parents ->
+        match parents with
+        | SyntaxNode.SynModule(SynModuleDecl.Let _) :: _ -> headPatternNames headPat
+        | _ -> []
+    | SyntaxNode.SynModule _ :: _ -> []
+    | _ :: rest -> blankedNames rest
+    | [] -> []
+
 let private toBlockRange (r: range) : BlockRange =
     { StartLine = r.StartLine
       StartCol = r.StartColumn
@@ -459,7 +513,8 @@ let private findLocatedBlocks (ast: ParsedInput) : LocatedBlock list =
                Blank = toBlockRange (blankSpan appRange path)
                Qualifier = qualifierOf path
                PrivateSpans = privateSpansOn classified.Access path |> List.map toBlockRange
-               TypeAnnotation = classified.TypeAnnotation |> Option.map toBlockRange }
+               TypeAnnotation = classified.TypeAnnotation |> Option.map toBlockRange
+               BoundNames = blankedNames path }
              :: acc
          | _ -> acc))
     |> List.rev
