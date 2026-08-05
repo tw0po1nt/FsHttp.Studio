@@ -587,6 +587,128 @@ let tests =
               Expect.equal (loadedVersionOf package) None "a refused Run must never reserve a pin in loadedVersions"
           }
 
+          test "case 11c: a reference inside the consumer's own block is refused with the name" {
+              // The reference sits in the target block's *own* span, which is where a real
+              // producer/consumer pair puts it. That is the path `splitDiagnostic` would
+              // otherwise treat as a fault in the user's block; case 11c has to claim it first
+              // (docs/spec/0003-lens-tells-the-truth.md, Decision 7).
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
+              let source =
+                  script (
+                      sprintf
+                          "let dexId =\n    http {\n        GET \"%s/hit\"\n    }\n\nhttp {\n    GET \"%s/hit\"\n    header \"X-Previous\" (string dexId)\n}\n"
+                          server.BaseUrl
+                          server.BaseUrl
+                  )
+
+              match run source 1 with
+              | Refused(code, name) ->
+                  Expect.equal code "unboundBlockValue" "case 11c's own wire code should come back"
+                  Expect.equal name (Some "dexId") "the name should come from the producer's own binding"
+                  Expect.equal hitCounter.Value 0 "a refused Run must not send a request"
+              | other -> failtestf "expected Refused for an in-block reference, got %A" other
+          }
+
+          test "case 11c: a reference from a sibling statement is refused with the name" {
+              // The producer block (index 0) is the sibling the Setup blanks when the consumer
+              // (index 1) is the target. `consumerRef` names the producer's own binding, so
+              // blanking it leaves that reference unbound, and FCS reports FS0039 for `dexId`
+              // (docs/spec/0003-lens-tells-the-truth.md, Decision 7).
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
+              let source =
+                  script (
+                      sprintf
+                          "let dexId =\n    http {\n        GET \"%s/hit\"\n    }\n\nlet consumerRef = dexId\n\nhttp {\n    GET \"%s/hit\"\n}\n"
+                          server.BaseUrl
+                          server.BaseUrl
+                  )
+
+              match run source 1 with
+              | Refused(code, name) ->
+                  Expect.equal code "unboundBlockValue" "case 11c's own wire code should come back"
+                  Expect.equal name (Some "dexId") "the name should come from the producer's own binding"
+                  Expect.equal hitCounter.Value 0 "a refused Run must not send a request"
+              | other -> failtestf "expected Refused for case 11c, got %A" other
+          }
+
+          test "a real typo stays a compile error, even with no blanked name involved" {
+              // `totallyUndefinedName` is nobody's blanked binding -- there is no sibling block
+              // to blank at all -- so this is the user's own mistake, and case 11c must not claim
+              // it.
+              let source =
+                  script "let y = totallyUndefinedName\n\nhttp {\n    GET \"https://example.com\"\n}\n"
+
+              match run source 0 with
+              | CompileError _ -> ()
+              | other -> failtestf "expected compileError for a real typo, got %A" other
+          }
+
+          test "a typo beside a blanked-name error still stays a compile error" {
+              // Both `dexId` (blanked) and `totallyUndefinedName` (a genuine typo) produce their
+              // own FS0039 in the same Setup interaction. The refusal claims the Run only when
+              // the missing binding is the whole story (Decision 7's precedence rule), so a
+              // mixed set of errors must still compile-error.
+              let source =
+                  script (
+                      "let dexId =\n    http {\n        GET \"https://example.com\"\n    }\n\nlet consumerRef = dexId\nlet typo = totallyUndefinedName\n\nhttp {\n    GET \"https://example.com\"\n}\n"
+                  )
+
+              match run source 1 with
+              | CompileError _ -> ()
+              | other -> failtestf "expected compileError for a typo beside a blanked-name error, got %A" other
+          }
+
+          test "case 11c: a blanked binding that no route reaches still names the value it took" {
+              // `getUser` takes an argument, so its own block is refused (`needsArguments`) and no
+              // Run ever reaches it. Blanking it still removes `getUser` from module scope, which
+              // is what a consumer loses -- so the name comes from the head pattern, not from the
+              // route.
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
+              let source =
+                  script (
+                      sprintf
+                          "let getUser id =\n    http {\n        GET (sprintf \"%s/hit?%%d\" id)\n    }\n\nhttp {\n    GET \"%s/hit\"\n    header \"X-Previous\" (string (getUser 1))\n}\n"
+                          server.BaseUrl
+                          server.BaseUrl
+                  )
+
+              match run source 1 with
+              | Refused(code, name) ->
+                  Expect.equal code "unboundBlockValue" "a blanked refused binding is still case 11c"
+                  Expect.equal name (Some "getUser") "the name should come from the binding's head pattern"
+                  Expect.equal hitCounter.Value 0 "a refused Run must not send a request"
+              | other -> failtestf "expected Refused for a blanked needsArguments binding, got %A" other
+          }
+
+          test "case 11c: a backtick-quoted name is reported without its backticks" {
+              // The diagnostic's range reads ``dex id`` back with the backticks the source wrote.
+              // The refusal sentence quotes the name to a user, so it carries the bare name --
+              // the backticks are F# syntax, not part of what the binding is called.
+              let hitCounter = ref 0
+              use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
+
+              let source =
+                  script (
+                      sprintf
+                          "let ``dex id`` =\n    http {\n        GET \"%s/hit\"\n    }\n\nhttp {\n    GET \"%s/hit\"\n    header \"X-Previous\" (string ``dex id``)\n}\n"
+                          server.BaseUrl
+                          server.BaseUrl
+                  )
+
+              match run source 1 with
+              | Refused(code, name) ->
+                  Expect.equal code "unboundBlockValue" "case 11c's own wire code should come back"
+                  Expect.equal name (Some "dex id") "the name should come back without its backticks"
+                  Expect.equal hitCounter.Value 0 "a refused Run must not send a request"
+              | other -> failtestf "expected Refused for a backtick-quoted name, got %A" other
+          }
+
           test "a setup that throws at run time returns runtimeError, not compileError" {
               // The Setup here compiles: it produces zero error diagnostics and fails only when
               // it runs. The diagnostics-first check must therefore fall through to the

@@ -234,11 +234,15 @@ let private withinInsertion (shift: ColumnShift option) (line: int, col: int) =
 /// The R1 route inserts `let <name> = ` at the block's own start (Decision 2) before the
 /// truncation point is computed, because that insertion can land on the same line the boundary
 /// truncates.
+///
+/// Also returns every name a blanked sibling's statement removed (Decision 7 of
+/// docs/spec/0003-lens-tells-the-truth.md, case 11c): the Setup blanking step is the one place
+/// that knows which names it took away, so it is the one place that records them.
 let private buildSetupText
     (source: string)
     (blocks: LocatedBlock list)
     (target: LocatedBlock)
-    : string * ColumnShift option =
+    : string * ColumnShift option * Set<string> =
     let lines = source.Replace("\r\n", "\n").Split('\n')
 
     // Hazard 1 (Decision 5): a sibling's blank span can contain the target itself -- a block
@@ -246,9 +250,13 @@ let private buildSetupText
     // Blanking that span would delete the target along with the sibling. Containment is the whole
     // test, and it needs no identity test beside it. Every route's blank span contains its own
     // block, so this filter already drops the target itself.
-    blocks
-    |> List.filter (fun b -> not (containsBlock b.Blank target.Block))
-    |> List.iter (fun b -> blankSpan lines b.Blank)
+    let blankedSiblings =
+        blocks |> List.filter (fun b -> not (containsBlock b.Blank target.Block))
+
+    blankedSiblings |> List.iter (fun b -> blankSpan lines b.Blank)
+
+    let blankedNames =
+        blankedSiblings |> List.collect (fun b -> b.BoundNames) |> Set.ofList
 
     // Decisions 6 and 7: blank the target's own `private` keywords and its own type annotation,
     // to spaces, before the R1 insertion below can move any column on the same line.
@@ -270,7 +278,7 @@ let private buildSetupText
     let prefixLines = lines.[0 .. cutIdx - 1]
     let lastLineText = lines.[cutIdx].Substring(0, cutCol)
 
-    Array.append prefixLines [| lastLineText |] |> String.concat "\n", shift
+    Array.append prefixLines [| lastLineText |] |> String.concat "\n", shift, blankedNames
 
 /// The second interaction: invokes the target by its qualified name, and applies the
 /// response-reading guard to its value before sending (Decision 10). The Setup builds the
@@ -285,6 +293,33 @@ let private invocationText (target: LocatedBlock) : string =
 
 let private errorDiagnostics (diags: FSharpDiagnostic[]) =
     diags |> Array.filter (fun d -> d.Severity = FSharpDiagnosticSeverity.Error)
+
+/// FCS's own "unbound value" diagnostic code. Stable across localizations, unlike the message
+/// text (docs/spec/0003-lens-tells-the-truth.md, Decision 7).
+[<Literal>]
+let private unboundValueErrorNumber = 39
+
+/// The wire spelling of the case 11c refusal. It is a Run outcome and not a `RefusalCode`, so
+/// `BlockLocator.codeToWire` does not carry it (docs/spec/0003-lens-tells-the-truth.md,
+/// Decision 7) and it is named here instead of spelled inline at the one place that emits it.
+[<Literal>]
+let private unboundBlockValueCode = "unboundBlockValue"
+
+/// The source text a diagnostic's own (single-line) range covers in `lines`, read back against
+/// the Setup text itself -- never parsed out of the (localized) *message*, which this
+/// deliberately does not touch. `None` when the range does not describe one line inside `lines`,
+/// which a multi-line unbound-value diagnostic never should, but a defensive read still declines
+/// to guess.
+let private textUnderDiagnostic (lines: string[]) (d: FSharpDiagnostic) : string option =
+    if d.StartLine = d.EndLine && d.StartLine >= 1 && d.StartLine <= lines.Length then
+        let line = lines.[d.StartLine - 1]
+
+        if d.StartColumn >= 0 && d.StartColumn <= d.EndColumn && d.EndColumn <= line.Length then
+            Some(line.Substring(d.StartColumn, d.EndColumn - d.StartColumn))
+        else
+            None
+    else
+        None
 
 /// True when `point` (already unshifted to original-source coordinates) falls inside `block`'s
 /// own span: at or after its start, and strictly before its end.
@@ -331,6 +366,51 @@ let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d:
               StartCol = sc
               EndLine = el
               EndCol = ec } }
+
+/// Case 11c (Decision 7): whether `errors` refuses the Run rather than compile-erroring it. Every
+/// error diagnostic must trace to a blanked name for the refusal to claim the Run -- one
+/// unrelated error (the user's own typo, or an FS0039 naming something no sibling bound) means
+/// the missing binding is not the whole story, and the whole thing is a compile error instead.
+///
+/// Reads `setupLines`, not `combinedSetup`'s own text, because a diagnostic's position here is
+/// still in Setup-interaction coordinates and `setupLines` is exactly that interaction's text
+/// (the companion addendum carries no user name to unbind, so it never contributes a match).
+///
+/// Several blanked names can be unbound at once. The refusal names the *first* one in diagnostic
+/// order, which is the first one the compiler reached, because the detail sentence speaks about
+/// one value. The rest are the same limit reported twice, so naming them adds nothing.
+let private blankedNameRefusal
+    (setupLines: string[])
+    (blankedNames: Set<string>)
+    (errors: FSharpDiagnostic[])
+    : string option =
+    // A backtick-quoted binding — ``get pikachu`` — is written with its backticks at both the
+    // definition and the reference, so the diagnostic's range reads them back too, while
+    // `BoundNames` holds the name without them. Strip them before the lookup, and report the
+    // bare name: it is the name the user reads in the refusal sentence, not F# call syntax.
+    let unquote (text: string) =
+        if text.Length >= 4 && text.StartsWith "``" && text.EndsWith "``" then
+            text.Substring(2, text.Length - 4)
+        else
+            text
+
+    if errors.Length = 0 then
+        None
+    else
+        let matches =
+            errors
+            |> Array.map (fun d ->
+                if d.ErrorNumber = unboundValueErrorNumber then
+                    textUnderDiagnostic setupLines d
+                    |> Option.map unquote
+                    |> Option.filter blankedNames.Contains
+                else
+                    None)
+
+        if matches |> Array.forall Option.isSome then
+            matches.[0]
+        else
+            None
 
 /// A diagnostic that starts inside the target block's own span keeps the compiler's text
 /// unchanged, at its own (unshifted) position (Decision 8) — no introductory sentence, because
@@ -422,13 +502,14 @@ let private runLocated (source: string) (located: LocatedBlock list) (blockIndex
     match List.tryItem blockIndex located with
     | None -> RuntimeError(sprintf "block index %d out of range (%d blocks located)" blockIndex located.Length)
     | Some target ->
-        let setupText, shift = buildSetupText source located target
+        let setupText, shift, blankedNames = buildSetupText source located target
         let combinedSetup = setupText + "\n" + companionAddendum
 
         // Lines 1 to setupLineCount of `combinedSetup` are native source (the target's own
         // block among them — Decision 1). Anything the addendum reports past them has no source
         // position (see `setupDiagnostic`).
-        let setupLineCount = setupText.Split('\n').Length
+        let setupLines = setupText.Split('\n')
+        let setupLineCount = setupLines.Length
 
         let fsiConfig = FsiEvaluationSession.GetDefaultConfiguration()
         let args = [| "fsi.exe"; "--noninteractive"; "--nologo" |]
@@ -464,39 +545,50 @@ let private runLocated (source: string) (located: LocatedBlock list) (blockIndex
         // a fault in the Setup around it (Decision 8), by whether the diagnostic's start
         // position — unshifted back past the R1 insertion, if any — lands inside the block's own
         // span.
-        match
-            errorDiagnostics setupDiags
-            |> Array.map (splitDiagnostic shift target.Block setupLineCount)
-            |> Array.toList
-        with
-        | [] ->
-            match setupResult with
-            | Choice2Of2 ex -> RuntimeError ex.Message
-            | Choice1Of2 _ ->
-                let targetResult, targetDiags =
-                    session.EvalExpressionNonThrowing(invocationText target)
+        //
+        // Case 11c (Decision 7 of docs/spec/0003-lens-tells-the-truth.md) runs first, on the raw
+        // Setup errors and in Setup-interaction coordinates: it needs the diagnostic's own range
+        // read back against `setupLines`, which `splitDiagnostic` has already translated away by
+        // the time its own list exists. A match here refuses the whole Run, and the invocation
+        // below never runs.
+        let setupErrors = errorDiagnostics setupDiags
 
-                match targetResult with
-                | Choice2Of2 ex ->
-                    // The invocation is the companion's own generated text, with no user-source
-                    // position of its own, so every diagnostic here gets the Setup treatment,
-                    // anchored at the top of the script (`realLineCount = 0` forces the anchor
-                    // on every line). `targetDiagnostic` is gone: there is no longer a separate
-                    // block interaction to map a native position back from.
-                    match
-                        errorDiagnostics targetDiags
-                        |> Array.map (setupDiagnostic 0 None)
-                        |> Array.toList
-                    with
-                    | [] -> RuntimeError ex.Message
-                    | errors -> CompileError errors
-                | Choice1Of2 None -> RuntimeError "expression returned no value"
-                | Choice1Of2(Some v) ->
-                    try
-                        extractResponse v
-                    with ex ->
-                        RuntimeError ex.Message
-        | errors -> CompileError errors
+        match blankedNameRefusal setupLines blankedNames setupErrors with
+        | Some name -> Refused(unboundBlockValueCode, Some name)
+        | None ->
+            match
+                setupErrors
+                |> Array.map (splitDiagnostic shift target.Block setupLineCount)
+                |> Array.toList
+            with
+            | [] ->
+                match setupResult with
+                | Choice2Of2 ex -> RuntimeError ex.Message
+                | Choice1Of2 _ ->
+                    let targetResult, targetDiags =
+                        session.EvalExpressionNonThrowing(invocationText target)
+
+                    match targetResult with
+                    | Choice2Of2 ex ->
+                        // The invocation is the companion's own generated text, with no user-source
+                        // position of its own, so every diagnostic here gets the Setup treatment,
+                        // anchored at the top of the script (`realLineCount = 0` forces the anchor
+                        // on every line). `targetDiagnostic` is gone: there is no longer a separate
+                        // block interaction to map a native position back from.
+                        match
+                            errorDiagnostics targetDiags
+                            |> Array.map (setupDiagnostic 0 None)
+                            |> Array.toList
+                        with
+                        | [] -> RuntimeError ex.Message
+                        | errors -> CompileError errors
+                    | Choice1Of2 None -> RuntimeError "expression returned no value"
+                    | Choice1Of2(Some v) ->
+                        try
+                            extractResponse v
+                        with ex ->
+                            RuntimeError ex.Message
+            | errors -> CompileError errors
 
 /// `runLocated` against a fresh locate of `source`. This is the `--worker` child's entry point,
 /// which receives source text and nothing else. In the parent, `run` has already located the
