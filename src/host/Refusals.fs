@@ -54,7 +54,8 @@ let private catalog: (string * Refusal) list =
 
       "noNameToCall",
       { Title = "⊘ Cannot run: this binding has no name"
-        Detail = "The pattern of this binding gives FsHttp.Studio no name to call. To run this request, bind it to a simple name." }
+        Detail =
+          "The pattern of this binding gives FsHttp.Studio no name to call. To run this request, bind it to a simple name." }
 
       "tupleBinding",
       { Title = "⊘ Cannot run: this binding binds two or more values"
@@ -63,7 +64,8 @@ let private catalog: (string * Refusal) list =
 
       "insideAnotherRequest",
       { Title = "⊘ Cannot run: inside another request"
-        Detail = "This request is inside another request. FsHttp.Studio can run the outer request only. To run this request, move it to its own binding." }
+        Detail =
+          "This request is inside another request. FsHttp.Studio can run the outer request only. To run this request, move it to its own binding." }
 
       "unaddressable",
       { Title = "⊘ Cannot run in this position"
