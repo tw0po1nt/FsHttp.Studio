@@ -37,3 +37,5 @@ out/
 # authorized copy per .agents/skills/simplified-technical-english/assets/README.md; ASD's
 # terms do not permit redistribution.
 .agents/skills/simplified-technical-english/assets/*.pdf
+
+.fake
