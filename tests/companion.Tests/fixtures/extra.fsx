@@ -112,6 +112,13 @@ http {
 }
 
 
+// A block inside a list expression -- F5, unaddressable (docs/spec/0003, Decision 2). No branch
+// of `classify` enumerates a list, and no other block contains this one, so it is the catch-all in
+// the one shape that reaches it without also reaching Decision 3's containment test. It is the
+// code an unrecognized wire string degrades to at the host, so it is the one worth pinning.
+let listed = [ http { GET "http://127.0.0.1:8391/api/v2/listed" } ]
+
+
 // The sweeper -- a plain bare block whose Setup has to blank every hazard above it.
 http { GET "http://127.0.0.1:8391/api/v2/sweeper" }
 

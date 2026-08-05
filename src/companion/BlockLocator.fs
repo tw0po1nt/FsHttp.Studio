@@ -62,6 +62,28 @@ type RefusalCode =
     /// that an unrecognized wire string degrades to at the host.
     | Unaddressable
 
+/// One plain sentence per code, safe to show a user. The code is the whole verdict, so the
+/// sentence is derived from it and never stored beside it: two shapes that share a code — the two
+/// `InnerBinding` branches — would otherwise drift into two different sentences for one verdict.
+/// No sentence interpolates an FCS type name (Decision 11). These are the *companion's* words, and
+/// not the shipped ones: Decision 2 of docs/spec/0003-lens-tells-the-truth.md gives every lens
+/// title and toast to the host, keyed by the code alone. They surface only in the interim
+/// `RuntimeError` text and in logs, so they use the glossary's **block** throughout.
+let reasonFor (code: RefusalCode) =
+    match code with
+    | LoopBody -> "a loop body describes many requests"
+    | IfBranch -> "a branch is decided at runtime"
+    | MatchClause -> "a match clause is decided at runtime"
+    | ExceptionHandler -> "a handler is decided at runtime"
+    | NeedsArguments -> "the function takes arguments we would have to invent"
+    | ClassMember -> "a class member needs an instance we would have to invent"
+    | InnerBinding -> "an inner binding is not reachable from a later FSI interaction"
+    | LambdaValue -> "the binding's value is a lambda, not the block"
+    | NoNameToCall -> "the binding does not give a name to invoke"
+    | TupleBinding -> "a tuple binding binds several values, so its value is not the block"
+    | InsideAnotherRequest -> "the block sits inside another block's own expression"
+    | Unaddressable -> "the block sits in a position that a Run cannot reach"
+
 /// How a Run reaches a block, decided from the untyped syntax tree alone. The two routes differ
 /// in where the invocation's name comes from: the Run supplies one, or the binding already has
 /// one.
@@ -73,9 +95,9 @@ type Route =
     /// The value of a module-level binding, at unit arity. The binding already names the block,
     /// so the Run invokes that name: `getSnorlax ()`. The spec calls this route R2.
     | NamedByTheBinding of invocation: string
-    /// A position neither route reaches. `reason` is a plain sentence, safe to show a user;
-    /// it must not interpolate an FCS type name (Decision 11).
-    | Refused of code: RefusalCode * reason: string
+    /// A position neither route reaches. The code is the whole verdict: `reasonFor` turns it into
+    /// a sentence, and the host turns it into a lens title.
+    | Refused of code: RefusalCode
 
 /// A located block's own CE range, the route a Run takes to reach it, the span to blank when
 /// it is *not* the target, its enclosing-module qualifier, and its `private` keyword spans.
@@ -212,6 +234,10 @@ let private typeAnnotationSpan (headPat: SynPat) (returnInfo: SynBindingReturnIn
     returnInfo
     |> Option.map (fun (SynBindingReturnInfo(range = r)) -> Range.mkRange r.FileName headPatRange.End r.End)
 
+/// What a binding's head pattern offers an invocation. This is a *head-pattern* verdict, and not
+/// a refusal: `classify` is the one that turns `TakesArguments` into the `NeedsArguments` code and
+/// `NoName` into `NoNameToCall`. The names differ on purpose, so a read of either type says which
+/// one it is.
 type private NameResult =
     | Invocable of string
     | TakesArguments
@@ -277,14 +303,13 @@ let private classify (blockStart: pos) (path: SyntaxNode list) : Classification 
             | SyntaxNode.SynModule(SynModuleDecl.Let _) :: _ ->
                 match derivedName headPat with
                 | Invocable invocation -> NamedByTheBinding invocation
-                | TakesArguments -> Refused(NeedsArguments, "the function takes arguments we would have to invent")
+                | TakesArguments -> Refused NeedsArguments
                 // A wildcard or a destructuring pattern binds no single name, so there is nothing
                 // to invoke and no value the invocation could name.
-                | NoName -> Refused(NoNameToCall, "the binding does not give a name to invoke")
+                | NoName -> Refused NoNameToCall
             | SyntaxNode.SynMemberDefn _ :: _
-            | SyntaxNode.SynTypeDefn _ :: _ ->
-                Refused(ClassMember, "a class member needs an instance we would have to invent")
-            | _ -> Refused(InnerBinding, "an inner binding is not reachable from a later FSI interaction")
+            | SyntaxNode.SynTypeDefn _ :: _ -> Refused ClassMember
+            | _ -> Refused InnerBinding
 
         // Decision 7 blanks the annotation on the R2 route alone, so the route decides whether
         // the span exists. A refused binding keeps its annotation, because the Setup boundary
@@ -303,25 +328,28 @@ let private classify (blockStart: pos) (path: SyntaxNode list) : Classification 
             match afterBoundary with
             | SyntaxNode.SynModule(SynModuleDecl.Expr _) :: _ -> NamedByTheRun
 
-            | SyntaxNode.SynExpr(SynExpr.Tuple _) :: _ ->
-                Refused(TupleBinding, "a tuple binding binds several values, so its value is not the block")
+            | SyntaxNode.SynExpr(SynExpr.Tuple _) :: _ -> Refused TupleBinding
 
             | SyntaxNode.SynExpr(SynExpr.ForEach _) :: _
             | SyntaxNode.SynExpr(SynExpr.For _) :: _
-            | SyntaxNode.SynExpr(SynExpr.While _) :: _ -> Refused(LoopBody, "a loop body describes many requests")
-            | SyntaxNode.SynExpr(SynExpr.IfThenElse _) :: _ -> Refused(IfBranch, "a branch is decided at runtime")
+            | SyntaxNode.SynExpr(SynExpr.While _) :: _ -> Refused LoopBody
+            | SyntaxNode.SynExpr(SynExpr.IfThenElse _) :: _ -> Refused IfBranch
+
+            // A `with` case is a `SynMatchClause`, the same node a `match` expression's own
+            // clauses use, so the clause alone cannot tell the two apart. Its *parent* can. This
+            // pair has to precede the bare `SynMatchClause` below, or a handler would answer
+            // "inside a match clause" for code that contains no `match` — the shape-grained title
+            // naming the wrong shape, which is the failure User Story 2 exists to prevent.
+            | SyntaxNode.SynMatchClause _ :: SyntaxNode.SynExpr(SynExpr.TryWith _) :: _ -> Refused ExceptionHandler
+
             | SyntaxNode.SynMatchClause _ :: _
             | SyntaxNode.SynExpr(SynExpr.Match _) :: _
-            | SyntaxNode.SynExpr(SynExpr.MatchLambda _) :: _ ->
-                Refused(MatchClause, "a match clause is decided at runtime")
+            | SyntaxNode.SynExpr(SynExpr.MatchLambda _) :: _ -> Refused MatchClause
             | SyntaxNode.SynExpr(SynExpr.TryWith _) :: _
-            | SyntaxNode.SynExpr(SynExpr.TryFinally _) :: _ ->
-                Refused(ExceptionHandler, "a handler is decided at runtime")
-            | SyntaxNode.SynExpr(SynExpr.Lambda _) :: _ ->
-                Refused(LambdaValue, "the binding's value is a lambda, not the block")
-            | SyntaxNode.SynExpr(SynExpr.LetOrUse _) :: _ ->
-                Refused(InnerBinding, "an inner let is not reachable from a later FSI interaction")
-            | _ -> Refused(Unaddressable, "the block sits inside another expression, so its value is not the block")
+            | SyntaxNode.SynExpr(SynExpr.TryFinally _) :: _ -> Refused ExceptionHandler
+            | SyntaxNode.SynExpr(SynExpr.Lambda _) :: _ -> Refused LambdaValue
+            | SyntaxNode.SynExpr(SynExpr.LetOrUse _) :: _ -> Refused InnerBinding
+            | _ -> Refused Unaddressable
 
         { Route = route
           Access = None
@@ -350,10 +378,11 @@ let private toBlockRange (r: range) : BlockRange =
       EndLine = r.EndLine
       EndCol = r.EndColumn }
 
-/// True when `inner` sits strictly inside `outer`: at or after `outer`'s start, at or before its
-/// end, and not `outer` itself. `BlockRange`'s structural equality is what excludes a block from
-/// counting as strictly inside its own range.
-let private strictlyInside (outer: BlockRange) (inner: BlockRange) =
+/// True when `inner` sits within `outer`: at or after `outer`'s start, and at or before its end.
+/// The bounds are inclusive, so a range contains *itself*. Decision 3 wants strict containment;
+/// the call site is what excludes the block's own range, because that is where the two ranges
+/// being compared are known to belong to two different blocks.
+let private contains (outer: BlockRange) (inner: BlockRange) =
     let startsAtOrBefore =
         outer.StartLine < inner.StartLine
         || (outer.StartLine = inner.StartLine && outer.StartCol <= inner.StartCol)
@@ -362,7 +391,7 @@ let private strictlyInside (outer: BlockRange) (inner: BlockRange) =
         outer.EndLine > inner.EndLine
         || (outer.EndLine = inner.EndLine && outer.EndCol >= inner.EndCol)
 
-    startsAtOrBefore && endsAtOrAfter && outer <> inner
+    startsAtOrBefore && endsAtOrAfter
 
 /// Decision 3 of docs/spec/0003-lens-tells-the-truth.md: a target block whose range sits
 /// strictly inside another located block's range gets `insideAnotherRequest`, in place of the
@@ -372,12 +401,18 @@ let private strictlyInside (outer: BlockRange) (inner: BlockRange) =
 /// specific branch already refused keeps that verdict, even when it also happens to sit inside
 /// another block.
 let private markInsideAnotherRequest (blocks: LocatedBlock list) : LocatedBlock list =
+    // `other` ranges over every located block, this one included, so the identity comparison is
+    // what makes the containment strict: a block always sits within its own range.
+    let sitsInsideAnother (block: LocatedBlock) =
+        blocks
+        |> List.exists (fun other -> not (obj.ReferenceEquals(other, block)) && contains other.Block block.Block)
+
     blocks
     |> List.map (fun block ->
         match block.Route with
-        | Refused(Unaddressable, _) when blocks |> List.exists (fun other -> strictlyInside other.Block block.Block) ->
+        | Refused Unaddressable when sitsInsideAnother block ->
             { block with
-                Route = Refused(InsideAnotherRequest, "the block sits inside another request's own expression") }
+                Route = Refused InsideAnotherRequest }
         | _ -> block)
 
 /// `SynExpr.App.Range` covers `http { ... }`, which is the builder identifier and both braces.

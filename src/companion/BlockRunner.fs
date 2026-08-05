@@ -421,8 +421,8 @@ let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
     // A refused target is never evaluated at all (Decision 11) — not the Setup, not the
     // companion addendum, nothing. The refusal-lens policy replaces this outcome with a
     // `refused` run tag; until that lands, a plain, readable sentence is the interim contract.
-    | Some { Route = Refused(_, reason) } ->
-        RuntimeError(sprintf "FsHttp.Studio cannot run a block in this position: %s." reason)
+    | Some { Route = Refused code } ->
+        RuntimeError(sprintf "FsHttp.Studio cannot run a block in this position: %s." (reasonFor code))
     | Some target ->
         let setupText, shift = buildSetupText source located target
         let combinedSetup = setupText + "\n" + companionAddendum

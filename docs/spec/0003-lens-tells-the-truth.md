@@ -120,9 +120,9 @@ local binding. They share one code. The remaining eleven map one to one.
 |---|---|---|---|
 | `loopBody` | F1 | `⊘ Cannot run: inside a loop` | `For`, `ForEach`, `While` |
 | `ifBranch` | F1 | `⊘ Cannot run: inside an if branch` | `IfThenElse` |
-| `matchClause` | F1 | `⊘ Cannot run: inside a match clause` | `Match`, `MatchLambda`, `SynMatchClause` |
-| `exceptionHandler` | F1 | `⊘ Cannot run: inside a try block` | `TryWith`, `TryFinally` |
-| `needsArguments` | F2 | `⊘ Cannot run: this function needs arguments` | `derivedName` gives `NeedsArguments` |
+| `matchClause` | F1 | `⊘ Cannot run: inside a match clause` | `Match`, `MatchLambda`, a `SynMatchClause` under a `Match` or a `MatchLambda` |
+| `exceptionHandler` | F1 | `⊘ Cannot run: inside a try block` | `TryWith`, `TryFinally`, a `SynMatchClause` under a `TryWith` |
+| `needsArguments` | F2 | `⊘ Cannot run: this function needs arguments` | `derivedName` gives `TakesArguments` |
 | `classMember` | F2 | `⊘ Cannot run: inside a class member` | `SynMemberDefn`, `SynTypeDefn` parent |
 | `innerBinding` | F3 | `⊘ Cannot run: inside a local binding` | non-module binding, `LetOrUse` |
 | `lambdaValue` | F3 | `⊘ Cannot run: this binding holds a function` | `SynExpr.Lambda` |
@@ -132,6 +132,11 @@ local binding. They share one code. The remaining eleven map one to one.
 | `unaddressable` | F5 | `⊘ Cannot run in this position` | the catch-all |
 
 `unaddressable` is also the title that an unrecognized code degrades to.
+
+FCS gives a `with` case the same node as a `match` clause: `SynMatchClause`. The clause alone cannot
+select the code. `classify` reads the parent. A `SynMatchClause` under a `TryWith` gets
+`exceptionHandler`. Every other `SynMatchClause` gets `matchClause`. This order keeps each title on
+the shape that the user wrote.
 
 The glyph is `⊘`, and it replaces `▶`. The two are distinct at a glance, and the title never starts
 with the run triangle that it cannot honor.

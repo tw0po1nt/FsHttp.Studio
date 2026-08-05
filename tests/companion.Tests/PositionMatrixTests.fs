@@ -29,7 +29,7 @@ let private isNamedByTheBinding (invocation: string) =
 
 let private isRefused (code: RefusalCode) =
     function
-    | Refused(c, _) -> c = code
+    | Refused c -> c = code
     | _ -> false
 
 /// Asserts block `index`'s route against `expected`, naming the spec position in the failure.
@@ -104,7 +104,7 @@ let tests =
 
           test "extra.fsx: the shapes the matrix does not have get the route the spec's table names" {
               let blocks = locateBlocks (fixture "extra.fsx")
-              Expect.hasLength blocks 22 "extra.fsx has 22 blocks"
+              Expect.hasLength blocks 23 "extra.fsx has 23 blocks"
 
               let assertRoute = assertRoute blocks
               assertRoute 0 "#13 let private x = http { }" (isNamedByTheBinding "secret")
@@ -126,11 +126,10 @@ let tests =
               assertRoute 11 "#18 try/with handler (try body)" (isRefused ExceptionHandler)
 
               // FCS represents a `with` case as a `SynMatchClause`, the same node a `match`
-              // expression's own clauses use, and `classify` tests `SynMatchClause` before
-              // `TryWith` (Decision 2's own table lists `SynMatchClause` under `matchClause`).
-              // The handler's own clause therefore takes that branch, not `exceptionHandler`,
-              // which stays reachable through the try body alone (the row just above).
-              assertRoute 12 "#18 try/with handler (with handler)" (isRefused MatchClause)
+              // expression's own clauses use, so the clause alone reads as a match. Position 18
+              // is a try, and the title has to say so: `classify` matches the clause together
+              // with its `TryWith` parent, ahead of the bare-clause branch.
+              assertRoute 12 "#18 try/with handler (with handler)" (isRefused ExceptionHandler)
               assertRoute 13 "#23 tuple binding (first element)" (isRefused TupleBinding)
               assertRoute 14 "#23 tuple binding (second element)" (isRefused TupleBinding)
               assertRoute 15 "#24 outer binding that holds a nested block" (isNamedByTheBinding "nested")
@@ -152,8 +151,15 @@ let tests =
                   "bare block nested inside another bare block's expression (0003, not a numbered reach-spec position)"
                   (isRefused InsideAnotherRequest)
 
-              assertRoute 20 "sweeper block (structural, not a numbered position)" isNamedByTheRun
-              assertRoute 21 "module Tail bare block (boundary probe, not a numbered position)" isNamedByTheRun
+              // The catch-all's own row. A list expression is a shape no branch enumerates, and
+              // nothing contains this block, so Decision 3's containment test leaves it alone.
+              assertRoute
+                  20
+                  "block inside a list expression (0003, not a numbered reach-spec position)"
+                  (isRefused Unaddressable)
+
+              assertRoute 21 "sweeper block (structural, not a numbered position)" isNamedByTheRun
+              assertRoute 22 "module Tail bare block (boundary probe, not a numbered position)" isNamedByTheRun
           }
 
           // Positions 13 to 15 are the rows that exist to exercise `Qualifier` and
@@ -177,7 +183,7 @@ let tests =
 
               assertPrivateSpans 4 "#16 attributed binding, private below the attribute line" 1
 
-              assertQualifier 21 "module Tail bare block" [ "Tail" ]
+              assertQualifier 22 "module Tail bare block" [ "Tail" ]
           }
 
           // Decision 7 asks for two things the route cannot show: the span covers the colon, and
@@ -197,5 +203,5 @@ let tests =
               assertTypeAnnotation 6 "#19 function with arguments" None
 
               // R1 names nothing, so there is no binding to read an annotation off.
-              assertTypeAnnotation 20 "sweeper block, bare and top level" None
+              assertTypeAnnotation 21 "sweeper block, bare and top level" None
           } ]
