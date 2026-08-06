@@ -1,0 +1,180 @@
+name: Beta
+
+# Cuts an installable .vsix before a release, so that a human can walk
+# docs/manual-check.md in a real VSCode window. Manual only — an operator clicks
+# "Run workflow".
+#
+# Two paths, chosen by the `ref` input:
+#
+#   ref empty  → Beta. Builds main, runs the full gate, publishes a GitHub
+#                pre-release at tag v<version>-beta.<n>.
+#   ref set    → Branch build. Builds that ref, skips the gate, uploads the
+#                .vsix as a workflow artifact. No tag, and no release.
+#
+# The gate is skipped on a Branch build on purpose. ci.yml already runs it on
+# the pull request, and a Branch build must reach the operator's hands before
+# the branch is green.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or SHA for a Branch build. Leave empty to cut a Beta from main.'
+        required: false
+        default: ''
+
+concurrency:
+  group: beta
+  cancel-in-progress: false
+
+permissions:
+  contents: write # create the tag + pre-release, upload the .vsix asset
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Select the build path
+        id: path
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          if [ -z "$REF" ]; then
+            echo "kind=beta" >> "$GITHUB_OUTPUT"
+            echo "checkout=main" >> "$GITHUB_OUTPUT"
+            echo "Cutting a Beta from main"
+          else
+            echo "kind=branch" >> "$GITHUB_OUTPUT"
+            echo "checkout=$REF" >> "$GITHUB_OUTPUT"
+            echo "Building the branch $REF"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.path.outputs.checkout }}
+
+      # workflow_dispatch reports github.sha for the ref that carries the
+      # workflow file, and not for the ref that this job checked out.
+      - name: Record the commit that was built
+        id: commit
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # The Beta counter is the number of existing v<version>-beta.* tags, plus
+      # one. package.json holds the target release version for the whole cycle,
+      # and no Beta version is ever committed. See ADR-0008.
+      - name: Resolve the version to stamp
+        id: version
+        env:
+          KIND: ${{ steps.path.outputs.kind }}
+          REF: ${{ inputs.ref }}
+          RUN_NUMBER: ${{ github.run_number }}
+          SHORT_SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          set -euo pipefail
+          TARGET=$(node -p "require('./package.json').version")
+
+          if [ "$KIND" = "beta" ]; then
+            # Filter the peeled ^{} refs, so that an annotated tag counts once.
+            COUNT=$(git ls-remote --tags origin "refs/tags/v$TARGET-beta.*" \
+              | grep -cv '\^{}' || true)
+            STAMP="$TARGET-beta.$((COUNT + 1))"
+            echo "tag=v$STAMP" >> "$GITHUB_OUTPUT"
+          else
+            # A semver pre-release identifier accepts only [0-9A-Za-z-]. A purely
+            # numeric identifier must also carry no leading zero, so a ref such as
+            # "007" falls back to the short SHA.
+            SLUG=$(printf '%s' "$REF" | tr -c '0-9A-Za-z-' '-' | cut -c1-30)
+            if [ -z "$SLUG" ] || printf '%s' "$SLUG" | grep -qE '^[0-9]+$'; then
+              SLUG=$(printf '%s' "$SHORT_SHA" | cut -c1-12)
+            fi
+            STAMP="$TARGET-$SLUG.$RUN_NUMBER"
+          fi
+
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "stamp=$STAMP" >> "$GITHUB_OUTPUT"
+          echo "Stamping $STAMP"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
+
+      - run: dotnet tool restore
+
+      # The Beta gate. Same guardrails as ci.yml and release.yml — a red build
+      # can never become a release candidate. A Branch build skips this block.
+      - name: Check the formatting
+        if: steps.path.outputs.kind == 'beta'
+        run: dotnet fantomas --check .
+
+      - name: Build the solution
+        if: steps.path.outputs.kind == 'beta'
+        run: dotnet build FsHttp.Studio.slnx
+
+      - name: Run the tests
+        if: steps.path.outputs.kind == 'beta'
+        run: dotnet test FsHttp.Studio.slnx --no-build
+
+      - run: npm ci
+
+      - name: Run the bundled renderer under node
+        if: steps.path.outputs.kind == 'beta'
+        run: npm run smoke
+
+      # Stamps the version into the checkout only. --no-git-tag-version keeps npm
+      # from committing and tagging, and nothing pushes this change.
+      - name: Stamp the version into the manifest
+        run: npm version "${{ steps.version.outputs.stamp }}" --no-git-tag-version
+
+      - run: npm run package
+
+      # Ship a checksum beside the asset, for the same reason release.yml does.
+      # A corporate proxy or an antivirus tool can rewrite a binary download.
+      - name: Generate the SHA256 checksum
+        run: |
+          VSIX="fshttp-studio-${{ steps.version.outputs.stamp }}.vsix"
+          sha256sum "$VSIX" > "$VSIX.sha256"
+          cat "$VSIX.sha256"
+
+      - name: Publish the pre-release
+        if: steps.path.outputs.kind == 'beta'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ steps.commit.outputs.sha }}
+          prerelease: true
+          make_latest: false
+          draft: false
+          generate_release_notes: true
+          body: |
+            Beta for `${{ steps.version.outputs.target }}`, built from `${{ steps.commit.outputs.sha }}`.
+
+            Install the `.vsix`, then walk [`docs/manual-check.md`](https://github.com/${{ github.repository }}/blob/main/docs/manual-check.md)
+            and record the result in a comment on this pre-release.
+
+            This build is a release candidate, and it is not a supported install.
+            `prune-betas.yml` deletes it when `${{ steps.version.outputs.target }}` ships.
+          files: |
+            fshttp-studio-${{ steps.version.outputs.stamp }}.vsix
+            fshttp-studio-${{ steps.version.outputs.stamp }}.vsix.sha256
+
+      - name: Upload the Branch build
+        if: steps.path.outputs.kind == 'branch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fshttp-studio-${{ steps.version.outputs.stamp }}
+          path: |
+            fshttp-studio-${{ steps.version.outputs.stamp }}.vsix
+            fshttp-studio-${{ steps.version.outputs.stamp }}.vsix.sha256
+          retention-days: 14
