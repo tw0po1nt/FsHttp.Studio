@@ -1,0 +1,7 @@
+{
+  "files.autoSave": "off",
+  "window.restoreWindows": "none",
+  "extensions.autoUpdate": false,
+  "extensions.ignoreRecommendations": true,
+  "telemetry.telemetryLevel": "off"
+}
