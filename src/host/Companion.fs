@@ -27,10 +27,17 @@ let statusText =
     | SdkNotFound -> ".NET SDK not found"
     | Stopped -> "companion stopped"
 
+[<NoComparison; NoEquality>]
+type private Pending =
+    { Resolve: obj -> unit
+      Abandon: unit -> unit }
+
 [<NoComparison>]
 type Handle =
-    { Process: ChildProcess
-      Pending: ResizeArray<obj -> unit> }
+    private
+        { Process: ChildProcess
+          Pending: ResizeArray<Pending>
+          mutable Closed: bool }
 
 let private toBlockRange (r: obj) : BlockRange =
     { StartLine = unbox<int> (r?startLine: obj)
@@ -87,22 +94,37 @@ let start (dotnetPath: string) (companionDllPath: string) (onState: State -> uni
 
     let options: obj = nonNull (box {| stdio = [| "pipe"; "pipe"; "pipe" |] |})
     let child = childProcess.spawn (dotnetPath, [| companionDllPath |], options)
-    let pending = ResizeArray<obj -> unit>()
+    let pending = ResizeArray<Pending>()
 
     let parser =
         FrameParser(fun payload ->
-            let json = JS.JSON.parse (decodeUtf8 payload)
+            let json: obj = JS.JSON.parse (decodeUtf8 payload)
             let tag = (json?tag: obj) |> unbox<string>
 
             match tag with
             | "ready" -> onState Ready
             | _ ->
                 if pending.Count > 0 then
-                    let resolve = pending.[0]
+                    let { Resolve = resolve }: Pending = pending.[0]
                     pending.RemoveAt(0)
                     resolve json)
 
     child.stdout.on ("data", fun chunk -> parser.Push(unbox<byte[]> chunk))
+
+    let handle =
+        { Process = child
+          Pending = pending
+          Closed = false }
+
+    /// Abandons every pending entry along its own path (Decision 6) and marks the handle closed,
+    /// so a `send` that arrives afterwards abandons immediately instead of enqueueing onto a
+    /// queue that nothing will flush again. Called from both the `exit` and `error` handlers,
+    /// because a spawn failure such as `ENOENT` reaches `error` and leaves the same queue behind.
+    let flushPending () =
+        let entries = handle.Pending.ToArray()
+        handle.Pending.Clear()
+        handle.Closed <- true
+        entries |> Array.iter (fun entry -> entry.Abandon())
 
     child.on (
         "error",
@@ -113,35 +135,56 @@ let start (dotnetPath: string) (companionDllPath: string) (onState: State -> uni
                 onState SdkNotFound
             else
                 onState Stopped
+
+            flushPending ()
     )
 
-    child.on ("exit", fun _ -> onState Stopped)
+    child.on (
+        "exit",
+        fun _ ->
+            onState Stopped
+            flushPending ()
+    )
 
     child.stdin.write (encodeFrame (encodeUtf8 "{\"tag\":\"hello\"}")) |> ignore
 
-    { Process = child; Pending = pending }
+    handle
 
-let private send (handle: Handle) (payloadJson: string) (onResponse: obj -> unit) =
-    handle.Pending.Add(onResponse)
-    handle.Process.stdin.write (encodeFrame (encodeUtf8 payloadJson)) |> ignore
+let private send (handle: Handle) (payloadJson: string) (entry: Pending) =
+    if handle.Closed then
+        entry.Abandon()
+    else
+        handle.Pending.Add(entry)
+        handle.Process.stdin.write (encodeFrame (encodeUtf8 payloadJson)) |> ignore
 
 /// Sends a `locate` request over the framed envelope. It resolves with the block ranges after
-/// the companion's `blocks` response arrives.
+/// the companion's `blocks` response arrives, or with an empty list if the companion is gone
+/// (Decision 6) — the honest degraded state, since there is nothing left to locate blocks in.
 let locate (handle: Handle) (source: string) : Async<BlockRange list> =
     Async.FromContinuations(fun (resolve, _reject, _cancel) ->
         let payload: obj = createObj [ "tag" ==> "locate"; "source" ==> source ]
 
-        send handle (JS.JSON.stringify payload) (fun json ->
-            let ranges: obj[] = unbox (json?ranges: obj)
-            resolve (ranges |> Array.map toBlockRange |> Array.toList)))
+        let entry =
+            { Resolve =
+                fun json ->
+                    let ranges: obj[] = unbox (json?ranges: obj)
+                    resolve (ranges |> Array.map toBlockRange |> Array.toList)
+              Abandon = fun () -> resolve [] }
+
+        send handle (JS.JSON.stringify payload) entry)
 
 /// Sends a `run` request for the located block at `blockIndex`, and resolves with its outcome.
-/// The index is 0-based, and it matches the order of an earlier `locate`.
+/// The index is 0-based, and it matches the order of an earlier `locate`. Abandons to
+/// `RunProtocolError` if the companion is gone (Decision 6).
 let run (handle: Handle) (source: string) (blockIndex: int) : Async<RunResult> =
     Async.FromContinuations(fun (resolve, _reject, _cancel) ->
         let payload: obj =
             createObj [ "tag" ==> "run"; "source" ==> source; "blockIndex" ==> blockIndex ]
 
-        send handle (JS.JSON.stringify payload) (fun json -> resolve (parseRunResult json)))
+        let entry =
+            { Resolve = fun json -> resolve (parseRunResult json)
+              Abandon = fun () -> resolve (RunProtocolError companionStoppedMessage) }
+
+        send handle (JS.JSON.stringify payload) entry)
 
 let stop (handle: Handle) = handle.Process.kill () |> ignore
