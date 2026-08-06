@@ -15,6 +15,17 @@ let private range startLine startCol endLine endCol =
       Refusal = None }
 
 [<Tests>]
+let companionStoppedTextTests =
+    testList
+        "companionStoppedText"
+        [ test "names the companion stopping and tells the user to reload the window" {
+              Expect.equal
+                  companionStoppedText
+                  "The FsHttp.Studio companion stopped. Reload the window to start it again."
+                  "a pending run abandons to exactly this text (docs/spec/0004-run-path-robustness.md, Decision 6)"
+          } ]
+
+[<Tests>]
 let toVscodeLineTests =
     testList
         "toVscodeLine"

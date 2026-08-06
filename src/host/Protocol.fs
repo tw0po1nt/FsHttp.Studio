@@ -21,6 +21,12 @@ type BlockRange =
 
 type Diagnostic = { Message: string; Range: BlockRange }
 
+/// The text a pending `run` abandons to when the companion process exits or fails to spawn
+/// (docs/spec/0004-run-path-robustness.md, Decision 6). "Reload" is the accurate instruction:
+/// nothing restarts the companion today.
+let companionStoppedText =
+    "The FsHttp.Studio companion stopped. Reload the window to start it again."
+
 /// The extension-host mirror of the companion's `run` response tags: `ok`, `compileError`,
 /// `runtimeError`, and `refused`. It adds one catch-all case for a malformed or unknown
 /// response.
