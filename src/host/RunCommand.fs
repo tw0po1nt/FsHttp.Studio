@@ -22,6 +22,9 @@ let private runningMessage: obj = createObj [ "tag" ==> "running" ]
 let private errorMessage (message: string) : obj =
     createObj [ "tag" ==> "error"; "message" ==> message ]
 
+let private refusedMessage (title: string) (detail: string) : obj =
+    createObj [ "tag" ==> "refused"; "title" ==> title; "detail" ==> detail ]
+
 let private resultMessage
     (method: string)
     (url: string)
@@ -69,17 +72,15 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
             // `Refusals` is the one module that owns every shipped refusal sentence
             // (docs/spec/0003, Decision 2). `unboundBlockValue` carries no lens title and no
             // `catalog` row, so its detail comes from `unboundBlockValueDetail` instead of
-            // `forCode`.
-            //
-            // TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/121): a refusal is not an
-            // error, but the viewer has no other channel yet. That ticket gives it one.
+            // `forCode`, and its heading comes from `Refusals.title` instead of `forCode`'s
+            // glyph-bearing lens title.
             | RunRefused(code, name) ->
                 let detail =
                     match code, name with
                     | "unboundBlockValue", Some blockedName -> Refusals.unboundBlockValueDetail blockedName
                     | _ -> (Refusals.forCode code).Detail
 
-                ResponseViewer.post (errorMessage detail)
+                ResponseViewer.post (refusedMessage (Refusals.title code) detail)
     }
 
 /// Registers the command that a `▶ Run request` CodeLens invokes. The caller passes the same

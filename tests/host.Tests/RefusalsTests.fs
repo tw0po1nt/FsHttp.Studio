@@ -60,3 +60,19 @@ let unboundBlockValueDetailTests =
         [ test "names the blanked binding" {
               Expect.stringContains (unboundBlockValueDetail "dexId") "dexId" "the sentence must name the value"
           } ]
+
+[<Tests>]
+let titleTests =
+    testList
+        "Refusals.title"
+        [ test "strips the glyph from each code's lens title, in sentence form" {
+              wireCodes
+              |> List.iter (fun code ->
+                  let expected = (forCode code).Title.Replace("⊘ ", "")
+                  Expect.equal (title code) expected (sprintf "%s must keep its lens title, minus the glyph" code)
+                  Expect.isFalse ((title code).StartsWith "⊘") (sprintf "%s must not carry the glyph" code))
+          }
+
+          test "unboundBlockValue gets a heading, though it has no lens title" {
+              Expect.isNotEmpty (title "unboundBlockValue") "unboundBlockValue needs a viewer heading"
+          } ]

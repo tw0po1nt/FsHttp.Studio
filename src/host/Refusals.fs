@@ -88,3 +88,16 @@ let unboundBlockValueDetail (name: string) : string =
         "This request uses `%s`, which another request in this script binds. One Run evaluates one request, so `%s` has no value. FsHttp.Studio cannot run a request that depends on another request."
         name
         name
+
+/// The `unboundBlockValue` heading for the response viewer's `refused` notice (docs/spec/0003,
+/// Decision 6). It has no lens and no `catalog` row, so it carries no glyph to strip.
+let private unboundBlockValueTitle = "Cannot run: depends on another request"
+
+/// The response viewer's `refused` heading for a wire refusal code (docs/spec/0003, Decision 6):
+/// the matching lens title, with its `⊘ ` glyph removed, in sentence form. `unboundBlockValue` has
+/// no lens title, so it uses its own heading instead of `forCode`.
+let title (code: string) : string =
+    if code = "unboundBlockValue" then
+        unboundBlockValueTitle
+    else
+        (forCode code).Title.Replace("⊘ ", "")
