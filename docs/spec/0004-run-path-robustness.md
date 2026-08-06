@@ -317,8 +317,9 @@ change with the record.
 
 ### Seam 3: the host's pure part
 
-`ProtocolTests` drives `Protocol.fs`. Put the two abandon strings there as values, so that Seam 3
-asserts their text and the interop module in Decision 6 has nothing to get wrong but the wiring.
+`ProtocolTests` drives `Protocol.fs`. Put the `run` abandon string there as a value. Seam 3 then
+asserts its text, and the interop module in Decision 6 has nothing to get wrong but the wiring. A
+pending `locate` abandons to an empty list, so it contributes no second string.
 
 ### What is not tested here
 
