@@ -70,17 +70,10 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
             | RunRuntimeError message -> ResponseViewer.post (errorMessage (sprintf "Runtime error: %s" message))
             | RunProtocolError message -> ResponseViewer.post (errorMessage message)
             // `Refusals` is the one module that owns every shipped refusal sentence
-            // (docs/spec/0003, Decision 2). `unboundBlockValue` carries no lens title and no
-            // `catalog` row, so its detail comes from `unboundBlockValueDetail` instead of
-            // `forCode`, and its heading comes from `Refusals.title` instead of `forCode`'s
-            // glyph-bearing lens title.
+            // (docs/spec/0003, Decision 2), including which codes its `catalog` does not carry.
             | RunRefused(code, name) ->
-                let detail =
-                    match code, name with
-                    | "unboundBlockValue", Some blockedName -> Refusals.unboundBlockValueDetail blockedName
-                    | _ -> (Refusals.forCode code).Detail
-
-                ResponseViewer.post (refusedMessage (Refusals.title code) detail)
+                let refusal = Refusals.forRefused code name
+                ResponseViewer.post (refusedMessage refusal.Title refusal.Detail)
     }
 
 /// Registers the command that a `▶ Run request` CodeLens invokes. The caller passes the same

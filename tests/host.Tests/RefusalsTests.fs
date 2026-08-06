@@ -46,33 +46,49 @@ let forCodeTests =
               Expect.equal unknown.Detail unaddressable.Detail "an unknown code shows the unaddressable detail"
           }
 
-          test "every lens title carries the refusal glyph, and not the run triangle" {
+          test "a title is the sentence alone, and carries no glyph" {
               wireCodes
               |> List.iter (fun code ->
                   let r = forCode code
-                  Expect.stringStarts r.Title "⊘" (sprintf "%s must not promise a Run it cannot honor" code))
+                  Expect.isFalse (r.Title.Contains "⊘") (sprintf "%s owns the sentence, and the lens owns the glyph" code))
+
+              Expect.equal (forCode "loopBody").Title "Cannot run: inside a loop" "the sentence is what the viewer heads its notice with"
           } ]
 
 [<Tests>]
-let unboundBlockValueDetailTests =
+let lensTitleTests =
     testList
-        "Refusals.unboundBlockValueDetail"
-        [ test "names the blanked binding" {
-              Expect.stringContains (unboundBlockValueDetail "dexId") "dexId" "the sentence must name the value"
-          } ]
-
-[<Tests>]
-let titleTests =
-    testList
-        "Refusals.title"
-        [ test "strips the glyph from each code's lens title, in sentence form" {
+        "Refusals.lensTitle"
+        [ test "every lens title carries the refusal glyph, and not the run triangle" {
               wireCodes
               |> List.iter (fun code ->
-                  let expected = (forCode code).Title.Replace("⊘ ", "")
-                  Expect.equal (title code) expected (sprintf "%s must keep its lens title, minus the glyph" code)
-                  Expect.isFalse ((title code).StartsWith "⊘") (sprintf "%s must not carry the glyph" code))
+                  Expect.stringStarts (lensTitle code) "⊘ " (sprintf "%s must not promise a Run it cannot honor" code))
           }
 
-          test "unboundBlockValue gets a heading, though it has no lens title" {
-              Expect.isNotEmpty (title "unboundBlockValue") "unboundBlockValue needs a viewer heading"
+          test "a lens title is the glyph and then the code's sentence" {
+              Expect.equal (lensTitle "loopBody") "⊘ Cannot run: inside a loop" "the lens shows the glyph and the sentence"
+          } ]
+
+[<Tests>]
+let forRefusedTests =
+    testList
+        "Refusals.forRefused"
+        [ test "a catalog code takes its heading and detail from the catalog" {
+              wireCodes
+              |> List.iter (fun code ->
+                  Expect.equal (forRefused code None) (forCode code) (sprintf "%s is a catalog refusal" code))
+          }
+
+          test "unboundBlockValue gets its own heading and names the blanked binding" {
+              let r = forRefused "unboundBlockValue" (Some "dexId")
+
+              Expect.equal r.Title "Cannot run: depends on another request" "unboundBlockValue needs a heading of its own"
+              Expect.stringContains r.Detail "dexId" "the sentence must name the value"
+              Expect.notEqual r.Title (forCode "unaddressable").Title "a bound-value refusal is not a position refusal"
+          }
+
+          test "unboundBlockValue without a name degrades whole, and not half" {
+              let r = forRefused "unboundBlockValue" None
+
+              Expect.equal r (forCode "unaddressable") "a heading and a detail must never come from two different refusals"
           } ]

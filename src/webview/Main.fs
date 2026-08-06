@@ -74,7 +74,6 @@ let private showRefused (title: string) (detail: string) =
     root.innerHTML <- ""
 
     let container = document.createElement "div"
-    container.className <- "refused"
     let heading = document.createElement "h2"
     heading.className <- "refused-title"
     heading.textContent <- title

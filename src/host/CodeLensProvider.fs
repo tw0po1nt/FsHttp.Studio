@@ -43,7 +43,7 @@ let private buildCodeLens (document: TextDocument) (i: int) (r: BlockRange) : Co
 
     let title, command =
         match r.Refusal with
-        | Some code -> (Refusals.forCode code).Title, explainCommandId
+        | Some code -> Refusals.lensTitle code, explainCommandId
         | None -> "▶ Run request", commandId
 
     let commandObj: obj =
