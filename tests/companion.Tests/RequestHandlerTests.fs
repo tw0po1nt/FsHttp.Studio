@@ -108,7 +108,7 @@ let tests =
               Expect.isTrue (range.GetProperty("startLine").GetInt32() > 0) "range should point at a real line"
           }
 
-          test "run request on an out-of-range block index returns a runtimeError envelope" {
+          test "run request on an out-of-range block index returns a refused envelope" {
               let request =
                   JsonSerializer.Serialize(
                       {| tag = "run"
@@ -117,7 +117,12 @@ let tests =
                   )
 
               let response = respondTo request
-              Expect.equal (response.GetProperty("tag").GetString()) "runtimeError" "tag should be runtimeError"
+              Expect.equal (response.GetProperty("tag").GetString()) "refused" "tag should be refused"
+
+              Expect.equal
+                  (response.GetProperty("code").GetString())
+                  "staleBlockIndex"
+                  "code should identify a stale lens"
           }
 
           test "run request on a refused block returns a refused envelope with its code" {

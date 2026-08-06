@@ -98,7 +98,7 @@ Three alternatives were considered and rejected:
 and one lens, in source order. `RunCommand` and `CodeLensProvider` both index into the same list, so
 no index arithmetic changes anywhere.
 
-### 2. Twelve shape codes, and the host owns every string
+### 2. Twelve shape codes, two Run outcome codes, and the host owns every string
 
 The companion ships a **code**. The host maps the code to the lens title and the toast. Three
 reasons:
@@ -301,13 +301,15 @@ them, beside the `▶ Run request` title.
 | `insideAnotherRequest` | This request is inside another request. FsHttp.Studio can run the outer request only. To run this request, move it to its own binding. |
 | `unaddressable` | FsHttp.Studio cannot address a request in this position. To run this request, move it to its own let binding, at the top level of the script or of a module. |
 | `unboundBlockValue` | This request uses `{name}`, which another request in this script binds. One Run evaluates one request, so `{name}` has no value. FsHttp.Studio cannot run a request that depends on another request. |
+| `staleBlockIndex` | This request moved or was removed after you started the Run. FsHttp.Studio cannot find it at the position the lens recorded. To run this request, run it again from its lens. |
 
-`unboundBlockValue` has no lens title. It is a Run outcome only. The response viewer must show a
-heading for its `refused` notice, so `unboundBlockValue` has a heading of its own:
+`unboundBlockValue` and `staleBlockIndex` have no lens title. They are Run outcomes only. The
+response viewer must show a heading for each `refused` notice.
 
 | Code | Response viewer heading |
 |---|---|
 | `unboundBlockValue` | Cannot run: depends on another request |
+| `staleBlockIndex` | Cannot run: the script changed |
 
 Each other code uses its lens title from Decision 2 as this heading. The lens shows that title
 after the `⊘ ` glyph. The response viewer shows the title alone.
@@ -369,7 +371,7 @@ Drive `BlockRunner.run`, which is the seam that `BlockRunnerTests` uses today.
    bound. Assert `compileError`, and assert that the tag is not `refused`.
 5. **A typo beside a blanked name stays a compile error.** Both errors in one script. This is the
    precedence rule in Decision 7.
-6. **An out-of-range index stays a runtime error.** The stale-lens boundary case.
+6. **An out-of-range index returns `staleBlockIndex`.** Drive the index through the worker channel.
 
 ### Seam 3: the host's map
 
@@ -419,11 +421,11 @@ Decision 11, which #96 itself marks as this spec's to replace.
 
 ### The count of codes
 
-The deciding ticket estimated "roughly eleven, one per `classify` outcome". The count is twelve,
-because two `classify` branches merged into `innerBinding` and one new branch appeared as
-`insideAnotherRequest` (Decision 3). Fourteen strings ship. Thirteen are details, because
-`unboundBlockValue` is a Run outcome with no lens. One is a heading, because that same code has no
-lens title to use as its response viewer heading.
+The deciding ticket estimated "roughly eleven, one per `classify` outcome". The `classify` count is
+twelve, because two branches merged into `innerBinding` and one new branch appeared as
+`insideAnotherRequest` (Decision 3). Two Run outcome codes add `unboundBlockValue` and
+`staleBlockIndex`. Sixteen strings ship. Fourteen are details. Two headings serve the outcome-only
+codes, which have no lens title.
 
 ### Provenance
 

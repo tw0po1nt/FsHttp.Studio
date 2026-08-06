@@ -31,10 +31,9 @@ type RunOutcome =
     | Ok of status: int * reason: string * headers: (string * string) list * contentType: string * bodyBase64: string
     | CompileError of Diagnostic list
     | RuntimeError of string
-    /// `classify` refused the target before any evaluation ran (Decision 5 of
-    /// docs/spec/0003-lens-tells-the-truth.md). `code` is the wire spelling
-    /// (`BlockLocator.codeToWire`). `name` carries the blanked binding's name for
-    /// `unboundBlockValue` only; every other code carries `None`.
+    /// The companion refused the Run before it evaluated a block. `code` is the wire spelling.
+    /// `name` carries the blanked binding name for `unboundBlockValue` only. Other codes carry
+    /// `None`.
     | Refused of code: string * name: string option
 
 /// The response-reading guard, as generated F# source. Two places emit it: the addendum below
@@ -500,7 +499,7 @@ let private extractResponse (v: FsiValue) : RunOutcome =
 /// also calls it in a throwaway child process, to serve a conflicting pin against a clean ALC.
 let private runLocated (source: string) (located: LocatedBlock list) (blockIndex: int) : RunOutcome =
     match List.tryItem blockIndex located with
-    | None -> RuntimeError(sprintf "block index %d out of range (%d blocks located)" blockIndex located.Length)
+    | None -> Refused("staleBlockIndex", None)
     | Some target ->
         let setupText, shift, blankedNames = buildSetupText source located target
         let combinedSetup = setupText + "\n" + companionAddendum
@@ -875,8 +874,7 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome
 /// up front, before any evaluation, so a refusal that reached it would mark pins that no session
 /// ever loads, and slow a later Run for nothing.
 ///
-/// An out-of-range `blockIndex` has no route to refuse on, so it falls through unchanged to
-/// `runLocated`'s own out-of-range `RuntimeError`.
+/// An out-of-range `blockIndex` has no target route. `runLocated` refuses it as a stale lens.
 ///
 /// The gate has to locate the blocks to decide, so the in-process path takes that same list on
 /// to `runLocated`. A Run parses the source once in this process, not once per stage. The

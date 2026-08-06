@@ -587,6 +587,24 @@ let tests =
               Expect.equal (loadedVersionOf package) None "a refused Run must never reserve a pin in loadedVersions"
           }
 
+          test "a stale lens is refused across the worker channel" {
+              use server = new TestServer(Map [ "/hit", countingHandler (ref 0) ])
+
+              let source = script (sprintf "http {\n    GET \"%s/hit\"\n}\n" server.BaseUrl)
+
+              match run source 0 with
+              | Ok _ -> ()
+              | other -> failtestf "expected the initial Run to load its pin, got %A" other
+
+              let workerSource = source.Replace(fsHttpRef, "13.3.0")
+
+              match run workerSource 4 with
+              | Refused(code, name) ->
+                  Expect.equal code "staleBlockIndex" "the worker must preserve the stale-lens code"
+                  Expect.equal name None "staleBlockIndex carries no name"
+              | other -> failtestf "expected Refused for a stale lens, got %A" other
+          }
+
           test "case 11c: a reference inside the consumer's own block is refused with the name" {
               // The reference sits in the target block's *own* span, which is where a real
               // producer/consumer pair puts it. That is the path `splitDiagnostic` would
