@@ -31,6 +31,8 @@ docs/**
 .config/**
 .agents/**
 .claude/**
+.local/**
+.idea/**
 scripts/**
 AGENTS.md
 CONTEXT.md
