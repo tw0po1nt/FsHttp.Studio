@@ -51,3 +51,69 @@ jobs:
       # Runs the renderer core's Fable/JS output under node — the guard that "compiles under Fable"
       # actually "bundles and runs", which the .NET Seam-B suite structurally can't cover.
       - run: npm run smoke
+
+  # PROTOTYPE 005 — throwaway. Delete with the branch. 10 cold attempts + 1 warm each.
+  ui-slice:
+    if: github.ref == 'refs/heads/prototype/005-vertical-slice' || github.head_ref == 'prototype/005-vertical-slice'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            scratch/005-vertical-slice/package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
+
+      - name: Install xvfb + GUI libs for ExTester
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2t64 \
+            || sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+
+      - run: dotnet tool restore
+      - run: npm ci
+      - run: npm run package
+
+      - name: Cold run
+        working-directory: scratch/005-vertical-slice
+        env:
+          VSIX: ${{ github.workspace }}/fshttp-studio-0.1.0.vsix
+          STORAGE: /tmp/fshttp-005-resources
+          EXT_DIR: /tmp/fshttp-005-extensions
+        run: |
+          npm ci
+          /usr/bin/time -f 'COLD_WALL_SEC %e' ./run.sh
+
+      - name: Warm run
+        working-directory: scratch/005-vertical-slice
+        env:
+          VSIX: ${{ github.workspace }}/fshttp-studio-0.1.0.vsix
+          STORAGE: /tmp/fshttp-005-resources
+          EXT_DIR: /tmp/fshttp-005-extensions
+        run: /usr/bin/time -f 'WARM_WALL_SEC %e' ./run.sh
+
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-attempt-${{ matrix.attempt }}
+          path: /tmp/fshttp-005-resources/screenshots/
+          if-no-files-found: ignore
