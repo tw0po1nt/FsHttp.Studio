@@ -389,6 +389,10 @@ No test drives the VSCode lens surface or the toast. `CodeLensProvider` and the 
 interop, and ADR-0003's seam puts the testable logic in `Protocol`. Seam 3 covers the map, which is
 where a wording defect lives.
 
+The two surfaces are verified by hand instead. [`docs/manual-check.md`](../manual-check.md) carries
+the steps under *The lens tells the truth*, and the Manual check gates the release. See
+[ADR-0008](../adr/0008-beta-gates-the-release.md).
+
 ## Out of Scope
 
 - **A README section or a docs anchor for the refused positions.** The guidance is worth more in the

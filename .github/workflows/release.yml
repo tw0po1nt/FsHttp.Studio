@@ -4,6 +4,12 @@ name: Release
 # "Run workflow". Registry publishing (vsce / ovsx) stays manual and is out of scope here.
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Release without a Beta for this version.'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: release
@@ -32,6 +38,21 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
             echo "::error::Tag $TAG already exists — bump package.json version before releasing."
+            exit 1
+          fi
+
+      # A tripwire, and not a proof. It shows that a Beta was built, and it cannot
+      # show that an operator walked docs/manual-check.md. It defends against the
+      # real failure: a release that ships before anybody opens a VSCode window.
+      # Set force to release a change that needs no Manual check, such as a README
+      # repair or a re-cut after a bad upload.
+      - name: Require a Beta for this version
+        if: ${{ !inputs.force }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if ! git ls-remote --tags origin "refs/tags/v$VERSION-beta.*" | grep -qv '\^{}'; then
+            echo "::error::No Beta exists for v$VERSION. Cut one with the Beta workflow, walk docs/manual-check.md, then release. Set the force input to release without one."
             exit 1
           fi
 

@@ -324,10 +324,14 @@ pending `locate` abandons to an empty list, so it contributes no second string.
 ### What is not tested here
 
 `Companion.fs` is Fable and Node interop, and no suite drives it. The FIFO flush, the closed-handle
-guard, and the `error`-path flush are therefore **verified by hand**: start a Run against a slow
-server, kill the companion process, and confirm the viewer leaves `Running…` for the stopped message,
-then confirm the next click reports the same message immediately. Record the check in the PR. Do not
-add a test project for it.
+guard, and the `error`-path flush are therefore **verified by hand**, against a Beta, in a real
+VSCode window. [`docs/manual-check.md`](../manual-check.md) carries the steps under *The companion
+stops*, and the Manual check gates the release. Do not add a test project for it.
+
+An earlier revision of this spec asked for the check in the pull request instead. That obligation was
+structurally impossible to meet, because no build existed at review time, and [#139](https://github.com/tw0po1nt/FsHttp.Studio/issues/139)
+met it with a scripted proxy. [ADR-0008](../adr/0008-beta-gates-the-release.md) moved the check to
+the Beta gate and built the Beta that it needs.
 
 ## Out of Scope
 

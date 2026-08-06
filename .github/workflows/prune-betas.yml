@@ -1,0 +1,56 @@
+name: Prune Betas
+
+# Deletes the Beta *releases* for a version when that version ships. A superseded
+# Beta has no audience, and it is an opportunity to install the wrong build. The
+# tags stay, and they keep the rebuild path exact.
+#
+# The trigger is `release: published`, and not a step in release.yml. release.yml
+# creates a *draft*, which a human then reviews and publishes. A prune step inside
+# release.yml would therefore delete the Betas before anybody published anything,
+# and a draft that is never published would take its Betas with it.
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: prune-betas
+  cancel-in-progress: false
+
+permissions:
+  contents: write # delete the pre-releases and their tags
+
+jobs:
+  prune:
+    # Publishing a Beta must not prune the Betas.
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete the Betas for this version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          # Escape the dots, so that the pattern does not match another version.
+          PATTERN="^v$(printf '%s' "$VERSION" | sed 's/\./\\./g')-beta\.[0-9]+$"
+
+          BETAS=$(gh release list --repo "$REPO" --limit 200 --json tagName \
+            --jq '.[].tagName' | grep -E "$PATTERN" || true)
+
+          if [ -z "$BETAS" ]; then
+            echo "No Beta release to prune for $TAG."
+            exit 0
+          fi
+
+          # Delete the release, and keep the tag. --cleanup-tag is deliberately
+          # absent. The noise to remove is the Releases page, and a tag with no
+          # release does not appear there. The tag is the only surviving record of
+          # the commit that a Beta was built from, and it makes the rebuild path
+          # exact: beta.yml with `ref: v0.2.0-beta.3` reproduces that Beta.
+          echo "$BETAS" | while read -r BETA_TAG; do
+            echo "Deleting the release for $BETA_TAG, and keeping the tag"
+            gh release delete "$BETA_TAG" --repo "$REPO" --yes
+          done
