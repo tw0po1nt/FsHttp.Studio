@@ -35,9 +35,8 @@ therefore records the commit that was built.
 stamped `<version>-<ref>.<run>`, uploaded as a workflow artifact, with no tag and no release.
 
 A Branch build **skips the CI gate on purpose**. `ci.yml` already runs that gate on the pull request,
-and running it again reports nothing new. The point of a Branch build is to reach an operator's hands
-early, and a build that arrives only after the branch turns green arrives after the moment that
-needed it.
+and running it again reports nothing new. A Branch build must reach an operator early. A build that
+arrives only after the branch is green arrives too late.
 
 ## Considered and rejected
 
@@ -51,17 +50,21 @@ needed it.
 
 ## Consequences
 
-- The Releases page shows Betas. `prune-betas.yml` deletes the Betas for a version when that version
-  is published, so the page stays readable. A superseded Beta also stops being an opportunity to
-  install the wrong build.
+- The Releases page shows Betas. `prune-betas.yml` deletes the Beta *releases* for a version when
+  that version is published, so the page stays readable. A superseded Beta also stops being an
+  opportunity to install the wrong build.
+- **The prune keeps the tags.** `gh release delete` runs without `--cleanup-tag`. A tag with no
+  release does not appear on the Releases page, so the tag costs no readability. The tag is the
+  only surviving record of the commit that a Beta was built from. The prune deletes the pre-release
+  body, which carried the same record.
 - Pruning costs no bisect that anybody needs. A Beta survives the whole window in which Beta
   granularity is useful, because the prune happens when the version ships. A report that arrives
   after the release names a release, and the first answer is to try the current release. A report
   that survives that answer is a defect, and a bisect across releases locates it. Beta granularity
-  adds nothing at that point. A Branch build also rebuilds any historical commit on demand, so the
-  prune removes a built artifact and not the means to make one.
-- `main` is not known-good-by-hand between Betas. A Manual check that finds a regression looks at a
-  batch of merged changes, and the repair is a new commit rather than a change to an open pull
-  request.
+  adds nothing at that point. The surviving tag also makes an exact rebuild cheap: `beta.yml` with
+  `ref: v0.2.0-beta.3` reproduces that Beta. The prune therefore removes a built artifact, and not
+  the means to make one.
+- `main` has no by-hand verification between Betas. A Manual check that finds a regression looks at
+  a batch of merged changes. The repair is a new commit, and not a change to an open pull request.
 - The tripwire in `release.yml` proves that a Beta was **built**, and it cannot prove that anybody
   walked the checklist. No workflow can prove that.

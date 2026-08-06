@@ -1,7 +1,8 @@
 name: Prune Betas
 
-# Deletes the Betas for a version when that version ships. A superseded Beta has
-# no audience, and it is an opportunity to install the wrong build.
+# Deletes the Beta *releases* for a version when that version ships. A superseded
+# Beta has no audience, and it is an opportunity to install the wrong build. The
+# tags stay, and they keep the rebuild path exact.
 #
 # The trigger is `release: published`, and not a step in release.yml. release.yml
 # creates a *draft*, which a human then reviews and publishes. A prune step inside
@@ -40,11 +41,16 @@ jobs:
             --jq '.[].tagName' | grep -E "$PATTERN" || true)
 
           if [ -z "$BETAS" ]; then
-            echo "No Beta to prune for $TAG."
+            echo "No Beta release to prune for $TAG."
             exit 0
           fi
 
+          # Delete the release, and keep the tag. --cleanup-tag is deliberately
+          # absent. The noise to remove is the Releases page, and a tag with no
+          # release does not appear there. The tag is the only surviving record of
+          # the commit that a Beta was built from, and it makes the rebuild path
+          # exact: beta.yml with `ref: v0.2.0-beta.3` reproduces that Beta.
           echo "$BETAS" | while read -r BETA_TAG; do
-            echo "Deleting $BETA_TAG"
-            gh release delete "$BETA_TAG" --repo "$REPO" --yes --cleanup-tag
+            echo "Deleting the release for $BETA_TAG, and keeping the tag"
+            gh release delete "$BETA_TAG" --repo "$REPO" --yes
           done
