@@ -54,8 +54,12 @@ needed it.
 - The Releases page shows Betas. `prune-betas.yml` deletes the Betas for a version when that version
   is published, so the page stays readable. A superseded Beta also stops being an opportunity to
   install the wrong build.
-- Pruning destroys the artifact that a bisect between `beta.2` and `beta.3` would want. Accepted
-  while the project has no beta testers to report such a thing.
+- Pruning costs no bisect that anybody needs. A Beta survives the whole window in which Beta
+  granularity is useful, because the prune happens when the version ships. A report that arrives
+  after the release names a release, and the first answer is to try the current release. A report
+  that survives that answer is a defect, and a bisect across releases locates it. Beta granularity
+  adds nothing at that point. A Branch build also rebuilds any historical commit on demand, so the
+  prune removes a built artifact and not the means to make one.
 - `main` is not known-good-by-hand between Betas. A Manual check that finds a regression looks at a
   batch of merged changes, and the repair is a new commit rather than a change to an open pull
   request.
