@@ -5,70 +5,71 @@
 // user reads.
 module Refusals
 
-/// A refusal's shipped words: the CodeLens title (glyph included) and the longer sentence that
-/// the toast and the response viewer both show.
+/// A refusal's shipped words: the short sentence that heads it, and the longer sentence that the
+/// toast and the response viewer both show. `Title` carries no glyph: the lens prepends one
+/// (`lensTitle`), and the response viewer's notice shows the sentence alone.
 type Refusal = { Title: string; Detail: string }
 
 /// One row per `classify` verdict (docs/spec/0003, Decision 2's table). `unaddressable` is both a
 /// code of its own and the fallback that an unrecognized code degrades to.
 let private catalog: (string * Refusal) list =
     [ "loopBody",
-      { Title = "⊘ Cannot run: inside a loop"
+      { Title = "Cannot run: inside a loop"
         Detail =
           "FsHttp.Studio cannot run a request inside a loop. A loop body describes many requests, and one Run sends one request. To run this request, bind it to a name outside the loop, then run that binding." }
 
       "ifBranch",
-      { Title = "⊘ Cannot run: inside an if branch"
+      { Title = "Cannot run: inside an if branch"
         Detail =
           "FsHttp.Studio cannot run a request inside an if branch. The script chooses the branch when it runs, so FsHttp.Studio cannot tell which request you want. To run this request, bind it to a name outside the if, then run that binding." }
 
       "matchClause",
-      { Title = "⊘ Cannot run: inside a match clause"
+      { Title = "Cannot run: inside a match clause"
         Detail =
           "FsHttp.Studio cannot run a request inside a match clause. The script chooses the clause when it runs, so FsHttp.Studio cannot tell which request you want. To run this request, bind it to a name outside the match, then run that binding." }
 
       "exceptionHandler",
-      { Title = "⊘ Cannot run: inside a try block"
+      { Title = "Cannot run: inside a try block"
         Detail =
           "FsHttp.Studio cannot run a request inside a try block. The script chooses the handler when it runs. To run this request, bind it to a name outside the try, then run that binding." }
 
       "needsArguments",
-      { Title = "⊘ Cannot run: this function needs arguments"
+      { Title = "Cannot run: this function needs arguments"
         Detail =
           "FsHttp.Studio cannot run a request in a function that takes arguments, because it has no values to supply. To run this request, move it to a binding that takes no arguments." }
 
       "classMember",
-      { Title = "⊘ Cannot run: inside a class member"
+      { Title = "Cannot run: inside a class member"
         Detail =
           "FsHttp.Studio cannot run a request in a class member, because it has no instance of the class. To run this request, move it to a module-level binding." }
 
       "innerBinding",
-      { Title = "⊘ Cannot run: inside a local binding"
+      { Title = "Cannot run: inside a local binding"
         Detail =
           "FsHttp.Studio cannot run a request in a local binding. A local binding is not in scope after the script runs. To run this request, move it to a module-level binding." }
 
       "lambdaValue",
-      { Title = "⊘ Cannot run: this binding holds a function"
+      { Title = "Cannot run: this binding holds a function"
         Detail =
           "This binding holds a function, and not a request. FsHttp.Studio sends the request only when your code calls the function. To run this request, bind it directly to a name." }
 
       "noNameToCall",
-      { Title = "⊘ Cannot run: this binding has no name"
+      { Title = "Cannot run: this binding has no name"
         Detail =
           "The pattern of this binding gives FsHttp.Studio no name to call. To run this request, bind it to a simple name." }
 
       "tupleBinding",
-      { Title = "⊘ Cannot run: this binding binds two or more values"
+      { Title = "Cannot run: this binding binds two or more values"
         Detail =
           "This binding binds two or more values, so its value is not the request alone. To run this request, give it its own let binding." }
 
       "insideAnotherRequest",
-      { Title = "⊘ Cannot run: inside another request"
+      { Title = "Cannot run: inside another request"
         Detail =
           "This request is inside another request. FsHttp.Studio can run the outer request only. To run this request, move it to its own binding." }
 
       "unaddressable",
-      { Title = "⊘ Cannot run in this position"
+      { Title = "Cannot run in this position"
         Detail =
           "FsHttp.Studio cannot address a request in this position. To run this request, move it to its own let binding, at the top level of the script or of a module." } ]
 
@@ -76,15 +77,34 @@ let private table = catalog |> Map.ofList
 
 let private fallback = table.["unaddressable"]
 
-/// The lens title and toast/detail text for a wire refusal code. An unrecognized code degrades to
+/// The heading and toast/detail text for a wire refusal code. An unrecognized code degrades to
 /// `unaddressable` (docs/spec/0003, Decision 2) and never throws.
 let forCode (code: string) : Refusal =
     table |> Map.tryFind code |> Option.defaultValue fallback
 
-/// The `unboundBlockValue` detail text (docs/spec/0003, Decision 10). It is a Run outcome only:
-/// `classify` never produces it, so it has no lens title and no row in `catalog`.
-let unboundBlockValueDetail (name: string) : string =
-    sprintf
-        "This request uses `%s`, which another request in this script binds. One Run evaluates one request, so `%s` has no value. FsHttp.Studio cannot run a request that depends on another request."
-        name
-        name
+/// The glyph that marks a refusal lens (docs/spec/0003, Decision 8). It belongs to the lens, and
+/// not to the sentence, so no other caller has to take it back off.
+let private glyph = "⊘ "
+
+/// The CodeLens title for a wire refusal code: the refusal's sentence behind the refusal glyph.
+let lensTitle (code: string) : string = glyph + (forCode code).Title
+
+/// The `unboundBlockValue` words (docs/spec/0003, Decision 10). This is a Run outcome only:
+/// `classify` never produces it, so it has no lens and no row in `catalog`, and it needs the
+/// blanked name to say which value went missing.
+let private unboundBlockValue (name: string) : Refusal =
+    { Title = "Cannot run: depends on another request"
+      Detail =
+        sprintf
+            "This request uses `%s`, which another request in this script binds. One Run evaluates one request, so `%s` has no value. FsHttp.Studio cannot run a request that depends on another request."
+            name
+            name }
+
+/// The words for a `RunRefused` outcome: the response viewer's `refused` heading and body, and the
+/// toast's sentence (docs/spec/0003, Decision 6). This is the one place that knows
+/// `unboundBlockValue` is the code `catalog` does not carry, so heading and body can never come
+/// from two different refusals.
+let forRefused (code: string) (name: string option) : Refusal =
+    match code, name with
+    | "unboundBlockValue", Some blockedName -> unboundBlockValue blockedName
+    | _ -> forCode code

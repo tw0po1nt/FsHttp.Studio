@@ -1,6 +1,7 @@
-// The webview entry point. It listens for the extension host's postMessage protocol, which is
-// `running`, `result`, and `error`. It then mounts the renderer core's output through
-// `Webview.Dom`. For the other messages it shows plain placeholder text or error text.
+// The webview entry point. It listens for the extension host's viewer updates, which are
+// `running`, `result`, `error`, and `refused`. It then mounts the renderer core's output through
+// `Webview.Dom`. For the other updates it shows plain placeholder text, error text, or a refused
+// notice.
 module Webview.Main
 
 open System
@@ -64,6 +65,25 @@ let private showRunning () =
 
     pendingTimer <- Some(window.setInterval (tick, 1000))
 
+/// Replaces the panel contents with a Refused Run notice: a heading and a body paragraph
+/// (docs/spec/0003, Decision 6). This is a notice, not an error, so `responseStyles` gives it the
+/// editor foreground for the heading and `--vscode-descriptionForeground` for the body, and no
+/// color that reads as a failure.
+let private showRefused (title: string) (detail: string) =
+    clearPending ()
+    root.innerHTML <- ""
+
+    let container = document.createElement "div"
+    let heading = document.createElement "h2"
+    heading.className <- "refused-title"
+    heading.textContent <- title
+    let body = document.createElement "p"
+    body.className <- "refused-detail"
+    body.textContent <- detail
+    container.appendChild heading |> ignore
+    container.appendChild body |> ignore
+    root.appendChild container |> ignore
+
 let private handle (data: obj) =
     match unbox<string> (data?tag: obj) with
     | "running" -> showRunning ()
@@ -73,6 +93,7 @@ let private handle (data: obj) =
     | "error" ->
         clearPending ()
         root.textContent <- unbox<string> (data?message: obj)
+    | "refused" -> showRefused (unbox<string> (data?title: obj)) (unbox<string> (data?detail: obj))
     | _ -> ()
 
 window.onmessage <- fun (ev: MessageEvent) -> handle ev.data

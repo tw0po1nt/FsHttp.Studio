@@ -302,7 +302,15 @@ them, beside the `▶ Run request` title.
 | `unaddressable` | FsHttp.Studio cannot address a request in this position. To run this request, move it to its own let binding, at the top level of the script or of a module. |
 | `unboundBlockValue` | This request uses `{name}`, which another request in this script binds. One Run evaluates one request, so `{name}` has no value. FsHttp.Studio cannot run a request that depends on another request. |
 
-`unboundBlockValue` has no lens title. It is a Run outcome only.
+`unboundBlockValue` has no lens title. It is a Run outcome only. The response viewer must show a
+heading for its `refused` notice, so `unboundBlockValue` has a heading of its own:
+
+| Code | Response viewer heading |
+|---|---|
+| `unboundBlockValue` | Cannot run: depends on another request |
+
+Each other code uses its lens title from Decision 2 as this heading. The lens shows that title
+after the `⊘ ` glyph. The response viewer shows the title alone.
 
 Rules that these strings hold, and that a later edit must hold:
 
@@ -413,8 +421,9 @@ Decision 11, which #96 itself marks as this spec's to replace.
 
 The deciding ticket estimated "roughly eleven, one per `classify` outcome". The count is twelve,
 because two `classify` branches merged into `innerBinding` and one new branch appeared as
-`insideAnotherRequest` (Decision 3). Thirteen strings ship, because `unboundBlockValue` is a Run
-outcome with no lens.
+`insideAnotherRequest` (Decision 3). Fourteen strings ship. Thirteen are details, because
+`unboundBlockValue` is a Run outcome with no lens. One is a heading, because that same code has no
+lens title to use as its response viewer heading.
 
 ### Provenance
 

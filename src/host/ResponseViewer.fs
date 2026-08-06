@@ -60,6 +60,19 @@ body {
   .pending-pulse { animation: none; opacity: 0.8; }
 }
 
+/* Refused Run notice (webview/Main.fs showRefused). Styled as a notice, not an error: no color
+   that reads as a failure. */
+.refused-title {
+  margin: 0 0 8px;
+  font-size: 1em;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+.refused-detail {
+  margin: 0;
+  color: var(--vscode-descriptionForeground);
+}
+
 /* status line */
 .status-line {
   display: flex;

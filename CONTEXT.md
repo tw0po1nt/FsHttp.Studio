@@ -36,6 +36,10 @@ _Avoid_: preview, output, inspector.
 The presentation-shell-agnostic routine that turns a response body into rendered DOM. It dispatches on the body's `Content-Type`.
 _Avoid_: renderer, view.
 
+**Viewer update**:
+The tagged object that the extension host posts to the response viewer. An update reports a Run in progress, a Run result, an error, or a Refused Run. An Envelope crosses the companion's process boundary. A viewer update crosses the webview boundary, and the two never name the same object.
+_Avoid_: message, payload, event.
+
 ### Execution engine
 
 **Companion**:
@@ -61,9 +65,13 @@ A response with a non-2xx status. The Run is still *successful*, because the ser
 _Avoid_: failure, error (reserve those for the two below).
 
 **Runtime error**:
-A Run that produced no response, because the user's code or the host failed. Examples are a refused connection, or a name that an earlier un-run block left unbound. The response viewer renders it as plain error text.
+A Run that produced no response, because the user's code or the host failed. An example is a refused connection. The response viewer renders it as plain error text.
 _Avoid_: exception, crash.
 
 **Compile error**:
 A Run whose block or setup did not compile. The response viewer reports it at the source location that caused it.
 _Avoid_: syntax error, build error.
+
+**Refused Run**:
+A Run that FsHttp.Studio declined, because it cannot reach the block's position, or because the block depends on a value that another block binds. No code was evaluated for a position refusal. The response viewer reports the reason and the workaround, and it does not report a fault in the user's script.
+_Avoid_: unsupported, blocked, disabled.
