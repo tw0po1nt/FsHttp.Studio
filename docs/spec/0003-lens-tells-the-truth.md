@@ -199,9 +199,8 @@ that no session ever loaded, and slows a later Run for nothing. Refusing first a
 
 `locate` plus `classify` costs 0.48 ms for a 175-line script, against a session of about 577 ms.
 
-An out-of-range block index keeps today's runtime error
-(`BlockRunner.fs:220`). A stale lens that shifts onto a different **valid** index gets that block's
-own verdict, which is the correct answer.
+An out-of-range block index returns `staleBlockIndex`. Refer to Decision 10. A stale lens that
+shifts onto a different **valid** index gets that block's own verdict, which is the correct answer.
 
 This replaces Decision 11 of the reach spec (#96), which returns an interim `RuntimeError` naming the
 position. Delete that interim, and its reason strings with it.
