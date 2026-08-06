@@ -50,9 +50,15 @@ let forCodeTests =
               wireCodes
               |> List.iter (fun code ->
                   let r = forCode code
-                  Expect.isFalse (r.Title.Contains "⊘") (sprintf "%s owns the sentence, and the lens owns the glyph" code))
 
-              Expect.equal (forCode "loopBody").Title "Cannot run: inside a loop" "the sentence is what the viewer heads its notice with"
+                  Expect.isFalse
+                      (r.Title.Contains "⊘")
+                      (sprintf "%s owns the sentence, and the lens owns the glyph" code))
+
+              Expect.equal
+                  (forCode "loopBody").Title
+                  "Cannot run: inside a loop"
+                  "the sentence is what the viewer heads its notice with"
           } ]
 
 [<Tests>]
@@ -66,7 +72,10 @@ let lensTitleTests =
           }
 
           test "a lens title is the glyph and then the code's sentence" {
-              Expect.equal (lensTitle "loopBody") "⊘ Cannot run: inside a loop" "the lens shows the glyph and the sentence"
+              Expect.equal
+                  (lensTitle "loopBody")
+                  "⊘ Cannot run: inside a loop"
+                  "the lens shows the glyph and the sentence"
           } ]
 
 [<Tests>]
@@ -82,7 +91,11 @@ let forRefusedTests =
           test "unboundBlockValue gets its own heading and names the blanked binding" {
               let r = forRefused "unboundBlockValue" (Some "dexId")
 
-              Expect.equal r.Title "Cannot run: depends on another request" "unboundBlockValue needs a heading of its own"
+              Expect.equal
+                  r.Title
+                  "Cannot run: depends on another request"
+                  "unboundBlockValue needs a heading of its own"
+
               Expect.stringContains r.Detail "dexId" "the sentence must name the value"
               Expect.notEqual r.Title (forCode "unaddressable").Title "a bound-value refusal is not a position refusal"
           }
@@ -90,5 +103,8 @@ let forRefusedTests =
           test "unboundBlockValue without a name degrades whole, and not half" {
               let r = forRefused "unboundBlockValue" None
 
-              Expect.equal r (forCode "unaddressable") "a heading and a detail must never come from two different refusals"
+              Expect.equal
+                  r
+                  (forCode "unaddressable")
+                  "a heading and a detail must never come from two different refusals"
           } ]
