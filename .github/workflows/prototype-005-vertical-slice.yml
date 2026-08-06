@@ -2,12 +2,9 @@
 name: prototype-005-vertical-slice
 
 on:
+  push:
+    branches: [prototype/005-vertical-slice]
   workflow_dispatch:
-    inputs:
-      runs:
-        description: Number of consecutive suite runs (flake sample)
-        required: false
-        default: "1"
 
 jobs:
   slice:
