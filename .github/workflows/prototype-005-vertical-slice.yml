@@ -50,7 +50,8 @@ jobs:
       - run: npm run package
         id: package
 
-      - name: Run vertical slice
+      - name: Run vertical slice (cold)
+        id: cold
         working-directory: scratch/005-vertical-slice
         env:
           VSIX: ${{ github.workspace }}/fshttp-studio-0.1.0.vsix
@@ -58,7 +59,19 @@ jobs:
           EXT_DIR: /tmp/fshttp-005-extensions
         run: |
           npm ci
-          /usr/bin/time -f 'WALL_SEC %e' ./run.sh
+          /usr/bin/time -f 'WALL_SEC %e' ./run.sh | tee /tmp/cold.txt
+          grep WALL_SEC /tmp/cold.txt | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Run vertical slice (warm)
+        id: warm
+        working-directory: scratch/005-vertical-slice
+        env:
+          VSIX: ${{ github.workspace }}/fshttp-studio-0.1.0.vsix
+          STORAGE: /tmp/fshttp-005-resources
+          EXT_DIR: /tmp/fshttp-005-extensions
+        run: |
+          /usr/bin/time -f 'WALL_SEC %e' ./run.sh | tee /tmp/warm.txt
+          grep WALL_SEC /tmp/warm.txt | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload failure screenshots
         if: failure()
