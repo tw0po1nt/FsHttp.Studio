@@ -107,4 +107,17 @@ let forRefusedTests =
                   r
                   (forCode "unaddressable")
                   "a heading and a detail must never come from two different refusals"
+          }
+
+          test "staleBlockIndex gets its own heading and detail" {
+              let r = forRefused "staleBlockIndex" None
+
+              Expect.equal r.Title "Cannot run: the script changed" "a stale lens needs its own heading"
+
+              Expect.equal
+                  r.Detail
+                  "This request moved or was removed after you started the Run. FsHttp.Studio cannot find it at the position the lens recorded. To run this request, run it again from its lens."
+                  "a stale lens needs its own corrective action"
+
+              Expect.notEqual r.Title (forCode "unaddressable").Title "a stale lens is not a position refusal"
           } ]

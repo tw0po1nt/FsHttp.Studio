@@ -100,11 +100,19 @@ let private unboundBlockValue (name: string) : Refusal =
             name
             name }
 
+/// A stale lens has no block at its recorded index. It is a Run outcome only, so it has no
+/// `catalog` row or lens title.
+let private staleBlockIndex: Refusal =
+    { Title = "Cannot run: the script changed"
+      Detail =
+        "This request moved or was removed after you started the Run. FsHttp.Studio cannot find it at the position the lens recorded. To run this request, run it again from its lens." }
+
 /// The words for a `RunRefused` outcome: the response viewer's `refused` heading and body, and the
 /// toast's sentence (docs/spec/0003, Decision 6). This is the one place that knows
-/// `unboundBlockValue` is the code `catalog` does not carry, so heading and body can never come
-/// from two different refusals.
+/// the outcome-only codes `catalog` does not carry, so heading and body can never come from two
+/// different refusals.
 let forRefused (code: string) (name: string option) : Refusal =
     match code, name with
     | "unboundBlockValue", Some blockedName -> unboundBlockValue blockedName
+    | "staleBlockIndex", None -> staleBlockIndex
     | _ -> forCode code
