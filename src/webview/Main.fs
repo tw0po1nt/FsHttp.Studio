@@ -1,6 +1,6 @@
-// The webview entry point. It listens for the extension host's postMessage protocol, which is
+// The webview entry point. It listens for the extension host's viewer updates, which are
 // `running`, `result`, `error`, and `refused`. It then mounts the renderer core's output through
-// `Webview.Dom`. For the other messages it shows plain placeholder text, error text, or a refused
+// `Webview.Dom`. For the other updates it shows plain placeholder text, error text, or a refused
 // notice.
 module Webview.Main
 

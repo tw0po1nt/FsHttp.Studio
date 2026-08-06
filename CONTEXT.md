@@ -36,6 +36,10 @@ _Avoid_: preview, output, inspector.
 The presentation-shell-agnostic routine that turns a response body into rendered DOM. It dispatches on the body's `Content-Type`.
 _Avoid_: renderer, view.
 
+**Viewer update**:
+The tagged object that the extension host posts to the response viewer. An update reports a Run in progress, a Run result, an error, or a Refused Run. An Envelope crosses the companion's process boundary. A viewer update crosses the webview boundary, and the two never name the same object.
+_Avoid_: message, payload, event.
+
 ### Execution engine
 
 **Companion**:

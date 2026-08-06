@@ -17,15 +17,15 @@ let mutable private generation = 0
 let setHandle (h: Companion.Handle) = handle <- Some h
 let setExtensionUri (u: obj) = extensionUri <- Some u
 
-let private runningMessage: obj = createObj [ "tag" ==> "running" ]
+let private runningUpdate: obj = createObj [ "tag" ==> "running" ]
 
-let private errorMessage (message: string) : obj =
+let private errorUpdate (message: string) : obj =
     createObj [ "tag" ==> "error"; "message" ==> message ]
 
-let private refusedMessage (title: string) (detail: string) : obj =
+let private refusedUpdate (title: string) (detail: string) : obj =
     createObj [ "tag" ==> "refused"; "title" ==> title; "detail" ==> detail ]
 
-let private resultMessage
+let private resultUpdate
     (method: string)
     (url: string)
     (elapsedMs: float)
@@ -65,15 +65,15 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
         if myGeneration = generation then
             match result with
             | RunOk(status, reason, headers, contentType, bodyBase64) ->
-                ResponseViewer.post (resultMessage method url elapsed status reason headers contentType bodyBase64)
-            | RunCompileError diagnostics -> ResponseViewer.post (errorMessage (formatCompileError diagnostics))
-            | RunRuntimeError message -> ResponseViewer.post (errorMessage (sprintf "Runtime error: %s" message))
-            | RunProtocolError message -> ResponseViewer.post (errorMessage message)
+                ResponseViewer.post (resultUpdate method url elapsed status reason headers contentType bodyBase64)
+            | RunCompileError diagnostics -> ResponseViewer.post (errorUpdate (formatCompileError diagnostics))
+            | RunRuntimeError message -> ResponseViewer.post (errorUpdate (sprintf "Runtime error: %s" message))
+            | RunProtocolError message -> ResponseViewer.post (errorUpdate message)
             // `Refusals` is the one module that owns every shipped refusal sentence
             // (docs/spec/0003, Decision 2), including which codes its `catalog` does not carry.
             | RunRefused(code, name) ->
                 let refusal = Refusals.forRefused code name
-                ResponseViewer.post (refusedMessage refusal.Title refusal.Detail)
+                ResponseViewer.post (refusedUpdate refusal.Title refusal.Detail)
     }
 
 /// Registers the command that a `▶ Run request` CodeLens invokes. The caller passes the same
@@ -98,7 +98,7 @@ let register () : Disposable =
                 | Some u -> ResponseViewer.showBeside u |> ignore
                 | None -> ()
 
-                ResponseViewer.post runningMessage
+                ResponseViewer.post runningUpdate
 
                 runOne h document blockIndex myGeneration |> Async.StartImmediate)
     )
