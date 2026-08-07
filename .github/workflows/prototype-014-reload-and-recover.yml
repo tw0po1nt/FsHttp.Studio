@@ -1,0 +1,87 @@
+# PROTOTYPE CI — ticket 014 companion death, reload, recover. Throwaway branch only.
+name: prototype-014-reload-and-recover
+
+on:
+  workflow_dispatch:
+    inputs:
+      negative:
+        description: Flip the final assertion to a marker that cannot match
+        required: false
+        default: "0"
+
+jobs:
+  slice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            scratch/014-reload-and-recover/package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
+
+      - name: Install xvfb + lib dependencies for ExTester
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2t64 || sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2
+
+      - name: Ubuntu 24 AppArmor tweak (ExTester openResources known issue)
+        run: |
+          # https://github.com/redhat-developer/vscode-extension-tester/blob/main/KNOWN_ISSUES.md
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+
+      - run: dotnet tool restore
+      - run: npm ci
+      - run: npm run package
+
+      - name: Run slice (cold)
+        working-directory: scratch/014-reload-and-recover
+        env:
+          VSIX: ${{ github.workspace }}/fshttp-studio-0.1.0.vsix
+          STORAGE: /tmp/fshttp-014-resources
+          EXT_DIR: /tmp/fshttp-014-extensions
+          NEGATIVE: ${{ inputs.negative }}
+        run: |
+          npm install
+          /usr/bin/time -f 'WALL_SEC %e' ./run.sh 2>&1 | tee /tmp/cold.txt
+          grep -E 'WALL_SEC|OBSERVED|^ +[a-z].*\(\+' /tmp/cold.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Run slice (warm)
+        working-directory: scratch/014-reload-and-recover
+        env:
+          VSIX: ${{ github.workspace }}/fshttp-studio-0.1.0.vsix
+          STORAGE: /tmp/fshttp-014-resources
+          EXT_DIR: /tmp/fshttp-014-extensions
+          NEGATIVE: ${{ inputs.negative }}
+        run: |
+          /usr/bin/time -f 'WALL_SEC %e' ./run.sh 2>&1 | tee /tmp/warm.txt
+          grep -E 'WALL_SEC|OBSERVED|^ +[a-z].*\(\+' /tmp/warm.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload logs and failure screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-logs-attempt-${{ matrix.attempt }}
+          path: |
+            /tmp/cold.txt
+            /tmp/warm.txt
+            /tmp/fshttp-014-resources/screenshots/
+          if-no-files-found: ignore

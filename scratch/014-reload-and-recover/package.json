@@ -1,0 +1,18 @@
+{
+  "name": "fshttp-studio-014-reload-and-recover",
+  "private": true,
+  "version": "0.0.0",
+  "description": "PROTOTYPE throwaway — companion death, window reload, recovery for wayfinder ticket 014",
+  "scripts": {
+    "build:fable": "dotnet tool run fable uitests --outDir out/fable --sourceMaps",
+    "build:bundle": "node esbuild.mjs",
+    "build": "npm run build:fable && npm run build:bundle",
+    "build:server": "dotnet publish server/TestHttpServer.fsproj -c Release -o server/publish"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "mocha": "^11.8.0",
+    "selenium-webdriver": "^4.28.0",
+    "vscode-extension-tester": "^8.24.0"
+  }
+}
