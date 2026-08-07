@@ -2,6 +2,10 @@
 name: prototype-014-reload-and-recover
 
 on:
+  # A workflow on a non-default branch is not dispatchable until GitHub has registered it,
+  # so this prototype triggers on push to its own throwaway branch.
+  push:
+    branches: [prototype/014-reload-and-recover]
   workflow_dispatch:
     inputs:
       negative:
