@@ -22,6 +22,8 @@ let private companionPattern = "Companion.dll"
 let private fixturePath = Proc.env "FIXTURE" ""
 let private sidecarPath = Proc.env "SIDECAR" ""
 let private negativeControl = (Proc.env "NEGATIVE" "") = "1"
+/// The post-death lens observation. Opt-in — see the comment at its call site.
+let private lensProbe = (Proc.env "LENS_PROBE" "") = "1"
 
 // ---------------------------------------------------------------- timing
 
@@ -158,36 +160,38 @@ let private slice =
         let stillAlive = companionsBefore |> Array.filter Proc.isAlive
         Assert.isTrue (stillAlive.Length = 0) "no companion process survives the kill"
 
-        // 3. What happens to the lens? Reported, not assumed — `CodeLensProvider.setReady false`
-        //    says it should vanish, and the manual check says to click it again.
-        let! survivingLens = eventuallyOrNone 10_000 1_000 tryGetRunnableLens
+        // 3. What happens to the lens after the death? `LENS_PROBE=1` only, because the
+        //    answer is "nothing you can assert": across 18 CI observations the lens usually
+        //    stayed clickable past 20 s and re-reported in ~130-280 ms, but once it was gone
+        //    within 10 s, and once a click on it raised StaleElementReferenceError and
+        //    reddened the job. Neither presence nor absence is a stable surface, so the
+        //    proposed check leaves the post-death lens alone and this block stays opt-in.
+        if lensProbe then
+            let! survivingLens = eventuallyOrNone 10_000 1_000 tryGetRunnableLens
 
-        match survivingLens with
-        | None -> Proc.log "    OBSERVED: no runnable lens after the companion's death"
-        | Some l ->
-            Proc.log "    OBSERVED: the lens is still clickable after the companion's death"
-            let secondClickAt = Proc.now ()
-            do! l.click () |> Async.AwaitPromise
-            let! _ = eventually 30_000 250 (fun () -> viewerShowing stoppedMessage)
-            Proc.log (sprintf "    OBSERVED: second click re-reported in %.0f ms" (Proc.now () - secondClickAt))
+            match survivingLens with
+            | None -> Proc.log "    OBSERVED: no runnable lens after the companion's death"
+            | Some l ->
+                Proc.log "    OBSERVED: the lens is still clickable after the companion's death"
+                let secondClickAt = Proc.now ()
+                do! l.click () |> Async.AwaitPromise
+                let! _ = eventually 30_000 250 (fun () -> viewerShowing stoppedMessage)
+                Proc.log (sprintf "    OBSERVED: second click re-reported in %.0f ms" (Proc.now () - secondClickAt))
 
-        // How long does that lens stay clickable? `CodeLensProvider.setReady false` fires
-        // `onDidChangeCodeLenses`, so VSCode should drop it — the question is when, and
-        // whether a check may lean on it. Report the number rather than assume either way.
-        let deathAt = Proc.now ()
+            let deathAt = Proc.now ()
 
-        let! gone =
-            eventuallyOrNone 20_000 250 (fun () ->
-                async {
-                    let! present = tryGetRunnableLens ()
-                    return (if present.IsNone then Some(Proc.now () - deathAt) else None)
-                })
+            let! gone =
+                eventuallyOrNone 20_000 250 (fun () ->
+                    async {
+                        let! present = tryGetRunnableLens ()
+                        return (if present.IsNone then Some(Proc.now () - deathAt) else None)
+                    })
 
-        match gone with
-        | Some ms -> Proc.log (sprintf "    OBSERVED: the runnable lens disappeared %.0f ms after the death probe" ms)
-        | None -> Proc.log "    OBSERVED: the runnable lens was still there 20 s after the death"
+            match gone with
+            | Some ms -> Proc.log (sprintf "    OBSERVED: the runnable lens disappeared %.0f ms after the death probe" ms)
+            | None -> Proc.log "    OBSERVED: the runnable lens was still there 20 s after the death"
 
-        mark "post-death lens observed"
+            mark "post-death lens observed"
 
         // Release the hanging request so the test server is not left with a stuck handler.
         let releaseStatus = Proc.httpStatus (baseUrl + "/release")
