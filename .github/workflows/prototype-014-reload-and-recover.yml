@@ -11,7 +11,7 @@ on:
       negative:
         description: Flip the final assertion to a marker that cannot match
         required: false
-        default: "1"
+        default: "0"
 
 jobs:
   slice:
@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        attempt: [1]
+        attempt: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
       - uses: actions/checkout@v4
 
@@ -63,7 +63,7 @@ jobs:
           VSIX: ${{ github.workspace }}/fshttp-studio-0.1.0.vsix
           STORAGE: /tmp/fshttp-014-resources
           EXT_DIR: /tmp/fshttp-014-extensions
-          NEGATIVE: "1"
+          NEGATIVE: ${{ inputs.negative }}
         run: |
           npm install
           /usr/bin/time -f 'WALL_SEC %e' ./run.sh 2>&1 | tee /tmp/cold.txt
@@ -76,7 +76,7 @@ jobs:
           VSIX: ${{ github.workspace }}/fshttp-studio-0.1.0.vsix
           STORAGE: /tmp/fshttp-014-resources
           EXT_DIR: /tmp/fshttp-014-extensions
-          NEGATIVE: "1"
+          NEGATIVE: ${{ inputs.negative }}
         run: |
           /usr/bin/time -f 'WALL_SEC %e' ./run.sh 2>&1 | tee /tmp/warm.txt
           grep -E 'WALL_SEC|OBSERVED|^ +[a-z].*\(\+' /tmp/warm.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
