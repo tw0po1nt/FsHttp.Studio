@@ -57,6 +57,7 @@ jobs:
       - run: npm run package
 
       - name: Run slice (cold)
+        shell: bash  # -eo pipefail: without it `./run.sh | tee` hides a failing suite
         working-directory: scratch/014-reload-and-recover
         env:
           VSIX: ${{ github.workspace }}/fshttp-studio-0.1.0.vsix
@@ -69,6 +70,7 @@ jobs:
           grep -E 'WALL_SEC|OBSERVED|^ +[a-z].*\(\+' /tmp/cold.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
 
       - name: Run slice (warm)
+        shell: bash  # -eo pipefail: without it `./run.sh | tee` hides a failing suite
         working-directory: scratch/014-reload-and-recover
         env:
           VSIX: ${{ github.workspace }}/fshttp-studio-0.1.0.vsix
