@@ -73,6 +73,24 @@ let private tryGetRunnableLens () =
             return None
     }
 
+/// Find and click in one retryable step. A CodeLens handle found in one poll can be stale by
+/// the next statement — Monaco re-renders lenses whenever the provider fires — and a bare
+/// `find` then `click` reddened two CI attempts with StaleElementReferenceError. 005's single
+/// warm miss was the same error. Every lens click in the suite goes through here.
+let private tryClick (find: unit -> Async<CodeLens option>) =
+    async {
+        try
+            let! found = find ()
+
+            match found with
+            | Some lens ->
+                do! lens.click () |> Async.AwaitPromise
+                return Some()
+            | None -> return None
+        with _ ->
+            return None
+    }
+
 /// Whole-panel text, read through the webview frame. Every assertion in this slice is a
 /// substring of it: `Running…`, the stopped sentence, or the rendered 200.
 let private tryReadViewer () =
@@ -123,7 +141,7 @@ let private slice =
         // The companion spawns on activation; give it a moment before the first locate.
         do! sleep 3_000 |> Async.AwaitPromise
 
-        let! lens = eventually 90_000 1_000 tryGetRunnableLens
+        let! _ = eventually 90_000 1_000 tryGetRunnableLens
         mark "first lens visible"
 
         let companionsBefore = Proc.pidsMatching companionPattern
@@ -131,7 +149,7 @@ let private slice =
         Assert.isTrue (companionsBefore.Length > 0) "the companion process is findable by `pgrep -f Companion.dll`"
 
         // 1. Run the hanging block.
-        do! lens.click () |> Async.AwaitPromise
+        let! _ = eventually 60_000 1_000 (fun () -> tryClick tryGetRunnableLens)
         mark "slow lens clicked"
 
         let! _ = eventually 60_000 500 (fun () -> viewerShowing "Running")
@@ -224,10 +242,10 @@ let private slice =
         mark "fixture reopened"
 
         // 5. A Run succeeds again — block index 1 is the fast JSON route.
-        let! recoveredLens = eventually 120_000 1_000 (fun () -> tryGetLensByIndex 1)
+        let! _ = eventually 120_000 1_000 (fun () -> tryGetLensByIndex 1)
         mark "lens visible after reload"
 
-        do! recoveredLens.click () |> Async.AwaitPromise
+        let! _ = eventually 60_000 1_000 (fun () -> tryClick (fun () -> tryGetLensByIndex 1))
         let! recovered = eventually 120_000 1_000 (fun () -> viewerShowing "200")
         mark "viewer renders 200 after reload"
 
