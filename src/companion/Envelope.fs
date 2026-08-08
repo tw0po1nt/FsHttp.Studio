@@ -61,6 +61,13 @@ let getStringProp (name: string) (root: JsonElement) : string =
     | true, v -> jsonString v
     | false, _ -> ""
 
+/// Reads an optional string property by name. Returns `None` when the property is absent,
+/// JSON null, or the empty string — the three shapes that mean "no value" on this wire.
+let getOptionalStringProp (name: string) (root: JsonElement) : string option =
+    match getStringProp name root with
+    | "" -> None
+    | s -> Some s
+
 /// Reads an int property by name. Returns 0 when the property is absent.
 let getIntProp (name: string) (root: JsonElement) : int =
     match root.TryGetProperty name with

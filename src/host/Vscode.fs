@@ -21,8 +21,17 @@ type Disposable =
 
 // --- documents / CodeLens ------------------------------------------------------------------
 
+/// vscode.Uri, narrowed to the one part this project reads. `scheme` is `"file"` for a script
+/// that lives on the local filesystem, and something else (`untitled`, `vscode-vfs`, `git`, a
+/// remote provider) for one that does not.
+type Uri =
+    abstract scheme: string
+
 type TextDocument =
     abstract fileName: string
+    /// The script's own URI. Only a `file` scheme carries a real local path in `fileName`, which
+    /// is what a Run needs for `__SOURCE_DIRECTORY__` (see `Protocol.scriptFileNameFor`).
+    abstract uri: Uri
     abstract getText: unit -> string
 
 /// vscode.Range. The 4-number overload constructs it (startLine, startChar, endLine, endChar).

@@ -497,7 +497,12 @@ let private extractResponse (v: FsiValue) : RunOutcome =
 /// This is the warm fast path. `run` calls it directly when the target's `#r "nuget:"` pins do
 /// not conflict with a version already loaded into this process. The `--worker` entry point
 /// also calls it in a throwaway child process, to serve a conflicting pin against a clean ALC.
-let private runLocated (source: string) (located: LocatedBlock list) (blockIndex: int) : RunOutcome =
+let private runLocated
+    (source: string)
+    (located: LocatedBlock list)
+    (blockIndex: int)
+    (scriptFileName: string option)
+    : RunOutcome =
     match List.tryItem blockIndex located with
     | None -> Refused("staleBlockIndex", None)
     | Some target ->
@@ -528,7 +533,26 @@ let private runLocated (source: string) (located: LocatedBlock list) (blockIndex
         use session =
             FsiEvaluationSession.Create(fsiConfig, args, inReader, Console.Error, Console.Error, collectible = true)
 
-        let setupResult, setupDiags = session.EvalInteractionNonThrowing(combinedSetup)
+        // When the extension host supplies the script's absolute path, both evals use FSI's
+        // `scriptFileName` overload so `__SOURCE_DIRECTORY__` and `__SOURCE_FILE__` resolve to
+        // the script's own directory and name. An untitled buffer omits the path and keeps
+        // FSI's default (`input.fsx` under the process working directory).
+        //
+        // The path also re-bases FSI's own relative resolution: a `#load "sibling.fsx"` or a
+        // `#r "lib.dll"` in the Setup then resolves beside the script, rather than beside the
+        // companion. That is the same correctness the two symbols buy, and a saved script needs
+        // it for the same reason.
+        let evalInteraction code =
+            match scriptFileName with
+            | Some path -> session.EvalInteractionNonThrowing(code, path)
+            | None -> session.EvalInteractionNonThrowing(code)
+
+        let evalExpression code =
+            match scriptFileName with
+            | Some path -> session.EvalExpressionNonThrowing(code, path)
+            | None -> session.EvalExpressionNonThrowing(code)
+
+        let setupResult, setupDiags = evalInteraction combinedSetup
 
         // `Choice1Of2` means only that the Setup threw no exception; it does not mean the
         // Setup has no errors. FSI can return `Choice1Of2` for a Setup that fails to parse or
@@ -564,8 +588,7 @@ let private runLocated (source: string) (located: LocatedBlock list) (blockIndex
                 match setupResult with
                 | Choice2Of2 ex -> RuntimeError ex.Message
                 | Choice1Of2 _ ->
-                    let targetResult, targetDiags =
-                        session.EvalExpressionNonThrowing(invocationText target)
+                    let targetResult, targetDiags = evalExpression (invocationText target)
 
                     match targetResult with
                     | Choice2Of2 ex ->
@@ -590,10 +613,12 @@ let private runLocated (source: string) (located: LocatedBlock list) (blockIndex
             | errors -> CompileError errors
 
 /// `runLocated` against a fresh locate of `source`. This is the `--worker` child's entry point,
-/// which receives source text and nothing else. In the parent, `run` has already located the
-/// blocks to decide the gate, so it calls `runLocated` directly rather than parse a second time.
-let runInProcessDirect (source: string) (blockIndex: int) : RunOutcome =
-    runLocated source (locateBlocks source) blockIndex
+/// and the direct in-process path. The child receives source text and an optional absolute
+/// `scriptFileName`, which is the script's own path when it is saved. In the parent,
+/// `run` has already located the blocks to decide the gate, so it calls `runLocated` directly
+/// rather than parse a second time.
+let runInProcessDirect (source: string) (blockIndex: int) (scriptFileName: string option) : RunOutcome =
+    runLocated source (locateBlocks source) blockIndex scriptFileName
 
 // ---------------------------------------------------------------------------------------------
 // Multi-version isolation. The assemblies that `#r "nuget:"` resolves load into the
@@ -796,7 +821,8 @@ let workerTimeoutMs = 120_000
 /// Runs one block in a throwaway child process (`dotnet Companion.dll --worker`), so that its
 /// `#r "nuget:"` assemblies load into a fresh default ALC. The runtime reclaims that ALC when
 /// the process exits, which avoids the process-global collision. The child reads one framed
-/// `{ source, blockIndex }` request, writes one outcome envelope, and then exits.
+/// `{ source, blockIndex, scriptFileName? }` request, writes one outcome envelope, and then
+/// exits.
 ///
 /// `timeoutMs` bounds the wait. `Kill()` terminates a worker that does not produce its frame in
 /// time, and also a worker that produces the frame and then stalls before it exits. The Run
@@ -804,7 +830,7 @@ let workerTimeoutMs = 120_000
 /// loops forever, or a request that never answers, both cause the first case. `use proc = proc`
 /// disposes the handle but does not unblock a wait. The bound and the kill, not the disposal,
 /// are what guarantee that the Run always terminates.
-let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome =
+let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) (scriptFileName: string option) : RunOutcome =
     let companionDll = typeof<RunOutcome>.Assembly.Location
 
     let psi = ProcessStartInfo(FileName = "dotnet")
@@ -830,9 +856,12 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome
                 with _ ->
                     ()
 
+            // One shape, always. `Envelope.getOptionalStringProp` reads the empty string as
+            // "no value", so the absent case needs no second record to construct here.
             let request: obj =
                 {| source = source
-                   blockIndex = blockIndex |}
+                   blockIndex = blockIndex
+                   scriptFileName = defaultArg scriptFileName "" |}
 
             writeFrame proc.StandardInput.BaseStream (JsonSerializer.SerializeToUtf8Bytes request)
             proc.StandardInput.Close()
@@ -883,12 +912,12 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) : RunOutcome
 /// Past the gate, `run` routes on one further condition: whether the target's `#r "nuget:"` pins
 /// conflict with a version already loaded in this process. No conflict -> the warm in-process
 /// session. A conflict -> a fresh `--worker` child, whose ALC cannot collide.
-let run (source: string) (blockIndex: int) : RunOutcome =
+let run (source: string) (blockIndex: int) (scriptFileName: string option) : RunOutcome =
     let located = locateBlocks source
 
     match List.tryItem blockIndex located with
     | Some { Route = BlockLocator.Refused code } -> RunOutcome.Refused(codeToWire code, None)
     | _ ->
         match routeAndReserve (extractPins source) with
-        | Worker -> runInWorker workerTimeoutMs source blockIndex
-        | InProcess -> runLocated source located blockIndex
+        | Worker -> runInWorker workerTimeoutMs source blockIndex scriptFileName
+        | InProcess -> runLocated source located blockIndex scriptFileName

@@ -51,6 +51,10 @@ let private resultUpdate
 let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: int) (myGeneration: int) : Async<unit> =
     async {
         let source = document.getText ()
+        // A `file`-scheme script's `fileName` is the absolute path FSI needs for
+        // `__SOURCE_DIRECTORY__`. Anything else has no real local path, so the Run sends none.
+        let scriptFileName = scriptFileNameFor document.uri.scheme document.fileName
+
         let! ranges = Companion.locate h source
 
         let method, url =
@@ -59,7 +63,7 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
             | None -> "", ""
 
         let started: float = emitJsExpr (nonNull (box 0)) "Date.now()"
-        let! result = Companion.run h source blockIndex
+        let! result = Companion.run h source blockIndex scriptFileName
         let elapsed: float = (emitJsExpr (nonNull (box 0)) "Date.now()") - started
 
         if myGeneration = generation then

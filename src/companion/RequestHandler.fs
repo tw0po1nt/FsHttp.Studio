@@ -29,7 +29,8 @@ let private toBlockEntry (block: LocatedBlock) : obj =
 
 // `BlockRunner.outcomeToWire` serializes the outcome, so the host response here and the
 // `--worker` child's response emit one identical shape and cannot drift apart.
-let private runResponse (source: string) (blockIndex: int) : obj = outcomeToWire (run source blockIndex)
+let private runResponse (source: string) (blockIndex: int) (scriptFileName: string option) : obj =
+    outcomeToWire (run source blockIndex scriptFileName)
 
 /// Handles one decoded request payload. Returns the response object that the caller
 /// serializes onto the frame channel.
@@ -46,7 +47,8 @@ let respond (request: JsonDocument) : obj =
     | "run" ->
         let source = root |> getStringProp "source"
         let blockIndex = root |> getIntProp "blockIndex"
-        runResponse source blockIndex
+        let scriptFileName = root |> getOptionalStringProp "scriptFileName"
+        runResponse source blockIndex scriptFileName
     | other ->
         {| tag = "error"
            message = sprintf "unknown request tag '%s'" (string other) |}
