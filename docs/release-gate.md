@@ -14,12 +14,18 @@ has no `@types/vscode` dependency, so no tool checks the declared minimum. A rel
 defect that occurs only on a VSCode version older than the pin. The manual check that this suite
 replaced had the same gap.
 
-**The pin becomes stale, and nothing yet refreshes it.**
+**The pin refreshes only as fast as someone merges the pull request.**
 ExTester supports the three most recent VSCode minor releases, so the pin is useful for about
-three months. Today nothing updates it: a person must edit `extester.config.json` by hand. If the
-pin falls outside the ExTester support window, ExTester can fail to download the matching
-ChromeDriver, and the gate then fails on an unrelated pull request. There is no scheduled
-pin-update workflow, and no release prerequisite covering one.
+three months. `update-vscode-pin.yml` runs weekly, and opens a pull request when the pin falls
+behind the latest stable release. That pull request still waits on a person: until someone
+merges it, the pin stays where it is. If the pin falls outside the ExTester support window,
+ExTester can fail to download the matching ChromeDriver, and the gate then fails on an
+unrelated pull request. No release prerequisite yet covers an open pin-update pull request.
+
+The gate run for a pin update is dispatched, not attached. GitHub raises no `pull_request`
+event for anything the built-in `GITHUB_TOKEN` does, so the pin-update pull request shows no
+checks of its own; the workflow starts the UI tests job against the branch and links the run
+from a comment. Read that link, not the check list, when reviewing a pin update.
 
 **CI retries the suite three times, and a green third attempt reports green.**
 The CI job runs the suite up to three times and passes if any attempt passes. A check that

@@ -1,10 +1,17 @@
 name: Update VSCode pin
 
 # Opens a pull request when the ExTester VSCode pin falls behind the latest
-# stable release. The UI tests job on that pull request is the gate for the
-# new version. A green run means a merge completes the update.
+# stable release, then starts the UI tests job against the pin branch. That
+# run is the gate for the new version: green means a merge completes the
+# update.
 #
-# Uses gh pr create with the built-in GITHUB_TOKEN. No third-party action
+# The pull request cannot start the gate on its own. GitHub does not raise
+# push or pull_request events for anything the built-in GITHUB_TOKEN does,
+# so a pull request opened here lands with no checks. workflow_dispatch is
+# the documented exception, so this workflow dispatches the UI tests job by
+# hand and links the run from the pull request.
+#
+# Uses gh throughout with the built-in GITHUB_TOKEN. No third-party action
 # opens the pull request. Permissions stay on this workflow only.
 on:
   schedule:
@@ -19,7 +26,12 @@ concurrency:
 
 permissions:
   contents: write # push the pin branch
-  pull-requests: write # open the pin-update pull request
+  pull-requests: write # open the pin-update pull request, and comment the gate link on it
+  actions: write # dispatch the UI tests job against the pin branch
+
+env:
+  CONFIG: tests/ui.Tests/extester.config.json
+  GATE_WORKFLOW: ui-tests.yml
 
 jobs:
   update-pin:
@@ -30,10 +42,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Resolve the latest stable VSCode version
-        id: compare
+        id: pin
         run: |
           set -euo pipefail
-          CONFIG=tests/ui.Tests/extester.config.json
           PIN="$(jq -r .setup.vscodeVersion "$CONFIG")"
           # Same API ExTester uses for "latest": first entry in the stable stream.
           LATEST="$(curl -fsSL https://update.code.visualstudio.com/api/releases/stable | jq -r '.[0]')"
@@ -43,23 +54,25 @@ jobs:
           fi
           echo "pin=$PIN" >> "$GITHUB_OUTPUT"
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
-          if [ "$PIN" = "$LATEST" ]; then
+          # Behind, not merely different. A pin deliberately set ahead of stable
+          # must not produce a downgrade pull request every Monday.
+          NEWEST="$(printf '%s\n%s\n' "$PIN" "$LATEST" | sort -V | tail -1)"
+          if [ "$PIN" = "$LATEST" ] || [ "$NEWEST" = "$PIN" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Pin $PIN already matches the latest stable release."
+            echo "Pin $PIN is at or ahead of the latest stable release $LATEST."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "Pin $PIN is behind the latest stable release $LATEST."
           fi
 
       - name: Push the updated pin and open a pull request
-        if: steps.compare.outputs.changed == 'true'
+        if: steps.pin.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          PIN: ${{ steps.compare.outputs.pin }}
-          LATEST: ${{ steps.compare.outputs.latest }}
+          PIN: ${{ steps.pin.outputs.pin }}
+          LATEST: ${{ steps.pin.outputs.latest }}
         run: |
           set -euo pipefail
-          CONFIG=tests/ui.Tests/extester.config.json
           BRANCH="chore/vscode-pin-${LATEST}"
 
           # One open pull request per target version. A later weekly run must
@@ -85,24 +98,41 @@ jobs:
           The previous pin was ${PIN}. The UI tests job on this pull request is the gate for the new version.
           EOF
           )"
-          # force-with-lease: reuse a leftover branch from a closed pin PR.
-          # Refuse the push if someone else moved the branch tip.
-          git push -u origin "HEAD:refs/heads/${BRANCH}" --force-with-lease
 
-          gh pr create \
+          # A branch can survive a closed pin pull request, so this push may need
+          # to overwrite one. checkout fetches a single ref, so a bare
+          # --force-with-lease has no remote-tracking ref to compare and refuses
+          # the push. Fetch the branch first, and state the tip the lease expects.
+          if git fetch --no-tags origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" 2>/dev/null; then
+            git push -u origin "HEAD:refs/heads/${BRANCH}" \
+              --force-with-lease="refs/heads/${BRANCH}:$(git rev-parse "refs/remotes/origin/${BRANCH}")"
+          else
+            git push -u origin "HEAD:refs/heads/${BRANCH}"
+          fi
+
+          PR_URL="$(gh pr create \
             --base main \
             --head "$BRANCH" \
             --title "Update ExTester VSCode pin to ${LATEST}" \
             --body "$(cat <<EOF
           ## Summary
 
-          The pin in \`tests/ui.Tests/extester.config.json\` is \`${PIN}\`.
+          The pin in \`${CONFIG}\` is \`${PIN}\`.
           The latest stable VSCode release is \`${LATEST}\`.
           This pull request sets \`setup.vscodeVersion\` and \`run.vscodeVersion\` to \`${LATEST}\`.
 
           ## Gate
 
-          The UI tests job on this pull request is the gate run for the new version.
+          The UI tests job against this branch is the gate run for the new version.
           A green run means that a merge completes the update.
+          A comment below links the run: it does not appear as a check on this
+          pull request, because a run this workflow starts is not attached to it.
           EOF
-          )"
+          )")"
+          echo "Opened $PR_URL"
+
+          # The gate. GITHUB_TOKEN raises no pull_request event, so the job needs
+          # dispatching by hand against the branch.
+          gh workflow run "$GATE_WORKFLOW" --ref "$BRANCH"
+          GATE_RUNS="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/${GATE_WORKFLOW}?query=branch%3A${BRANCH}"
+          gh pr comment "$PR_URL" --body "Gate run for \`${LATEST}\`: ${GATE_RUNS}"
