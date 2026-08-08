@@ -26,8 +26,12 @@ let PerCheckBudgetMs = 45_000
 /// Green-path budget for the suite, excluding setup.
 let SuiteBudgetMs = 240_000
 
-/// Cross-process contract for `GET /json`. Must match `UiTestServer.Server.jsonProbeBody`.
-let jsonProbeBody = """{"probe":"ui-test-server"}"""
+/// Cross-process contract for `GET /json`. Must match `UiTestServer.Server.jsonProbeBody`. The
+/// key and the value are named separately because a check reading the viewer's pretty-printed DOM
+/// cannot match the one-line body — it matches these two parts, which whitespace cannot move.
+let jsonProbeKey = "probe"
+let jsonProbeValue = "ui-test-server"
+let jsonProbeBody = sprintf """{"%s":"%s"}""" jsonProbeKey jsonProbeValue
 
 let private extensionStatusPrefix = "FsHttp.Studio"
 let private fixtureTabSuffix = "setup.fsx"
@@ -111,10 +115,10 @@ let private failSetup (cause: string) =
     Assert.fail (sprintf "Harness setup failed: %s" cause)
 
 let private verifySidecarLive () =
-    let path = Proc.env "UI_TEST_SIDECAR" ""
-
-    if path = "" then
-        failSetup "UI_TEST_SIDECAR is not set"
+    let path =
+        match Proc.sidecarPath () with
+        | None -> failSetup "UI_TEST_SIDECAR is not set, so setup cannot find the test server"
+        | Some path -> path
 
     match Proc.readSidecar path with
     | Proc.SidecarMissing -> failSetup (sprintf "the sidecar file is missing at %s" path)

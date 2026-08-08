@@ -7,5 +7,5 @@ open Harness
 
 Harness.registerHooks ()
 
-Mocha.runTests (testList "FsHttp.Studio UI tests" [ SelfCheckTests.tests ])
+Mocha.runTests (testList "FsHttp.Studio UI tests" [ SelfCheckTests.tests; CorePathTests.tests ])
 |> ignore

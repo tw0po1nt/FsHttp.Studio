@@ -54,6 +54,14 @@ let curlConnectionRefused (url: string) : bool =
     let code = httpStatus url
     code = "" || code = "000"
 
+/// Where this run's test server wrote its sidecar, as `run.sh` exports it. `None` when the
+/// variable is unset — the name of the variable lives here alone, and each caller words its own
+/// failure around what it needed the path for.
+let sidecarPath () : string option =
+    match env "UI_TEST_SIDECAR" "" with
+    | "" -> None
+    | path -> Some path
+
 /// The outcome of reading the test server's sidecar. Missing and unreadable are separate cases
 /// because setup must name which of the two happened: a missing file means the server never
 /// started, and an unreadable one means it wrote something the harness cannot trust.

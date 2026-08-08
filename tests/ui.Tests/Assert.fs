@@ -6,10 +6,13 @@ module Assert
 
 open Fable.Core
 
-[<Emit("throw new Error($0)")>]
-let private throwError (_message: string) : unit = jsNative
+// Throws a real JS `Error`. Typed as `'a` so a failing branch can inhabit any return type the
+// same way `failwith` does. The IIFE keeps the emit a value expression — a bare `throw` inside
+// a `return` is not valid JavaScript, which is what Fable would emit for a polymorphic `Emit`.
+[<Emit("(() => { throw new Error($0); })()")>]
+let private throwError (_message: string) : 'a = jsNative
 
-let fail (message: string) : unit = throwError message
+let fail (message: string) : 'a = throwError message
 
 let equal (actual: 'a) (expected: 'a) (message: string) : unit when 'a: equality =
     if actual <> expected then

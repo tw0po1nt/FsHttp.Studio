@@ -13,6 +13,7 @@
     <Compile Include="ExTester.fs" />
     <Compile Include="Harness.fs" />
     <Compile Include="SelfCheckTests.fs" />
+    <Compile Include="CorePathTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 
