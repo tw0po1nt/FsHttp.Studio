@@ -79,10 +79,13 @@ let private hasSdkAtLeast (requiredMajor: int) (listSdksOutput: string) : bool =
 
 let activate (context: ExtensionContext) =
     let item = window.createStatusBarItem (statusBarAlignmentLeft, 100.0)
+    // Register the item before the first `setStatusText`, which is a no-op while `statusItem` is
+    // None. Otherwise the item shows empty until the companion's first state arrives, and
+    // "starting…" — the one status that says activation happened — is never seen.
+    statusItem <- Some item
     setStatusText (Companion.statusText Companion.Starting)
     item.show ()
     context.subscriptions.Add(box item)
-    statusItem <- Some item
 
     RunCommand.setExtensionUri context.extensionUri
 

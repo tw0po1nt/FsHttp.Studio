@@ -1,0 +1,10 @@
+{
+  "files.autoSave": "off",
+  "window.restoreWindows": "none",
+  "workbench.startupEditor": "none",
+  "workbench.welcomePage.walkthroughs.openOnInstall": false,
+  "security.workspace.trust.enabled": false,
+  "extensions.autoUpdate": false,
+  "extensions.ignoreRecommendations": true,
+  "telemetry.telemetryLevel": "off"
+}

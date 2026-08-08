@@ -89,3 +89,33 @@ _Avoid_: dev build, PR build (the ref does not have to belong to a pull request)
 **Manual check**:
 The by-hand walk of `docs/manual-check.md` against a Beta, in a real VSCode window. It covers the interop surfaces that no suite drives: the lens, the toast, the response viewer, and the companion's process handling.
 _Avoid_: smoke (`npm run smoke` already names running the bundled renderer under node), QA, regression test.
+
+### UI test suite
+
+**Check**:
+One test in the UI suite, driving a real VSCode through ExTester. A check is what the Manual check's steps become, so it names a user-visible outcome rather than a unit of code.
+_Avoid_: test, case, scenario, spec (a spec is the written ticket that asks for the check).
+
+**Harness**:
+The shared module every check imports: the ExTester page-object bindings, the wait combinator, the budgets, and the Mocha hooks. A check that defines its own wait or its own budget has bypassed the harness.
+_Avoid_: framework, fixture (a fixture is the checked-in script the suite opens), helpers.
+
+**Harness setup**:
+The Mocha `before` hook, from the first ExTester call through proven-live. Always the two words, never bare "Setup", which the authoring surface already reserves for the code a Run evaluates.
+_Avoid_: setup (bare), init, bootstrap.
+
+**Proven-live**:
+The state that Harness setup must reach before any check runs: the workbench answered, the test server passed its healthcheck and its sidecar parsed, the fixture folder is open with the extension active, and a companion exists. A workbench that merely rendered is *visible*, not proven-live.
+_Avoid_: ready, warm, healthy.
+
+**Sidecar**:
+The JSON file the test HTTP server writes to report the port it allocated and the port it deliberately left dead. It is the one channel between that server and the harness. Harness setup deletes it before the server starts, so a stale file cannot pass as a live one.
+_Avoid_: manifest, handshake file, lockfile.
+
+**Dead port**:
+The port the test server allocates and never listens on, so a check can drive a refused connection. The harness, not the server, probes it, which keeps one error vocabulary for "the sidecar is stale".
+_Avoid_: closed port, bad port.
+
+**Budget**:
+The green-path time a phase is allowed: 180 s for Harness setup, 45 s per check, 240 s for the suite. A budget catches drift and is asserted in `afterEach`/`after`, never in a check body. It is not a hang guard — the Mocha timeouts above it are.
+_Avoid_: timeout, deadline (a deadline is what one `eventually` call waits against).

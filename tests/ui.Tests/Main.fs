@@ -3,6 +3,9 @@
 module Main
 
 open Fable.Mocha
+open Harness
 
-Mocha.runTests (testList "FsHttp.Studio UI tests" [ ScaffoldTests.tests ])
+Harness.registerHooks ()
+
+Mocha.runTests (testList "FsHttp.Studio UI tests" [ SelfCheckTests.tests ])
 |> ignore
