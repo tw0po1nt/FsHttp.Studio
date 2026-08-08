@@ -1,4 +1,4 @@
-# Single CI entry point for the ExTester UI suite (issue #156). Local runs use the same run.sh.
+# Single CI entry point for the ExTester UI suite. Local runs use the same run.sh.
 name: UI tests
 
 on:
@@ -20,16 +20,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      demo_broken_setup:
-        description: 'Negative verification only — kill the test server before ExTester (expect a red job).'
-        type: boolean
-        required: false
-        default: false
 
+# Supersede a branch's own in-flight run only. A run on main, or one a workflow_call caller
+# is waiting on, must finish — cancelling it would leave the gate's verdict ambiguous.
 concurrency:
   group: ui-tests-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -42,13 +38,16 @@ jobs:
   ui-tests:
     name: UI test suite
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Covers three 20-minute suite attempts plus setup. The 20-minute bound that matters
+    # is per attempt, on the step below; this cap only stops a wedged runner billing forever.
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v4
 
       - name: Read VSCode pin for cache key
         id: pin
         run: |
+          set -euo pipefail
           PIN="$(jq -r .setup.vscodeVersion tests/ui.Tests/extester.config.json)"
           echo "version=$PIN" >> "$GITHUB_OUTPUT"
 
@@ -64,12 +63,13 @@ jobs:
 
       - uses: actions/cache@v4
         with:
+          # Binaries only — never $STORAGE/settings, which run.sh deletes so no VSCode
+          # profile state carries between runs. No restore-keys: a prefix fallback would
+          # serve the previous pin's VSCode, which is the one thing the pinned key prevents.
           path: |
-            /tmp/fshttp-ui-test-resources/VSCode-linux-x64
-            /tmp/fshttp-ui-test-resources/chromedriver-linux64
+            ${{ env.STORAGE }}/VSCode-linux-x64
+            ${{ env.STORAGE }}/chromedriver-linux64
           key: ${{ runner.os }}-extest-${{ steps.pin.outputs.version }}
-          restore-keys: |
-            ${{ runner.os }}-extest-
 
       - uses: actions/cache@v4
         with:
@@ -92,6 +92,7 @@ jobs:
       - name: Package extension (.vsix)
         id: vsix
         run: |
+          set -euo pipefail
           npm run package
           VSIX="$(ls -1 fshttp-studio-*.vsix | tail -1)"
           echo "path=$PWD/$VSIX" >> "$GITHUB_OUTPUT"
@@ -102,16 +103,15 @@ jobs:
       - name: Run UI test suite
         uses: nick-fields/retry@v4
         with:
-          timeout_minutes: 18
+          timeout_minutes: 20
           max_attempts: 3
           retry_wait_seconds: 30
+          # bash, and run.sh invoked directly: piping it into tee would report a red
+          # suite as a green job, and every budget assert depends on red staying red.
           shell: bash
           command: |
             export VSIX="${{ steps.vsix.outputs.path }}"
             export UI_TEST_SKIP_SERVER_BUILD=1
-            if [[ "${{ inputs.demo_broken_setup }}" == "true" ]]; then
-              export UI_TEST_DEMO_BROKEN_SETUP=1
-            fi
             tests/ui.Tests/run.sh
 
       - name: Upload failure screenshots and logs
@@ -120,6 +120,6 @@ jobs:
         with:
           name: ui-test-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            /tmp/fshttp-ui-test-resources/screenshots/**/*.png
-            /tmp/fshttp-ui-test-resources/chromedriver.log
+            ${{ env.STORAGE }}/screenshots/**/*.png
+            ${{ env.STORAGE }}/chromedriver.log
           if-no-files-found: ignore

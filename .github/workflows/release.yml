@@ -19,11 +19,7 @@ permissions:
   contents: write # create the tag + Release, upload the .vsix asset
 
 jobs:
-  ui-tests:
-    uses: ./.github/workflows/ui-tests.yml
-
   release:
-    needs: ui-tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

@@ -21,6 +21,15 @@ pin falls outside the ExTester support window, ExTester can fail to download the
 ChromeDriver, and the gate then fails on an unrelated pull request. There is no scheduled
 pin-update workflow, and no release prerequisite covering one.
 
+**CI retries the suite three times, and a green third attempt reports green.**
+The CI job runs the suite up to three times and passes if any attempt passes. A check that
+fails two runs in three therefore reports a green job, and the budget asserts exist precisely
+to catch that kind of drift. The retry is a workflow-level construct that cannot see *why* the
+suite failed, so it cannot tell a wedged runner from a check that is genuinely going bad. This
+is a known and accepted gap: without it, the environment dependencies ExTester carries would
+redden unrelated pull requests. Read a re-run attempt count above 1 as a signal worth chasing,
+not as noise.
+
 **Linux only** — a defect that appears only in `dotnet` discovery or companion process handling on
 macOS or Windows ships uncaught. That is a known and accepted cost.
 
