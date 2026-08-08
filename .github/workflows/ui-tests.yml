@@ -20,6 +20,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      demo_broken_setup:
+        description: 'Negative verification only — kill the test server before ExTester (expect a red job).'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: ui-tests-${{ github.ref }}
@@ -103,6 +109,9 @@ jobs:
           command: |
             export VSIX="${{ steps.vsix.outputs.path }}"
             export UI_TEST_SKIP_SERVER_BUILD=1
+            if [[ "${{ inputs.demo_broken_setup }}" == "true" ]]; then
+              export UI_TEST_DEMO_BROKEN_SETUP=1
+            fi
             tests/ui.Tests/run.sh
 
       - name: Upload failure screenshots and logs
