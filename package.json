@@ -54,11 +54,16 @@
     "build:fable:webview": "dotnet tool run fable src/webview --outDir out/webview",
     "build:bundle": "node esbuild.mjs",
     "smoke": "npm run build:fable:webview && node smoke.mjs",
+    "build:fable:ui-tests": "dotnet tool run fable tests/ui.Tests --outDir out/ui-tests --sourceMaps",
+    "build:bundle:ui-tests": "node tests/ui.Tests/bundle.mjs",
+    "ui-tests:scaffold": "npm run build:fable:ui-tests && npm run build:bundle:ui-tests && NODE_OPTIONS=--enable-source-maps mocha --config tests/ui.Tests/.mocharc.cjs out/ui-tests/suite.bundle.cjs",
+    "ui-tests:assert-demo": "npm run build:fable:ui-tests && npm run build:bundle:ui-tests && NODE_OPTIONS=--enable-source-maps UI_TEST_ASSERT_DEMO=1 mocha --config tests/ui.Tests/.mocharc.cjs out/ui-tests/suite.bundle.cjs",
     "compile": "dotnet tool restore && npm run build:companion && npm run build:fable:extension && npm run build:fable:webview && npm run build:bundle",
     "package": "npm run compile && vsce package --no-dependencies"
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
-    "@vscode/vsce": "^3.9.2"
+    "@vscode/vsce": "^3.9.2",
+    "mocha": "^11.7.1"
   }
 }
