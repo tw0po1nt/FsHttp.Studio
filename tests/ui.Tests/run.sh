@@ -31,8 +31,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "==> build test server"
-dotnet publish "$SUITE/server/UiTestServer.fsproj" -c Release -o "$SERVER_OUT"
+if [[ "${UI_TEST_SKIP_SERVER_BUILD:-}" == "1" ]]; then
+  if [[ ! -x "$SERVER_BIN" ]]; then
+    echo "UI_TEST_SKIP_SERVER_BUILD is set but $SERVER_BIN is missing — build the test server in CI first" >&2
+    exit 1
+  fi
+  echo "==> test server (prebuilt at $SERVER_OUT)"
+else
+  echo "==> build test server"
+  dotnet publish "$SUITE/server/UiTestServer.fsproj" -c Release -o "$SERVER_OUT"
+fi
 
 echo "==> start test server"
 rm -f "$SIDECAR"

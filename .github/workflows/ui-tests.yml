@@ -1,0 +1,116 @@
+# Single CI entry point for the ExTester UI suite (issue #156). Local runs use the same run.sh.
+name: UI tests
+
+on:
+  workflow_call:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/ui-tests.yml'
+      - '.config/dotnet-tools.json'
+      - 'esbuild.mjs'
+      - 'global.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src/**'
+      - 'tests/ui.Tests/**'
+      - 'webpack.config.js'
+      - '.vscodeignore'
+      - '**/*.fsproj'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ui-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  STORAGE: /tmp/fshttp-ui-test-resources
+  EXT_DIR: /tmp/fshttp-ui-test-extensions
+
+jobs:
+  ui-tests:
+    name: UI test suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read VSCode pin for cache key
+        id: pin
+        run: |
+          PIN="$(jq -r .setup.vscodeVersion tests/ui.Tests/extester.config.json)"
+          echo "version=$PIN" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/fshttp-ui-test-resources/VSCode-linux-x64
+            /tmp/fshttp-ui-test-resources/chromedriver-linux64
+          key: ${{ runner.os }}-extest-${{ steps.pin.outputs.version }}
+          restore-keys: |
+            ${{ runner.os }}-extest-
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
+
+      - name: Install xvfb and libraries for ExTester
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2t64 \
+            || sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2
+
+      - name: Ubuntu 24 AppArmor tweak (ExTester openResources)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - run: dotnet tool restore
+
+      - run: npm ci
+
+      - name: Package extension (.vsix)
+        id: vsix
+        run: |
+          npm run package
+          VSIX="$(ls -1 fshttp-studio-*.vsix | tail -1)"
+          echo "path=$PWD/$VSIX" >> "$GITHUB_OUTPUT"
+
+      - name: Build test server
+        run: dotnet publish tests/ui.Tests/server/UiTestServer.fsproj -c Release -o out/ui-test-server
+
+      - name: Run UI test suite
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 18
+          max_attempts: 3
+          retry_wait_seconds: 30
+          shell: bash
+          command: |
+            export VSIX="${{ steps.vsix.outputs.path }}"
+            export UI_TEST_SKIP_SERVER_BUILD=1
+            tests/ui.Tests/run.sh
+
+      - name: Upload failure screenshots and logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/fshttp-ui-test-resources/screenshots/**/*.png
+            /tmp/fshttp-ui-test-resources/chromedriver.log
+          if-no-files-found: ignore
