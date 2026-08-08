@@ -1,22 +1,25 @@
 module SelfCheckTests
 
 open Fable.Mocha
-open Harness
 
 let tests =
     testList
         "setup self-check"
         [ testCase "proven-live workbench and timing summary" (fun () ->
+              let state = Harness.provenLiveState ()
+
+              Assert.isTrue state.WorkbenchReady "waitForWorkbench returned"
+              Assert.isTrue state.ServerLive "the test server healthcheck passed and the sidecar parsed"
+              Assert.isTrue state.FixtureOpen "the fixture folder is open"
+              Assert.isTrue state.ExtensionActive "the extension is active"
+              Assert.isTrue state.CompanionRunning "a companion process exists"
               Assert.isTrue (Harness.isProvenLive ()) "the before hook reached a proven-live workbench"
 
-              match Harness.provenLiveState () with
-              | Some state ->
-                  Assert.isTrue state.WorkbenchReady "waitForWorkbench returned"
-                  Assert.isTrue state.ServerLive "the test server healthcheck passed and the sidecar parsed"
-                  Assert.isTrue state.FixtureOpen "the fixture folder is open"
-                  Assert.isTrue state.ExtensionActive "the extension is active"
-                  Assert.isTrue state.CompanionRunning "a companion process exists"
-              | None -> Assert.fail "proven-live state was not recorded during setup"
+              // Setup emits the table as its last act, so this observes a write that already
+              // happened rather than performing the one it verifies.
+              Assert.isTrue (Harness.timingSummaryWasEmitted ()) "setup emitted the timing table"
 
-              Harness.writeTimingSummary ()
-              Assert.isTrue (Harness.timingSummaryWasPrinted ()) "the timing table was written to the job summary") ]
+              if Proc.env "GITHUB_STEP_SUMMARY" "" <> "" then
+                  Assert.isTrue
+                      (Harness.timingSummaryWasWrittenToJobSummary ())
+                      "the timing table reached the GitHub Actions job summary") ]

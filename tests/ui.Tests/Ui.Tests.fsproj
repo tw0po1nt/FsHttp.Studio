@@ -4,13 +4,12 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
     <IsPackable>false</IsPackable>
-    <!-- ImportMember stubs and null checks in hook wiring; see Harness.fs. -->
-    <NoWarn>1182;3559</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="Assert.fs" />
     <Compile Include="Proc.fs" />
+    <Compile Include="Timing.fs" />
     <Compile Include="ExTester.fs" />
     <Compile Include="Harness.fs" />
     <Compile Include="SelfCheckTests.fs" />

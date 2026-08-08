@@ -1,3 +1,7 @@
+// Assertions for the UI suite. Each one throws a real JS `Error`, not an F# exception, so Mocha
+// reports a stack that `--enable-source-maps` can resolve back to the `.fs` line that failed.
+// `run.sh` sets `NODE_OPTIONS=--enable-source-maps` for exactly that reason; without it a failure
+// points at the bundle.
 module Assert
 
 open Fable.Core

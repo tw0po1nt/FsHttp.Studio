@@ -10,8 +10,9 @@ STORAGE="${STORAGE:-/tmp/fshttp-ui-test-resources}"
 EXT_DIR="${EXT_DIR:-/tmp/fshttp-ui-test-extensions}"
 SERVER_OUT="$ROOT/out/ui-test-server"
 SERVER_BIN="$SERVER_OUT/UiTestServer"
-SIDECAR="$SUITE/fixtures/sidecar.json"
-FIXTURE="$SUITE/fixtures/setup.fsx"
+FIXTURES="$SUITE/fixtures"
+SIDECAR="$FIXTURES/sidecar.json"
+FIXTURE="$FIXTURES/setup.fsx"
 BUNDLE="$ROOT/out/ui-tests/suite.bundle.cjs"
 SERVER_PID=""
 
@@ -24,7 +25,9 @@ cleanup() {
     kill "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
   fi
-  pkill -f 'dist/companion/Companion.dll' 2>/dev/null || true
+  # Anchored on this run's extensions directory, so an interrupted run never kills the companion
+  # behind the developer's own editor.
+  pkill -f "$EXT_DIR.*Companion.dll" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -80,6 +83,7 @@ unset EXTENSION_DEV_PATH || true
 (cd "$ROOT" && npx extest install-vsix -s "$STORAGE" -e "$EXT_DIR" -f "$VSIX" --config "$SUITE/extester.config.json")
 
 export UI_TEST_SIDECAR="$SIDECAR"
+export UI_TEST_EXTENSIONS_DIR="$EXT_DIR"
 export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--enable-source-maps"
 
 echo "==> ExTester: run suite"
@@ -89,7 +93,10 @@ RUN_ARGS=(
   -e "$EXT_DIR"
   -o "$SUITE/settings.json"
   -m "$SUITE/.mocharc.js"
-  -r "$FIXTURE"
+  # The folder first, so VSCode opens it as the workspace root and the extension activates against
+  # a real workspace; then the script, so a tab is open too. `--open_resource` is variadic, which
+  # is why it stays last and the bundle glob leads the list.
+  -r "$FIXTURES" "$FIXTURE"
 )
 
 if [[ "$(uname -s)" == "Linux" ]]; then

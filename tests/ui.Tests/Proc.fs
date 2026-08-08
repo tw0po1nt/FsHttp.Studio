@@ -4,10 +4,17 @@ module Proc
 open Fable.Core
 open Fable.Core.JsInterop
 
-/// Runs a shell command and returns its stdout. A non-zero exit returns "" rather than
-/// throwing: every caller here treats "no output" as the answer.
-[<Emit("(() => { try { return require('node:child_process').execSync($0, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { return ''; } })()")>]
-let sh (_command: string) : string = jsNative
+/// Upper bound on any shell command this module runs. A hung `curl` or `pgrep` must not hold the
+/// harness past its own budget, so the wait is bounded and expiry reads as "no output".
+let private shellTimeoutMs = 30_000
+
+/// Runs a shell command and returns its stdout. A non-zero exit, or a run that outlives
+/// `shellTimeoutMs`, returns "" rather than throwing: every caller here treats "no output" as the
+/// answer.
+[<Emit("(() => { try { return require('node:child_process').execSync($0, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: $1 }); } catch (e) { return ''; } })()")>]
+let sh (_command: string) (_timeoutMs: int) : string = jsNative
+
+let private run (command: string) = sh command shellTimeoutMs
 
 [<Emit("process.env[$0] ?? $1")>]
 let env (_name: string) (_fallback: string) : string = jsNative
@@ -30,49 +37,58 @@ let appendFile (_path: string) (_text: string) : unit = jsNative
 /// Every pid whose command line matches `pattern`. Empty when nothing matches — `pgrep`
 /// exits 1 in that case, which `sh` swallows.
 let pidsMatching (pattern: string) : int[] =
-    (sh (sprintf "pgrep -f '%s'" pattern)).Split('\n')
+    (run (sprintf "pgrep -f '%s'" pattern)).Split('\n')
     |> Array.choose (fun line ->
         match System.Int32.TryParse(line.Trim()) with
         | true, pid -> Some pid
         | _ -> None)
 
-let killCompanionProcesses () =
-    sh "pkill -f 'dist/companion/Companion.dll' 2>/dev/null || true" |> ignore
-
 let httpStatus (url: string) : string =
-    (sh (sprintf "curl -sS -m 10 -o /dev/null -w '%%{http_code}' '%s'" url)).Trim()
+    (run (sprintf "curl -sS -m 10 -o /dev/null -w '%%{http_code}' '%s'" url)).Trim()
 
 let httpBody (url: string) : string =
-    (sh (sprintf "curl -sS -m 10 '%s'" url)).Trim()
+    (run (sprintf "curl -sS -m 10 '%s'" url)).Trim()
 
 /// True when nothing accepts connections on `url` (the sidecar dead port).
 let curlConnectionRefused (url: string) : bool =
     let code = httpStatus url
     code = "" || code = "000"
 
-let tryParseSidecar (path: string) =
+/// The outcome of reading the test server's sidecar. Missing and unreadable are separate cases
+/// because setup must name which of the two happened: a missing file means the server never
+/// started, and an unreadable one means it wrote something the harness cannot trust.
+type SidecarRead =
+    | SidecarMissing
+    | SidecarUnreadable of reason: string
+    | SidecarLive of baseUrl: string * deadUrl: string
+
+let readSidecar (path: string) : SidecarRead =
     if not (fileExists path) then
-        None
+        SidecarMissing
     else
         try
             let parsed: obj = JS.JSON.parse (readFile path)
             let baseUrl = unbox<string> (parsed?("baseUrl"): obj)
             let deadUrl = unbox<string> (parsed?("deadUrl"): obj)
 
-            if
-                System.String.IsNullOrWhiteSpace baseUrl
-                || System.String.IsNullOrWhiteSpace deadUrl
-            then
-                None
+            if System.String.IsNullOrWhiteSpace baseUrl then
+                SidecarUnreadable "it names no baseUrl"
+            elif System.String.IsNullOrWhiteSpace deadUrl then
+                SidecarUnreadable "it names no deadUrl"
             else
-                Some(baseUrl.TrimEnd('/'), deadUrl)
+                SidecarLive(baseUrl.TrimEnd('/'), deadUrl)
         with _ ->
-            None
+            SidecarUnreadable "it is not valid JSON"
 
-let appendJobSummary (markdown: string) =
+/// Appends `markdown` to the GitHub Actions job summary, and echoes it to the console so a local
+/// run sees the same table. Returns true when the job summary file itself received it, which is
+/// false outside Actions.
+let appendJobSummary (markdown: string) : bool =
     let summary = env "GITHUB_STEP_SUMMARY" ""
+    let reachedJobSummary = summary <> ""
 
-    if summary <> "" then
+    if reachedJobSummary then
         appendFile summary markdown
 
     log markdown
+    reachedJobSummary

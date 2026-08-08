@@ -1,17 +1,12 @@
 {
   "$schema": "../../node_modules/vscode-extension-tester/resources/extester.schema.json",
+  "//": "The VSCode pin, and nothing else. run.sh owns every path and passes it as a flag, so a path here would be a second source of truth that silently loses. ExTester reads setup.vscodeVersion for get-vscode and get-chromedriver, and run.vscodeVersion for run-tests, so the pin is stated in both.",
   "setup": {
     "vscodeVersion": "1.132.0",
-    "type": "stable",
-    "storage": "/tmp/fshttp-ui-test-resources",
-    "extensionsDir": "/tmp/fshttp-ui-test-extensions"
+    "type": "stable"
   },
   "run": {
     "vscodeVersion": "1.132.0",
-    "type": "stable",
-    "storage": "/tmp/fshttp-ui-test-resources",
-    "extensionsDir": "/tmp/fshttp-ui-test-extensions",
-    "mochaConfig": "./.mocharc.js",
-    "settings": "./settings.json"
+    "type": "stable"
   }
 }

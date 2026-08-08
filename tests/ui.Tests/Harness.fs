@@ -29,17 +29,19 @@ let SuiteBudgetMs = 240_000
 /// Cross-process contract for `GET /json`. Must match `UiTestServer.Server.jsonProbeBody`.
 let jsonProbeBody = """{"probe":"ui-test-server"}"""
 
-let private companionPattern = "Companion.dll"
 let private extensionStatusPrefix = "FsHttp.Studio"
 let private fixtureTabSuffix = "setup.fsx"
+let private fixtureFolderName = "fixtures"
+let private setupPhaseName = "Harness setup"
+let private suitePhaseName = "Suite"
 
 /// Retry spacing between polls. Deliberately not a parameter: the deadline is what a check tunes,
 /// and a per-call interval would put a magic number in every check body.
 let PollIntervalMs = 250
 
-[<Emit("Date.now()")>]
-let private nowMs () : float = jsNative
-
+/// Which of the four proven-live conditions setup has actually confirmed. Each field is written
+/// the moment its own tell holds, so a setup that fails partway leaves a record naming the tell
+/// that never arrived rather than an all-or-nothing verdict.
 type ProvenLive =
     { WorkbenchReady: bool
       ServerLive: bool
@@ -47,29 +49,40 @@ type ProvenLive =
       ExtensionActive: bool
       CompanionRunning: bool }
 
-let mutable private provenLive: ProvenLive option = None
+let private nothingProven =
+    { WorkbenchReady = false
+      ServerLive = false
+      FixtureOpen = false
+      ExtensionActive = false
+      CompanionRunning = false }
+
+let mutable private provenLive = nothingProven
 let mutable private setupElapsedMs = 0.0
-let mutable private timingSummaryPrinted = false
+let mutable private timingSummaryEmitted = false
+let mutable private timingSummaryReachedJobSummary = false
 
 let mutable private suiteStartMs: float option = None
 let mutable private checkStartMs: float option = None
-let mutable private checkRows = ResizeArray<string * float * float>()
+let mutable private checkRows = ResizeArray<Timing.PhaseTiming>()
 
 let provenLiveState () = provenLive
 
 let setupElapsed () = setupElapsedMs
 
-let timingSummaryWasPrinted () = timingSummaryPrinted
+/// True once a timing table has been rendered and emitted. Setup emits one as its last act, so a
+/// check can observe the summary path without performing the write it is verifying.
+let timingSummaryWasEmitted () = timingSummaryEmitted
+
+/// True once a timing table reached `GITHUB_STEP_SUMMARY` itself. False outside GitHub Actions,
+/// where there is no job summary file to reach.
+let timingSummaryWasWrittenToJobSummary () = timingSummaryReachedJobSummary
 
 let isProvenLive () =
-    match provenLive with
-    | Some state ->
-        state.WorkbenchReady
-        && state.ServerLive
-        && state.FixtureOpen
-        && state.ExtensionActive
-        && state.CompanionRunning
-    | None -> false
+    provenLive.WorkbenchReady
+    && provenLive.ServerLive
+    && provenLive.FixtureOpen
+    && provenLive.ExtensionActive
+    && provenLive.CompanionRunning
 
 /// Polls `predicate` until it holds or `timeoutMs` elapses. The predicate is async because every
 /// observation of the running editor returns a promise; wrap a synchronous condition in
@@ -82,7 +95,7 @@ let eventually (timeoutMs: int) (subject: string) (predicate: unit -> Async<bool
 
             if holds then
                 return ()
-            elif nowMs () >= deadline then
+            elif Proc.now () >= deadline then
                 Assert.fail (sprintf "Timed out after %i ms waiting for %s" timeoutMs subject)
             else
                 do! Async.Sleep PollIntervalMs
@@ -90,7 +103,7 @@ let eventually (timeoutMs: int) (subject: string) (predicate: unit -> Async<bool
         }
 
     async {
-        let deadline = nowMs () + float timeoutMs
+        let deadline = Proc.now () + float timeoutMs
         return! loop deadline
     }
 
@@ -103,9 +116,10 @@ let private verifySidecarLive () =
     if path = "" then
         failSetup "UI_TEST_SIDECAR is not set"
 
-    match Proc.tryParseSidecar path with
-    | None -> failSetup (sprintf "sidecar file is missing or does not parse at %s" path)
-    | Some(baseUrl, deadUrl) ->
+    match Proc.readSidecar path with
+    | Proc.SidecarMissing -> failSetup (sprintf "the sidecar file is missing at %s" path)
+    | Proc.SidecarUnreadable reason -> failSetup (sprintf "the sidecar file at %s does not parse: %s" path reason)
+    | Proc.SidecarLive(baseUrl, deadUrl) ->
         let body = Proc.httpBody (baseUrl + "/json")
 
         if body <> jsonProbeBody then
@@ -116,7 +130,35 @@ let private verifySidecarLive () =
         if not (Proc.curlConnectionRefused deadUrl) then
             failSetup (sprintf "dead port answered at %s — sidecar may be stale" deadUrl)
 
-let private tryFixtureOpen () =
+/// True when the Explorer shows the fixture folder as a workspace root. A workspace folder, not
+/// only an open tab, is what makes the extension's activation and every later check start from
+/// the same state.
+let private tryFixtureFolderOpen () =
+    async {
+        try
+            let bar = ExTester.ActivityBar.create ()
+            let! control = bar.getViewControl "Explorer" |> Async.AwaitPromise
+
+            if isNull (box control) then
+                return false
+            else
+                let! sideBar = control.openView () |> Async.AwaitPromise
+                let! sections = sideBar.getContent().getSections () |> Async.AwaitPromise
+                let mutable found = false
+
+                for section in sections do
+                    if not found then
+                        let! title = section.getTitle () |> Async.AwaitPromise
+
+                        if title.ToLowerInvariant().Contains fixtureFolderName then
+                            found <- true
+
+                return found
+        with _ ->
+            return false
+    }
+
+let private tryFixtureTabOpen () =
     async {
         try
             let view = ExTester.EditorView.create ()
@@ -145,66 +187,80 @@ let private tryExtensionActive () =
             return false
     }
 
+/// Matches only the companion that this run's VSCode spawned, by anchoring on the extensions
+/// directory the `.vsix` was installed into. A bare `Companion.dll` would also match the
+/// developer's own editor, and the tell would pass without the suite having started anything.
+let private companionPattern () =
+    let extensionsDir = Proc.env "UI_TEST_EXTENSIONS_DIR" ""
+
+    if extensionsDir = "" then
+        failSetup
+            "UI_TEST_EXTENSIONS_DIR is not set, so the companion tell cannot tell this run's companion from any other"
+
+    extensionsDir + ".*Companion.dll"
+
 let private tryCompanionRunning () =
-    async { return Proc.pidsMatching companionPattern |> Array.isEmpty |> not }
+    async { return Proc.pidsMatching (companionPattern ()) |> Array.isEmpty |> not }
+
+let private emitTimingTable (caption: string) (rows: Timing.PhaseTiming list) =
+    let reachedJobSummary = Proc.appendJobSummary (Timing.renderTable caption rows)
+    timingSummaryEmitted <- true
+    timingSummaryReachedJobSummary <- timingSummaryReachedJobSummary || reachedJobSummary
+
+let private setupRow () =
+    { Timing.Name = setupPhaseName
+      Timing.ElapsedMs = setupElapsedMs
+      Timing.BudgetMs = float SetupBudgetMs }
+
+let private suiteRow () =
+    let elapsed =
+        match suiteStartMs with
+        | Some start -> Proc.now () - start
+        | None -> 0.0
+
+    { Timing.Name = suitePhaseName
+      Timing.ElapsedMs = elapsed
+      Timing.BudgetMs = float SuiteBudgetMs }
 
 let private runSetup () =
     async {
-        let setupStart = nowMs ()
+        let setupStart = Proc.now ()
+        provenLive <- nothingProven
         let browser = ExTester.VSBrowser.instance
 
         do! ExTester.waitForWorkbench browser 120_000. |> Async.AwaitPromise
 
+        provenLive <-
+            { provenLive with
+                WorkbenchReady = true }
+
         verifySidecarLive ()
+        provenLive <- { provenLive with ServerLive = true }
 
-        do! eventually PostReloadRecoveryDeadlineMs "the harness fixture tab to open" (fun () -> tryFixtureOpen ())
+        do! eventually PostReloadRecoveryDeadlineMs "the fixture folder to open in the Explorer" tryFixtureFolderOpen
+        do! eventually PostReloadRecoveryDeadlineMs "the harness fixture tab to open" tryFixtureTabOpen
+        provenLive <- { provenLive with FixtureOpen = true }
 
-        do!
-            eventually PostReloadRecoveryDeadlineMs "FsHttp.Studio to activate in the status bar" (fun () ->
-                tryExtensionActive ())
-
-        do! eventually PostReloadRecoveryDeadlineMs "the companion process to exist" (fun () -> tryCompanionRunning ())
-
-        setupElapsedMs <- nowMs () - setupStart
+        do! eventually PostReloadRecoveryDeadlineMs "FsHttp.Studio to activate in the status bar" tryExtensionActive
 
         provenLive <-
-            Some
-                { WorkbenchReady = true
-                  ServerLive = true
-                  FixtureOpen = true
-                  ExtensionActive = true
-                  CompanionRunning = true }
+            { provenLive with
+                ExtensionActive = true }
 
+        do! eventually PostReloadRecoveryDeadlineMs "the companion process to exist" tryCompanionRunning
+
+        provenLive <-
+            { provenLive with
+                CompanionRunning = true }
+
+        setupElapsedMs <- Proc.now () - setupStart
+        emitTimingTable "Harness setup" [ setupRow () ]
         return ()
     }
 
-let private assertBudget (label: string) (budgetMs: float) (elapsedMs: float) =
-    if elapsedMs > budgetMs then
-        Assert.fail (sprintf "%s exceeded the %i s budget (observed %.0f ms)" label (int (budgetMs / 1000.0)) elapsedMs)
-
-let private printTimingTable () =
-    let rows =
-        ("Harness setup", setupElapsedMs, float SetupBudgetMs)
-        :: (checkRows |> Seq.toList)
-
-    let suiteElapsed =
-        match suiteStartMs with
-        | Some start -> nowMs () - start
-        | None -> 0.0
-
-    let bodyLines =
-        rows
-        |> List.map (fun (name, elapsed, budget) -> sprintf "| %s | %.0f ms | %.0f ms |" name elapsed budget)
-        |> String.concat "\n"
-
-    let md =
-        "| Phase | Elapsed | Budget |\n| --- | ---: | ---: |\n"
-        + bodyLines
-        + "\n"
-        + sprintf "| Suite total | %.0f ms | %.0f ms |\n" suiteElapsed (float SuiteBudgetMs)
-
-    Proc.appendJobSummary md
-    timingSummaryPrinted <- true
+let private assertBudget (timing: Timing.PhaseTiming) =
+    if Timing.overBudget timing then
+        Assert.fail (Timing.budgetFailure timing)
 
 [<Emit("$0.fullTitle()")>]
 let private testFullTitle (_test: obj) : string = jsNative
@@ -218,44 +274,47 @@ let private onAfterEach (test: obj option) =
 
         let elapsed =
             match checkStartMs with
-            | Some start -> nowMs () - start
+            | Some start -> Proc.now () - start
             | None -> 0.0
 
-        checkRows.Add(title, elapsed, float PerCheckBudgetMs)
-        assertBudget (sprintf "Check %s" title) (float PerCheckBudgetMs) elapsed
+        let timing =
+            { Timing.Name = sprintf "Check %s" title
+              Timing.ElapsedMs = elapsed
+              Timing.BudgetMs = float PerCheckBudgetMs }
+
+        checkRows.Add timing
         checkStartMs <- None
+        assertBudget timing
         return ()
     }
 
 let private onAfter () =
     async {
-        assertBudget "Harness setup" (float SetupBudgetMs) setupElapsedMs
+        // Emit before asserting. A run that drifts past a budget is the run whose timings a reader
+        // most needs, and `assertBudget` throws.
+        let rows = (setupRow () :: List.ofSeq checkRows) @ [ suiteRow () ]
+        emitTimingTable "UI test suite timings" rows
 
-        let suiteElapsed =
-            match suiteStartMs with
-            | Some start -> nowMs () - start
-            | None -> 0.0
-
-        assertBudget "Suite" (float SuiteBudgetMs) suiteElapsed
-        printTimingTable ()
+        assertBudget (setupRow ())
+        assertBudget (suiteRow ())
         return ()
     }
 
 let private onBeforeEach () =
     async {
         if suiteStartMs.IsNone then
-            suiteStartMs <- Some(nowMs ())
+            suiteStartMs <- Some(Proc.now ())
 
-        checkStartMs <- Some(nowMs ())
+        checkStartMs <- Some(Proc.now ())
         return ()
     }
 
 [<ImportMember(from = "./harness-hooks.mjs")>]
 let private registerHarnessHooks
-    (setupFn: unit -> JS.Promise<unit>)
-    (beforeEachFn: unit -> JS.Promise<unit>)
-    (afterEachFn: obj -> JS.Promise<unit>)
-    (afterFn: unit -> JS.Promise<unit>)
+    (_setupFn: unit -> JS.Promise<unit>)
+    (_beforeEachFn: unit -> JS.Promise<unit>)
+    (_afterEachFn: obj -> JS.Promise<unit>)
+    (_afterFn: unit -> JS.Promise<unit>)
     : unit =
     jsNative
 
@@ -268,11 +327,7 @@ let registerHooks () : unit =
         fun () -> onBeforeEach () |> Async.StartAsPromise
 
     let afterEachHook (test: obj) : JS.Promise<unit> =
-        let wrapped =
-            if System.Object.ReferenceEquals(test, null) then
-                None
-            else
-                Some test
+        let wrapped = if isNull (box test) then None else Some test
 
         onAfterEach wrapped |> Async.StartAsPromise
 
@@ -280,7 +335,3 @@ let registerHooks () : unit =
         fun () -> onAfter () |> Async.StartAsPromise
 
     registerHarnessHooks setup beforeEachHook afterEachHook afterHook
-
-/// Writes the timing table to the job summary. The `after` hook calls this too; the self-check
-/// calls it so a one-check run still proves the summary path before `after`.
-let writeTimingSummary () = printTimingTable ()
