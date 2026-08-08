@@ -4,6 +4,8 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
     <IsPackable>false</IsPackable>
+    <!-- ImportMember stubs and null checks in hook wiring; see Harness.fs. -->
+    <NoWarn>1182;3559</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

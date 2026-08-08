@@ -1,7 +1,5 @@
 // Shared harness for the UI test suite: ExTester setup, budgets, and the sanctioned wait
 // combinator. Checks import this module instead of inventing their own wait loops or budgets.
-#nowarn "3559"
-
 module Harness
 
 open Fable.Core
@@ -112,11 +110,7 @@ let private verifySidecarLive () =
 
         if body <> jsonProbeBody then
             failSetup (
-                sprintf
-                    "test server healthcheck failed at %s/json (got %A, expected %s)"
-                    baseUrl
-                    body
-                    jsonProbeBody
+                sprintf "test server healthcheck failed at %s/json (got %A, expected %s)" baseUrl body jsonProbeBody
             )
 
         if not (Proc.curlConnectionRefused deadUrl) then
@@ -163,17 +157,13 @@ let private runSetup () =
 
         verifySidecarLive ()
 
-        do!
-            eventually PostReloadRecoveryDeadlineMs "the harness fixture tab to open" (fun () ->
-                tryFixtureOpen ())
+        do! eventually PostReloadRecoveryDeadlineMs "the harness fixture tab to open" (fun () -> tryFixtureOpen ())
 
         do!
             eventually PostReloadRecoveryDeadlineMs "FsHttp.Studio to activate in the status bar" (fun () ->
                 tryExtensionActive ())
 
-        do!
-            eventually PostReloadRecoveryDeadlineMs "the companion process to exist" (fun () ->
-                tryCompanionRunning ())
+        do! eventually PostReloadRecoveryDeadlineMs "the companion process to exist" (fun () -> tryCompanionRunning ())
 
         setupElapsedMs <- nowMs () - setupStart
 
@@ -190,13 +180,7 @@ let private runSetup () =
 
 let private assertBudget (label: string) (budgetMs: float) (elapsedMs: float) =
     if elapsedMs > budgetMs then
-        Assert.fail (
-            sprintf
-                "%s exceeded the %i s budget (observed %.0f ms)"
-                label
-                (int (budgetMs / 1000.0))
-                elapsedMs
-        )
+        Assert.fail (sprintf "%s exceeded the %i s budget (observed %.0f ms)" label (int (budgetMs / 1000.0)) elapsedMs)
 
 let private printTimingTable () =
     let rows =
@@ -210,8 +194,7 @@ let private printTimingTable () =
 
     let bodyLines =
         rows
-        |> List.map (fun (name, elapsed, budget) ->
-            sprintf "| %s | %.0f ms | %.0f ms |" name elapsed budget)
+        |> List.map (fun (name, elapsed, budget) -> sprintf "| %s | %.0f ms | %.0f ms |" name elapsed budget)
         |> String.concat "\n"
 
     let md =
@@ -267,9 +250,7 @@ let private onBeforeEach () =
         return ()
     }
 
-#nowarn "1182"
-
-[<ImportMember(from="./harness-hooks.mjs")>]
+[<ImportMember(from = "./harness-hooks.mjs")>]
 let private registerHarnessHooks
     (setupFn: unit -> JS.Promise<unit>)
     (beforeEachFn: unit -> JS.Promise<unit>)
@@ -281,8 +262,10 @@ let private registerHarnessHooks
 /// Registers Mocha hooks through ExTester so failures capture screenshots. Call once from Main
 /// before `Mocha.runTests`.
 let registerHooks () : unit =
-    let setup : unit -> JS.Promise<unit> = fun () -> runSetup () |> Async.StartAsPromise
-    let beforeEachHook : unit -> JS.Promise<unit> = fun () -> onBeforeEach () |> Async.StartAsPromise
+    let setup: unit -> JS.Promise<unit> = fun () -> runSetup () |> Async.StartAsPromise
+
+    let beforeEachHook: unit -> JS.Promise<unit> =
+        fun () -> onBeforeEach () |> Async.StartAsPromise
 
     let afterEachHook (test: obj) : JS.Promise<unit> =
         let wrapped =
@@ -293,7 +276,8 @@ let registerHooks () : unit =
 
         onAfterEach wrapped |> Async.StartAsPromise
 
-    let afterHook : unit -> JS.Promise<unit> = fun () -> onAfter () |> Async.StartAsPromise
+    let afterHook: unit -> JS.Promise<unit> =
+        fun () -> onAfter () |> Async.StartAsPromise
 
     registerHarnessHooks setup beforeEachHook afterEachHook afterHook
 
