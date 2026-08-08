@@ -1,0 +1,125 @@
+# Single CI entry point for the ExTester UI suite. Local runs use the same run.sh.
+name: UI tests
+
+on:
+  workflow_call:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/ui-tests.yml'
+      - '.config/dotnet-tools.json'
+      - 'esbuild.mjs'
+      - 'global.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src/**'
+      - 'tests/ui.Tests/**'
+      - 'webpack.config.js'
+      - '.vscodeignore'
+      - '**/*.fsproj'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Supersede a branch's own in-flight run only. A run on main, or one a workflow_call caller
+# is waiting on, must finish — cancelling it would leave the gate's verdict ambiguous.
+concurrency:
+  group: ui-tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  STORAGE: /tmp/fshttp-ui-test-resources
+  EXT_DIR: /tmp/fshttp-ui-test-extensions
+
+jobs:
+  ui-tests:
+    name: UI test suite
+    runs-on: ubuntu-latest
+    # Covers three 20-minute suite attempts plus setup. The 20-minute bound that matters
+    # is per attempt, on the step below; this cap only stops a wedged runner billing forever.
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read VSCode pin for cache key
+        id: pin
+        run: |
+          set -euo pipefail
+          PIN="$(jq -r .setup.vscodeVersion tests/ui.Tests/extester.config.json)"
+          echo "version=$PIN" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          # Binaries only — never $STORAGE/settings, which run.sh deletes so no VSCode
+          # profile state carries between runs. No restore-keys: a prefix fallback would
+          # serve the previous pin's VSCode, which is the one thing the pinned key prevents.
+          path: |
+            ${{ env.STORAGE }}/VSCode-linux-x64
+            ${{ env.STORAGE }}/chromedriver-linux64
+          key: ${{ runner.os }}-extest-${{ steps.pin.outputs.version }}
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
+
+      - name: Install xvfb and libraries for ExTester
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2t64 \
+            || sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2
+
+      - name: Ubuntu 24 AppArmor tweak (ExTester openResources)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - run: dotnet tool restore
+
+      - run: npm ci
+
+      - name: Package extension (.vsix)
+        id: vsix
+        run: |
+          set -euo pipefail
+          npm run package
+          VSIX="$(ls -1 fshttp-studio-*.vsix | tail -1)"
+          echo "path=$PWD/$VSIX" >> "$GITHUB_OUTPUT"
+
+      - name: Build test server
+        run: dotnet publish tests/ui.Tests/server/UiTestServer.fsproj -c Release -o out/ui-test-server
+
+      - name: Run UI test suite
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 20
+          max_attempts: 3
+          retry_wait_seconds: 30
+          # bash, and run.sh invoked directly: piping it into tee would report a red
+          # suite as a green job, and every budget assert depends on red staying red.
+          shell: bash
+          command: |
+            export VSIX="${{ steps.vsix.outputs.path }}"
+            export UI_TEST_SKIP_SERVER_BUILD=1
+            tests/ui.Tests/run.sh
+
+      - name: Upload failure screenshots and logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.STORAGE }}/screenshots/**/*.png
+            ${{ env.STORAGE }}/chromedriver.log
+          if-no-files-found: ignore
