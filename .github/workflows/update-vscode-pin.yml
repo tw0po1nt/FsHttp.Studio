@@ -1,0 +1,108 @@
+name: Update VSCode pin
+
+# Opens a pull request when the ExTester VSCode pin falls behind the latest
+# stable release. The UI tests job on that pull request is the gate for the
+# new version. A green run means a merge completes the update.
+#
+# Uses gh pr create with the built-in GITHUB_TOKEN. No third-party action
+# opens the pull request. Permissions stay on this workflow only.
+on:
+  schedule:
+    # Weekly. A no-op week is free. A patch that breaks ChromeDriver must not
+    # wait three weeks to surface.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: update-vscode-pin
+  cancel-in-progress: false
+
+permissions:
+  contents: write # push the pin branch
+  pull-requests: write # open the pin-update pull request
+
+jobs:
+  update-pin:
+    name: Compare pin and open a pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve the latest stable VSCode version
+        id: compare
+        run: |
+          set -euo pipefail
+          CONFIG=tests/ui.Tests/extester.config.json
+          PIN="$(jq -r .setup.vscodeVersion "$CONFIG")"
+          # Same API ExTester uses for "latest": first entry in the stable stream.
+          LATEST="$(curl -fsSL https://update.code.visualstudio.com/api/releases/stable | jq -r '.[0]')"
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            echo "::error::Could not resolve the latest stable VSCode version."
+            exit 1
+          fi
+          echo "pin=$PIN" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          if [ "$PIN" = "$LATEST" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Pin $PIN already matches the latest stable release."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Pin $PIN is behind the latest stable release $LATEST."
+          fi
+
+      - name: Push the updated pin and open a pull request
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PIN: ${{ steps.compare.outputs.pin }}
+          LATEST: ${{ steps.compare.outputs.latest }}
+        run: |
+          set -euo pipefail
+          CONFIG=tests/ui.Tests/extester.config.json
+          BRANCH="chore/vscode-pin-${LATEST}"
+
+          # One open pull request per target version. A later weekly run must
+          # not open a duplicate while the first pull request waits for review.
+          EXISTING="$(gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number // empty')"
+          if [ -n "$EXISTING" ]; then
+            echo "Pull request #$EXISTING already updates the pin to $LATEST."
+            exit 0
+          fi
+
+          jq --arg v "$LATEST" \
+            '.setup.vscodeVersion = $v | .run.vscodeVersion = $v' \
+            "$CONFIG" > "${CONFIG}.tmp"
+          mv "${CONFIG}.tmp" "$CONFIG"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add "$CONFIG"
+          git commit -m "$(cat <<EOF
+          Update the ExTester VSCode pin to ${LATEST}.
+
+          The previous pin was ${PIN}. The UI tests job on this pull request is the gate for the new version.
+          EOF
+          )"
+          # force-with-lease: reuse a leftover branch from a closed pin PR.
+          # Refuse the push if someone else moved the branch tip.
+          git push -u origin "HEAD:refs/heads/${BRANCH}" --force-with-lease
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Update ExTester VSCode pin to ${LATEST}" \
+            --body "$(cat <<EOF
+          ## Summary
+
+          The pin in \`tests/ui.Tests/extester.config.json\` is \`${PIN}\`.
+          The latest stable VSCode release is \`${LATEST}\`.
+          This pull request sets \`setup.vscodeVersion\` and \`run.vscodeVersion\` to \`${LATEST}\`.
+
+          ## Gate
+
+          The UI tests job on this pull request is the gate run for the new version.
+          A green run means that a merge completes the update.
+          EOF
+          )"
