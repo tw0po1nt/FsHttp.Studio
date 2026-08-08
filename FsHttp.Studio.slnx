@@ -6,5 +6,6 @@
   <Project Path="src/host/Extension.fsproj" />
   <Project Path="tests/host.Tests/Extension.Tests.fsproj" />
   <Project Path="src/webview/Webview.fsproj" />
+  <Project Path="tests/ui.Tests/Ui.Tests.fsproj" />
   <Project Path="tests/ui.Tests/server/UiTestServer.fsproj" />
 </Solution>
