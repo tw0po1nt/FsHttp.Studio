@@ -4,4 +4,5 @@ module Main
 
 open Fable.Mocha
 
-Mocha.runTests (testList "FsHttp.Studio UI tests" [ ScaffoldTests.tests ]) |> ignore
+Mocha.runTests (testList "FsHttp.Studio UI tests" [ ScaffoldTests.tests ])
+|> ignore
