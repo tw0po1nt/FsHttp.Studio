@@ -16,6 +16,6 @@ await esbuild.build({
   platform: "node",
   target: "node18",
   format: "cjs",
-  external: ["vscode"],
+  external: ["vscode", "vscode-extension-tester", "selenium-webdriver"],
   sourcemap: true,
 });

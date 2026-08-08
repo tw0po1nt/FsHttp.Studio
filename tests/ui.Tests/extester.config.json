@@ -1,0 +1,17 @@
+{
+  "$schema": "../../node_modules/vscode-extension-tester/resources/extester.schema.json",
+  "setup": {
+    "vscodeVersion": "1.132.0",
+    "type": "stable",
+    "storage": "/tmp/fshttp-ui-test-resources",
+    "extensionsDir": "/tmp/fshttp-ui-test-extensions"
+  },
+  "run": {
+    "vscodeVersion": "1.132.0",
+    "type": "stable",
+    "storage": "/tmp/fshttp-ui-test-resources",
+    "extensionsDir": "/tmp/fshttp-ui-test-extensions",
+    "mochaConfig": "./.mocharc.js",
+    "settings": "./settings.json"
+  }
+}

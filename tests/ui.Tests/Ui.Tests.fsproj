@@ -8,8 +8,10 @@
 
   <ItemGroup>
     <Compile Include="Assert.fs" />
+    <Compile Include="Proc.fs" />
+    <Compile Include="ExTester.fs" />
     <Compile Include="Harness.fs" />
-    <Compile Include="ScaffoldTests.fs" />
+    <Compile Include="SelfCheckTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 
