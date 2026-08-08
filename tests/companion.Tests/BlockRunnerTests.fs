@@ -6,6 +6,7 @@ module Companion.Tests.BlockRunnerTests
 // sits on top of both. This file drives `BlockRunner.run` itself.
 
 open System
+open System.IO
 open Expecto
 open Companion.BlockRunner
 open Companion.Tests.TestServer
@@ -26,6 +27,9 @@ let private pngMagic =
     [| 0x89uy; 0x50uy; 0x4Euy; 0x47uy; 0x0Duy; 0x0Auy; 0x1Auy; 0x0Auy |]
 
 let private pngBytes = Array.append pngMagic [| 1uy; 2uy; 3uy; 4uy |]
+
+/// A Run with no document path. Existing cases keep today's untitled / unspecified behavior.
+let private runSource source blockIndex = run source blockIndex None
 
 /// Asserts that a diagnostic points somewhere the editor can actually highlight. A setup
 /// diagnostic may be anchored rather than native, so the line is not fixed, but it must still
@@ -54,7 +58,7 @@ let tests =
 
               let source = script (sprintf "http {\n    GET \"%s/png\"\n}\n" server.BaseUrl)
 
-              match run source 0 with
+              match runSource source 0 with
               | Ok(status, _reason, headers, contentType, bodyBase64) ->
                   Expect.equal status 200 "status should round-trip"
                   Expect.equal contentType "image/png" "contentType should come from the content header"
@@ -78,7 +82,7 @@ let tests =
 
               let source = script (sprintf "http {\n    GET \"%s/missing\"\n}\n" server.BaseUrl)
 
-              match run source 0 with
+              match runSource source 0 with
               | Ok(status, _, _, _, _) -> Expect.equal status 404 "the non-2xx status should come through as ok"
               | other -> failtestf "a non-2xx response should still be ok, got %A" other
           }
@@ -101,7 +105,7 @@ let tests =
               let source = "open FsHttp\n\nhttp {\n    GET \"https://example.com\"\n}\n"
               let sourceLineCount = source.Split('\n').Length
 
-              match run source 0 with
+              match runSource source 0 with
               | CompileError diagnostics ->
                   // The failure comes from the companion addendum's own `open FsHttp`, which has
                   // no user-source line. Its range must still anchor inside the real source, and
@@ -128,7 +132,7 @@ let tests =
                           server.BaseUrl
                   )
 
-              match run source 1 with
+              match runSource source 1 with
               | Ok _ -> Expect.equal hitCounter.Value 1 "only the target block's own request should have fired"
               | other -> failtestf "expected ok, got %A" other
           }
@@ -152,7 +156,7 @@ let tests =
 
                   let source = script (sourceFor (server.BaseUrl + "/hit"))
 
-                  match run source 0 with
+                  match runSource source 0 with
                   | Ok(status, _, _, _, _) ->
                       Expect.equal status 200 (sprintf "%s should run to a successful response" name)
                       Expect.equal hitCounter.Value 1 (sprintf "%s should send exactly one request" name)
@@ -176,7 +180,7 @@ let tests =
                           server.BaseUrl
                   )
 
-              match run source 0 with
+              match runSource source 0 with
               | Ok(status, _, _, _, _) ->
                   Expect.equal status 200 "a backtick-quoted binding should reach its block"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
@@ -193,7 +197,7 @@ let tests =
               let source =
                   script (sprintf "let private secret =\n    http {\n        GET \"%s/hit\"\n    }\n" server.BaseUrl)
 
-              match run source 0 with
+              match runSource source 0 with
               | Ok(status, _, _, _, _) ->
                   Expect.equal status 200 "a private binding should still run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
@@ -207,7 +211,7 @@ let tests =
               let source =
                   script (sprintf "module private Vault =\n    http {\n        GET \"%s/hit\"\n    }\n" server.BaseUrl)
 
-              match run source 0 with
+              match runSource source 0 with
               | Ok(status, _, _, _, _) ->
                   Expect.equal status 200 "a block in a private module should still run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
@@ -227,7 +231,7 @@ let tests =
                       sprintf "let internal semiSecret =\n    http {\n        GET \"%s/hit\"\n    }\n" server.BaseUrl
                   )
 
-              match run source 0 with
+              match runSource source 0 with
               | Ok(status, _, _, _, _) ->
                   Expect.equal status 200 "an internal binding should run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
@@ -251,7 +255,7 @@ let tests =
                           server.BaseUrl
                   )
 
-              match run source 0 with
+              match runSource source 0 with
               | Ok(status, _, _, _, _) ->
                   Expect.equal status 200 "an attributed binding should run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
@@ -273,7 +277,7 @@ let tests =
                           server.BaseUrl
                   )
 
-              match run source 0 with
+              match runSource source 0 with
               | Ok(status, _, _, _, _) ->
                   Expect.equal status 200 "the annotated binding should still run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request, not two"
@@ -295,7 +299,7 @@ let tests =
                           server.BaseUrl
                   )
 
-              match run source 0 with
+              match runSource source 0 with
               | Ok(status, _, _, _, _) ->
                   Expect.equal status 200 "the outer, targeted block must survive the containing sibling span"
                   Expect.equal hitCounter.Value 1 "only the target's own request should fire"
@@ -318,7 +322,7 @@ let tests =
                           server.BaseUrl
                   )
 
-              match run source 1 with
+              match runSource source 1 with
               | Ok(status, _, _, _, _) ->
                   Expect.equal status 200 "the block below the class and its member should still run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
@@ -336,7 +340,7 @@ let tests =
               let source =
                   script (sprintf "http {\n    GET \"%s/hit\"\n}\n|> Request.send\n" server.BaseUrl)
 
-              match run source 0 with
+              match runSource source 0 with
               | Ok _ -> Expect.equal hitCounter.Value 1 "the script's own trailing pipe must not send a second request"
               | other -> failtestf "expected ok, got %A" other
           }
@@ -359,7 +363,7 @@ let tests =
                           server.BaseUrl
                   )
 
-              match run source 0 with
+              match runSource source 0 with
               | Ok _ ->
                   Expect.equal firstHits.Value 1 "the target block should have sent its own request"
                   Expect.equal secondHits.Value 0 "the code after the target block must not run"
@@ -376,7 +380,7 @@ let tests =
               let blockLine = "http { GET undefinedBaseUrl }"
               let expectedCol = blockLine.IndexOf "undefinedBaseUrl"
 
-              match run source 0 with
+              match runSource source 0 with
               | CompileError diagnostics ->
                   Expect.isNonEmpty diagnostics "at least one diagnostic expected"
 
@@ -403,7 +407,7 @@ let tests =
               let headerLine = "    header undefinedHeaderName \"x\""
               let expectedCol = headerLine.IndexOf "undefinedHeaderName"
 
-              match run source 0 with
+              match runSource source 0 with
               | CompileError diagnostics ->
                   Expect.isNonEmpty diagnostics "at least one diagnostic expected"
 
@@ -433,7 +437,7 @@ let tests =
                   script (sprintf "let a =\n    http {\n        GET \"%s/stream.png\"\n    }\n" server.BaseUrl)
 
               for i in 1..3 do
-                  match run source 0 with
+                  match runSource source 0 with
                   | Ok(status, _, _, _, bodyBase64) ->
                       Expect.equal status 200 (sprintf "Run #%d should be a successful 200" i)
 
@@ -447,7 +451,7 @@ let tests =
           test "a non-compiling target block returns compileError with a source range" {
               let source = script "http {\n    GET undefinedBaseUrl\n}\n"
 
-              match run source 0 with
+              match runSource source 0 with
               | CompileError diagnostics ->
                   Expect.isNonEmpty diagnostics "at least one diagnostic expected"
                   let d = diagnostics.[0]
@@ -472,7 +476,7 @@ let tests =
                   script
                       "module M =\n    let ``__fsHttpStudio_target`` = 1\n\n    http {\n        GET \"https://example.com\"\n    }\n"
 
-              match run source 0 with
+              match runSource source 0 with
               | CompileError diagnostics ->
                   Expect.isNonEmpty diagnostics "at least one diagnostic expected"
 
@@ -493,7 +497,7 @@ let tests =
               let source =
                   script "let x : int = \"not an int\"\n\nhttp {\n    GET \"https://example.com\"\n}\n"
 
-              match run source 0 with
+              match runSource source 0 with
               | CompileError diagnostics -> Expect.isNonEmpty diagnostics "at least one diagnostic expected"
               | other -> failtestf "expected compileError, got %A" other
           }
@@ -519,7 +523,7 @@ let tests =
               let source =
                   "let f () =\n    let x = 1\n    |> ignore\n    |> ignore\n    x\n\nhttp {\n    GET \"https://example.com\"\n}\n"
 
-              match run source 0 with
+              match runSource source 0 with
               | CompileError diagnostics ->
                   Expect.isNonEmpty diagnostics "at least one diagnostic expected"
 
@@ -557,7 +561,7 @@ let tests =
                       "for name in [ \"pidgey\"; \"rattata\" ] do\n    http {\n        GET \"%s/hit\"\n    }\n"
                       server.BaseUrl
 
-              match run source 0 with
+              match runSource source 0 with
               | Refused(code, name) ->
                   Expect.equal code "loopBody" "the loop body's own wire code should come back"
                   Expect.equal name None "loopBody carries no name"
@@ -577,7 +581,7 @@ let tests =
                       "#r \"nuget: %s, 1.2.3\"\nfor name in [ \"pidgey\" ] do\n    http {\n        GET \"http://example.invalid\"\n    }\n"
                       package
 
-              match run source 0 with
+              match runSource source 0 with
               | Refused(code, _) -> Expect.equal code "loopBody" "the loop body should still be the refusal"
               | other -> failtestf "expected Refused, got %A" other
 
@@ -592,13 +596,13 @@ let tests =
 
               let source = script (sprintf "http {\n    GET \"%s/hit\"\n}\n" server.BaseUrl)
 
-              match run source 0 with
+              match runSource source 0 with
               | Ok _ -> ()
               | other -> failtestf "expected the initial Run to load its pin, got %A" other
 
               let workerSource = source.Replace(fsHttpRef, "13.3.0")
 
-              match run workerSource 4 with
+              match runSource workerSource 4 with
               | Refused(code, name) ->
                   Expect.equal code "staleBlockIndex" "the worker must preserve the stale-lens code"
                   Expect.equal name None "staleBlockIndex carries no name"
@@ -621,7 +625,7 @@ let tests =
                           server.BaseUrl
                   )
 
-              match run source 1 with
+              match runSource source 1 with
               | Refused(code, name) ->
                   Expect.equal code "unboundBlockValue" "case 11c's own wire code should come back"
                   Expect.equal name (Some "dexId") "the name should come from the producer's own binding"
@@ -645,7 +649,7 @@ let tests =
                           server.BaseUrl
                   )
 
-              match run source 1 with
+              match runSource source 1 with
               | Refused(code, name) ->
                   Expect.equal code "unboundBlockValue" "case 11c's own wire code should come back"
                   Expect.equal name (Some "dexId") "the name should come from the producer's own binding"
@@ -660,7 +664,7 @@ let tests =
               let source =
                   script "let y = totallyUndefinedName\n\nhttp {\n    GET \"https://example.com\"\n}\n"
 
-              match run source 0 with
+              match runSource source 0 with
               | CompileError _ -> ()
               | other -> failtestf "expected compileError for a real typo, got %A" other
           }
@@ -675,7 +679,7 @@ let tests =
                       "let dexId =\n    http {\n        GET \"https://example.com\"\n    }\n\nlet consumerRef = dexId\nlet typo = totallyUndefinedName\n\nhttp {\n    GET \"https://example.com\"\n}\n"
                   )
 
-              match run source 1 with
+              match runSource source 1 with
               | CompileError _ -> ()
               | other -> failtestf "expected compileError for a typo beside a blanked-name error, got %A" other
           }
@@ -696,7 +700,7 @@ let tests =
                           server.BaseUrl
                   )
 
-              match run source 1 with
+              match runSource source 1 with
               | Refused(code, name) ->
                   Expect.equal code "unboundBlockValue" "a blanked refused binding is still case 11c"
                   Expect.equal name (Some "getUser") "the name should come from the binding's head pattern"
@@ -719,7 +723,7 @@ let tests =
                           server.BaseUrl
                   )
 
-              match run source 1 with
+              match runSource source 1 with
               | Refused(code, name) ->
                   Expect.equal code "unboundBlockValue" "case 11c's own wire code should come back"
                   Expect.equal name (Some "dex id") "the name should come back without its backticks"
@@ -736,7 +740,7 @@ let tests =
               let source =
                   script "let x : int = failwith \"setup blew up\"\n\nhttp {\n    GET \"https://example.com\"\n}\n"
 
-              match run source 0 with
+              match runSource source 0 with
               | RuntimeError message ->
                   Expect.stringContains message "setup blew up" "the exception message should survive"
               | other -> failtestf "expected runtimeError, got %A" other
@@ -761,7 +765,7 @@ let tests =
                   script (sprintf "http {\n    GET \"%s/stream.png\"\n}\n" server.BaseUrl)
 
               for i in 1..3 do
-                  match run source 0 with
+                  match runSource source 0 with
                   | Ok(status, _, _, _, bodyBase64) ->
                       Expect.equal status 200 (sprintf "Run #%d should be a successful 200" i)
 
@@ -789,11 +793,11 @@ let tests =
                       version
                       server.BaseUrl
 
-              match run (sourceFor "15.0.3") 0 with
+              match runSource (sourceFor "15.0.3") 0 with
               | Ok(status, _, _, _, _) -> Expect.equal status 200 "first pin (15.0.3) should run"
               | other -> failtestf "first pin expected ok, got %A" other
 
-              match run (sourceFor "13.3.0") 0 with
+              match runSource (sourceFor "13.3.0") 0 with
               | Ok(status, _, _, _, bodyBase64) ->
                   Expect.equal status 200 "second, differently-pinned Run (13.3.0) should also run"
 
@@ -817,7 +821,7 @@ let tests =
               let source = script (sprintf "http {\n    GET \"%s/hang\"\n}\n" server.BaseUrl)
 
               let sw = Diagnostics.Stopwatch.StartNew()
-              let outcome = runInWorker 5000 source 0
+              let outcome = runInWorker 5000 source 0 None
               sw.Stop()
               // Unblock the listener thread, so the server can shut down cleanly.
               release.Set()
@@ -835,7 +839,7 @@ let tests =
           test "a network failure returns runtimeError, distinct from compileError" {
               let source = script "http {\n    GET \"http://127.0.0.1:1/nope\"\n}\n"
 
-              match run source 0 with
+              match runSource source 0 with
               | RuntimeError _ -> ()
               | other -> failtestf "expected runtimeError, got %A" other
           }
@@ -858,7 +862,7 @@ let tests =
               let versionlessSource =
                   sprintf "#r \"nuget: FsHttp\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n" server.BaseUrl
 
-              match run versionlessSource 0 with
+              match runSource versionlessSource 0 with
               | Ok(status, _, _, _, _) -> Expect.equal status 200 "the version-less Run should load latest and run"
               | other -> failtestf "version-less Run expected ok, got %A" other
 
@@ -868,7 +872,7 @@ let tests =
               let pinnedSource =
                   sprintf "#r \"nuget: FsHttp, 13.3.0\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n" server.BaseUrl
 
-              match run pinnedSource 0 with
+              match runSource pinnedSource 0 with
               | Ok(status, _, _, _, bodyBase64) ->
                   Expect.equal status 200 "the later differently-pinned Run should run without an ALC collision"
 
@@ -878,6 +882,81 @@ let tests =
                       "the conflict-routed Run's body should be byte-intact"
               | other ->
                   failtestf "differently-pinned Run after a version-less load expected ok (no collision), got %A" other
+          }
+
+          test "__SOURCE_DIRECTORY__ resolves to the directory of a known scriptFileName" {
+              // A Run that reads a file beside the script must resolve against the script's own
+              // directory, and not against the companion's working directory. The host passes
+              // the absolute document path as `scriptFileName`; FSI's overload sets
+              // `__SOURCE_DIRECTORY__` from it.
+              let dir =
+                  Path.Combine(Path.GetTempPath(), "fshttp-studio-source-dir-" + Guid.NewGuid().ToString("N"))
+
+              Directory.CreateDirectory(dir) |> ignore
+
+              try
+                  File.WriteAllText(Path.Combine(dir, "marker.txt"), "beside")
+                  let scriptPath = Path.Combine(dir, "probe.fsx")
+
+                  use server = new TestServer(Map [ "/beside", textHandler 200 "resolved" ])
+
+                  let source =
+                      script (
+                          String.concat
+                              "\n"
+                              [ sprintf "let baseUrl = \"%s\"" server.BaseUrl
+                                "let marker = System.IO.File.ReadAllText(System.IO.Path.Combine(__SOURCE_DIRECTORY__, \"marker.txt\"))"
+                                "http {"
+                                "    GET (sprintf \"%s/%s\" baseUrl marker)"
+                                "}"
+                                "" ]
+                      )
+
+                  match run source 0 (Some scriptPath) with
+                  | Ok(status, _, _, _, bodyBase64) ->
+                      Expect.equal status 200 "the sidecar beside the script should be readable"
+                      let body = Text.Encoding.UTF8.GetString(Convert.FromBase64String bodyBase64)
+                      Expect.equal body "resolved" "the request should use the sidecar's contents"
+                  | other -> failtestf "expected ok from a beside-script read, got %A" other
+              finally
+                  Directory.Delete(dir, true)
+          }
+
+          test "a --worker child also resolves __SOURCE_DIRECTORY__ from scriptFileName" {
+              // The conflict path must carry the same document path into the throwaway child.
+              // Drive `runInWorker` directly so the assertion does not depend on pin state.
+              let dir =
+                  Path.Combine(Path.GetTempPath(), "fshttp-studio-worker-source-dir-" + Guid.NewGuid().ToString("N"))
+
+              Directory.CreateDirectory(dir) |> ignore
+
+              try
+                  File.WriteAllText(Path.Combine(dir, "marker.txt"), "worker-beside")
+                  let scriptPath = Path.Combine(dir, "probe.fsx")
+
+                  use server =
+                      new TestServer(Map [ "/worker-beside", textHandler 200 "worker-resolved" ])
+
+                  let source =
+                      script (
+                          String.concat
+                              "\n"
+                              [ sprintf "let baseUrl = \"%s\"" server.BaseUrl
+                                "let marker = System.IO.File.ReadAllText(System.IO.Path.Combine(__SOURCE_DIRECTORY__, \"marker.txt\"))"
+                                "http {"
+                                "    GET (sprintf \"%s/%s\" baseUrl marker)"
+                                "}"
+                                "" ]
+                      )
+
+                  match runInWorker workerTimeoutMs source 0 (Some scriptPath) with
+                  | Ok(status, _, _, _, bodyBase64) ->
+                      Expect.equal status 200 "the worker sidecar beside the script should be readable"
+                      let body = Text.Encoding.UTF8.GetString(Convert.FromBase64String bodyBase64)
+                      Expect.equal body "worker-resolved" "the worker request should use the sidecar's contents"
+                  | other -> failtestf "expected ok from a worker beside-script read, got %A" other
+              finally
+                  Directory.Delete(dir, true)
           } ]
 
 // Pure pin parsing, with no FSI and no server. It produces the input that `run`'s conflict

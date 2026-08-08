@@ -23,6 +23,9 @@ type Disposable =
 
 type TextDocument =
     abstract fileName: string
+    /// True for an untitled buffer that has never been saved. Such a buffer has no real path,
+    /// so a Run must not invent one for `__SOURCE_DIRECTORY__`.
+    abstract isUntitled: bool
     abstract getText: unit -> string
 
 /// vscode.Range. The 4-number overload constructs it (startLine, startChar, endLine, endChar).

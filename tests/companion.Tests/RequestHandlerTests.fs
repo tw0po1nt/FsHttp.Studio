@@ -140,4 +140,44 @@ let tests =
 
               let hasName, _ = response.TryGetProperty "name"
               Expect.isFalse hasName "a code with no name should omit the property entirely"
+          }
+
+          test "run request accepts scriptFileName without changing a pre-eval refusal" {
+              // The path reaches `run` before the gate. A refused shape must still refuse, which
+              // proves the new field parses and does not disturb locate-free refusal handling.
+              let request =
+                  JsonSerializer.Serialize(
+                      {| tag = "run"
+                         source =
+                          "for name in [ \"pidgey\" ] do\n    http {\n        GET \"https://example.com\"\n    }\n"
+                         blockIndex = 0
+                         scriptFileName = "/tmp/probe.fsx" |}
+                  )
+
+              let response = respondTo request
+              Expect.equal (response.GetProperty("tag").GetString()) "refused" "tag should be refused"
+              Expect.equal (response.GetProperty("code").GetString()) "loopBody" "code should name the shape"
+          }
+
+          test "locate request stays text-only when a scriptFileName property is also present" {
+              // `locate` reads only `source`. An accidental extra property must not change the
+              // ranges, because path symbols matter only at evaluation.
+              let source = "http {\n    GET \"https://example.com/1\"\n}\n"
+
+              let withoutPath =
+                  respondTo (JsonSerializer.Serialize({| tag = "locate"; source = source |}))
+
+              let withPath =
+                  respondTo (
+                      JsonSerializer.Serialize(
+                          {| tag = "locate"
+                             source = source
+                             scriptFileName = "/tmp/probe.fsx" |}
+                      )
+                  )
+
+              Expect.equal
+                  (withoutPath.GetProperty("ranges").GetArrayLength())
+                  (withPath.GetProperty("ranges").GetArrayLength())
+                  "locate ranges must not depend on scriptFileName"
           } ]

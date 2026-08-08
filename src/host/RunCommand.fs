@@ -51,6 +51,10 @@ let private resultUpdate
 let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: int) (myGeneration: int) : Async<unit> =
     async {
         let source = document.getText ()
+        // A saved document's `fileName` is the absolute path FSI needs for `__SOURCE_DIRECTORY__`.
+        // An untitled buffer has no real path; omit it so the companion keeps today's default.
+        let scriptFileName = if document.isUntitled then None else Some document.fileName
+
         let! ranges = Companion.locate h source
 
         let method, url =
@@ -59,7 +63,7 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
             | None -> "", ""
 
         let started: float = emitJsExpr (nonNull (box 0)) "Date.now()"
-        let! result = Companion.run h source blockIndex
+        let! result = Companion.run h source blockIndex scriptFileName
         let elapsed: float = (emitJsExpr (nonNull (box 0)) "Date.now()") - started
 
         if myGeneration = generation then
