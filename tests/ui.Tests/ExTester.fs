@@ -30,6 +30,7 @@ type WebView =
     abstract findWebElement: locator: obj -> JS.Promise<WebElement>
 
 type VSBrowser =
+    abstract openResources: paths: string[] -> JS.Promise<unit>
     abstract waitForWorkbench: timeoutMs: float -> JS.Promise<unit>
     abstract takeScreenshot: name: string -> JS.Promise<unit>
     abstract driver: obj
@@ -171,6 +172,12 @@ let By: ByStatic = jsNative
 
 let waitForWorkbench (browser: VSBrowser) (timeoutMs: float) : JS.Promise<unit> =
     emitJsExpr (browser, timeoutMs) "$0.waitForWorkbench($1)"
+
+/// Opens a file in the workbench. Pair with a later `Harness.eventually` on the tab or the
+/// lenses — `openResources` returns when ExTester has asked VSCode to open the path, not when
+/// the editor has finished rendering it.
+let openResource (browser: VSBrowser) (path: string) : JS.Promise<unit> =
+    emitJsExpr (browser, path) "$0.openResources($1)"
 
 let private switchToFrameTimed (view: WebView) (timeoutMs: float) : JS.Promise<unit> =
     emitJsExpr (view, timeoutMs) "$0.switchToFrame($1)"
