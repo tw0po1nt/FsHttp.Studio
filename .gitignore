@@ -16,6 +16,9 @@ obj/
 node_modules/
 dist/
 out/
+
+# UI test harness — generated when the test HTTP server starts
+tests/ui.Tests/fixtures/sidecar.json
 *.vsix
 
 # Env
