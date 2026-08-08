@@ -533,10 +533,15 @@ let private runLocated
         use session =
             FsiEvaluationSession.Create(fsiConfig, args, inReader, Console.Error, Console.Error, collectible = true)
 
-        // When the host supplies the absolute document path, both evals use FSI's
+        // When the extension host supplies the script's absolute path, both evals use FSI's
         // `scriptFileName` overload so `__SOURCE_DIRECTORY__` and `__SOURCE_FILE__` resolve to
         // the script's own directory and name. An untitled buffer omits the path and keeps
         // FSI's default (`input.fsx` under the process working directory).
+        //
+        // The path also re-bases FSI's own relative resolution: a `#load "sibling.fsx"` or a
+        // `#r "lib.dll"` in the Setup then resolves beside the script, rather than beside the
+        // companion. That is the same correctness the two symbols buy, and a saved script needs
+        // it for the same reason.
         let evalInteraction code =
             match scriptFileName with
             | Some path -> session.EvalInteractionNonThrowing(code, path)
@@ -607,8 +612,9 @@ let private runLocated
                             RuntimeError ex.Message
             | errors -> CompileError errors
 
-/// `runLocated` against a fresh locate of `source`. This is the `--worker` child's entry point.
-/// The child receives source text and an optional absolute `scriptFileName`. In the parent,
+/// `runLocated` against a fresh locate of `source`. This is the `--worker` child's entry point,
+/// and the direct in-process path. The child receives source text and an optional absolute
+/// `scriptFileName`, which is the script's own path when it is saved. In the parent,
 /// `run` has already located the blocks to decide the gate, so it calls `runLocated` directly
 /// rather than parse a second time.
 let runInProcessDirect (source: string) (blockIndex: int) (scriptFileName: string option) : RunOutcome =
@@ -850,17 +856,12 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) (scriptFileN
                 with _ ->
                     ()
 
+            // One shape, always. `Envelope.getOptionalStringProp` reads the empty string as
+            // "no value", so the absent case needs no second record to construct here.
             let request: obj =
-                match scriptFileName with
-                | Some path ->
-                    {| source = source
-                       blockIndex = blockIndex
-                       scriptFileName = path |}
-                    :> obj
-                | None ->
-                    {| source = source
-                       blockIndex = blockIndex |}
-                    :> obj
+                {| source = source
+                   blockIndex = blockIndex
+                   scriptFileName = defaultArg scriptFileName "" |}
 
             writeFrame proc.StandardInput.BaseStream (JsonSerializer.SerializeToUtf8Bytes request)
             proc.StandardInput.Close()

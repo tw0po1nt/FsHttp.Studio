@@ -51,9 +51,9 @@ let private resultUpdate
 let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: int) (myGeneration: int) : Async<unit> =
     async {
         let source = document.getText ()
-        // A saved document's `fileName` is the absolute path FSI needs for `__SOURCE_DIRECTORY__`.
-        // An untitled buffer has no real path; omit it so the companion keeps today's default.
-        let scriptFileName = if document.isUntitled then None else Some document.fileName
+        // A `file`-scheme script's `fileName` is the absolute path FSI needs for
+        // `__SOURCE_DIRECTORY__`. Anything else has no real local path, so the Run sends none.
+        let scriptFileName = scriptFileNameFor document.uri.scheme document.fileName
 
         let! ranges = Companion.locate h source
 

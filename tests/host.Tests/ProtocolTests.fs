@@ -26,6 +26,34 @@ let companionStoppedTextTests =
           } ]
 
 [<Tests>]
+let scriptFileNameForTests =
+    testList
+        "scriptFileNameFor"
+        [ test "a file-scheme script sends its own absolute path" {
+              Expect.equal
+                  (scriptFileNameFor "file" "/Users/x/api/probe.fsx")
+                  (Some "/Users/x/api/probe.fsx")
+                  "FSI resolves __SOURCE_DIRECTORY__ from this path"
+          }
+
+          test "an untitled buffer sends nothing, so FSI keeps its own default" {
+              Expect.equal (scriptFileNameFor "untitled" "Untitled-1") None "an untitled buffer has no real path"
+          }
+
+          test "a scheme with no local path sends nothing rather than an invented directory" {
+              // vscode hands these a `fileName` that looks like a path but resolves nowhere on
+              // this machine. `isUntitled` is false for all three, so the scheme is the test.
+              for scheme, fileName in
+                  [ "vscode-vfs", "/repo/probe.fsx"
+                    "git", "/Users/x/api/probe.fsx"
+                    "vscode-remote", "/home/x/probe.fsx" ] do
+                  Expect.equal
+                      (scriptFileNameFor scheme fileName)
+                      None
+                      (sprintf "the %s scheme carries no local path" scheme)
+          } ]
+
+[<Tests>]
 let toVscodeLineTests =
     testList
         "toVscodeLine"

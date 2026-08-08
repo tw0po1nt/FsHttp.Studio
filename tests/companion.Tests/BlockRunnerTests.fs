@@ -28,8 +28,48 @@ let private pngMagic =
 
 let private pngBytes = Array.append pngMagic [| 1uy; 2uy; 3uy; 4uy |]
 
-/// A Run with no document path. Existing cases keep today's untitled / unspecified behavior.
+/// A Run with no script path. Existing cases keep today's untitled / unspecified behavior.
 let private runSource source blockIndex = run source blockIndex None
+
+/// Drives `runner` over a script that reads `marker.txt` out of `__SOURCE_DIRECTORY__` and then
+/// requests the route that names its contents. The script itself is never written to disk: only
+/// its *path* travels, which is exactly what FSI's `scriptFileName` overload consumes. A Run
+/// that resolved the wrong directory throws on the read and cannot reach a 200, so the assertion
+/// cannot pass by accident. `marker` distinguishes one case's temp directory and route from
+/// another's.
+let private expectResolvesBesideScript (marker: string) (runner: string -> int -> string option -> RunOutcome) =
+    let dir =
+        Path.Combine(Path.GetTempPath(), sprintf "fshttp-studio-%s-%s" marker (Guid.NewGuid().ToString("N")))
+
+    Directory.CreateDirectory dir |> ignore
+
+    try
+        File.WriteAllText(Path.Combine(dir, "marker.txt"), marker)
+        let scriptPath = Path.Combine(dir, "probe.fsx")
+
+        use server =
+            new TestServer(Map [ "/" + marker, textHandler 200 (marker + "-resolved") ])
+
+        let source =
+            script (
+                String.concat
+                    "\n"
+                    [ sprintf "let baseUrl = \"%s\"" server.BaseUrl
+                      "let marker = System.IO.File.ReadAllText(System.IO.Path.Combine(__SOURCE_DIRECTORY__, \"marker.txt\"))"
+                      "http {"
+                      "    GET (sprintf \"%s/%s\" baseUrl marker)"
+                      "}"
+                      "" ]
+            )
+
+        match runner source 0 (Some scriptPath) with
+        | Ok(status, _, _, _, bodyBase64) ->
+            Expect.equal status 200 "the sidecar beside the script should be readable"
+            let body = Text.Encoding.UTF8.GetString(Convert.FromBase64String bodyBase64)
+            Expect.equal body (marker + "-resolved") "the request should use the sidecar's contents"
+        | other -> failtestf "expected ok from a beside-script read, got %A" other
+    finally
+        Directory.Delete(dir, true)
 
 /// Asserts that a diagnostic points somewhere the editor can actually highlight. A setup
 /// diagnostic may be anchored rather than native, so the line is not fixed, but it must still
@@ -884,79 +924,18 @@ let tests =
                   failtestf "differently-pinned Run after a version-less load expected ok (no collision), got %A" other
           }
 
-          test "__SOURCE_DIRECTORY__ resolves to the directory of a known scriptFileName" {
+          test "the in-process path resolves __SOURCE_DIRECTORY__ from a known scriptFileName" {
               // A Run that reads a file beside the script must resolve against the script's own
-              // directory, and not against the companion's working directory. The host passes
-              // the absolute document path as `scriptFileName`; FSI's overload sets
-              // `__SOURCE_DIRECTORY__` from it.
-              let dir =
-                  Path.Combine(Path.GetTempPath(), "fshttp-studio-source-dir-" + Guid.NewGuid().ToString("N"))
-
-              Directory.CreateDirectory(dir) |> ignore
-
-              try
-                  File.WriteAllText(Path.Combine(dir, "marker.txt"), "beside")
-                  let scriptPath = Path.Combine(dir, "probe.fsx")
-
-                  use server = new TestServer(Map [ "/beside", textHandler 200 "resolved" ])
-
-                  let source =
-                      script (
-                          String.concat
-                              "\n"
-                              [ sprintf "let baseUrl = \"%s\"" server.BaseUrl
-                                "let marker = System.IO.File.ReadAllText(System.IO.Path.Combine(__SOURCE_DIRECTORY__, \"marker.txt\"))"
-                                "http {"
-                                "    GET (sprintf \"%s/%s\" baseUrl marker)"
-                                "}"
-                                "" ]
-                      )
-
-                  match run source 0 (Some scriptPath) with
-                  | Ok(status, _, _, _, bodyBase64) ->
-                      Expect.equal status 200 "the sidecar beside the script should be readable"
-                      let body = Text.Encoding.UTF8.GetString(Convert.FromBase64String bodyBase64)
-                      Expect.equal body "resolved" "the request should use the sidecar's contents"
-                  | other -> failtestf "expected ok from a beside-script read, got %A" other
-              finally
-                  Directory.Delete(dir, true)
+              // directory, and not against the companion's working directory. Drive
+              // `runInProcessDirect`, not `run`: `run` routes on process-global pin state, so it
+              // could land in the worker and prove nothing about the warm path.
+              expectResolvesBesideScript "inprocess" runInProcessDirect
           }
 
           test "a --worker child also resolves __SOURCE_DIRECTORY__ from scriptFileName" {
-              // The conflict path must carry the same document path into the throwaway child.
-              // Drive `runInWorker` directly so the assertion does not depend on pin state.
-              let dir =
-                  Path.Combine(Path.GetTempPath(), "fshttp-studio-worker-source-dir-" + Guid.NewGuid().ToString("N"))
-
-              Directory.CreateDirectory(dir) |> ignore
-
-              try
-                  File.WriteAllText(Path.Combine(dir, "marker.txt"), "worker-beside")
-                  let scriptPath = Path.Combine(dir, "probe.fsx")
-
-                  use server =
-                      new TestServer(Map [ "/worker-beside", textHandler 200 "worker-resolved" ])
-
-                  let source =
-                      script (
-                          String.concat
-                              "\n"
-                              [ sprintf "let baseUrl = \"%s\"" server.BaseUrl
-                                "let marker = System.IO.File.ReadAllText(System.IO.Path.Combine(__SOURCE_DIRECTORY__, \"marker.txt\"))"
-                                "http {"
-                                "    GET (sprintf \"%s/%s\" baseUrl marker)"
-                                "}"
-                                "" ]
-                      )
-
-                  match runInWorker workerTimeoutMs source 0 (Some scriptPath) with
-                  | Ok(status, _, _, _, bodyBase64) ->
-                      Expect.equal status 200 "the worker sidecar beside the script should be readable"
-                      let body = Text.Encoding.UTF8.GetString(Convert.FromBase64String bodyBase64)
-                      Expect.equal body "worker-resolved" "the worker request should use the sidecar's contents"
-                  | other -> failtestf "expected ok from a worker beside-script read, got %A" other
-              finally
-                  Directory.Delete(dir, true)
+              // The conflict path must carry the same script path into the throwaway child.
+              // Drive `runInWorker` directly, for the same reason as the case above.
+              expectResolvesBesideScript "worker" (runInWorker workerTimeoutMs)
           } ]
 
 // Pure pin parsing, with no FSI and no server. It produces the input that `run`'s conflict

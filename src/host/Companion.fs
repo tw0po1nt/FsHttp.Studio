@@ -181,20 +181,20 @@ let locate (handle: Handle) (source: string) : Async<BlockRange list> =
 
 /// Sends a `run` request for the located block at `blockIndex`, and resolves with its outcome.
 /// The index is 0-based, and it matches the order of an earlier `locate`. `scriptFileName` is
-/// the absolute document path for a saved `.fsx`, so FSI can set `__SOURCE_DIRECTORY__`. It is
-/// `None` for an untitled buffer, which keeps FSI's default. Abandons to `RunProtocolError` if
-/// the companion is gone (docs/spec/0004-run-path-robustness.md, Decision 6).
+/// the script's own absolute path when it is saved on disk, so FSI can set
+/// `__SOURCE_DIRECTORY__`. It is `None` for a script with no such path, which keeps FSI's
+/// default. Abandons to `RunProtocolError` if the companion is gone
+/// (docs/spec/0004-run-path-robustness.md, Decision 6).
 let run (handle: Handle) (source: string) (blockIndex: int) (scriptFileName: string option) : Async<RunResult> =
     Async.FromContinuations(fun (resolve, _reject, _cancel) ->
+        // One shape, always. The companion reads the empty string as "no value", so the absent
+        // case needs no second payload to construct here.
         let payload: obj =
-            match scriptFileName with
-            | Some path ->
-                createObj
-                    [ "tag" ==> "run"
-                      "source" ==> source
-                      "blockIndex" ==> blockIndex
-                      "scriptFileName" ==> path ]
-            | None -> createObj [ "tag" ==> "run"; "source" ==> source; "blockIndex" ==> blockIndex ]
+            createObj
+                [ "tag" ==> "run"
+                  "source" ==> source
+                  "blockIndex" ==> blockIndex
+                  "scriptFileName" ==> defaultArg scriptFileName "" ]
 
         let entry =
             { Resolve = fun json -> resolve (parseRunResult json)

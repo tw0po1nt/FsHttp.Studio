@@ -40,6 +40,16 @@ type RunResult =
     /// `unboundBlockValue` only.
     | RunRefused of code: string * name: string option
 
+/// The `scriptFileName` a Run sends for a script with this URI scheme and `fileName`.
+///
+/// FSI sets `__SOURCE_DIRECTORY__` and `__SOURCE_FILE__` from the path, so the path must be a
+/// real local one. Only the `file` scheme guarantees that. An untitled buffer (`untitled`), a
+/// virtual or remote workspace (`vscode-vfs`, and the remote providers), and a diff view
+/// (`git`) all carry a `fileName` that no local read can resolve, so a Run must send nothing
+/// rather than invent a directory for them. `None` keeps FSI's own default.
+let scriptFileNameFor (scheme: string) (fileName: string) : string option =
+    if scheme = "file" then Some fileName else None
+
 /// Converts an FCS-native 1-based line to vscode's 0-based line (ADR-0003's coordinate
 /// convention). The columns already agree, so only the line needs an adjustment.
 let toVscodeLine (fcsLine: int) : int = fcsLine - 1

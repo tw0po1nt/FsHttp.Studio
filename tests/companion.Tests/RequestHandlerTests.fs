@@ -176,8 +176,10 @@ let tests =
                       )
                   )
 
+              // Compare the serialized ranges, not just their count: a shifted range is exactly
+              // the drift this guard exists to catch, and a length check would miss it.
               Expect.equal
-                  (withoutPath.GetProperty("ranges").GetArrayLength())
-                  (withPath.GetProperty("ranges").GetArrayLength())
+                  (withPath.GetProperty("ranges").GetRawText())
+                  (withoutPath.GetProperty("ranges").GetRawText())
                   "locate ranges must not depend on scriptFileName"
           } ]
