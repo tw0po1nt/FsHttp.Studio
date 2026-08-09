@@ -1,6 +1,6 @@
-// The core path's first Run: open the fixture, click a Run request lens, and assert the response
-// viewer opens beside the editor and renders the first block's response. Spec 0006 steps 1–5.
-// The second Run (steps 6–7) lands in a follow-on check that reuses this fixture and session.
+// The core path: open the fixture, click a Run request lens, assert the first response, then
+// click the second block's lens and assert the viewer replaces the first response. Spec 0006
+// steps 1–7. The second check reuses the fixture and the open viewer the first check leaves.
 module CorePathTests
 
 open System.IO
@@ -16,7 +16,17 @@ let private fixtureFileName = "core-path.fsx"
 /// block's own source text (`Protocol.extractMethodAndUrl`), so `GET $"{baseUrl}/json"` renders
 /// as `{baseUrl}/json` — the `/json` path is the tell that distinguishes it from `/status`.
 let private firstBlockUrlPath = "/json"
+/// Path segment of the second block's URL. Together with the `/status` body keys, it is the
+/// positive tell that the viewer shows the second response rather than a stale first one.
+let private secondBlockUrlPath = "/status"
+/// Key names from `GET /status`. Assert the names only — the numeric values depend on whether
+/// another check already hit `/slow` in this session.
+let private statusSeenKey = "slowSeen"
+let private statusWaitingKey = "slowWaiting"
 let private runInProgressLabel = "Running…"
+/// Zero-based index of the second block's lens. Both lenses share `lensTitle`, so a title match
+/// cannot reach the second block.
+let private secondLensIndex = 1
 
 let private fixturePath () =
     match Proc.sidecarPath () with
@@ -38,6 +48,9 @@ let private tryRunRequestLensAboveEachBlock () =
 let private tryClickFirstLens () =
     ExTester.tryClickCodeLensByTitle lensTitle
 
+let private tryClickSecondLens () =
+    ExTester.tryClickCodeLensByIndex secondLensIndex
+
 /// Reads the viewer's DOM and applies `holds` to it. A frame that cannot be entered yet is a
 /// normal poll result, so it reads as "does not hold" rather than an exception.
 let private viewerSatisfies (holds: ExTester.ResponseViewerDom -> bool) =
@@ -58,6 +71,16 @@ let private tryFirstResponseRendered () =
         && dom.UrlText.Contains firstBlockUrlPath
         && dom.JsonBodyText.Contains Harness.jsonProbeKey
         && dom.JsonBodyText.Contains Harness.jsonProbeValue)
+
+/// The second response arrived *and* replaced the first. Absence of the first body's key is
+/// asserted only here, inside the same `eventually` that proves the second response is present —
+/// absence at a fixed time proves nothing.
+let private trySecondResponseReplacedFirst () =
+    viewerSatisfies (fun dom ->
+        dom.UrlText.Contains secondBlockUrlPath
+        && dom.JsonBodyText.Contains statusSeenKey
+        && dom.JsonBodyText.Contains statusWaitingKey
+        && not (dom.JsonBodyText.Contains Harness.jsonProbeKey))
 
 let private firstRunRendersCorrectly =
     async {
@@ -96,5 +119,25 @@ let private firstRunRendersCorrectly =
                 tryFirstResponseRendered
     }
 
+let private secondRunReplacesTheFirst =
+    async {
+        // Inherits the open fixture and viewer from `firstRunRendersCorrectly`. Leaves them open
+        // with the second response showing, which is the state the next check expects.
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "a click on the second block's Run request lens"
+                tryClickSecondLens
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "the second block's URL and status keys in the viewer, with the first body gone"
+                trySecondResponseReplacedFirst
+    }
+
 let tests =
-    testList "the core path" [ testCaseAsync "first Run renders correctly" firstRunRendersCorrectly ]
+    testList
+        "the core path"
+        [ testCaseAsync "first Run renders correctly" firstRunRendersCorrectly
+          testCaseAsync "second Run replaces the first" secondRunReplacesTheFirst ]
