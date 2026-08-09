@@ -103,6 +103,14 @@ type Poll =
     | DoesNotHold
     | Observed of observation: string
 
+/// The account a poll gives of the state it found, where it gives one. A poll that holds has no
+/// account to give a timeout, because a wait that holds never times out.
+let private observationOf (result: Poll) =
+    match result with
+    | Observed observation -> Some observation
+    | Holds
+    | DoesNotHold -> None
+
 /// The one polling loop. `eventually` is the plain-condition face of it, so a check chooses between
 /// reporting and not reporting, and not between two waits.
 ///
@@ -110,13 +118,12 @@ type Poll =
 /// workbench again after the deadline: a fresh read would report a state the wait never failed on,
 /// and the surface it reads may have changed in the meantime.
 let eventuallyObserved (timeoutMs: int) (subject: string) (poll: unit -> Async<Poll>) : Async<unit> =
-    let timedOut (last: Poll) : unit =
+    let timedOut (observation: string option) : unit =
         let waitingFor = sprintf "Timed out after %i ms waiting for %s" timeoutMs subject
 
-        match last with
-        | Observed observation -> Assert.fail (sprintf "%s. The last poll saw %s" waitingFor observation)
-        | Holds
-        | DoesNotHold -> Assert.fail waitingFor
+        match observation with
+        | Some observation -> Assert.fail (sprintf "%s. The last poll saw %s" waitingFor observation)
+        | None -> Assert.fail waitingFor
 
     let rec loop (deadline: float) =
         async {
@@ -124,7 +131,7 @@ let eventuallyObserved (timeoutMs: int) (subject: string) (poll: unit -> Async<P
 
             match result with
             | Holds -> return ()
-            | _ when Proc.now () >= deadline -> return timedOut result
+            | _ when Proc.now () >= deadline -> return timedOut (observationOf result)
             | _ ->
                 do! Async.Sleep PollIntervalMs
                 return! loop deadline

@@ -159,7 +159,8 @@ One `.fsproj` per directory, so pointing Fable at the suite root is unambiguous.
 The harness is a module of the suite, not a per-check concern. It owns:
 
 - ExTester bindings (roughly 45 members over about nine page objects).
-- The assertion module, the `eventually` combinator, and the named deadline constants.
+- The assertion module, the `eventually` and `eventuallyObserved` combinators, and the named
+  deadline constants.
 - The `before` hook, the `afterEach` / `after` budget asserts, and the timing table.
 
 Checks import it. A check must not define its own wait primitive, its own budget assert, or its own
@@ -304,11 +305,11 @@ the same voice as "sidecar is stale".
 **`eventually` is the only sanctioned assertion wait.** Every product assertion that needs time goes
 through it. No second polling combinator. No `driver.wait` for product state from a check.
 
-*Amended after spec 0006.* The harness also supplies `eventuallyObserved`. Its poll returns what the
-poll saw, and not a bare `bool`. A timeout then names the state that the last poll read. An
-exact-count assertion needs this, because too few and too many both time out on the same message.
-`eventuallyObserved` is not a second combinator. It holds the one polling loop, and `eventually`
-calls it. A check that has nothing to report continues to use `eventually`.
+*Amended after spec 0006.* The harness also supplies `eventuallyObserved`. A poll returns the state
+it read, and not a bare `bool`, so a timeout names the state that the last poll read. An exact-count
+assertion needs this, because too few lenses and too many lenses produce the same timeout.
+`eventuallyObserved` is not a second combinator. It contains the one polling loop, and `eventually`
+calls `eventuallyObserved`. A check that has nothing to report continues to use `eventually`.
 
 Named default deadlines, as constants in the harness module:
 

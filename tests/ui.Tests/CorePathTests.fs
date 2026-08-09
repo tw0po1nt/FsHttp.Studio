@@ -34,10 +34,10 @@ let private fixturePath () =
 /// carries a glyph and a space, and an unquoted list of them cannot show where one ends.
 let private describeTitles (titles: string[]) =
     if Array.isEmpty titles then
-        "no code lenses"
+        "0 CodeLenses"
     else
         let quoted = titles |> Array.map (fun t -> sprintf "\"%s\"" t) |> String.concat ", "
-        sprintf "%i code lenses: %s" titles.Length quoted
+        sprintf "%i CodeLenses: %s" titles.Length quoted
 
 /// Exactly one lens per block, each carrying the Run request title. An exact count is the claim
 /// the spec makes — a provider that over-detects and stacks a third lens is as wrong as one that
