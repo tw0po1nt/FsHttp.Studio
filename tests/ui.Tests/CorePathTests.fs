@@ -1,6 +1,7 @@
 // The core path: open the fixture, click a Run request lens, assert the first response, then
 // click the second block's lens and assert the viewer replaces the first response. Spec 0006
-// steps 1–7. The second check reuses the fixture and the open viewer the first check leaves.
+// steps 1–7, as one check — the spec prices all seven steps against one per-check budget, and a
+// split would also make the second half depend silently on the first half having run.
 module CorePathTests
 
 open System.IO
@@ -16,13 +17,9 @@ let private fixtureFileName = "core-path.fsx"
 /// block's own source text (`Protocol.extractMethodAndUrl`), so `GET $"{baseUrl}/json"` renders
 /// as `{baseUrl}/json` — the `/json` path is the tell that distinguishes it from `/status`.
 let private firstBlockUrlPath = "/json"
-/// Path segment of the second block's URL. Together with the `/status` body keys, it is the
-/// positive tell that the viewer shows the second response rather than a stale first one.
+/// Path segment of the second block's URL. Together with the `/status` body keys from `Harness`,
+/// it is the positive tell that the viewer shows the second response rather than a stale first one.
 let private secondBlockUrlPath = "/status"
-/// Key names from `GET /status`. Assert the names only — the numeric values depend on whether
-/// another check already hit `/slow` in this session.
-let private statusSeenKey = "slowSeen"
-let private statusWaitingKey = "slowWaiting"
 let private runInProgressLabel = "Running…"
 /// Zero-based index of the second block's lens. Both lenses share `lensTitle`, so a title match
 /// cannot reach the second block.
@@ -78,11 +75,13 @@ let private tryFirstResponseRendered () =
 let private trySecondResponseReplacedFirst () =
     viewerSatisfies (fun dom ->
         dom.UrlText.Contains secondBlockUrlPath
-        && dom.JsonBodyText.Contains statusSeenKey
-        && dom.JsonBodyText.Contains statusWaitingKey
+        && dom.JsonBodyText.Contains Harness.slowSeenKey
+        && dom.JsonBodyText.Contains Harness.slowWaitingKey
         && not (dom.JsonBodyText.Contains Harness.jsonProbeKey))
 
-let private firstRunRendersCorrectly =
+/// Leaves the fixture and the viewer open, showing the second response. That is the state spec 3's
+/// check expects to inherit and replace.
+let private theCorePath =
     async {
         let path = fixturePath ()
         let browser = ExTester.VSBrowser.instance
@@ -117,12 +116,7 @@ let private firstRunRendersCorrectly =
                 Harness.ViewerUpdateDeadlineMs
                 "status 200, the first block's URL, and the probe body in the response viewer"
                 tryFirstResponseRendered
-    }
 
-let private secondRunReplacesTheFirst =
-    async {
-        // Inherits the open fixture and viewer from `firstRunRendersCorrectly`. Leaves them open
-        // with the second response showing, which is the state the next check expects.
         do!
             Harness.eventually
                 Harness.LensAppearanceDeadlineMs
@@ -137,7 +131,4 @@ let private secondRunReplacesTheFirst =
     }
 
 let tests =
-    testList
-        "the core path"
-        [ testCaseAsync "first Run renders correctly" firstRunRendersCorrectly
-          testCaseAsync "second Run replaces the first" secondRunReplacesTheFirst ]
+    testList "the core path" [ testCaseAsync "renders one Run, then replaces it with the next" theCorePath ]

@@ -33,6 +33,12 @@ let jsonProbeKey = "probe"
 let jsonProbeValue = "ui-test-server"
 let jsonProbeBody = sprintf """{"%s":"%s"}""" jsonProbeKey jsonProbeValue
 
+/// Cross-process contract for `GET /status`. Must match `UiTestServer.Server.statusBody`. Only the
+/// key names live here: the counters they carry depend on whether another check already hit
+/// `/slow` in this session, so a check asserts the names and never the numbers.
+let slowSeenKey = "slowSeen"
+let slowWaitingKey = "slowWaiting"
+
 let private extensionStatusPrefix = "FsHttp.Studio"
 let private fixtureTabSuffix = "setup.fsx"
 let private fixtureFolderName = "fixtures"
