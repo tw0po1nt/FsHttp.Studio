@@ -9,6 +9,7 @@
 // workbench UI or the webview DOM — and adds no seam to the shipping extension.
 module ExTester
 
+open System.IO
 open Fable.Core
 open Fable.Core.JsInterop
 
@@ -24,6 +25,8 @@ type CodeLens =
 
 type TextEditor =
     abstract getCodeLenses: unit -> JS.Promise<CodeLens[]>
+    abstract getNumberOfLines: unit -> JS.Promise<float>
+    abstract setText: text: string -> JS.Promise<unit>
 
 type WebView =
     abstract switchBack: unit -> JS.Promise<unit>
@@ -76,6 +79,21 @@ type Workbench =
     abstract executeCommand: command: string -> JS.Promise<unit>
     abstract getNotifications: unit -> JS.Promise<Notification[]>
 
+/// One row in the Problems view, as ExTester's `Marker` page object exposes it.
+type Marker =
+    abstract getText: unit -> JS.Promise<string>
+    abstract getLabel: unit -> JS.Promise<string>
+
+type ProblemsView =
+    abstract setFilter: pattern: string -> JS.Promise<unit>
+    /// `markerType` is an ExTester `MarkerType` string: `"any"`, `"error"`, `"warning"`, or
+    /// `"file"`.
+    abstract getAllVisibleMarkers: markerType: string -> JS.Promise<Marker[]>
+
+type BottomBarPanel =
+    abstract openProblemsView: unit -> JS.Promise<ProblemsView>
+    abstract toggle: openPanel: bool -> JS.Promise<unit>
+
 type ByStatic =
     abstract css: selector: string -> obj
 
@@ -101,6 +119,11 @@ type ResponseViewerDom =
         RootText: string
         /// Text of the Run in progress label, such as `Running…`.
         RunInProgressLabel: string
+        /// Text of the Refused Run heading (`.refused-title`). Empty when no refusal rendered.
+        RefusalTitleText: string
+        /// Text of the Refused Run body paragraph (`.refused-detail`). Empty when no refusal
+        /// rendered.
+        RefusalDetailText: string
     }
 
 /// Cross-boundary contract with the shipping renderer. Each selector must match the class name
@@ -116,6 +139,8 @@ module private Viewer =
     let headersSelector = ".headers"
     let rootSelector = "#root"
     let runInProgressSelector = ".pending-label"
+    let refusalTitleSelector = ".refused-title"
+    let refusalDetailSelector = ".refused-detail"
 
     /// The class on the status-code span that is not the span's own `status-code`.
     let statusCodeClass = "status-code"
@@ -180,6 +205,15 @@ module Workbench =
     let private Ctor: obj = jsNative
 
     let create () : Workbench = createInst Ctor
+
+module BottomBarPanel =
+    [<Import("BottomBarPanel", "vscode-extension-tester")>]
+    let private Ctor: obj = jsNative
+
+    let create () : BottomBarPanel = createInst Ctor
+
+/// ExTester's `MarkerType.Any` wire value. Passed to `ProblemsView.getAllVisibleMarkers`.
+let markerTypeAny = "any"
 
 module TextEditor =
     [<Import("TextEditor", "vscode-extension-tester")>]
@@ -260,6 +294,30 @@ let private fixtureFolderName = "fixtures"
 let private openSectionItem (section: ViewSection) (itemTitle: string) : JS.Promise<unit> =
     emitJsExpr (section, itemTitle) "$0.openItem($1)"
 
+/// Replaces the fixture editor's buffer with the on-disk fixture text. Opening into a column that
+/// just had every tab closed has been observed to leave the file contents doubled; writing the
+/// checked-in bytes back is the recovery. Pair with a later lens wait so CodeLens can repaint
+/// after the edit. Keep this off the shared sole-tab open — rewriting a healthy buffer has broken
+/// CodeLens clicks on fixtures that did not need the recovery.
+let tryResetEditorFromDisk (fileName: string) : Async<bool> =
+    async {
+        try
+            match Proc.sidecarPath () with
+            | None -> return false
+            | Some sidecar ->
+                let fixture = Path.Combine(Path.GetDirectoryName sidecar, fileName)
+                let text = File.ReadAllText fixture
+                let! group = editorGroup fixtureGroupIndex
+                let editor = TextEditor.createInGroup group
+                do! editor.setText text |> Async.AwaitPromise
+                let! lines = editor.getNumberOfLines () |> Async.AwaitPromise
+                // Disk text is N lines; the editor often reports N or N+1 for a trailing newline.
+                let diskLines = text.Split('\n').Length
+                return int lines <= diskLines + 1
+        with _ ->
+            return false
+    }
+
 /// Opens a workspace file as the *sole* tab in the fixture column, closing whatever else that
 /// column held. Pair with `Harness.eventually`.
 ///
@@ -270,6 +328,11 @@ let private openSectionItem (section: ViewSection) (itemTitle: string) : JS.Prom
 /// the group, which can be a hidden tab carrying no CodeLens widgets even when the focused tab
 /// has them.
 ///
+/// Idempotent when the column already holds exactly that one tab: a second call does not reopen
+/// the file. Reopening inside `Harness.eventually` can concatenate the buffer into itself — the
+/// same defect `openResources` has when polled. A check that hits a doubled buffer after open
+/// should call `tryResetEditorFromDisk` once before waiting on lenses.
+///
 /// Session-state cost, deliberate and named here because it is not reversed: this discards the
 /// fixture tab setup proved live (`Harness` FixtureOpen) along with any earlier check's fixture.
 /// The workspace folder — the state the extension's activation depends on — is untouched. A later
@@ -277,45 +340,56 @@ let private openSectionItem (section: ViewSection) (itemTitle: string) : JS.Prom
 let tryOpenAsSoleTabInFixtureColumn (tabTitle: string) : Async<bool> =
     async {
         try
-            let workbench = Workbench.create ()
-
-            do!
-                workbench.executeCommand "workbench.action.focusFirstEditorGroup"
-                |> Async.AwaitPromise
-
             let view = EditorView.create ()
-            do! EditorView.closeAllEditors view fixtureGroupIndex |> Async.AwaitPromise
+            let! groupBefore = editorGroup fixtureGroupIndex
+            let! titlesBefore = groupBefore.getOpenEditorTitles () |> Async.AwaitPromise
 
-            let bar = ActivityBar.create ()
-            let! control = bar.getViewControl "Explorer" |> Async.AwaitPromise
+            if titlesBefore.Length = 1 && titlesBefore |> Array.exists (fun t -> t.Contains tabTitle) then
+                do!
+                    EditorView.openEditor view tabTitle fixtureGroupIndex
+                    |> Async.AwaitPromise
+                    |> Async.Ignore
 
-            if isNull (box control) then
-                return false
+                return true
             else
-                let! sideBar = control.openView () |> Async.AwaitPromise
-                let! sections = sideBar.getContent().getSections () |> Async.AwaitPromise
-                let mutable opened = false
+                let workbench = Workbench.create ()
 
-                for section in sections do
-                    if not opened then
-                        let! title = section.getTitle () |> Async.AwaitPromise
+                do!
+                    workbench.executeCommand "workbench.action.focusFirstEditorGroup"
+                    |> Async.AwaitPromise
 
-                        if title.ToLowerInvariant().Contains fixtureFolderName then
-                            do! openSectionItem section tabTitle |> Async.AwaitPromise
-                            opened <- true
+                do! EditorView.closeAllEditors view fixtureGroupIndex |> Async.AwaitPromise
 
-                if not opened then
+                let bar = ActivityBar.create ()
+                let! control = bar.getViewControl "Explorer" |> Async.AwaitPromise
+
+                if isNull (box control) then
                     return false
                 else
-                    do!
-                        EditorView.openEditor view tabTitle fixtureGroupIndex
-                        |> Async.AwaitPromise
-                        |> Async.Ignore
+                    let! sideBar = control.openView () |> Async.AwaitPromise
+                    let! sections = sideBar.getContent().getSections () |> Async.AwaitPromise
+                    let mutable opened = false
 
-                    let! groupAfter = editorGroup fixtureGroupIndex
-                    let! titles = groupAfter.getOpenEditorTitles () |> Async.AwaitPromise
+                    for section in sections do
+                        if not opened then
+                            let! title = section.getTitle () |> Async.AwaitPromise
 
-                    return titles.Length = 1 && titles |> Array.exists (fun t -> t.Contains tabTitle)
+                            if title.ToLowerInvariant().Contains fixtureFolderName then
+                                do! openSectionItem section tabTitle |> Async.AwaitPromise
+                                opened <- true
+
+                    if not opened then
+                        return false
+                    else
+                        do!
+                            EditorView.openEditor view tabTitle fixtureGroupIndex
+                            |> Async.AwaitPromise
+                            |> Async.Ignore
+
+                        let! groupAfter = editorGroup fixtureGroupIndex
+                        let! titles = groupAfter.getOpenEditorTitles () |> Async.AwaitPromise
+
+                        return titles.Length = 1 && titles |> Array.exists (fun t -> t.Contains tabTitle)
         with _ ->
             return false
     }
@@ -370,6 +444,19 @@ let tryReadCodeLensTitles () : Async<string[]> =
                 return titles.ToArray()
         with _ ->
             return [||]
+    }
+
+/// Line count of the fixture column's active editor, or `None` when the editor cannot be read.
+/// Used to tell a doubled buffer (openResources concatenation) from a stale-lens DOM read.
+let tryReadEditorLineCount () : Async<int option> =
+    async {
+        try
+            let! group = editorGroup fixtureGroupIndex
+            let editor = TextEditor.createInGroup group
+            let! lines = editor.getNumberOfLines () |> Async.AwaitPromise
+            return Some(int lines)
+        with _ ->
+            return None
     }
 
 /// True when a second editor group is open beside the first *and* holds the response viewer's
@@ -457,6 +544,25 @@ let tryDismissWarningNotification (message: string) : Async<bool> =
             return false
     }
 
+/// Opens the Problems view, filters it to `fixtureFileName`, and returns true when no visible
+/// markers remain for that filter. Pair with `Harness.eventually` after a positive tell that the
+/// Run settled — absence alone is not meaningful.
+let tryNoProblemsForFixture (fixtureFileName: string) : Async<bool> =
+    async {
+        try
+            let panel = BottomBarPanel.create ()
+            let! problems = panel.openProblemsView () |> Async.AwaitPromise
+            do! problems.setFilter fixtureFileName |> Async.AwaitPromise
+            let! markers = problems.getAllVisibleMarkers markerTypeAny |> Async.AwaitPromise
+
+            if isNull (box markers) then
+                return true
+            else
+                return markers.Length = 0
+        with _ ->
+            return false
+    }
+
 /// Enters the response viewer's webview iframe, reads the DOM surfaces the product checks
 /// assert on, and switches back to the workbench. Returns `None` when the frame cannot be
 /// entered; otherwise returns whatever text and class content is present (empty when a node is
@@ -481,6 +587,8 @@ let tryReadResponseViewer () : Async<ResponseViewerDom option> =
                 let! headers = tryElementText view Viewer.headersSelector
                 let! root = tryElementText view Viewer.rootSelector
                 let! runInProgress = tryElementText view Viewer.runInProgressSelector
+                let! refusalTitle = tryElementText view Viewer.refusalTitleSelector
+                let! refusalDetail = tryElementText view Viewer.refusalDetailSelector
 
                 // Cleared before the switch, not after: a `switchBack` that throws must not send
                 // the handler below into a second one.
@@ -497,7 +605,9 @@ let tryReadResponseViewer () : Async<ResponseViewerDom option> =
                           PlainBodyText = plainBody
                           HeadersText = headers
                           RootText = root
-                          RunInProgressLabel = runInProgress }
+                          RunInProgressLabel = runInProgress
+                          RefusalTitleText = refusalTitle
+                          RefusalDetailText = refusalDetail }
             with _ ->
                 if switched then
                     try

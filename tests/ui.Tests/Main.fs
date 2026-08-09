@@ -13,6 +13,7 @@ Mocha.runTests (
         [ SelfCheckTests.tests
           CorePathTests.tests
           RunOutcomesTests.tests
-          LoopLensTests.tests ]
+          LoopLensTests.tests
+          CrossBlockRefusedRunTests.tests ]
 )
 |> ignore
