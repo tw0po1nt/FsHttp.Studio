@@ -12,8 +12,10 @@
     <Compile Include="Timing.fs" />
     <Compile Include="ExTester.fs" />
     <Compile Include="Harness.fs" />
+    <Compile Include="Checks.fs" />
     <Compile Include="SelfCheckTests.fs" />
     <Compile Include="CorePathTests.fs" />
+    <Compile Include="RunOutcomesTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

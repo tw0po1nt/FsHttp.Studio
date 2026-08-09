@@ -35,7 +35,9 @@ let sidecarJson (baseUrl: string) (deadUrl: string) =
 /// parking a thread-pool thread for the life of the process. No passing test comes near it.
 let private slowCeiling = TimeSpan.FromMinutes 2.0
 
-let private notFoundRouteBody = "ui-test-server:notfound"
+/// Cross-process contract for `GET /notfound`. Match exactly in fixtures and harness checks.
+let notFoundBody = "ui-test-server:notfound"
+
 let private catchAllBody = "ui-test-server:unknown"
 
 let private utf8 = Encoding.UTF8
@@ -121,7 +123,7 @@ type UiTestHttpServer() =
 
             match ctx.Request.HttpMethod, path with
             | "GET", "/json" -> writeText ctx 200 "application/json" jsonProbeBody
-            | "GET", "/notfound" -> writeText ctx 404 "text/plain" notFoundRouteBody
+            | "GET", "/notfound" -> writeText ctx 404 "text/plain" notFoundBody
             | "GET", "/slow" -> handleSlow ctx
             | "GET", "/release" -> handleRelease ctx
             | "GET", "/status" -> handleStatus ctx

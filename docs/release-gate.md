@@ -1,8 +1,8 @@
 # Release gate
 
 This document states what the UI test suite covers and what it does not. The suite is still
-growing. Spec 1 ships only the harness and the setup self-check. Later specs add the six product
-checks that retire `docs/manual-check.md`.
+growing. Spec 1 shipped the harness and the setup self-check; specs 2 and 3 shipped the first two
+product checks. Later specs add the rest of the product checks that retire `docs/manual-check.md`.
 
 ## Prerequisites
 
@@ -46,5 +46,8 @@ Windows ships uncaught. This is a known and accepted cost, not an oversight.
 
 - Spec 1 (harness): packaged `.vsix` in a pinned headless VSCode, test HTTP server with sidecar,
   proven-live setup, budgets, and the setup self-check.
+- Spec 2 (the core path): open the fixture, Run one block, then replace that response with the next.
+- Spec 3 (Run outcomes render honestly): a real 404 renders as a response with no failure. A
+  dead-port Run renders as plain runtime-error text with no status line.
 
-Product checks land in later specs.
+The remaining product checks land in later specs.
