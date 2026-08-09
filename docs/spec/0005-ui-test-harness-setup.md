@@ -304,6 +304,12 @@ the same voice as "sidecar is stale".
 **`eventually` is the only sanctioned assertion wait.** Every product assertion that needs time goes
 through it. No second polling combinator. No `driver.wait` for product state from a check.
 
+*Amended after spec 0006.* The harness also supplies `eventuallyObserved`. Its poll returns what the
+poll saw, and not a bare `bool`. A timeout then names the state that the last poll read. An
+exact-count assertion needs this, because too few and too many both time out on the same message.
+`eventuallyObserved` is not a second combinator. It holds the one polling loop, and `eventually`
+calls it. A check that has nothing to report continues to use `eventually`.
+
 Named default deadlines, as constants in the harness module:
 
 | Surface | Default |
