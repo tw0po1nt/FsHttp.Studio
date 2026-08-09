@@ -9,7 +9,6 @@
 // workbench UI or the webview DOM — and adds no seam to the shipping extension.
 module ExTester
 
-open System.IO
 open Fable.Core
 open Fable.Core.JsInterop
 
@@ -25,8 +24,6 @@ type CodeLens =
 
 type TextEditor =
     abstract getCodeLenses: unit -> JS.Promise<CodeLens[]>
-    abstract getNumberOfLines: unit -> JS.Promise<float>
-    abstract setText: text: string -> JS.Promise<unit>
 
 type WebView =
     abstract switchBack: unit -> JS.Promise<unit>
@@ -79,16 +76,11 @@ type Workbench =
     abstract executeCommand: command: string -> JS.Promise<unit>
     abstract getNotifications: unit -> JS.Promise<Notification[]>
 
-/// One row in the Problems view, as ExTester's `Marker` page object exposes it.
-type Marker =
-    abstract getText: unit -> JS.Promise<string>
-    abstract getLabel: unit -> JS.Promise<string>
-
 type ProblemsView =
     abstract setFilter: pattern: string -> JS.Promise<unit>
-    /// `markerType` is an ExTester `MarkerType` string: `"any"`, `"error"`, `"warning"`, or
-    /// `"file"`.
-    abstract getAllVisibleMarkers: markerType: string -> JS.Promise<Marker[]>
+    /// The visible rows, as ExTester's `Marker` page objects. Typed as opaque because the only
+    /// assertion made on them is how many there are — a row's own text is never read.
+    abstract getAllVisibleMarkers: markerType: string -> JS.Promise<obj[]>
 
 type BottomBarPanel =
     abstract openProblemsView: unit -> JS.Promise<ProblemsView>
@@ -212,8 +204,9 @@ module BottomBarPanel =
 
     let create () : BottomBarPanel = createInst Ctor
 
-/// ExTester's `MarkerType.Any` wire value. Passed to `ProblemsView.getAllVisibleMarkers`.
-let markerTypeAny = "any"
+/// ExTester's `MarkerType` wire values. Passed to `ProblemsView.getAllVisibleMarkers`.
+module MarkerType =
+    let any = "any"
 
 module TextEditor =
     [<Import("TextEditor", "vscode-extension-tester")>]
@@ -294,28 +287,53 @@ let private fixtureFolderName = "fixtures"
 let private openSectionItem (section: ViewSection) (itemTitle: string) : JS.Promise<unit> =
     emitJsExpr (section, itemTitle) "$0.openItem($1)"
 
-/// Replaces the fixture editor's buffer with the on-disk fixture text. Opening into a column that
-/// just had every tab closed has been observed to leave the file contents doubled; writing the
-/// checked-in bytes back is the recovery. Pair with a later lens wait so CodeLens can repaint
-/// after the edit. Keep this off the shared sole-tab open — rewriting a healthy buffer has broken
-/// CodeLens clicks on fixtures that did not need the recovery.
-let tryResetEditorFromDisk (fileName: string) : Async<bool> =
+/// True when the fixture column's tabs are exactly one tab, and that tab is `tabTitle`. The
+/// claim both the sole-tab open's precondition and its verdict are written against.
+let private holdsOnly (tabTitle: string) (titles: string[]) =
+    titles.Length = 1 && titles |> Array.exists (fun t -> t.Contains tabTitle)
+
+/// Empties the fixture column and reaches the file through the Explorer. The slow path of
+/// `tryOpenAsSoleTabInFixtureColumn`, which documents why the Explorer rather than
+/// `openResources`, and what the emptying costs.
+let private tryOpenThroughExplorer (view: EditorView) (tabTitle: string) : Async<bool> =
     async {
-        try
-            match Proc.sidecarPath () with
-            | None -> return false
-            | Some sidecar ->
-                let fixture = Path.Combine(Path.GetDirectoryName sidecar, fileName)
-                let text = File.ReadAllText fixture
-                let! group = editorGroup fixtureGroupIndex
-                let editor = TextEditor.createInGroup group
-                do! editor.setText text |> Async.AwaitPromise
-                let! lines = editor.getNumberOfLines () |> Async.AwaitPromise
-                // Disk text is N lines; the editor often reports N or N+1 for a trailing newline.
-                let diskLines = text.Split('\n').Length
-                return int lines <= diskLines + 1
-        with _ ->
+        let workbench = Workbench.create ()
+
+        do!
+            workbench.executeCommand "workbench.action.focusFirstEditorGroup"
+            |> Async.AwaitPromise
+
+        do! EditorView.closeAllEditors view fixtureGroupIndex |> Async.AwaitPromise
+
+        let bar = ActivityBar.create ()
+        let! control = bar.getViewControl "Explorer" |> Async.AwaitPromise
+
+        if isNull (box control) then
             return false
+        else
+            let! sideBar = control.openView () |> Async.AwaitPromise
+            let! sections = sideBar.getContent().getSections () |> Async.AwaitPromise
+            let mutable opened = false
+
+            for section in sections do
+                if not opened then
+                    let! title = section.getTitle () |> Async.AwaitPromise
+
+                    if title.ToLowerInvariant().Contains fixtureFolderName then
+                        do! openSectionItem section tabTitle |> Async.AwaitPromise
+                        opened <- true
+
+            if not opened then
+                return false
+            else
+                do!
+                    EditorView.openEditor view tabTitle fixtureGroupIndex
+                    |> Async.AwaitPromise
+                    |> Async.Ignore
+
+                let! groupAfter = editorGroup fixtureGroupIndex
+                let! titles = groupAfter.getOpenEditorTitles () |> Async.AwaitPromise
+                return holdsOnly tabTitle titles
     }
 
 /// Opens a workspace file as the *sole* tab in the fixture column, closing whatever else that
@@ -328,10 +346,11 @@ let tryResetEditorFromDisk (fileName: string) : Async<bool> =
 /// the group, which can be a hidden tab carrying no CodeLens widgets even when the focused tab
 /// has them.
 ///
-/// Idempotent when the column already holds exactly that one tab: a second call does not reopen
-/// the file. Reopening inside `Harness.eventually` can concatenate the buffer into itself — the
-/// same defect `openResources` has when polled. A check that hits a doubled buffer after open
-/// should call `tryResetEditorFromDisk` once before waiting on lenses.
+/// Idempotent when the column already holds exactly that one tab: a second call selects the tab
+/// and returns, rather than closing the column and reaching through the Explorer again. That
+/// matters because this binding is polled: reopening a file the column already holds can
+/// concatenate the buffer into itself — the same defect `openResources` has when polled — and a
+/// doubled buffer renders doubled lenses.
 ///
 /// Session-state cost, deliberate and named here because it is not reversed: this discards the
 /// fixture tab setup proved live (`Harness` FixtureOpen) along with any earlier check's fixture.
@@ -341,13 +360,10 @@ let tryOpenAsSoleTabInFixtureColumn (tabTitle: string) : Async<bool> =
     async {
         try
             let view = EditorView.create ()
-            let! groupBefore = editorGroup fixtureGroupIndex
-            let! titlesBefore = groupBefore.getOpenEditorTitles () |> Async.AwaitPromise
+            let! group = editorGroup fixtureGroupIndex
+            let! titles = group.getOpenEditorTitles () |> Async.AwaitPromise
 
-            if
-                titlesBefore.Length = 1
-                && titlesBefore |> Array.exists (fun t -> t.Contains tabTitle)
-            then
+            if holdsOnly tabTitle titles then
                 do!
                     EditorView.openEditor view tabTitle fixtureGroupIndex
                     |> Async.AwaitPromise
@@ -355,44 +371,7 @@ let tryOpenAsSoleTabInFixtureColumn (tabTitle: string) : Async<bool> =
 
                 return true
             else
-                let workbench = Workbench.create ()
-
-                do!
-                    workbench.executeCommand "workbench.action.focusFirstEditorGroup"
-                    |> Async.AwaitPromise
-
-                do! EditorView.closeAllEditors view fixtureGroupIndex |> Async.AwaitPromise
-
-                let bar = ActivityBar.create ()
-                let! control = bar.getViewControl "Explorer" |> Async.AwaitPromise
-
-                if isNull (box control) then
-                    return false
-                else
-                    let! sideBar = control.openView () |> Async.AwaitPromise
-                    let! sections = sideBar.getContent().getSections () |> Async.AwaitPromise
-                    let mutable opened = false
-
-                    for section in sections do
-                        if not opened then
-                            let! title = section.getTitle () |> Async.AwaitPromise
-
-                            if title.ToLowerInvariant().Contains fixtureFolderName then
-                                do! openSectionItem section tabTitle |> Async.AwaitPromise
-                                opened <- true
-
-                    if not opened then
-                        return false
-                    else
-                        do!
-                            EditorView.openEditor view tabTitle fixtureGroupIndex
-                            |> Async.AwaitPromise
-                            |> Async.Ignore
-
-                        let! groupAfter = editorGroup fixtureGroupIndex
-                        let! titles = groupAfter.getOpenEditorTitles () |> Async.AwaitPromise
-
-                        return titles.Length = 1 && titles |> Array.exists (fun t -> t.Contains tabTitle)
+                return! tryOpenThroughExplorer view tabTitle
         with _ ->
             return false
     }
@@ -447,19 +426,6 @@ let tryReadCodeLensTitles () : Async<string[]> =
                 return titles.ToArray()
         with _ ->
             return [||]
-    }
-
-/// Line count of the fixture column's active editor, or `None` when the editor cannot be read.
-/// Used to tell a doubled buffer (openResources concatenation) from a stale-lens DOM read.
-let tryReadEditorLineCount () : Async<int option> =
-    async {
-        try
-            let! group = editorGroup fixtureGroupIndex
-            let editor = TextEditor.createInGroup group
-            let! lines = editor.getNumberOfLines () |> Async.AwaitPromise
-            return Some(int lines)
-        with _ ->
-            return None
     }
 
 /// True when a second editor group is open beside the first *and* holds the response viewer's
@@ -550,18 +516,41 @@ let tryDismissWarningNotification (message: string) : Async<bool> =
 /// Opens the Problems view, filters it to `fixtureFileName`, and returns true when no visible
 /// markers remain for that filter. Pair with `Harness.eventually` after a positive tell that the
 /// Run settled — absence alone is not meaningful.
+///
+/// Recorded softness, so a green run is not over-read: only FsHttp.Studio is installed in the
+/// suite's VSCode. No F# language service is present, so nothing else contributes diagnostics to
+/// a `.fsx` file, and an empty Problems view is weaker evidence here than in a user's editor. It
+/// proves FsHttp.Studio contributes no diagnostic. It cannot prove FsHttp.Studio's output would
+/// not *look* like a fault beside another extension's. The stronger half of that intent lives in
+/// the viewer assertion, which reads a channel with no such weakness.
+///
+/// Opens the bottom panel as a side effect. A caller that wants the panel closed again must close
+/// it — see `tryCloseBottomPanel`.
 let tryNoProblemsForFixture (fixtureFileName: string) : Async<bool> =
     async {
         try
             let panel = BottomBarPanel.create ()
             let! problems = panel.openProblemsView () |> Async.AwaitPromise
             do! problems.setFilter fixtureFileName |> Async.AwaitPromise
-            let! markers = problems.getAllVisibleMarkers markerTypeAny |> Async.AwaitPromise
+            let! markers = problems.getAllVisibleMarkers MarkerType.any |> Async.AwaitPromise
 
             if isNull (box markers) then
                 return true
             else
                 return markers.Length = 0
+        with _ ->
+            return false
+    }
+
+/// Closes the bottom panel, so a check that opened the Problems view hands the next check the
+/// session state it inherited. Returns false when the panel cannot be reached; a caller asserting
+/// something else should not redden on that.
+let tryCloseBottomPanel () : Async<bool> =
+    async {
+        try
+            let panel = BottomBarPanel.create ()
+            do! panel.toggle false |> Async.AwaitPromise
+            return true
         with _ ->
             return false
     }

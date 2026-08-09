@@ -34,7 +34,8 @@ let private tryRefusedRunRenderedAsNotice () =
 
 /// Inherits a session whose response viewer is closed (the loop-lens check left it closed). Opens
 /// this check's fixture as the sole tab in the fixture column, runs the second block, and leaves
-/// the viewer open showing the refusal.
+/// the viewer open showing the refusal. The bottom panel the no-fault assertion opens is closed
+/// again, so the only session state a later check inherits from here is the open viewer.
 let private crossBlockRefusedRun =
     async {
         do!
@@ -42,14 +43,6 @@ let private crossBlockRefusedRun =
                 Harness.LensAppearanceDeadlineMs
                 "the cross-block fixture tab to open as the fixture column's only tab"
                 (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
-
-        // Opening after earlier checks have emptied the column can leave the buffer doubled.
-        // Reset from disk once before waiting on lenses.
-        do!
-            Harness.eventually
-                Harness.LensAppearanceDeadlineMs
-                "the fixture editor buffer to match the on-disk fixture"
-                (fun () -> ExTester.tryResetEditorFromDisk fixtureFileName)
 
         do!
             Harness.eventuallyObserved
@@ -69,9 +62,17 @@ let private crossBlockRefusedRun =
                 "the unboundBlockValue refusal as a notice in the viewer"
                 tryRefusedRunRenderedAsNotice
 
+        // Weaker evidence than it looks: no F# language service is installed in the suite's
+        // VSCode, so nothing but FsHttp.Studio can contribute a `.fsx` diagnostic here. The
+        // assertion's recorded softness is spelled out on `tryNoProblemsForFixture`. The sharp
+        // half of this claim is the notice assertion above.
         do!
             Harness.eventually Harness.ViewerUpdateDeadlineMs "no Problems markers attributed to the fixture" (fun () ->
                 ExTester.tryNoProblemsForFixture fixtureFileName)
+
+        // Not asserted: the panel is housekeeping, and a close that fails must not redden a check
+        // whose subject is the refusal render.
+        do! ExTester.tryCloseBottomPanel () |> Async.Ignore
     }
 
 let tests =

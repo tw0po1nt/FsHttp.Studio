@@ -34,7 +34,6 @@ let private describeTitles (titles: string[]) =
 let tryRunRequestLensAboveEachBlock (blockCount: int) =
     async {
         let! titles = ExTester.tryReadCodeLensTitles ()
-        let! lineCount = ExTester.tryReadEditorLineCount ()
 
         if
             titles.Length = blockCount
@@ -42,12 +41,7 @@ let tryRunRequestLensAboveEachBlock (blockCount: int) =
         then
             return Harness.Holds
         else
-            let lines =
-                match lineCount with
-                | Some n -> sprintf ", editor has %i lines" n
-                | None -> ""
-
-            return Harness.Observed(sprintf "%s%s" (describeTitles titles) lines)
+            return Harness.Observed(describeTitles titles)
     }
 
 /// At least one lens carrying `expectedTitle`, and every rendered lens title equal to it. A DOM
