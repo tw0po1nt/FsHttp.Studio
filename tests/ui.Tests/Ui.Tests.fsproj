@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\src\host\Refusals.fs" Link="Refusals.fs" />
     <Compile Include="Assert.fs" />
     <Compile Include="Proc.fs" />
     <Compile Include="Timing.fs" />
@@ -16,6 +17,7 @@
     <Compile Include="SelfCheckTests.fs" />
     <Compile Include="CorePathTests.fs" />
     <Compile Include="RunOutcomesTests.fs" />
+    <Compile Include="LoopLensTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 
