@@ -70,10 +70,8 @@ let private crossBlockRefusedRun =
                 tryRefusedRunRenderedAsNotice
 
         do!
-            Harness.eventually
-                Harness.ViewerUpdateDeadlineMs
-                "no Problems markers attributed to the fixture"
-                (fun () -> ExTester.tryNoProblemsForFixture fixtureFileName)
+            Harness.eventually Harness.ViewerUpdateDeadlineMs "no Problems markers attributed to the fixture" (fun () ->
+                ExTester.tryNoProblemsForFixture fixtureFileName)
     }
 
 let tests =

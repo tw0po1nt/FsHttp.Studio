@@ -344,7 +344,10 @@ let tryOpenAsSoleTabInFixtureColumn (tabTitle: string) : Async<bool> =
             let! groupBefore = editorGroup fixtureGroupIndex
             let! titlesBefore = groupBefore.getOpenEditorTitles () |> Async.AwaitPromise
 
-            if titlesBefore.Length = 1 && titlesBefore |> Array.exists (fun t -> t.Contains tabTitle) then
+            if
+                titlesBefore.Length = 1
+                && titlesBefore |> Array.exists (fun t -> t.Contains tabTitle)
+            then
                 do!
                     EditorView.openEditor view tabTitle fixtureGroupIndex
                     |> Async.AwaitPromise
