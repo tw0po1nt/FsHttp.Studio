@@ -4,68 +4,39 @@
 // the already-open viewer the core-path check left behind.
 module RunOutcomesTests
 
-open System.IO
-open Fable.Core
 open Fable.Mocha
 
-let private lensTitle = "▶ Run request"
 let private blockCount = 2
 let private fixtureFileName = "run-outcomes.fsx"
-/// Path segment of the 404 block's URL, as it appears in the status line. Distinguishes a named
-/// `/notfound` render from a catch-all typo that also answers 404.
+/// Path segment the 404 block's URL ends in, as it appears in the status line. Distinguishes a
+/// named `/notfound` render from a catch-all typo that also answers 404.
 let private notFoundUrlPath = "/notfound"
 /// The status-band class `Renderer.statusClass` writes for a 4xx status.
 let private status4xxClass = "status-4xx"
-/// Zero-based index of the dead-port block's lens. Both lenses share `lensTitle`.
+/// Zero-based index of the dead-port block's lens. Both lenses share `Checks.lensTitle`.
 let private deadPortLensIndex = 1
 
-let private fixturePath () =
-    match Proc.sidecarPath () with
-    | None -> Assert.fail "UI_TEST_SIDECAR is not set, so the check cannot locate its fixture"
-    | Some sidecar -> Path.Combine(Path.GetDirectoryName sidecar, fixtureFileName)
-
-let private describeTitles (titles: string[]) =
-    if Array.isEmpty titles then
-        "0 CodeLenses"
-    else
-        let quoted = titles |> Array.map (fun t -> sprintf "\"%s\"" t) |> String.concat ", "
-        sprintf "%i CodeLenses: %s" titles.Length quoted
-
-let private tryRunRequestLensAboveEachBlock () =
-    async {
-        let! titles = ExTester.tryReadCodeLensTitles ()
-
-        if
-            titles.Length = blockCount
-            && titles |> Array.forall (fun t -> t.Contains lensTitle)
-        then
-            return Harness.Holds
-        else
-            return Harness.Observed(describeTitles titles)
-    }
-
-let private tryClickFirstLens () =
-    ExTester.tryClickCodeLensByTitle lensTitle
+let private tryClickNotFoundLens () =
+    ExTester.tryClickCodeLensByTitle Checks.lensTitle
 
 let private tryClickDeadPortLens () =
     ExTester.tryClickCodeLensByIndex deadPortLensIndex
 
-let private viewerSatisfies (holds: ExTester.ResponseViewerDom -> bool) =
-    async {
-        match! ExTester.tryReadResponseViewer () with
-        | None -> return false
-        | Some dom -> return holds dom
-    }
+/// The status line shows the block's own source text, so the 404 block renders as
+/// `{baseUrl}/notfound` — the URL *ends* in the path. A containment match would also accept
+/// `/notfound/x`, which is a different route.
+let private urlEndsInNotFound (urlText: string) =
+    urlText.TrimEnd().EndsWith notFoundUrlPath
 
 /// A successful Run with an HTTP error response: status 404, the named route's URL, the named
 /// route's body rendered by content type, the 4xx status band, and no runtime-error text. The
 /// absence of failure is asserted only inside this settled state — absence at a fixed time is not
 /// meaningful.
 let private tryNotFoundRenderedHonestly () =
-    viewerSatisfies (fun dom ->
+    Checks.viewerSatisfies (fun dom ->
         dom.StatusCodeText.Contains "404"
         && dom.StatusClass.Contains status4xxClass
-        && dom.UrlText.Contains notFoundUrlPath
+        && urlEndsInNotFound dom.UrlText
         && dom.StatusLineText <> ""
         && dom.PlainBodyText.Contains Harness.notFoundBody
         && dom.HeadersText <> ""
@@ -75,7 +46,7 @@ let private tryNotFoundRenderedHonestly () =
 /// distinctive content gone, and no status line or headers section. Absence of the status line is
 /// asserted only inside this settled state.
 let private tryDeadPortRenderedAsRuntimeError () =
-    viewerSatisfies (fun dom ->
+    Checks.viewerSatisfies (fun dom ->
         dom.RootText.Contains Harness.runtimeErrorLabel
         && not (dom.RootText.Contains Harness.notFoundBody)
         && not (dom.PlainBodyText.Contains Harness.notFoundBody)
@@ -83,29 +54,28 @@ let private tryDeadPortRenderedAsRuntimeError () =
         && dom.HeadersText = ""
         && dom.StatusCodeText = "")
 
-/// Inherits the warm companion and open viewer from the core-path check. Opens this check's own
-/// fixture, runs both outcomes, and leaves the viewer showing the runtime error.
+/// Inherits the warm companion and the open viewer from the core-path check, and takes over the
+/// fixture column for its own fixture — see `ExTester.tryOpenAsSoleTabInFixtureColumn` for what
+/// that discards. Runs both outcomes and leaves the viewer showing the runtime error.
 let private runOutcomesRenderHonestly =
     async {
-        let path = fixturePath ()
-
         do!
             Harness.eventually
                 Harness.LensAppearanceDeadlineMs
-                "the run-outcomes fixture tab to open and take focus"
-                (fun () -> ExTester.tryOpenAndFocusResource path fixtureFileName)
+                "the run-outcomes fixture tab to open as the fixture column's only tab"
+                (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
 
         do!
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
                 "a Run request lens above each of the two blocks"
-                tryRunRequestLensAboveEachBlock
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount)
 
         do!
             Harness.eventually
                 Harness.LensAppearanceDeadlineMs
                 "a click on the 404 block's Run request lens"
-                tryClickFirstLens
+                tryClickNotFoundLens
 
         do!
             Harness.eventually

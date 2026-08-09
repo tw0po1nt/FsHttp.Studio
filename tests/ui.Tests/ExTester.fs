@@ -39,18 +39,11 @@ type StatusBar =
     abstract getItem: title: string -> JS.Promise<WebElement>
     abstract getItems: unit -> JS.Promise<WebElement[]>
 
-/// One editor tab inside a group.
-type EditorTab =
-    abstract getTitle: unit -> JS.Promise<string>
-    abstract isSelected: unit -> JS.Promise<bool>
-    abstract select: unit -> JS.Promise<unit>
-
 /// One editor column. A group is what scopes a page object to a column: an editor or a webview
 /// built from a group reads that column's active tab, rather than whichever column happens to
 /// hold focus.
 type EditorGroup =
     abstract getOpenEditorTitles: unit -> JS.Promise<string[]>
-    abstract getOpenTabs: unit -> JS.Promise<EditorTab[]>
 
 type EditorView =
     abstract getOpenEditorTitles: unit -> JS.Promise<string[]>
@@ -259,14 +252,21 @@ let private fixtureFolderName = "fixtures"
 let private openSectionItem (section: ViewSection) (itemTitle: string) : JS.Promise<unit> =
     emitJsExpr (section, itemTitle) "$0.openItem($1)"
 
-/// Opens a workspace file as the sole tab in the fixture column. Pair with `Harness.eventually`.
+/// Opens a workspace file as the *sole* tab in the fixture column, closing whatever else that
+/// column held. Pair with `Harness.eventually`.
 ///
-/// Uses the Explorer, not `openResources`. After the core-path check, focus sits on the
-/// response viewer, and `openResources` opens into the focused group — which displaces the
-/// viewer panel. Closing every tab in the fixture column first also avoids a second defect:
-/// with several tabs open, `TextEditor` resolves the first `.editor-instance` in the group,
-/// which can be a hidden tab with no CodeLens widgets even when the focused tab has them.
-let tryOpenAndFocusResource (_path: string) (tabTitle: string) : Async<bool> =
+/// Takes a tab title, not a path: it reaches the file through the Explorer rather than
+/// `openResources`, because once the viewer is open focus sits on it and `openResources` opens
+/// into the focused group — displacing the viewer panel. Emptying the column first avoids a
+/// second defect: with several tabs open, `TextEditor` resolves the first `.editor-instance` in
+/// the group, which can be a hidden tab carrying no CodeLens widgets even when the focused tab
+/// has them.
+///
+/// Session-state cost, deliberate and named here because it is not reversed: this discards the
+/// fixture tab setup proved live (`Harness` FixtureOpen) along with any earlier check's fixture.
+/// The workspace folder — the state the extension's activation depends on — is untouched. A later
+/// check must open its own fixture through this binding rather than assume a tab is still there.
+let tryOpenAsSoleTabInFixtureColumn (tabTitle: string) : Async<bool> =
     async {
         try
             let workbench = Workbench.create ()

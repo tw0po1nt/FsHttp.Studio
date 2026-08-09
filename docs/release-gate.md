@@ -1,8 +1,8 @@
 # Release gate
 
 This document states what the UI test suite covers and what it does not. The suite is still
-growing. Spec 1 ships only the harness and the setup self-check. Later specs add the six product
-checks that retire `docs/manual-check.md`.
+growing. Spec 1 shipped the harness and the setup self-check; specs 2 and 3 shipped the first two
+product checks. Later specs add the rest of the product checks that retire `docs/manual-check.md`.
 
 ## Prerequisites
 
