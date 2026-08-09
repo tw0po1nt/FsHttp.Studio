@@ -44,6 +44,26 @@ let tryRunRequestLensAboveEachBlock (blockCount: int) =
             return Harness.Observed(describeTitles titles)
     }
 
+/// At least one lens carrying `expectedTitle`, and every rendered lens title equal to it. A DOM
+/// that paints the same title twice still holds; a mixed Run-request lens does not.
+let tryOnlyLensTitle (expectedTitle: string) =
+    async {
+        let! titles = ExTester.tryReadCodeLensTitles ()
+
+        if titles.Length >= 1 && titles |> Array.forall (fun t -> t = expectedTitle) then
+            return Harness.Holds
+        else
+            return Harness.Observed(describeTitles titles)
+    }
+
+/// True when no rendered lens title contains the Run request title. Pair with a prior tell that
+/// the provider has already painted lenses on this block — absence alone is not meaningful.
+let tryNoRunRequestLens () =
+    async {
+        let! titles = ExTester.tryReadCodeLensTitles ()
+        return titles |> Array.forall (fun t -> not (t.Contains lensTitle))
+    }
+
 /// Reads the viewer's DOM and applies `holds` to it. A frame that cannot be entered yet is a
 /// normal poll result, so it reads as "does not hold" rather than an exception.
 let viewerSatisfies (holds: ExTester.ResponseViewerDom -> bool) =

@@ -65,8 +65,16 @@ type ViewControl =
 type ActivityBar =
     abstract getViewControl: title: string -> JS.Promise<ViewControl>
 
+/// One toast or center notification, as ExTester's `Notification` page object exposes it.
+type Notification =
+    abstract getMessage: unit -> JS.Promise<string>
+    /// ExTester's `NotificationType` string: `"info"`, `"warning"`, `"error"`, or `"any"`.
+    abstract getType: unit -> JS.Promise<string>
+    abstract dismiss: unit -> JS.Promise<unit>
+
 type Workbench =
     abstract executeCommand: command: string -> JS.Promise<unit>
+    abstract getNotifications: unit -> JS.Promise<Notification[]>
 
 type ByStatic =
     abstract css: selector: string -> obj
@@ -378,6 +386,76 @@ let tryViewerBesideEditor () : Async<bool> =
             else
                 let! titles = groups[viewerGroupIndex].getOpenEditorTitles () |> Async.AwaitPromise
                 return titles |> Array.exists (fun t -> t.Contains Viewer.tabTitle)
+        with _ ->
+            return false
+    }
+
+/// Closes the response viewer column when it is open. Pair with `Harness.eventually`: returns
+/// true once no viewer tab remains beside the editor, including the case where none was open.
+let tryCloseResponseViewer () : Async<bool> =
+    async {
+        try
+            let view = EditorView.create ()
+            let! groups = view.getEditorGroups () |> Async.AwaitPromise
+
+            if groups.Length > viewerGroupIndex then
+                do! EditorView.closeAllEditors view viewerGroupIndex |> Async.AwaitPromise
+
+            let! stillOpen = tryViewerBesideEditor ()
+            return not stillOpen
+        with _ ->
+            return false
+    }
+
+/// True when a standalone warning toast shows exactly `message`. Reads the notification UI, not a
+/// `showWarningMessage` call site.
+let tryWarningNotification (message: string) : Async<bool> =
+    async {
+        try
+            let workbench = Workbench.create ()
+            let! notifications = workbench.getNotifications () |> Async.AwaitPromise
+
+            if isNull (box notifications) then
+                return false
+            else
+                let mutable found = false
+
+                for notification in notifications do
+                    if not found then
+                        let! text = notification.getMessage () |> Async.AwaitPromise
+                        let! notificationType = notification.getType () |> Async.AwaitPromise
+
+                        if notificationType = "warning" && text = message then
+                            found <- true
+
+                return found
+        with _ ->
+            return false
+    }
+
+/// Finds a warning toast whose text is exactly `message` and dismisses it in the same attempt.
+/// Pair with `Harness.eventually`: a stale handle between find and dismiss fails the attempt.
+let tryDismissWarningNotification (message: string) : Async<bool> =
+    async {
+        try
+            let workbench = Workbench.create ()
+            let! notifications = workbench.getNotifications () |> Async.AwaitPromise
+
+            if isNull (box notifications) then
+                return false
+            else
+                let mutable dismissed = false
+
+                for notification in notifications do
+                    if not dismissed then
+                        let! text = notification.getMessage () |> Async.AwaitPromise
+                        let! notificationType = notification.getType () |> Async.AwaitPromise
+
+                        if notificationType = "warning" && text = message then
+                            do! notification.dismiss () |> Async.AwaitPromise
+                            dismissed <- true
+
+                return dismissed
         with _ ->
             return false
     }
