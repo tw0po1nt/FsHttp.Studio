@@ -39,6 +39,14 @@ let jsonProbeBody = sprintf """{"%s":"%s"}""" jsonProbeKey jsonProbeValue
 let slowSeenKey = "slowSeen"
 let slowWaitingKey = "slowWaiting"
 
+/// Cross-process contract for `GET /notfound`. Must match `UiTestServer.Server.notFoundBody`.
+/// Distinct from the `/json` probe body, so a catch-all 404 cannot pass this check by accident.
+let notFoundBody = "ui-test-server:notfound"
+
+/// Substring the host writes into every runtime-error viewer update. Present on a dead-port Run,
+/// and absent on a successful HTTP error response.
+let runtimeErrorLabel = "Runtime error"
+
 let private extensionStatusPrefix = "FsHttp.Studio"
 let private fixtureTabSuffix = "setup.fsx"
 let private fixtureFolderName = "fixtures"

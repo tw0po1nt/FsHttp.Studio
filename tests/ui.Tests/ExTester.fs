@@ -1,12 +1,12 @@
 // ExTester page-object bindings for the UI harness and checks. Checks import this module
 // instead of calling vscode-extension-tester directly.
 //
-// Bindings land when a check needs them: setup owns the workbench tells, and the core-path
-// check owns CodeLens titles and clicks, the viewer-beside-the-editor tell, and response-viewer
-// DOM reads. Every editor-facing binding is scoped to an editor group, because the viewer takes
-// focus when it opens and an unscoped page object would resolve the wrong column's tab. Each
-// binding reads a channel a person reads — the workbench UI or the webview DOM — and adds no
-// seam to the shipping extension.
+// Bindings land when a check needs them: setup owns the workbench tells, the core-path check
+// owns CodeLens titles and clicks plus the viewer-beside-the-editor tell, and product checks
+// that read the response viewer share the DOM read. Every editor-facing binding is scoped to
+// an editor group, because the viewer takes focus when it opens and an unscoped page object
+// would resolve the wrong column's tab. Each binding reads a channel a person reads — the
+// workbench UI or the webview DOM — and adds no seam to the shipping extension.
 module ExTester
 
 open Fable.Core
@@ -39,11 +39,18 @@ type StatusBar =
     abstract getItem: title: string -> JS.Promise<WebElement>
     abstract getItems: unit -> JS.Promise<WebElement[]>
 
+/// One editor tab inside a group.
+type EditorTab =
+    abstract getTitle: unit -> JS.Promise<string>
+    abstract isSelected: unit -> JS.Promise<bool>
+    abstract select: unit -> JS.Promise<unit>
+
 /// One editor column. A group is what scopes a page object to a column: an editor or a webview
 /// built from a group reads that column's active tab, rather than whichever column happens to
 /// hold focus.
 type EditorGroup =
     abstract getOpenEditorTitles: unit -> JS.Promise<string[]>
+    abstract getOpenTabs: unit -> JS.Promise<EditorTab[]>
 
 type EditorView =
     abstract getOpenEditorTitles: unit -> JS.Promise<string[]>
@@ -65,6 +72,9 @@ type ViewControl =
 type ActivityBar =
     abstract getViewControl: title: string -> JS.Promise<ViewControl>
 
+type Workbench =
+    abstract executeCommand: command: string -> JS.Promise<unit>
+
 type ByStatic =
     abstract css: selector: string -> obj
 
@@ -81,6 +91,13 @@ type ResponseViewerDom =
         UrlText: string
         /// Text of the rendered JSON body region.
         JsonBodyText: string
+        /// Text of the rendered plain-text body region (`.response-text`).
+        PlainBodyText: string
+        /// Text of the collapsible headers section. Empty when no response headers rendered.
+        HeadersText: string
+        /// Text of the webview root. Carries the full response render, or the plain error text
+        /// a runtime-error update writes with no response structure.
+        RootText: string
         /// Text of the Run in progress label, such as `Running…`.
         RunInProgressLabel: string
     }
@@ -94,6 +111,9 @@ module private Viewer =
     let statusCodeSelector = ".status-code"
     let urlSelector = ".status-url"
     let jsonBodySelector = ".response-json"
+    let plainBodySelector = ".response-text"
+    let headersSelector = ".headers"
+    let rootSelector = "#root"
     let runInProgressSelector = ".pending-label"
 
     /// The class on the status-code span that is not the span's own `status-code`.
@@ -134,6 +154,14 @@ module EditorView =
 
     let create () : EditorView = createInst Ctor
 
+    /// Select a tab by partial title in one editor group.
+    let openEditor (view: EditorView) (title: string) (groupIndex: int) : JS.Promise<obj> =
+        emitJsExpr (view, title, groupIndex) "$0.openEditor($1, $2)"
+
+    /// Close every tab in one editor group.
+    let closeAllEditors (view: EditorView) (groupIndex: int) : JS.Promise<unit> =
+        emitJsExpr (view, groupIndex) "$0.closeAllEditors($1)"
+
 module StatusBar =
     [<Import("StatusBar", "vscode-extension-tester")>]
     let private Ctor: obj = jsNative
@@ -145,6 +173,12 @@ module ActivityBar =
     let private Ctor: obj = jsNative
 
     let create () : ActivityBar = createInst Ctor
+
+module Workbench =
+    [<Import("Workbench", "vscode-extension-tester")>]
+    let private Ctor: obj = jsNative
+
+    let create () : Workbench = createInst Ctor
 
 module TextEditor =
     [<Import("TextEditor", "vscode-extension-tester")>]
@@ -219,6 +253,64 @@ let private statusClassFromAttribute (classAttr: string) : string =
         |> Array.tryFind (fun c -> c.StartsWith Viewer.statusClassPrefix && c <> Viewer.statusCodeClass)
         |> Option.defaultValue ""
 
+/// The workspace folder name setup opens. Explorer sections use this title.
+let private fixtureFolderName = "fixtures"
+
+let private openSectionItem (section: ViewSection) (itemTitle: string) : JS.Promise<unit> =
+    emitJsExpr (section, itemTitle) "$0.openItem($1)"
+
+/// Opens a workspace file as the sole tab in the fixture column. Pair with `Harness.eventually`.
+///
+/// Uses the Explorer, not `openResources`. After the core-path check, focus sits on the
+/// response viewer, and `openResources` opens into the focused group — which displaces the
+/// viewer panel. Closing every tab in the fixture column first also avoids a second defect:
+/// with several tabs open, `TextEditor` resolves the first `.editor-instance` in the group,
+/// which can be a hidden tab with no CodeLens widgets even when the focused tab has them.
+let tryOpenAndFocusResource (_path: string) (tabTitle: string) : Async<bool> =
+    async {
+        try
+            let workbench = Workbench.create ()
+            do! workbench.executeCommand "workbench.action.focusFirstEditorGroup" |> Async.AwaitPromise
+
+            let view = EditorView.create ()
+            do! EditorView.closeAllEditors view fixtureGroupIndex |> Async.AwaitPromise
+
+            let bar = ActivityBar.create ()
+            let! control = bar.getViewControl "Explorer" |> Async.AwaitPromise
+
+            if isNull (box control) then
+                return false
+            else
+                let! sideBar = control.openView () |> Async.AwaitPromise
+                let! sections = sideBar.getContent().getSections () |> Async.AwaitPromise
+                let mutable opened = false
+
+                for section in sections do
+                    if not opened then
+                        let! title = section.getTitle () |> Async.AwaitPromise
+
+                        if title.ToLowerInvariant().Contains fixtureFolderName then
+                            do! openSectionItem section tabTitle |> Async.AwaitPromise
+                            opened <- true
+
+                if not opened then
+                    return false
+                else
+                    do!
+                        EditorView.openEditor view tabTitle fixtureGroupIndex
+                        |> Async.AwaitPromise
+                        |> Async.Ignore
+
+                    let! groupAfter = editorGroup fixtureGroupIndex
+                    let! titles = groupAfter.getOpenEditorTitles () |> Async.AwaitPromise
+
+                    return
+                        titles.Length = 1
+                        && titles |> Array.exists (fun t -> t.Contains tabTitle)
+        with _ ->
+            return false
+    }
+
 /// Finds a CodeLens in the fixture's editor and clicks it in the same attempt. Pair with
 /// `Harness.eventually`: a stale handle between find and click fails the attempt, and the next
 /// poll retries both steps together.
@@ -289,8 +381,8 @@ let tryViewerBesideEditor () : Async<bool> =
             return false
     }
 
-/// Enters the response viewer's webview iframe, reads the DOM surfaces the core-path check
-/// asserts on, and switches back to the workbench. Returns `None` when the frame cannot be
+/// Enters the response viewer's webview iframe, reads the DOM surfaces the product checks
+/// assert on, and switches back to the workbench. Returns `None` when the frame cannot be
 /// entered; otherwise returns whatever text and class content is present (empty when a node is
 /// missing). Does not assert DOM tree shape, element count, or layout.
 let tryReadResponseViewer () : Async<ResponseViewerDom option> =
@@ -309,6 +401,9 @@ let tryReadResponseViewer () : Async<ResponseViewerDom option> =
                 let! statusClass = tryElementAttribute view Viewer.statusCodeSelector "class"
                 let! url = tryElementText view Viewer.urlSelector
                 let! jsonBody = tryElementText view Viewer.jsonBodySelector
+                let! plainBody = tryElementText view Viewer.plainBodySelector
+                let! headers = tryElementText view Viewer.headersSelector
+                let! root = tryElementText view Viewer.rootSelector
                 let! runInProgress = tryElementText view Viewer.runInProgressSelector
 
                 // Cleared before the switch, not after: a `switchBack` that throws must not send
@@ -323,6 +418,9 @@ let tryReadResponseViewer () : Async<ResponseViewerDom option> =
                           StatusClass = statusClassFromAttribute statusClass
                           UrlText = url
                           JsonBodyText = jsonBody
+                          PlainBodyText = plainBody
+                          HeadersText = headers
+                          RootText = root
                           RunInProgressLabel = runInProgress }
             with _ ->
                 if switched then
