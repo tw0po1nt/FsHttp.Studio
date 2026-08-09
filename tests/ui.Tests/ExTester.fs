@@ -270,7 +270,10 @@ let tryOpenAndFocusResource (_path: string) (tabTitle: string) : Async<bool> =
     async {
         try
             let workbench = Workbench.create ()
-            do! workbench.executeCommand "workbench.action.focusFirstEditorGroup" |> Async.AwaitPromise
+
+            do!
+                workbench.executeCommand "workbench.action.focusFirstEditorGroup"
+                |> Async.AwaitPromise
 
             let view = EditorView.create ()
             do! EditorView.closeAllEditors view fixtureGroupIndex |> Async.AwaitPromise
@@ -304,9 +307,7 @@ let tryOpenAndFocusResource (_path: string) (tabTitle: string) : Async<bool> =
                     let! groupAfter = editorGroup fixtureGroupIndex
                     let! titles = groupAfter.getOpenEditorTitles () |> Async.AwaitPromise
 
-                    return
-                        titles.Length = 1
-                        && titles |> Array.exists (fun t -> t.Contains tabTitle)
+                    return titles.Length = 1 && titles |> Array.exists (fun t -> t.Contains tabTitle)
         with _ ->
             return false
     }
