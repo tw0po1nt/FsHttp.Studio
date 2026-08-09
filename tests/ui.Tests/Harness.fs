@@ -94,20 +94,45 @@ let isProvenLive () =
     && provenLive.ExtensionActive
     && provenLive.CompanionRunning
 
-/// Polls `predicate` until it holds or `timeoutMs` elapses. The predicate is async because every
-/// observation of the running editor returns a promise; wrap a synchronous condition in
-/// `async { return ... }`. `subject` names what is being waited on, so a timeout reads as the
-/// surface that never arrived rather than a bare elapsed time.
-let eventually (timeoutMs: int) (subject: string) (predicate: unit -> Async<bool>) : Async<unit> =
+/// What one poll saw. `Holds` ends the wait. `DoesNotHold` is a poll with nothing to say about the
+/// state it found, which is most of them. `Observed` carries the poll's own account of that state,
+/// for a condition whose opposite defects fail the same way — an exact count that reads too few and
+/// one that reads too many produce the same timeout, and only the observation tells them apart.
+type Poll =
+    | Holds
+    | DoesNotHold
+    | Observed of observation: string
+
+/// The account a poll gives of the state it found, where it gives one. A poll that holds has no
+/// account to give a timeout, because a wait that holds never times out.
+let private observationOf (result: Poll) =
+    match result with
+    | Observed observation -> Some observation
+    | Holds
+    | DoesNotHold -> None
+
+/// The one polling loop. `eventually` is the plain-condition face of it, so a check chooses between
+/// reporting and not reporting, and not between two waits.
+///
+/// A timeout quotes the result of the *last* poll before the deadline. It does not read the
+/// workbench again after the deadline: a fresh read would report a state the wait never failed on,
+/// and the surface it reads may have changed in the meantime.
+let eventuallyObserved (timeoutMs: int) (subject: string) (poll: unit -> Async<Poll>) : Async<unit> =
+    let timedOut (observation: string option) : unit =
+        let waitingFor = sprintf "Timed out after %i ms waiting for %s" timeoutMs subject
+
+        match observation with
+        | Some observation -> Assert.fail (sprintf "%s. The last poll saw %s" waitingFor observation)
+        | None -> Assert.fail waitingFor
+
     let rec loop (deadline: float) =
         async {
-            let! holds = predicate ()
+            let! result = poll ()
 
-            if holds then
-                return ()
-            elif Proc.now () >= deadline then
-                Assert.fail (sprintf "Timed out after %i ms waiting for %s" timeoutMs subject)
-            else
+            match result with
+            | Holds -> return ()
+            | _ when Proc.now () >= deadline -> return timedOut (observationOf result)
+            | _ ->
                 do! Async.Sleep PollIntervalMs
                 return! loop deadline
         }
@@ -116,6 +141,18 @@ let eventually (timeoutMs: int) (subject: string) (predicate: unit -> Async<bool
         let deadline = Proc.now () + float timeoutMs
         return! loop deadline
     }
+
+/// Polls `predicate` until it holds or `timeoutMs` elapses. The predicate is async because every
+/// observation of the running editor returns a promise; wrap a synchronous condition in
+/// `async { return ... }`. `subject` names what is being waited on, so a timeout reads as the
+/// surface that never arrived rather than a bare elapsed time. A predicate that can name what it
+/// saw instead goes through `eventuallyObserved`, which is the same loop.
+let eventually (timeoutMs: int) (subject: string) (predicate: unit -> Async<bool>) : Async<unit> =
+    eventuallyObserved timeoutMs subject (fun () ->
+        async {
+            let! holds = predicate ()
+            return if holds then Holds else DoesNotHold
+        })
 
 let private failSetup (cause: string) =
     Assert.fail (sprintf "Harness setup failed: %s" cause)
