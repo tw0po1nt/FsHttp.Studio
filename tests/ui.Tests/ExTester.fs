@@ -407,28 +407,36 @@ let tryCloseResponseViewer () : Async<bool> =
             return false
     }
 
+/// Finds a standalone warning toast whose text is exactly `message`. `None` when no notification
+/// list is available, or none matches.
+let private tryFindWarningNotification (message: string) : Async<Notification option> =
+    async {
+        let workbench = Workbench.create ()
+        let! notifications = workbench.getNotifications () |> Async.AwaitPromise
+
+        if isNull (box notifications) then
+            return None
+        else
+            let mutable found = None
+
+            for notification in notifications do
+                if found.IsNone then
+                    let! text = notification.getMessage () |> Async.AwaitPromise
+                    let! notificationType = notification.getType () |> Async.AwaitPromise
+
+                    if notificationType = "warning" && text = message then
+                        found <- Some notification
+
+            return found
+    }
+
 /// True when a standalone warning toast shows exactly `message`. Reads the notification UI, not a
 /// `showWarningMessage` call site.
 let tryWarningNotification (message: string) : Async<bool> =
     async {
         try
-            let workbench = Workbench.create ()
-            let! notifications = workbench.getNotifications () |> Async.AwaitPromise
-
-            if isNull (box notifications) then
-                return false
-            else
-                let mutable found = false
-
-                for notification in notifications do
-                    if not found then
-                        let! text = notification.getMessage () |> Async.AwaitPromise
-                        let! notificationType = notification.getType () |> Async.AwaitPromise
-
-                        if notificationType = "warning" && text = message then
-                            found <- true
-
-                return found
+            let! found = tryFindWarningNotification message
+            return found.IsSome
         with _ ->
             return false
     }
@@ -438,24 +446,13 @@ let tryWarningNotification (message: string) : Async<bool> =
 let tryDismissWarningNotification (message: string) : Async<bool> =
     async {
         try
-            let workbench = Workbench.create ()
-            let! notifications = workbench.getNotifications () |> Async.AwaitPromise
+            let! found = tryFindWarningNotification message
 
-            if isNull (box notifications) then
-                return false
-            else
-                let mutable dismissed = false
-
-                for notification in notifications do
-                    if not dismissed then
-                        let! text = notification.getMessage () |> Async.AwaitPromise
-                        let! notificationType = notification.getType () |> Async.AwaitPromise
-
-                        if notificationType = "warning" && text = message then
-                            do! notification.dismiss () |> Async.AwaitPromise
-                            dismissed <- true
-
-                return dismissed
+            match found with
+            | Some notification ->
+                do! notification.dismiss () |> Async.AwaitPromise
+                return true
+            | None -> return false
         with _ ->
             return false
     }
