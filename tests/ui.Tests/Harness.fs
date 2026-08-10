@@ -20,6 +20,13 @@ let ToastDeadlineMs = 15_000
 /// Default wait for the editor to recover after a reload.
 let PostReloadRecoveryDeadlineMs = 60_000
 
+/// Wait for the companion to report `ready`, paid once in setup. It is the longest wait the
+/// harness makes, and deliberately so: the companion's first response costs a `dotnet --list-sdks`
+/// probe, a .NET process start, and FCS's first parse. On a slow runner that cold start alone has
+/// been measured above 45 s. Setup absorbs it inside `SetupBudgetMs` so no product check pays it —
+/// a check that waits on cold start measures the runner, not the product.
+let CompanionReadyDeadlineMs = 120_000
+
 /// Green-path budget for the `before` hook through proven-live.
 let SetupBudgetMs = 180_000
 
@@ -61,6 +68,11 @@ let companionStoppedText =
     "The FsHttp.Studio companion stopped. Reload the window to start it again."
 
 let private extensionStatusPrefix = "FsHttp.Studio"
+
+/// The status bar text the extension shows once the companion reports `ready`, exactly as
+/// `Extension.setStatusText` and `Companion.statusText` compose it. Asserted as rendered — it is
+/// the only surface that publishes the companion's state to a reader.
+let private extensionReadyStatus = "FsHttp.Studio: ready"
 let private fixtureTabSuffix = "setup.fsx"
 let private fixtureFolderName = "fixtures"
 let private setupPhaseName = "Harness setup"
@@ -78,14 +90,16 @@ type ProvenLive =
       ServerLive: bool
       FixtureOpen: bool
       ExtensionActive: bool
-      CompanionRunning: bool }
+      CompanionRunning: bool
+      CompanionReady: bool }
 
 let private nothingProven =
     { WorkbenchReady = false
       ServerLive = false
       FixtureOpen = false
       ExtensionActive = false
-      CompanionRunning = false }
+      CompanionRunning = false
+      CompanionReady = false }
 
 let mutable private provenLive = nothingProven
 let mutable private setupElapsedMs = 0.0
@@ -114,6 +128,7 @@ let isProvenLive () =
     && provenLive.FixtureOpen
     && provenLive.ExtensionActive
     && provenLive.CompanionRunning
+    && provenLive.CompanionReady
 
 /// What one poll saw. `Holds` ends the wait. `DoesNotHold` is a poll with nothing to say about the
 /// state it found, which is most of them. `Observed` carries the poll's own account of that state,
@@ -244,7 +259,10 @@ let private tryFixtureTabOpen () =
             return false
     }
 
-let private tryExtensionActive () =
+/// True when some status bar item's text satisfies `holds`. The read is wrapped because the status
+/// bar is queried while the workbench is still settling, and a stale element throws rather than
+/// returning nothing.
+let private anyStatusItemSatisfies (holds: string -> bool) =
     async {
         try
             let bar = ExTester.StatusBar.create ()
@@ -255,13 +273,23 @@ let private tryExtensionActive () =
                 if not found then
                     let! text = item.getText () |> Async.AwaitPromise
 
-                    if text.Contains extensionStatusPrefix then
+                    if holds text then
                         found <- true
 
             return found
         with _ ->
             return false
     }
+
+let private tryExtensionActive () =
+    anyStatusItemSatisfies (fun text -> text.Contains extensionStatusPrefix)
+
+/// The companion answered its first request, rather than merely having been spawned. This is the
+/// tell `tryCompanionRunning` cannot give: a pid exists the moment `Companion.start` spawns it,
+/// while `ready` is written only once the process is serving. Until then `CodeLensProvider` holds
+/// every lens back, so a check that opens a fixture sees no lens through no fault of the product.
+let private tryCompanionReady () =
+    anyStatusItemSatisfies (fun text -> text.Contains extensionReadyStatus)
 
 /// Matches only the companion that this run's VSCode spawned, by anchoring on the extensions
 /// directory the `.vsix` was installed into. A bare `Companion.dll` would also match the
@@ -380,6 +408,12 @@ let private runSetup () =
         provenLive <-
             { provenLive with
                 CompanionRunning = true }
+
+        do! eventually CompanionReadyDeadlineMs "the companion to report ready" tryCompanionReady
+
+        provenLive <-
+            { provenLive with
+                CompanionReady = true }
 
         setupElapsedMs <- Proc.now () - setupStart
         emitTimingTable "Harness setup" [ setupRow () ]
