@@ -71,6 +71,25 @@ let private expectResolvesBesideScript (marker: string) (runner: string -> int -
     finally
         Directory.Delete(dir, true)
 
+/// The delay the timing cases hold their server at. `requestMs` brackets the invocation, so it
+/// must cover this delay on whichever route the Run takes.
+let private timedRunDelayMs = 200
+
+/// Drives `runner` over a block whose server waits `timedRunDelayMs` before answering, and hands
+/// `check` the `requestMs` off the outcome together with the elapsed time of the whole call. The
+/// in-process case and the worker case need the same fixture over a different route.
+let private expectTimedRun (runner: string -> int -> string option -> RunOutcome) (check: float -> float -> unit) =
+    use server = new TestServer(Map [ "/slow", delayedHandler timedRunDelayMs ])
+    let source = script (sprintf "http {\n    GET \"%s/slow\"\n}\n" server.BaseUrl)
+
+    let sw = Diagnostics.Stopwatch.StartNew()
+    let outcome = runner source 0 None
+    sw.Stop()
+
+    match outcome with
+    | Ok(_, _, _, _, _, requestMs) -> check requestMs sw.Elapsed.TotalMilliseconds
+    | other -> failtestf "expected ok with requestMs, got %A" other
+
 /// Asserts that a diagnostic points somewhere the editor can actually highlight. A setup
 /// diagnostic may be anchored rather than native, so the line is not fixed, but it must still
 /// land inside the script: a phantom line past the end fails to highlight in the UI.
@@ -885,51 +904,37 @@ let tests =
           }
 
           test "requestMs covers a known server delay and sits below the whole call's elapsed time" {
-              // The companion brackets the invocation alone. Against a 200 ms server that
+              // The companion brackets the invocation alone. Against the delayed server that
               // number must cover the delay, and it must stay well below the host-side total
               // that also pays for session creation and Setup
               // (docs/spec/0004-run-path-robustness.md, Decision 7).
-              use server = new TestServer(Map [ "/slow", delayedHandler 200 ])
-              let source = script (sprintf "http {\n    GET \"%s/slow\"\n}\n" server.BaseUrl)
-
-              let sw = Diagnostics.Stopwatch.StartNew()
-              let outcome = runInProcessDirect source 0 None
-              sw.Stop()
-
-              match outcome with
-              | Ok(_, _, _, _, _, requestMs) ->
-                  Expect.isGreaterThanOrEqual requestMs 200.0 "requestMs must cover the server's known delay"
-
-                  Expect.isLessThan
+              expectTimedRun runInProcessDirect (fun requestMs totalMs ->
+                  Expect.isGreaterThanOrEqual
                       requestMs
-                      sw.Elapsed.TotalMilliseconds
-                      "requestMs is the invocation, not the whole call"
+                      (float timedRunDelayMs)
+                      "requestMs must cover the server's known delay"
+
+                  Expect.isLessThan requestMs totalMs "requestMs is the invocation, not the whole call"
 
                   // Session creation alone is on the order of 100 ms on a warm process. A
                   // requestMs that is within 50 ms of the total would mean the bracket still
                   // wrapped the session.
-                  Expect.isLessThan
-                      requestMs
-                      (sw.Elapsed.TotalMilliseconds - 50.0)
-                      "requestMs must sit well below the total, not beside it"
-              | other -> failtestf "expected ok with requestMs, got %A" other
+                  Expect.isLessThan requestMs (totalMs - 50.0) "requestMs must sit well below the total, not beside it")
           }
 
           test "the worker path carries requestMs through the wire" {
-              // Drive `runInWorker` directly so the assertion hits `outcomeToWire` /
-              // `wireToOutcome`, not only the warm in-process path.
-              use server = new TestServer(Map [ "/slow", delayedHandler 200 ])
-              let source = script (sprintf "http {\n    GET \"%s/slow\"\n}\n" server.BaseUrl)
-
-              match runInWorker workerTimeoutMs source 0 None with
-              | Ok(_, _, _, _, _, requestMs) ->
+              // This drives `runInWorker` directly rather than forcing the route with a
+              // conflicting pin, for the same reason as the __SOURCE_DIRECTORY__ worker case
+              // below: a pin conflict depends on what earlier cases already loaded into the
+              // process-global map, so it proves nothing on its own. The route-forced Run in the
+              // last case in this list makes the complementary assertion. What matters here is
+              // that the number survives `outcomeToWire` / `wireToOutcome`, and a direct drive
+              // guarantees it crosses them.
+              expectTimedRun (runInWorker workerTimeoutMs) (fun requestMs _ ->
                   Expect.isGreaterThanOrEqual
                       requestMs
-                      200.0
-                      "the worker path must carry a requestMs that covers the delay"
-
-                  Expect.isGreaterThan requestMs 0.0 "requestMs must be positive"
-              | other -> failtestf "expected ok with requestMs from the worker, got %A" other
+                      (float timedRunDelayMs)
+                      "the worker path must carry a requestMs that covers the delay")
           }
 
           // This case stays last in the sequenced list on purpose. It loads FsHttp
@@ -961,8 +966,13 @@ let tests =
                   sprintf "#r \"nuget: FsHttp, 13.3.0\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n" server.BaseUrl
 
               match runSource pinnedSource 0 with
-              | Ok(status, _, _, _, bodyBase64, _) ->
+              | Ok(status, _, _, _, bodyBase64, requestMs) ->
                   Expect.equal status 200 "the later differently-pinned Run should run without an ALC collision"
+
+                  // This is the one Run in the file that the pin conflict itself routes to a
+                  // worker, so it is where `requestMs` is proven to survive a route the test did
+                  // not choose. The server here has no delay, so positivity is all it can claim.
+                  Expect.isGreaterThan requestMs 0.0 "a pin-forced worker Run must still carry a measured requestMs"
 
                   Expect.equal
                       (Convert.FromBase64String bodyBase64)

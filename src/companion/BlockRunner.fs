@@ -693,7 +693,7 @@ let private wireToOutcome (root: JsonElement) : RunOutcome =
             headers,
             jsonString (root.GetProperty "contentType"),
             jsonString (root.GetProperty "bodyBase64"),
-            root.GetProperty("requestMs").GetDouble()
+            root |> getFloatProp "requestMs"
         )
     | "compileError" ->
         [ for d in root.GetProperty("diagnostics").EnumerateArray() do
