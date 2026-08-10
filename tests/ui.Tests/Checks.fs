@@ -18,71 +18,43 @@ let private fixturePath (fileName: string) =
     | None -> Assert.fail "UI_TEST_SIDECAR is not set, so the check cannot locate its fixture"
     | Some sidecar -> Path.Combine(Path.GetDirectoryName sidecar, fileName)
 
-/// The fixture as the workspace holds it, or `None` when the file cannot be read. The suite runs
-/// in Node, so it reads the workspace directly rather than asking the editor about it. This is the
-/// content a correctly loaded buffer has, and the tell that separates a provider painting twice
-/// from a file the editor loaded twice.
-let private fixtureTextOnDisk (fileName: string) =
+/// The fixture's size as the workspace holds it, or `None` when the file cannot be read. The suite
+/// runs in Node, so it reads the workspace directly rather than asking the editor about it. This is
+/// the size a correctly loaded buffer has.
+let private fixtureLineCountOnDisk (fileName: string) =
     try
         let path = fixturePath fileName
 
         if Proc.fileExists path then
-            Some(Proc.readFile path)
+            Some((Proc.readFile path).Split('\n').Length)
         else
             None
     with _ ->
         None
-
-let private fixtureLineCountOnDisk (fileName: string) =
-    fixtureTextOnDisk fileName |> Option.map (fun text -> text.Split('\n').Length)
-
-/// Names what a buffer that is not the fixture actually holds. A line count reports only that the
-/// buffer is the wrong size. A buffer that repeats the fixture and a buffer that carries a second,
-/// different file both read as too long, and the two need different repairs. Only the text
-/// separates them.
-///
-/// Compares normalized lines, never the raw text. The buffer arrives through the clipboard, which
-/// is free to change line endings and trailing whitespace.
-let private describeBufferShape (buffer: string) (disk: string) =
-    let normalize (text: string) =
-        text.Replace("\r\n", "\n").TrimEnd().Split('\n')
-        |> Array.map (fun line -> line.TrimEnd())
-
-    let bufferLines = normalize buffer
-    let diskLines = normalize disk
-
-    let repeatsOfFirstLine =
-        match diskLines |> Array.tryFind (fun line -> line.Trim() <> "") with
-        | None -> "a fixture with no non-empty line to count"
-        | Some first ->
-            let count = bufferLines |> Array.filter (fun line -> line = first) |> Array.length
-            sprintf "the fixture's first line %i times" count
-
-    let endsWithASecondCopy =
-        bufferLines.Length > diskLines.Length
-        && Array.forall2 (=) (Array.skip (bufferLines.Length - diskLines.Length) bufferLines) diskLines
-
-    sprintf
-        "a buffer of %i lines for a file of %i, holding %s, and %s"
-        bufferLines.Length
-        diskLines.Length
-        repeatsOfFirstLine
-        (if endsWithASecondCopy then
-             "ending in a whole second copy of the fixture"
-         else
-             "not ending in a copy of the fixture")
 
 let private describeFixtureOnDisk (fileName: string) =
     match fixtureLineCountOnDisk fileName with
     | Some lines -> sprintf "%i lines on disk" lines
     | None -> sprintf "a %s the suite could not read" fileName
 
+/// The titles a poll read, as one line for a failure message. Quoted individually, because a title
+/// carries a glyph and a space, and an unquoted list of them cannot show where one ends.
+let private describeTitles (titles: string[]) =
+    if Array.isEmpty titles then
+        "0 CodeLenses"
+    else
+        let quoted = titles |> Array.map (fun t -> sprintf "\"%s\"" t) |> String.concat ", "
+        sprintf "%i CodeLenses: %s" titles.Length quoted
+
+/// A read that raised, worded so a reader cannot mistake it for an editor that painted no lens.
+let private describeReadFailure (reason: string) =
+    sprintf "no reading at all — the CodeLens query raised: %s" reason
+
 /// Opens a fixture as the sole tab in the fixture column, and returns once the column holds it and
-/// nothing else, with the file loaded once.
+/// nothing else.
 ///
-/// The open runs once and is not polled. Opening a file the column already holds concatenates the
-/// buffer into itself, and the doubled buffer renders doubled lenses. Every wait after it is a
-/// read or an idempotent command, so a poll cannot open anything a second time.
+/// The open runs once and is not polled. Every wait after it is a read or an idempotent command,
+/// so a poll cannot open the same fixture a second time.
 ///
 /// A column that already holds exactly this tab is left alone, so a check may call this against a
 /// fixture the previous check opened without paying the reopen.
@@ -101,42 +73,7 @@ let openFixtureAsSoleTab (tabTitle: string) =
                 Harness.LensAppearanceDeadlineMs
                 (sprintf "the fixture column to hold %s and nothing else" tabTitle)
                 (fun () -> ExTester.tryCloseOtherTabsInFixtureColumn tabTitle)
-
-        // A check reads lenses against the fixture, so the buffer must be the fixture. VSCode has
-        // been seen loading a file into its buffer twice, and every block then carries a second
-        // lens the fixture does not describe. One line of slack absorbs a trailing newline the
-        // buffer and the file disagree about.
-        match fixtureTextOnDisk tabTitle with
-        | None -> Assert.fail (sprintf "the workspace holds no readable %s to check the buffer against" tabTitle)
-        | Some diskText ->
-            let diskLineCount = diskText.Split('\n').Length
-
-            do!
-                Harness.eventuallyObserved
-                    Harness.LensAppearanceDeadlineMs
-                    (sprintf "the %s buffer to hold the file once, not twice" tabTitle)
-                    (fun () ->
-                        async {
-                            match! ExTester.tryFixtureBufferText () with
-                            | None -> return Harness.DoesNotHold
-                            | Some buffer when abs (buffer.Split('\n').Length - diskLineCount) <= 1 ->
-                                return Harness.Holds
-                            | Some buffer -> return Harness.Observed(describeBufferShape buffer diskText)
-                        })
     }
-
-/// The titles a poll read, as one line for a failure message. Quoted individually, because a title
-/// carries a glyph and a space, and an unquoted list of them cannot show where one ends.
-let private describeTitles (titles: string[]) =
-    if Array.isEmpty titles then
-        "0 CodeLenses"
-    else
-        let quoted = titles |> Array.map (fun t -> sprintf "\"%s\"" t) |> String.concat ", "
-        sprintf "%i CodeLenses: %s" titles.Length quoted
-
-/// A read that raised, worded so a reader cannot mistake it for an editor that painted no lens.
-let private describeReadFailure (reason: string) =
-    sprintf "no reading at all — the CodeLens query raised: %s" reason
 
 /// Exactly one lens per block, each carrying the Run request title. An exact count is the claim the
 /// spec makes — a provider that over-detects and stacks an extra lens is as wrong as one that finds
@@ -153,25 +90,24 @@ let tryRunRequestLensAboveEachBlock (blockCount: int) (fileName: string) =
             then
                 return Harness.Holds
             else
-                // Both sizes are read only on the failing path. A count that reads double is a
-                // provider that painted twice, a file the driver opened twice, or a file something
-                // wrote twice, and only the buffer beside the disk separates the three.
-                let! buffer = ExTester.describeFixtureBuffer ()
-
+                // The fixture's size on disk is read only on the failing path, and names which
+                // fixture the count is wrong for.
                 return
-                    Harness.Observed(
-                        sprintf "%s over %s, against %s" (describeTitles titles) buffer (describeFixtureOnDisk fileName)
-                    )
+                    Harness.Observed(sprintf "%s, against %s" (describeTitles titles) (describeFixtureOnDisk fileName))
     }
 
-/// At least one lens carrying `expectedTitle`, and every rendered lens title equal to it. A DOM
-/// that paints the same title twice still holds; a mixed Run-request lens does not.
-let tryOnlyLensTitle (expectedTitle: string) =
+/// Exactly `blockCount` lenses, each title equal to `expectedTitle`. The count is exact for the
+/// same reason `tryRunRequestLensAboveEachBlock` makes it exact: a provider that paints the right
+/// title twice is a defect, and a check that accepts any number above zero cannot see it.
+let tryOnlyLensTitle (blockCount: int) (expectedTitle: string) =
     async {
         match! ExTester.tryReadCodeLensTitles () with
         | ExTester.LensReadFailed reason -> return Harness.Observed(describeReadFailure reason)
         | ExTester.LensTitles titles ->
-            if titles.Length >= 1 && titles |> Array.forall (fun t -> t = expectedTitle) then
+            if
+                titles.Length = blockCount
+                && titles |> Array.forall (fun t -> t = expectedTitle)
+            then
                 return Harness.Holds
             else
                 return Harness.Observed(describeTitles titles)

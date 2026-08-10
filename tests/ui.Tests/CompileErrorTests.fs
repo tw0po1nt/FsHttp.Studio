@@ -7,6 +7,8 @@ module CompileErrorTests
 open Fable.Mocha
 
 let private fixtureFileName = "compile-error.fsx"
+/// Blocks in `compile-error.fsx`. Must match the fixture.
+let private blockCount = 1
 /// 1-based line the fixture marks as the break-target. Must match `compile-error.fsx`.
 let private brokenLine = 12
 /// 1-based column of the type error on the broken line, as `formatCompileError` prints it after
@@ -73,7 +75,7 @@ let private compileErrorNamesItsSource =
                     Harness.eventuallyObserved
                         Harness.LensAppearanceDeadlineMs
                         "a Run request lens above the block"
-                        (fun () -> Checks.tryOnlyLensTitle Checks.lensTitle)
+                        (fun () -> Checks.tryOnlyLensTitle blockCount Checks.lensTitle)
 
                 // Armed before the edit is attempted, not after it is confirmed. A paste that lands
                 // but never confirms within the deadline is exactly the failure the restore exists

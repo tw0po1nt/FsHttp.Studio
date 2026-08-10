@@ -730,42 +730,11 @@ let trySetFixtureLine (line: int) (text: string) : Async<bool> =
             return false
     }
 
-/// The fixture buffer's size and dirty flag, for a failure that has to tell a buffer the product
-/// mis-read from a buffer that is not the fixture. A lens count that reads double is either, and
-/// the two need different repairs: a doubled buffer is the driver having opened the file twice,
-/// and a correct buffer is the provider having painted twice.
-let describeFixtureBuffer () : Async<string> =
-    async {
-        try
-            let! editor = fixtureEditor ()
-            let! dirty, text = bufferState editor
-            let lines = text.Split '\n' |> Array.length
-
-            return sprintf "a %s buffer of %i lines" (if dirty then "dirty" else "clean") lines
-        with e ->
-            return sprintf "a buffer that could not be read: %s" e.Message
-    }
-
-/// The fixture editor's whole buffer, or `None` when it cannot be read.
-///
-/// The fixture column has been observed holding a fixture twice over — a 59-line buffer of a
-/// 30-line file, reported clean, with the file on disk unchanged. A doubled buffer carries a
-/// second copy of every block, so the provider paints a lens above each one and an exact lens
-/// count reads double. Two independent reads agree on the doubling: the buffer through the
-/// clipboard, and a DOM lens count scoped to one `.editor-instance`.
-///
-/// A caller must not compare this text to the file byte for byte. The buffer arrives through the
-/// clipboard, which is free to normalize line endings and trailing whitespace. Compare line
-/// counts, or compare a half of the buffer against another half.
-let tryFixtureBufferText () : Async<string option> =
-    async {
-        try
-            let! editor = fixtureEditor ()
-            let! _, text = bufferState editor
-            return Some text
-        with _ ->
-            return None
-    }
+// No binding here measures the buffer's size. `bufferState` reads through `TextEditor.getText`,
+// which copies the whole document to the clipboard and reads it back. That read has been seen
+// returning the fixture twice over for a document the DOM proved correct, so a size taken from it
+// cannot support a claim about the document. The bindings below ask only whether a fragment the
+// check itself wrote is present, which a doubled read answers the same way as a correct one.
 
 /// True when the fixture editor's tab is dirty and its buffer contains `fragment`.
 let tryFixtureBufferHolds (fragment: string) : Async<bool> =

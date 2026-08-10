@@ -7,6 +7,8 @@ module LoopLensTests
 open Fable.Mocha
 
 let private fixtureFileName = "loop-lens.fsx"
+/// Blocks in `loop-lens.fsx`. Must match the fixture.
+let private blockCount = 1
 let private loopBodyCode = "loopBody"
 
 let private loopBody = Refusals.forCode loopBodyCode
@@ -39,7 +41,7 @@ let private loopLensRefusesWithToast =
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
                 "the refusal lens title above the block inside the loop"
-                (fun () -> Checks.tryOnlyLensTitle refusalLensTitle)
+                (fun () -> Checks.tryOnlyLensTitle blockCount refusalLensTitle)
 
         do!
             Harness.eventually
