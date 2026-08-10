@@ -1,6 +1,6 @@
 // Fixture for the Compile Error names its source check. One reachable module-level block, and
 // above it a stable region the check breaks with a type error. The URL is an inert loopback
-// literal: a Setup that does not compile never sends a request, so this fixture needs no
+// literal: a Setup that does not compile never reaches the URL, so this fixture needs no
 // sidecar and no live server.
 
 #r "nuget: FsHttp"

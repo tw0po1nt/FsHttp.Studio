@@ -77,13 +77,16 @@ let private compileErrorNamesItsSource =
                     "a Run request lens above the block"
                     (fun () -> Checks.tryOnlyLensTitle Checks.lensTitle)
 
+            // Armed before the edit is attempted, not after it is confirmed. A paste that lands but
+            // never confirms within the deadline is exactly the failure the restore exists for, and
+            // arming afterwards would skip it.
+            needsRevert <- true
+
             do!
                 Harness.eventually
                     Harness.LensAppearanceDeadlineMs
                     "a type error on the fixture's marked line in the unsaved buffer"
                     (fun () -> ExTester.trySetFixtureLine brokenLine brokenText)
-
-            needsRevert <- true
 
             do!
                 Harness.eventually
@@ -105,12 +108,24 @@ let private compileErrorNamesItsSource =
         with e ->
             bodyError <- Some e
 
-        if needsRevert then
-            do! revertAndAssertClean ()
+        let mutable revertError: exn option = None
 
-        match bodyError with
-        | Some e -> raise e
-        | None -> ()
+        if needsRevert then
+            try
+                do! revertAndAssertClean ()
+            with e ->
+                revertError <- Some e
+
+        // The body's failure is the diagnostic one — it carries the `.fs` frame naming the assertion
+        // that went red. A restore that fails on top of it is logged rather than raised, so it
+        // cannot displace that frame. A restore that fails on its own is the only failure there is.
+        match bodyError, revertError with
+        | Some body, Some revert ->
+            Proc.log (sprintf "the fixture buffer restore also failed: %s" revert.Message)
+            raise body
+        | Some body, None -> raise body
+        | None, Some revert -> raise revert
+        | None, None -> ()
     }
 
 let tests =

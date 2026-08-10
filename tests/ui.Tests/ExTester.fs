@@ -148,6 +148,14 @@ module private Viewer =
 /// so it is the leftmost group.
 let private fixtureGroupIndex = 0
 
+/// The workbench command that focuses the fixture column. VSCode names these commands by ordinal,
+/// so this must move with `fixtureGroupIndex`. A column this has no command for fails loudly here
+/// rather than silently focusing the wrong one.
+let private focusFixtureGroupCommand =
+    match fixtureGroupIndex with
+    | 0 -> "workbench.action.focusFirstEditorGroup"
+    | other -> failwithf "no focus command wired for fixture column %d" other
+
 /// The column the response viewer opens in. `ResponseViewer.showBeside` asks for the column beside
 /// the active one, and the fixture holds the leftmost.
 let private viewerGroupIndex = 1
@@ -312,9 +320,7 @@ let private tryOpenThroughExplorer (view: EditorView) (tabTitle: string) : Async
     async {
         let workbench = Workbench.create ()
 
-        do!
-            workbench.executeCommand "workbench.action.focusFirstEditorGroup"
-            |> Async.AwaitPromise
+        do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
 
         do! EditorView.closeAllEditors view fixtureGroupIndex |> Async.AwaitPromise
 
@@ -564,6 +570,27 @@ let private fixtureEditor () : Async<TextEditor> =
         return TextEditor.createInGroup group
     }
 
+/// An editor tab's dirty flag and full buffer text — the pair every buffer claim below reads, and
+/// the pair `trySetFixtureLine` reads twice.
+let private bufferState (editor: TextEditor) : Async<bool * string> =
+    async {
+        let! dirty = editor.isDirty () |> Async.AwaitPromise
+        let! text = editor.getText () |> Async.AwaitPromise
+        return dirty, text
+    }
+
+/// True when the fixture editor's buffer state satisfies `holds`. An unreachable editor is a false,
+/// not a throw, so `Harness.eventually` can retry it.
+let private tryFixtureBuffer (holds: bool -> string -> bool) : Async<bool> =
+    async {
+        try
+            let! editor = fixtureEditor ()
+            let! dirty, text = bufferState editor
+            return holds dirty text
+        with _ ->
+            return false
+    }
+
 /// Replaces one 1-based line in the fixture editor with `text`. Idempotent when the buffer already
 /// holds `text` on that path: a poll that finds the broken text present and the tab dirty returns
 /// without rewriting. Pair with `Harness.eventually` — the tell is dirty plus the broken fragment,
@@ -574,15 +601,13 @@ let trySetFixtureLine (line: int) (text: string) : Async<bool> =
     async {
         try
             let! editor = fixtureEditor ()
-            let! dirty = editor.isDirty () |> Async.AwaitPromise
-            let! current = editor.getText () |> Async.AwaitPromise
+            let! dirty, current = bufferState editor
 
             if dirty && current.Contains text then
                 return true
             else
                 do! TextEditor.setTextAtLine editor line text |> Async.AwaitPromise
-                let! dirtyAfter = editor.isDirty () |> Async.AwaitPromise
-                let! textAfter = editor.getText () |> Async.AwaitPromise
+                let! dirtyAfter, textAfter = bufferState editor
                 return dirtyAfter && textAfter.Contains text
         with _ ->
             return false
@@ -590,27 +615,11 @@ let trySetFixtureLine (line: int) (text: string) : Async<bool> =
 
 /// True when the fixture editor's tab is dirty and its buffer contains `fragment`.
 let tryFixtureBufferHolds (fragment: string) : Async<bool> =
-    async {
-        try
-            let! editor = fixtureEditor ()
-            let! dirty = editor.isDirty () |> Async.AwaitPromise
-            let! text = editor.getText () |> Async.AwaitPromise
-            return dirty && text.Contains fragment
-        with _ ->
-            return false
-    }
+    tryFixtureBuffer (fun dirty text -> dirty && text.Contains fragment)
 
 /// True when the fixture editor's tab is clean and its buffer does not contain `fragment`.
 let tryFixtureBufferLacks (fragment: string) : Async<bool> =
-    async {
-        try
-            let! editor = fixtureEditor ()
-            let! dirty = editor.isDirty () |> Async.AwaitPromise
-            let! text = editor.getText () |> Async.AwaitPromise
-            return (not dirty) && not (text.Contains fragment)
-        with _ ->
-            return false
-    }
+    tryFixtureBuffer (fun dirty text -> (not dirty) && not (text.Contains fragment))
 
 /// Focuses the fixture column and reverts its active file from disk through the workbench's own
 /// revert-file command. Pair with `Harness.eventually` on `tryFixtureBufferLacks` — the command
@@ -620,10 +629,7 @@ let tryRevertFixtureFile () : Async<bool> =
         try
             let workbench = Workbench.create ()
 
-            do!
-                workbench.executeCommand "workbench.action.focusFirstEditorGroup"
-                |> Async.AwaitPromise
-
+            do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
             do! workbench.executeCommand "workbench.action.files.revert" |> Async.AwaitPromise
             return true
         with _ ->

@@ -5,7 +5,10 @@ module Harness
 open Fable.Core
 open Fable.Core.JsInterop
 
-/// Default wait for a CodeLens to appear in the workbench.
+/// Default wait for the workbench itself to settle: a CodeLens to appear, a fixture tab to open, a
+/// click to land, a buffer edit or revert to show up in the editor. Named for the lens because that
+/// is the slowest of them and the one that sets the number; every check reuses it rather than
+/// inventing a second workbench deadline.
 let LensAppearanceDeadlineMs = 45_000
 
 /// Default wait for the response viewer to repaint after a Run.
