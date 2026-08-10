@@ -123,6 +123,18 @@ jobs:
             fi
             tests/ui.Tests/run.sh
 
+      - name: Report a fixture the suite wrote
+        if: always()
+        # The last attempt has no attempt after it to notice, and a fixture that reaches disk is
+        # the tell that separates a driver that opened a file twice from one that wrote it twice.
+        run: |
+          if git diff --quiet -- tests/ui.Tests/fixtures; then
+            echo "fixtures unchanged on disk"
+          else
+            echo "::warning::the suite wrote a fixture"
+            git diff --stat -- tests/ui.Tests/fixtures
+          fi
+
       - name: Upload failure screenshots and logs
         if: failure()
         uses: actions/upload-artifact@v4

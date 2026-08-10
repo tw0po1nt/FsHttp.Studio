@@ -57,7 +57,7 @@ let private theCorePath =
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
                 "a Run request lens above each of the two blocks"
-                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount)
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount fixtureFileName)
 
         do!
             Harness.eventually

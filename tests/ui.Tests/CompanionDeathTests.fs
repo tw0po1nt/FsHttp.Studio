@@ -63,7 +63,7 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
                 "a Run request lens above each of the two blocks"
-                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount)
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount fixtureFileName)
 
         do!
             Harness.eventually
@@ -119,7 +119,7 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
                 "a Run request lens above each of the two blocks after the reload"
-                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount)
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount fixtureFileName)
 
         do!
             Harness.eventually

@@ -5,9 +5,32 @@
 // combinator — this module owns nothing but what a check reuses.
 module Checks
 
+open System.IO
+
 /// The lens's rendered title, glyph included, exactly as `CodeLensProvider.buildCodeLens` writes
 /// it. Asserted as rendered, and reused as the partial title a click matches on.
 let lensTitle = "▶ Run request"
+
+/// A fixture checked in beside the sidecar. The sidecar path is the only location the suite is
+/// handed at run time, so every fixture is resolved from it.
+let private fixturePath (fileName: string) =
+    match Proc.sidecarPath () with
+    | None -> Assert.fail "UI_TEST_SIDECAR is not set, so the check cannot locate its fixture"
+    | Some sidecar -> Path.Combine(Path.GetDirectoryName sidecar, fileName)
+
+/// The fixture as it sits on disk, for a failure that must say whether a buffer the editor shows
+/// doubled is a file the driver opened twice or a file something wrote twice. The suite runs in
+/// Node, so it reads the workspace directly rather than asking the editor about it.
+let private describeFixtureOnDisk (fileName: string) =
+    try
+        let path = fixturePath fileName
+
+        if Proc.fileExists path then
+            sprintf "%i lines on disk" (Proc.readFile(path).Split('\n').Length)
+        else
+            sprintf "no file at %s" path
+    with e ->
+        sprintf "a disk read that raised: %s" e.Message
 
 /// One attempt to open `tabTitle` in the fixture column. Holds as soon as the Explorer item has
 /// been clicked — *not* when the tab has rendered — because the click must happen once, and a poll
@@ -69,7 +92,7 @@ let private describeReadFailure (reason: string) =
 /// spec makes — a provider that over-detects and stacks an extra lens is as wrong as one that finds
 /// only the first block. Those two defects time out identically, so a poll that does not hold
 /// reports the titles it read and the log names which one occurred without a screenshot.
-let tryRunRequestLensAboveEachBlock (blockCount: int) =
+let tryRunRequestLensAboveEachBlock (blockCount: int) (fileName: string) =
     async {
         match! ExTester.tryReadCodeLensTitles () with
         | ExTester.LensReadFailed reason -> return Harness.Observed(describeReadFailure reason)
@@ -80,11 +103,15 @@ let tryRunRequestLensAboveEachBlock (blockCount: int) =
             then
                 return Harness.Holds
             else
-                // The buffer is read only on the failing path. A count that reads double is either
-                // a fixture the driver opened twice or a provider that painted twice, and the
-                // buffer's own size is what separates them.
+                // Both sizes are read only on the failing path. A count that reads double is a
+                // provider that painted twice, a file the driver opened twice, or a file something
+                // wrote twice, and only the buffer beside the disk separates the three.
                 let! buffer = ExTester.describeFixtureBuffer ()
-                return Harness.Observed(sprintf "%s over %s" (describeTitles titles) buffer)
+
+                return
+                    Harness.Observed(
+                        sprintf "%s over %s, against %s" (describeTitles titles) buffer (describeFixtureOnDisk fileName)
+                    )
     }
 
 /// At least one lens carrying `expectedTitle`, and every rendered lens title equal to it. A DOM
