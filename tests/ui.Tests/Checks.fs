@@ -18,20 +18,59 @@ let private fixturePath (fileName: string) =
     | None -> Assert.fail "UI_TEST_SIDECAR is not set, so the check cannot locate its fixture"
     | Some sidecar -> Path.Combine(Path.GetDirectoryName sidecar, fileName)
 
-/// How many lines the fixture has in the workspace, or `None` when the file cannot be read. The
-/// suite runs in Node, so it reads the workspace directly rather than asking the editor about it.
-/// This is the size a correctly loaded buffer has, and the tell that separates a provider painting
-/// twice from a file the editor loaded twice.
-let private fixtureLineCountOnDisk (fileName: string) =
+/// The fixture as the workspace holds it, or `None` when the file cannot be read. The suite runs
+/// in Node, so it reads the workspace directly rather than asking the editor about it. This is the
+/// content a correctly loaded buffer has, and the tell that separates a provider painting twice
+/// from a file the editor loaded twice.
+let private fixtureTextOnDisk (fileName: string) =
     try
         let path = fixturePath fileName
 
         if Proc.fileExists path then
-            Some(Proc.readFile(path).Split('\n').Length)
+            Some(Proc.readFile path)
         else
             None
     with _ ->
         None
+
+let private fixtureLineCountOnDisk (fileName: string) =
+    fixtureTextOnDisk fileName |> Option.map (fun text -> text.Split('\n').Length)
+
+/// Names what a buffer that is not the fixture actually holds. A line count reports only that the
+/// buffer is the wrong size. A buffer that repeats the fixture and a buffer that carries a second,
+/// different file both read as too long, and the two need different repairs. Only the text
+/// separates them.
+///
+/// Compares normalized lines, never the raw text. The buffer arrives through the clipboard, which
+/// is free to change line endings and trailing whitespace.
+let private describeBufferShape (buffer: string) (disk: string) =
+    let normalize (text: string) =
+        text.Replace("\r\n", "\n").TrimEnd().Split('\n')
+        |> Array.map (fun line -> line.TrimEnd())
+
+    let bufferLines = normalize buffer
+    let diskLines = normalize disk
+
+    let repeatsOfFirstLine =
+        match diskLines |> Array.tryFind (fun line -> line.Trim() <> "") with
+        | None -> "a fixture with no non-empty line to count"
+        | Some first ->
+            let count = bufferLines |> Array.filter (fun line -> line = first) |> Array.length
+            sprintf "the fixture's first line %i times" count
+
+    let endsWithASecondCopy =
+        bufferLines.Length > diskLines.Length
+        && Array.forall2 (=) (Array.skip (bufferLines.Length - diskLines.Length) bufferLines) diskLines
+
+    sprintf
+        "a buffer of %i lines for a file of %i, holding %s, and %s"
+        bufferLines.Length
+        diskLines.Length
+        repeatsOfFirstLine
+        (if endsWithASecondCopy then
+             "ending in a whole second copy of the fixture"
+         else
+             "not ending in a copy of the fixture")
 
 let private describeFixtureOnDisk (fileName: string) =
     match fixtureLineCountOnDisk fileName with
@@ -67,24 +106,22 @@ let openFixtureAsSoleTab (tabTitle: string) =
         // been seen loading a file into its buffer twice, and every block then carries a second
         // lens the fixture does not describe. One line of slack absorbs a trailing newline the
         // buffer and the file disagree about.
-        match fixtureLineCountOnDisk tabTitle with
+        match fixtureTextOnDisk tabTitle with
         | None -> Assert.fail (sprintf "the workspace holds no readable %s to check the buffer against" tabTitle)
-        | Some diskLineCount ->
+        | Some diskText ->
+            let diskLineCount = diskText.Split('\n').Length
+
             do!
                 Harness.eventuallyObserved
                     Harness.LensAppearanceDeadlineMs
                     (sprintf "the %s buffer to hold the file once, not twice" tabTitle)
                     (fun () ->
                         async {
-                            match! ExTester.tryFixtureBufferLineCount () with
+                            match! ExTester.tryFixtureBufferText () with
                             | None -> return Harness.DoesNotHold
-                            | Some bufferLineCount when abs (bufferLineCount - diskLineCount) <= 1 ->
+                            | Some buffer when abs (buffer.Split('\n').Length - diskLineCount) <= 1 ->
                                 return Harness.Holds
-                            | Some bufferLineCount ->
-                                return
-                                    Harness.Observed(
-                                        sprintf "a buffer of %i lines for a file of %i" bufferLineCount diskLineCount
-                                    )
+                            | Some buffer -> return Harness.Observed(describeBufferShape buffer diskText)
                         })
     }
 

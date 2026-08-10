@@ -746,23 +746,23 @@ let describeFixtureBuffer () : Async<string> =
             return sprintf "a buffer that could not be read: %s" e.Message
     }
 
-/// How many lines the fixture editor holds, or `None` when the buffer cannot be read.
+/// The fixture editor's whole buffer, or `None` when it cannot be read.
 ///
 /// The fixture column has been observed holding a fixture twice over — a 59-line buffer of a
 /// 30-line file, reported clean, with the file on disk unchanged. A doubled buffer carries a
 /// second copy of every block, so the provider paints a lens above each one and an exact lens
-/// count reads double. A check compares this against the file to keep that state from reaching it
-/// as a product defect.
+/// count reads double. Two independent reads agree on the doubling: the buffer through the
+/// clipboard, and a DOM lens count scoped to one `.editor-instance`.
 ///
-/// A caller must compare line counts rather than text. The buffer arrives through the clipboard,
-/// which is free to normalize line endings and trailing whitespace, and a count cannot fail over
-/// that.
-let tryFixtureBufferLineCount () : Async<int option> =
+/// A caller must not compare this text to the file byte for byte. The buffer arrives through the
+/// clipboard, which is free to normalize line endings and trailing whitespace. Compare line
+/// counts, or compare a half of the buffer against another half.
+let tryFixtureBufferText () : Async<string option> =
     async {
         try
             let! editor = fixtureEditor ()
             let! _, text = bufferState editor
-            return Some(text.Split('\n') |> Array.length)
+            return Some text
         with _ ->
             return None
     }
