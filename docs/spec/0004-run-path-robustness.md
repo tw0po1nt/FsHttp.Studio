@@ -325,13 +325,21 @@ pending `locate` abandons to an empty list, so it contributes no second string.
 
 `Companion.fs` is Fable and Node interop, and no suite drives it. The FIFO flush, the closed-handle
 guard, and the `error`-path flush are therefore **verified by hand**, against a Beta, in a real
-VSCode window. [`docs/manual-check.md`](../manual-check.md) carries the steps under *The companion
+VSCode window. `docs/manual-check.md` carries the steps under *The companion
 stops*, and the Manual check gates the release. Do not add a test project for it.
 
 An earlier revision of this spec asked for the check in the pull request instead. That obligation was
 structurally impossible to meet, because no build existed at review time, and [#139](https://github.com/tw0po1nt/FsHttp.Studio/issues/139)
 met it with a scripted proxy. [ADR-0008](../adr/0008-beta-gates-the-release.md) moved the check to
 the Beta gate and built the Beta that it needs.
+
+> **Update (2026-08-10):** The two paragraphs above are no longer true. Spec 7 of the UI test suite
+> drives companion death: it kills the companion during a Run, reads the stopped message in the
+> response viewer, reloads the window, and runs a block again. The UI suite gates the release,
+> `docs/manual-check.md` is deleted, and [ADR-0009](../adr/0009-ui-suite-gates-the-release.md)
+> supersedes ADR-0008. One gap remains open. After the companion dies, the suite asserts neither the
+> presence nor the absence of the lens. See
+> [`docs/release-gate.md`](../release-gate.md).
 
 ## Out of Scope
 

@@ -16,7 +16,7 @@ opened.
 
 **A Beta now gates the release.** `beta.yml` builds `main`, runs the full CI gate, and publishes a
 GitHub pre-release at `v<version>-beta.<n>` with the `.vsix` attached. An operator installs it, walks
-[`docs/manual-check.md`](../manual-check.md), and records the result on the pre-release. `release.yml`
+`docs/manual-check.md`, and records the result on the pre-release. `release.yml`
 refuses a version that has no Beta, and a `force` input releases a change that needs no walk.
 
 ## The Beta version is synthesized, not committed
