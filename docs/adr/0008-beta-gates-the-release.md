@@ -1,5 +1,6 @@
 ---
-Status: superseded by ADR-0009
+Status: superseded
+Superseded-by: ADR-0009
 ---
 
 # A Beta gates the release, and its version is never committed

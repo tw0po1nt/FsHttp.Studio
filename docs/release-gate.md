@@ -14,7 +14,7 @@ The UI suite drives the VSCode version that `extester.config.json` pins, and it 
 Linux only. `package.json` states `"engines": { "vscode": "^1.66.0" }`. The suite does not
 test that minimum version, because ExTester cannot drive it. No other check tests it either — the
 repository has no `@types/vscode` dependency, so no tool checks the declared minimum. A release can
-ship a defect that occurs only on a VSCode version older than the pin. The manual check that this
+ship a defect that occurs only on a VSCode version older than the pin. The by-hand walk that this
 suite replaced had the same gap.
 
 **The pin becomes stale.**
@@ -46,17 +46,16 @@ The suite does not cut a Beta, open its pre-release, or download the `.vsix`. A 
 workflow can therefore ship while packaging and install stay green.
 
 **A machine with no .NET is not covered.**
-A machine with no .NET, or a misconfigured runtime path, is not covered. The former manual check
-never covered it either.
+A machine with no .NET, or a misconfigured runtime path, is not covered. The by-hand walk that this
+suite replaced never covered it either.
 
 **After companion death, the suite asserts neither lens presence nor absence.**
 After the companion dies, the suite does not assert what the lens does. Neither its presence nor
 its absence is stable across runs. See [#145](https://github.com/tw0po1nt/FsHttp.Studio/issues/145).
 
-## New untestable surface
-
-A spec that finds a surface no suite drives records that surface in this honest-gap section. Prefer
-to automate the surface. Do not leave the instruction only inside a shipped spec.
+**A new untestable surface belongs in this section.**
+A spec that finds a surface no suite drives records that surface here. Prefer to automate the
+surface. Do not leave the instruction only inside a shipped spec.
 
 ## What the suite covers today
 

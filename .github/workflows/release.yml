@@ -76,6 +76,9 @@ jobs:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
 
+      # Every step from here to the failure-artifact upload carries the same
+      # `if: !inputs.force` guard. A step added inside that run needs the guard too, or a
+      # forced release still pays for the suite setup it was told to skip.
       - name: Read VSCode pin for cache key
         if: ${{ !inputs.force }}
         id: pin
@@ -87,6 +90,9 @@ jobs:
       - uses: actions/cache@v4
         if: ${{ !inputs.force }}
         with:
+          # Binaries only — never $STORAGE/settings, which run.sh deletes so no VSCode
+          # profile state carries between runs. No restore-keys: a prefix fallback would
+          # serve the previous pin's VSCode, which is the one thing the pinned key prevents.
           path: |
             ${{ env.STORAGE }}/VSCode-linux-x64
             ${{ env.STORAGE }}/chromedriver-linux64
@@ -130,6 +136,12 @@ jobs:
 
       # Same budgets and ×3 job retry as ui-tests.yml. The release path runs its own
       # suite. It does not gate on a previously-green CI check for this commit.
+      #
+      # These steps are copied from ui-tests.yml rather than reached through its
+      # `workflow_call` on purpose. A called workflow runs on its own runner and packages
+      # its own .vsix, so the artifact the suite drove would not be the artifact this job
+      # ships. The gate is only worth what it tested. Keep the copy in step with
+      # ui-tests.yml — a change to either file re-runs the suite through its paths filter.
       - name: Build test server
         if: ${{ !inputs.force }}
         run: dotnet publish tests/ui.Tests/server/UiTestServer.fsproj -c Release -o out/ui-test-server

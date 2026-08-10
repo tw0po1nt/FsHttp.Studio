@@ -7,6 +7,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/ui-tests.yml'
+      # release.yml embeds a copy of the suite steps. A change to it must re-run the
+      # suite here, or the copy drifts with nothing to catch it.
+      - '.github/workflows/release.yml'
       - '.config/dotnet-tools.json'
       - 'esbuild.mjs'
       - 'global.json'
