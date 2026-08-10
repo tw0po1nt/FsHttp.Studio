@@ -185,10 +185,6 @@ module EditorView =
 
     let create () : EditorView = createInst Ctor
 
-    /// Select a tab by partial title in one editor group.
-    let openEditor (view: EditorView) (title: string) (groupIndex: int) : JS.Promise<obj> =
-        emitJsExpr (view, title, groupIndex) "$0.openEditor($1, $2)"
-
     /// Close every tab in one editor group.
     let closeAllEditors (view: EditorView) (groupIndex: int) : JS.Promise<unit> =
         emitJsExpr (view, groupIndex) "$0.closeAllEditors($1)"
@@ -304,17 +300,17 @@ let private openSectionItem (section: ViewSection) (itemTitle: string) : JS.Prom
 let private holdsOnly (tabTitle: string) (titles: string[]) =
     titles.Length = 1 && titles |> Array.exists (fun t -> t.Contains tabTitle)
 
-/// What one attempt to take the fixture column over did. Emptying the column and clicking the
-/// Explorer item is the one step in this suite that must not be repeated, so the outcome says
-/// whether that step was reached rather than folding into a boolean a caller would poll.
+/// What one attempt to open the fixture did. Clicking the Explorer item is the one step in this
+/// suite that must not be repeated, so the outcome says whether that step was reached rather than
+/// folding into a boolean a caller would poll.
 type FixtureOpen =
-    /// The column was emptied and the Explorer item was clicked. The tab may not have rendered
-    /// yet — wait for that with `tryFixtureColumnHoldsOnly`.
+    /// The Explorer item was clicked. The tab may not have rendered yet, and the column can still
+    /// hold other tabs — `tryCloseOtherTabsInFixtureColumn` settles both.
     | FixtureOpenRequested
-    /// The Explorer was not ready, so nothing was closed and nothing was clicked. Safe to retry.
+    /// The Explorer was not ready, so nothing was clicked. Safe to retry.
     | FixtureOpenNotReached of reason: string
-    /// The close or the click itself raised, so the column's state is unknown. Not safe to retry:
-    /// a second click landing on a column that is still closing concatenates the buffer.
+    /// The click itself raised, so the column's state is unknown. Not safe to retry: a second
+    /// click on a file the column already holds concatenates the buffer into itself.
     | FixtureOpenRaised of reason: string
 
 /// True when the fixture column holds `tabTitle` and nothing else.
@@ -332,33 +328,26 @@ let tryFixtureColumnHoldsOnly (tabTitle: string) : Async<bool> =
             return false
     }
 
-/// Empties the fixture column and reaches a workspace file through the Explorer, opening it as the
-/// *sole* tab in that column.
+/// Opens a workspace file in the fixture column, beside whatever that column already holds.
+/// `tryCloseOtherTabsInFixtureColumn` makes it the sole tab afterwards.
 ///
-/// **Reach `FixtureOpenRequested` exactly once per fixture**, then wait on
-/// `tryFixtureColumnHoldsOnly`. Closing the column and clicking the Explorer item is one
-/// non-idempotent action: a second click landing before the close has settled concatenates the
-/// buffer into itself, and a doubled buffer renders doubled lenses — which reads as a provider
-/// that over-detects rather than as a driver that opened twice. `Checks.openFixtureAsSoleTab`
-/// composes the action and the wait, and is what a check should call.
+/// **Reach `FixtureOpenRequested` exactly once per fixture.** Clicking the Explorer item is not
+/// idempotent: a second click on a file the column already holds concatenates the buffer into
+/// itself, and a doubled buffer renders doubled lenses — which reads as a provider that
+/// over-detects rather than as a driver that opened twice. `Checks.openFixtureAsSoleTab` composes
+/// the click and the waits, and is what a check should call.
 ///
-/// The Explorer is resolved before the column is emptied, so the one outcome a caller may retry —
-/// `FixtureOpenNotReached` — leaves the workbench untouched. Emptying first would let a retry
-/// close the response viewer, which slides into the fixture column's index once that column has
-/// no tabs left.
+/// Opens first and closes the other tabs second, rather than emptying the column first. A column
+/// with no tabs left stops being a column: the response viewer then slides into the fixture
+/// column's index, and the file opens beside the viewer instead of replacing it.
+///
+/// The Explorer is resolved before the click, so the one outcome a caller may retry —
+/// `FixtureOpenNotReached` — leaves the workbench untouched.
 ///
 /// Takes a tab title, not a path: it reaches the file through the Explorer rather than ExTester's
 /// `openResources`, because once the viewer is open focus sits on it and `openResources` opens
-/// into the focused group — displacing the viewer panel. Emptying the column first avoids a
-/// second defect: with several tabs open, a CodeLens read resolves the first laid-out
-/// `.editor-instance` in the page, and a column holding an inactive tab gives it a second one to
-/// choose from.
-///
-/// Session-state cost, deliberate and named here because it is not reversed: this discards the
-/// fixture tab setup proved live (`Harness` FixtureOpen) along with any earlier check's fixture.
-/// The workspace folder — the state the extension's activation depends on — is untouched. A later
-/// check must open its own fixture through this binding rather than assume a tab is still there.
-let openFixtureAsSoleTab (tabTitle: string) : Async<FixtureOpen> =
+/// into the focused group — displacing the viewer panel.
+let openFixtureInColumn (tabTitle: string) : Async<FixtureOpen> =
     async {
         let! fixtures =
             async {
@@ -392,15 +381,50 @@ let openFixtureAsSoleTab (tabTitle: string) : Async<FixtureOpen> =
         | Ok section ->
             try
                 let workbench = Workbench.create ()
-                let view = EditorView.create ()
 
+                // Focus first, so the Explorer's click opens into the fixture column rather than
+                // into whichever column last held focus — the response viewer, for most checks.
                 do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
-                do! EditorView.closeAllEditors view fixtureGroupIndex |> Async.AwaitPromise
                 do! openSectionItem section tabTitle |> Async.AwaitPromise
 
                 return FixtureOpenRequested
             with e ->
-                return FixtureOpenRaised(sprintf "emptying the column and opening %s raised: %s" tabTitle e.Message)
+                return FixtureOpenRaised(sprintf "opening %s from the Explorer raised: %s" tabTitle e.Message)
+    }
+
+/// Closes every tab in the fixture column except its active one, and reports whether the column
+/// now holds `tabTitle` and nothing else.
+///
+/// Safe to poll, which is the point: closing the other tabs is idempotent, and it cannot empty the
+/// column, so the response viewer can never slide into the fixture column's index. A column
+/// holding one tab keeps exactly one `.editor-instance` laid out, which is what a CodeLens read
+/// needs — an inactive tab leaves a second editor in the page carrying no lens.
+///
+/// Waits for the fixture tab to appear before it closes anything. The Explorer's click makes the
+/// file it opens the column's active tab, so closing the others while that tab is still on its way
+/// would close the tab this is waiting for, and nothing reopens it.
+let tryCloseOtherTabsInFixtureColumn (tabTitle: string) : Async<bool> =
+    async {
+        try
+            let! group = editorGroup fixtureGroupIndex
+            let! titles = group.getOpenEditorTitles () |> Async.AwaitPromise
+
+            if holdsOnly tabTitle titles then
+                return true
+            elif titles |> Array.exists (fun t -> t.Contains tabTitle) |> not then
+                return false
+            else
+                let workbench = Workbench.create ()
+
+                do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
+
+                do!
+                    workbench.executeCommand "workbench.action.closeOtherEditors"
+                    |> Async.AwaitPromise
+
+                return! tryFixtureColumnHoldsOnly tabTitle
+        with _ ->
+            return false
     }
 
 /// Finds a CodeLens in the fixture's editor and clicks it in the same attempt. Pair with
@@ -738,6 +762,22 @@ let trySetFixtureLine (line: int) (text: string) : Async<bool> =
                 return dirtyAfter && textAfter.Contains text
         with _ ->
             return false
+    }
+
+/// The fixture buffer's size and dirty flag, for a failure that has to tell a buffer the product
+/// mis-read from a buffer that is not the fixture. A lens count that reads double is either, and
+/// the two need different repairs: a doubled buffer is the driver having opened the file twice,
+/// and a correct buffer is the provider having painted twice.
+let describeFixtureBuffer () : Async<string> =
+    async {
+        try
+            let! editor = fixtureEditor ()
+            let! dirty, text = bufferState editor
+            let lines = text.Split '\n' |> Array.length
+
+            return sprintf "a %s buffer of %i lines" (if dirty then "dirty" else "clean") lines
+        with e ->
+            return sprintf "a buffer that could not be read: %s" e.Message
     }
 
 /// True when the fixture editor's tab is dirty and its buffer contains `fragment`.
