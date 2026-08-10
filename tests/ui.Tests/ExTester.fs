@@ -416,7 +416,15 @@ let tryClickCodeLensByIndex (index: int) : Async<bool> =
 /// The rendered titles of every CodeLens in the fixture's editor, top to bottom. Empty when the
 /// editor has no lens yet, so a check can wait for the lenses to render and assert their words in
 /// one `Harness.eventually`.
-let tryReadCodeLensTitles () : Async<string[]> =
+/// What one CodeLens read saw. A read that throws is not an editor with no lenses: ExTester raises
+/// when the editor group or the editor itself is not addressable yet, and reporting that as zero
+/// lenses makes a query that never ran indistinguishable from a provider that painted nothing.
+/// Those two failures need different repairs, so the read reports which one it was.
+type LensRead =
+    | LensTitles of titles: string[]
+    | LensReadFailed of reason: string
+
+let tryReadCodeLensTitles () : Async<LensRead> =
     async {
         try
             let! group = editorGroup fixtureGroupIndex
@@ -424,7 +432,7 @@ let tryReadCodeLensTitles () : Async<string[]> =
             let! lenses = editor.getCodeLenses () |> Async.AwaitPromise
 
             if isNull (box lenses) then
-                return [||]
+                return LensTitles [||]
             else
                 let titles = ResizeArray<string>()
 
@@ -432,9 +440,9 @@ let tryReadCodeLensTitles () : Async<string[]> =
                     let! title = lens.getText () |> Async.AwaitPromise
                     titles.Add title
 
-                return titles.ToArray()
-        with _ ->
-            return [||]
+                return LensTitles(titles.ToArray())
+        with e ->
+            return LensReadFailed e.Message
     }
 
 /// True when a second editor group is open beside the first *and* holds the response viewer's

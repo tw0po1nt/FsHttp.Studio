@@ -27,41 +27,50 @@ let private describeTitles (titles: string[]) =
         let quoted = titles |> Array.map (fun t -> sprintf "\"%s\"" t) |> String.concat ", "
         sprintf "%i CodeLenses: %s" titles.Length quoted
 
+/// A read that raised, worded so a reader cannot mistake it for an editor that painted no lens.
+let private describeReadFailure (reason: string) =
+    sprintf "no reading at all — the CodeLens query raised: %s" reason
+
 /// Exactly one lens per block, each carrying the Run request title. An exact count is the claim the
 /// spec makes — a provider that over-detects and stacks an extra lens is as wrong as one that finds
 /// only the first block. Those two defects time out identically, so a poll that does not hold
 /// reports the titles it read and the log names which one occurred without a screenshot.
 let tryRunRequestLensAboveEachBlock (blockCount: int) =
     async {
-        let! titles = ExTester.tryReadCodeLensTitles ()
-
-        if
-            titles.Length = blockCount
-            && titles |> Array.forall (fun t -> t.Contains lensTitle)
-        then
-            return Harness.Holds
-        else
-            return Harness.Observed(describeTitles titles)
+        match! ExTester.tryReadCodeLensTitles () with
+        | ExTester.LensReadFailed reason -> return Harness.Observed(describeReadFailure reason)
+        | ExTester.LensTitles titles ->
+            if
+                titles.Length = blockCount
+                && titles |> Array.forall (fun t -> t.Contains lensTitle)
+            then
+                return Harness.Holds
+            else
+                return Harness.Observed(describeTitles titles)
     }
 
 /// At least one lens carrying `expectedTitle`, and every rendered lens title equal to it. A DOM
 /// that paints the same title twice still holds; a mixed Run-request lens does not.
 let tryOnlyLensTitle (expectedTitle: string) =
     async {
-        let! titles = ExTester.tryReadCodeLensTitles ()
-
-        if titles.Length >= 1 && titles |> Array.forall (fun t -> t = expectedTitle) then
-            return Harness.Holds
-        else
-            return Harness.Observed(describeTitles titles)
+        match! ExTester.tryReadCodeLensTitles () with
+        | ExTester.LensReadFailed reason -> return Harness.Observed(describeReadFailure reason)
+        | ExTester.LensTitles titles ->
+            if titles.Length >= 1 && titles |> Array.forall (fun t -> t = expectedTitle) then
+                return Harness.Holds
+            else
+                return Harness.Observed(describeTitles titles)
     }
 
 /// True when no rendered lens title contains the Run request title. Pair with a prior tell that
 /// the provider has already painted lenses on this block — absence alone is not meaningful.
+/// A read that failed reports `false` rather than absence. This tell claims that no Run request
+/// lens is painted, and a query that never ran is no evidence for that claim.
 let tryNoRunRequestLens () =
     async {
-        let! titles = ExTester.tryReadCodeLensTitles ()
-        return titles |> Array.forall (fun t -> not (t.Contains lensTitle))
+        match! ExTester.tryReadCodeLensTitles () with
+        | ExTester.LensReadFailed _ -> return false
+        | ExTester.LensTitles titles -> return titles |> Array.forall (fun t -> not (t.Contains lensTitle))
     }
 
 /// Reads the viewer's DOM and applies `holds` to it. A frame that cannot be entered yet is a
