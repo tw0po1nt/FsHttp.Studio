@@ -1,3 +1,7 @@
+---
+Status: superseded by ADR-0009
+---
+
 # A Beta gates the release, and its version is never committed
 
 FsHttp.Studio has surfaces that no suite can drive. `CodeLensProvider`, the warning toast, the

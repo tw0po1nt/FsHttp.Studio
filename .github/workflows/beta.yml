@@ -1,17 +1,17 @@
 name: Beta
 
-# Cuts an installable .vsix before a release, so that a human can walk
-# docs/manual-check.md in a real VSCode window. Manual only — an operator clicks
-# "Run workflow".
+# Optional pre-release .vsix channel for handing someone a build. A Beta is
+# distribution only. It is not required for a release. The UI suite is the
+# release gate. Manual only — an operator clicks "Run workflow".
 #
 # Two paths, chosen by the `ref` input:
 #
-#   ref empty  → Beta. Builds main, runs the full gate, publishes a GitHub
+#   ref empty  → Beta. Builds main, runs the full CI gate, publishes a GitHub
 #                pre-release at tag v<version>-beta.<n>.
-#   ref set    → Branch build. Builds that ref, skips the gate, uploads the
+#   ref set    → Branch build. Builds that ref, skips the CI gate, uploads the
 #                .vsix as a workflow artifact. No tag, and no release.
 #
-# The gate is skipped on a Branch build on purpose. ci.yml already runs it on
+# The CI gate is skipped on a Branch build on purpose. ci.yml already runs it on
 # the pull request, and a Branch build must reach the operator's hands before
 # the branch is green.
 on:
@@ -160,10 +160,10 @@ jobs:
           body: |
             Beta for `${{ steps.version.outputs.target }}`, built from `${{ steps.commit.outputs.sha }}`.
 
-            Install the `.vsix`, then walk [`docs/manual-check.md`](https://github.com/${{ github.repository }}/blob/main/docs/manual-check.md)
-            and record the result in a comment on this pre-release.
+            Install the `.vsix` to try this build. A Beta is distribution only.
+            The UI suite is the release gate. A Beta is not required for a release.
 
-            This build is a release candidate, and it is not a supported install.
+            This build is not a supported install.
             `prune-betas.yml` deletes it when `${{ steps.version.outputs.target }}` ships.
           files: |
             fshttp-studio-${{ steps.version.outputs.stamp }}.vsix
