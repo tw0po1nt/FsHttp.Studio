@@ -23,6 +23,19 @@ three months. A weekly workflow opens a pull request that updates the pin. The C
 request is the gate run for the new version. If a pin is outside the ExTester support window,
 ExTester can fail to download the matching ChromeDriver, and the gate then fails.
 
+**The pin is held below 1.123.0, and the hold has a clock on it.**
+VSCode 1.123.0 and later load every file of a folder workspace twice, which the suite reads as a
+document that holds each block two times. `tests/ui.Tests/vscode-pin-hold.json` records the hold,
+and the weekly workflow opens no pull request while it is in force. The `//pin` note in
+`tests/ui.Tests/extester.config.json` carries the measurement and the version bisect.
+
+The hold and the support window pull against each other. Each week the pin stays at 1.122.0, it
+falls one release further behind, and the paragraph above states what happens at about three
+months: ExTester can fail to fetch a matching ChromeDriver, and the whole suite goes red for a
+reason that has nothing to do with the product. A hold is therefore a delay and not a resolution.
+Run the workflow by hand with the probe input to test the latest release against the suite. Delete
+the hold file when a release passes.
+
 The workflow dispatches the gate run for a pin update. GitHub raises no `pull_request` event for
 anything the built-in `GITHUB_TOKEN` does. The pin-update pull request therefore shows no status
 checks of its own. The workflow starts the UI tests job against the branch and links the run from a

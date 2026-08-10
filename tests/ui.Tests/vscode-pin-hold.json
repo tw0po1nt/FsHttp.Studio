@@ -1,0 +1,6 @@
+{
+  "//": "A deliberate hold on the ExTester VSCode pin, read by .github/workflows/update-vscode-pin.yml. While a hold is in force, the weekly job opens no pin-update pull request, because every version it could offer is known to fail. Delete this file to release the hold and return the job to its normal weekly behavior. It lives beside extester.config.json rather than inside it: that file's schema sets additionalProperties to false, and the pin is stated there for ExTester alone.",
+  "knownBadFrom": "1.123.0",
+  "reason": "1.123.0 and later load every file of a folder workspace twice, so the suite reads a doubled document and counts one lens for each block of each copy. The `//pin` note in extester.config.json carries the measurement and the version bisect.",
+  "tracking": ""
+}
