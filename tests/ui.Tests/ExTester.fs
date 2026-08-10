@@ -424,6 +424,42 @@ type LensRead =
     | LensTitles of titles: string[]
     | LensReadFailed of reason: string
 
+/// Asks the page what the editor elements actually are, for a read that raised. ExTester's
+/// `TextEditor` waits for `.editor-instance` to become visible and reports only that the wait
+/// expired, which does not say whether the element is missing, collapsed, or covered. Each of
+/// those needs a different repair, so the failure carries the answer rather than a guess.
+let private describeEditorInstances () : Async<string> =
+    async {
+        try
+            let driver = VSBrowser.instance.driver
+
+            let script =
+                """
+                var nodes = document.querySelectorAll('.editor-instance');
+                var parts = [];
+                for (var i = 0; i < nodes.length; i++) {
+                    var n = nodes[i];
+                    var r = n.getBoundingClientRect();
+                    var s = window.getComputedStyle(n);
+                    var mid = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                    parts.push(
+                        '#' + i +
+                        ' ' + Math.round(r.width) + 'x' + Math.round(r.height) +
+                        ' display=' + s.display +
+                        ' visibility=' + s.visibility +
+                        ' opacity=' + s.opacity +
+                        ' covered=' + (mid && !n.contains(mid) && mid !== n));
+                }
+                return nodes.length + ' .editor-instance [' + parts.join('; ') + ']';
+                """
+
+            let described: JS.Promise<obj> = emitJsExpr (driver, script) "$0.executeScript($1)"
+            let! result = described |> Async.AwaitPromise
+            return unbox<string> result
+        with e ->
+            return sprintf "the editor-instance probe itself raised: %s" e.Message
+    }
+
 let tryReadCodeLensTitles () : Async<LensRead> =
     async {
         try
@@ -442,7 +478,8 @@ let tryReadCodeLensTitles () : Async<LensRead> =
 
                 return LensTitles(titles.ToArray())
         with e ->
-            return LensReadFailed e.Message
+            let! editors = describeEditorInstances ()
+            return LensReadFailed(sprintf "%s — page shows %s" e.Message editors)
     }
 
 /// True when a second editor group is open beside the first *and* holds the response viewer's
