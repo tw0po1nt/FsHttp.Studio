@@ -45,53 +45,76 @@ type RunOutcome =
     /// `None`.
     | Refused of code: string * name: string option
 
-/// The response-reading guard alone, as generated F# source. The addendum applies it to
-/// `GlobalConfig.defaults`. The invocation re-applies it on the block's own value (Decision 10
-/// of docs/spec/0002-reach-a-block-anywhere.md), and may also inject a request timeout in the
-/// same `Config.update` (docs/spec/0004-run-path-robustness.md, Decision 3). The two settings
-/// on this string cannot drift apart from the invocation's copy, because
-/// `invocationConfigUpdate` builds on this same text when it injects no timeout.
-let private responseReadingGuard =
-    "Config.update (fun c -> { c with bufferResponseContent = true; httpCompletionOption = System.Net.Http.HttpCompletionOption.ResponseContentRead })"
+/// The two response-reading settings, as the generated F# record fields alone. This one text is
+/// the only place either field name is spelled. The addendum applies them to
+/// `GlobalConfig.defaults`, and `invocationConfigUpdate` applies them to the block's own value
+/// (Decision 10 of docs/spec/0002-reach-a-block-anywhere.md). Neither copy can drift from the
+/// other, because neither writes the fields out a second time. `companionAddendum` carries the
+/// reason that each setting is load-bearing.
+let private responseReadingFields =
+    "bufferResponseContent = true; httpCompletionOption = System.Net.Http.HttpCompletionOption.ResponseContentRead"
 
-/// The Runtime error text for a request that hit the injected bound. The number is the bound
-/// that this Run carried on the wire, so a user who raised `fshttpStudio.requestTimeoutMs`
-/// reads that number back. Public so Seam 1 can assert the wording without duplicating it.
+/// The response-reading guard on its own, as generated F# source, for the addendum's copy.
+let private responseReadingGuard =
+    sprintf "Config.update (fun c -> { c with %s })" responseReadingFields
+
+/// The FSI binding that the invocation's `Config.update` writes the *applied* timeout into, in
+/// milliseconds, with `0.` for "no bound at all". The companion reads it back when a
+/// cancellation surfaces, so the message names the bound that actually fired rather than the
+/// bound that rode the wire. The two differ whenever the block set its own
+/// `config_timeoutInSeconds`: `Option.orElse` keeps the block's value, and that is the number
+/// the user needs to read (docs/spec/0004-run-path-robustness.md, Decision 5). The binding is
+/// also the invocation-time `Config` read that Seam 1 scenario 5 asserts against.
+let private appliedTimeoutBinding = "__fsHttpStudioAppliedTimeoutMs"
+
+/// The Runtime error text for a request that hit its bound. `timeoutMs` is the bound that was
+/// applied, so a user who raised `fshttpStudio.requestTimeoutMs`, or who set a timeout on the
+/// block, reads their own number back. Public so Seam 1 can assert the wording without
+/// duplicating it.
 let requestTimeoutMessage (timeoutMs: int) : string =
     sprintf
         "No response within %d ms. FsHttp.Studio stopped waiting.\nRaise fshttpStudio.requestTimeoutMs to wait longer, or set it to 0 to wait as long as HttpClient allows."
         timeoutMs
 
-/// The invocation's `Config.update` fragment. `timeoutMs = 0` means do not inject: the update
-/// is the response-reading guard alone, and `Config.timeout` stays whatever the block already
-/// carried (`None` when the block set no timeout). A positive `timeoutMs` adds an
-/// `Option.orElse` default, so a block that already set `config_timeoutInSeconds` keeps it
-/// (docs/spec/0004-run-path-robustness.md, Decisions 2 and 4).
+/// The invocation's `Config.update` fragment: the response-reading fields, an optional injected
+/// timeout, and the write to `appliedTimeoutBinding`. `timeoutMs = 0` means do not inject, so
+/// `Config.timeout` stays whatever the block already carried (`None` when the block set none).
+/// A positive `timeoutMs` adds an `Option.orElse` default, so a block that already set
+/// `config_timeoutInSeconds` keeps it (docs/spec/0004-run-path-robustness.md, Decisions 2
+/// and 4).
 let invocationConfigUpdate (timeoutMs: int) : string =
-    if timeoutMs <= 0 then
-        responseReadingGuard
-    else
-        sprintf
-            "Config.update (fun c -> { c with bufferResponseContent = true; httpCompletionOption = System.Net.Http.HttpCompletionOption.ResponseContentRead; timeout = c.timeout |> Option.orElse (Some (System.TimeSpan.FromMilliseconds %d.)) })"
-            timeoutMs
+    let timeoutField =
+        if timeoutMs <= 0 then
+            ""
+        else
+            sprintf "; timeout = c.timeout |> Option.orElse (Some (System.TimeSpan.FromMilliseconds %d.))" timeoutMs
 
-/// True when `ex` is the request bound firing. Unwrap `AggregateException` first: a refused
-/// connection arrives wrapped (`AggregateException` → `HttpRequestException` →
-/// `SocketException`), and a timeout arrives bare as `TaskCanceledException`. Any
-/// `OperationCanceledException` in the unwrapped chain is the bound
-/// (docs/spec/0004-run-path-robustness.md, Decision 5).
-let private isRequestTimeout (ex: exn) : bool =
-    let root =
-        match ex with
-        | :? AggregateException as ae ->
-            let flat = ae.Flatten()
+    sprintf
+        "Config.update (fun c -> let applied = { c with %s%s } in (%s <- (match applied.timeout with Some t -> t.TotalMilliseconds | None -> 0.)); applied)"
+        responseReadingFields
+        timeoutField
+        appliedTimeoutBinding
 
-            if flat.InnerExceptions.Count > 0 then
-                flat.InnerExceptions.[0]
-            else
-                ex
-        | _ -> ex
+/// The exception that a Run should report on. A refused connection arrives wrapped
+/// (`AggregateException` → `HttpRequestException` → `SocketException`), and
+/// `AggregateException`'s own message is the generic "One or more errors occurred.". A timeout
+/// arrives bare. One unwrap serves both readers below, so they cannot disagree about which
+/// exception they are looking at (docs/spec/0004-run-path-robustness.md, Decision 5).
+let private unwrapAggregate (ex: exn) : exn =
+    match ex with
+    | :? AggregateException as ae ->
+        let flat = ae.Flatten()
 
+        if flat.InnerExceptions.Count > 0 then
+            flat.InnerExceptions.[0]
+        else
+            ex
+    | _ -> ex
+
+/// True when `root`, already unwrapped, is a bound firing. The companion never passes a
+/// cancellation token of its own, so any `OperationCanceledException` in the chain is the
+/// timeout. `TaskCanceledException` derives from it, so this covers both.
+let private isRequestTimeout (root: exn) : bool =
     let rec inChain (e: exn) =
         match e with
         | :? OperationCanceledException -> true
@@ -102,24 +125,18 @@ let private isRequestTimeout (ex: exn) : bool =
 
     inChain root
 
-/// Maps an invocation exception to a Runtime error. A cancellation that followed a positive
-/// injected bound becomes `requestTimeoutMessage`. Every other failure keeps the unwrapped
-/// exception's own message, so a refused connection still names the connection rather than
-/// AggregateException's generic outer text.
-let private runtimeErrorFrom (timeoutMs: int) (ex: exn) : RunOutcome =
-    let root =
-        match ex with
-        | :? AggregateException as ae ->
-            let flat = ae.Flatten()
+/// Maps an invocation exception to a Runtime error. A cancellation, when a bound was actually
+/// applied, becomes `requestTimeoutMessage` at that applied number. `readAppliedTimeoutMs` is
+/// deferred, because reading it costs an FSI evaluation and only the timeout branch needs it.
+/// Every other failure keeps the unwrapped exception's own message, so a refused connection
+/// still names the connection.
+let private runtimeErrorFrom (readAppliedTimeoutMs: unit -> int) (ex: exn) : RunOutcome =
+    let root = unwrapAggregate ex
 
-            if flat.InnerExceptions.Count > 0 then
-                flat.InnerExceptions.[0]
-            else
-                ex
-        | _ -> ex
-
-    if timeoutMs > 0 && isRequestTimeout ex then
-        RuntimeError(requestTimeoutMessage timeoutMs)
+    if isRequestTimeout root then
+        match readAppliedTimeoutMs () with
+        | applied when applied > 0 -> RuntimeError(requestTimeoutMessage applied)
+        | _ -> RuntimeError root.Message
     else
         RuntimeError root.Message
 
@@ -143,9 +160,14 @@ let private runtimeErrorFrom (timeoutMs: int) (ex: exn) : RunOutcome =
 /// `ResponseContentRead` makes the BCL read the whole body into memory as part of the send,
 /// independent of any later connection state, so every Run reads it cleanly.
 /// `bufferResponseContent` stays on as a second guard.
+///
+/// It also declares `appliedTimeoutBinding`, which the invocation writes and the companion
+/// reads back. It is declared here, and not in the invocation, because the invocation is a
+/// single expression and has nowhere to put a declaration.
 let private companionAddendum =
     [ "open FsHttp"
       "FsHttp.Fsi.disableDebugLogs()"
+      sprintf "let mutable %s = 0." appliedTimeoutBinding
       sprintf "GlobalConfig.set (GlobalConfig.defaults |> %s)" responseReadingGuard ]
     |> String.concat "\n"
 
@@ -638,6 +660,19 @@ let private runLocated
             | Some path -> session.EvalExpressionNonThrowing(code, path)
             | None -> session.EvalExpressionNonThrowing(code)
 
+        // The bound the invocation's `Config.update` actually applied, in ms, with 0 for "no
+        // bound". It is read after the fact, because `Option.orElse` can keep a timeout the
+        // block set for itself, and that number — not the injected one — is what the timeout
+        // message must name. A session that cannot produce the value falls back to the injected
+        // bound, which is the right answer in every case but the block's own.
+        let readAppliedTimeoutMs () =
+            match evalExpression appliedTimeoutBinding with
+            | Choice1Of2(Some v), _ ->
+                match v.ReflectionValue with
+                | :? float as ms -> int ms
+                | _ -> timeoutMs
+            | _ -> timeoutMs
+
         let setupResult, setupDiags = evalInteraction combinedSetup
 
         // `Choice1Of2` means only that the Setup threw no exception; it does not mean the
@@ -694,14 +729,14 @@ let private runLocated
                             |> Array.map (setupDiagnostic 0 None)
                             |> Array.toList
                         with
-                        | [] -> runtimeErrorFrom timeoutMs ex
+                        | [] -> runtimeErrorFrom readAppliedTimeoutMs ex
                         | errors -> CompileError errors
                     | Choice1Of2 None -> RuntimeError "expression returned no value"
                     | Choice1Of2(Some v) ->
                         try
                             extractResponse requestMs v
                         with ex ->
-                            runtimeErrorFrom timeoutMs ex
+                            runtimeErrorFrom readAppliedTimeoutMs ex
             | errors -> CompileError errors
 
 /// `runLocated` against a fresh locate of `source`. This is the `--worker` child's entry point,
@@ -923,22 +958,24 @@ let workerTimeoutMs = 120_000
 /// `{ source, blockIndex, scriptFileName?, timeoutMs }` request, writes one outcome envelope,
 /// and then exits.
 ///
-/// `timeoutMs` bounds the wait for the child's frame. `Kill()` terminates a worker that does
-/// not produce its frame in time, and also a worker that produces the frame and then stalls
-/// before it exits. The Run then maps to a `RuntimeError`, instead of a block of the caller
-/// forever. A user block that loops forever, or a request that never answers, both cause the
-/// first case. `use proc = proc` disposes the handle but does not unblock a wait. The bound and
-/// the kill, not the disposal, are what guarantee that the Run always terminates.
+/// The two bounds are both durations in milliseconds, and they mean different things, so they
+/// carry different names rather than sit transposable beside each other. `workerWaitMs` bounds
+/// how long the parent waits for the child's frame. `timeoutMs` is the request bound the child
+/// injects at invocation time; it rides the worker payload under that name, the same field the
+/// warm `run` envelope carries, and `0` means do not inject.
 ///
-/// `requestTimeoutMs` is the request bound the child injects at invocation time. It rides the
-/// worker payload as `timeoutMs`, the same field the warm `run` envelope carries. `0` means do
-/// not inject.
+/// `Kill()` terminates a worker that does not produce its frame within `workerWaitMs`, and also
+/// a worker that produces the frame and then stalls before it exits. The Run then maps to a
+/// `RuntimeError`, instead of a block of the caller forever. A user block that loops forever, or
+/// a request that never answers, both cause the first case. `use proc = proc` disposes the
+/// handle but does not unblock a wait. The bound and the kill, not the disposal, are what
+/// guarantee that the Run always terminates.
 let runInWorker
-    (timeoutMs: int)
+    (workerWaitMs: int)
     (source: string)
     (blockIndex: int)
     (scriptFileName: string option)
-    (requestTimeoutMs: int)
+    (timeoutMs: int)
     : RunOutcome =
     let companionDll = typeof<RunOutcome>.Assembly.Location
 
@@ -973,7 +1010,7 @@ let runInWorker
                 {| source = source
                    blockIndex = blockIndex
                    scriptFileName = defaultArg scriptFileName ""
-                   timeoutMs = requestTimeoutMs |}
+                   timeoutMs = timeoutMs |}
 
             writeFrame proc.StandardInput.BaseStream (JsonSerializer.SerializeToUtf8Bytes request)
             proc.StandardInput.Close()
@@ -986,9 +1023,9 @@ let runInWorker
             // The child's stderr (FCS and user output) inherits ours, so no drain is necessary.
             let readFrame = Task.Run(fun () -> tryReadFrame proc.StandardOutput.BaseStream)
 
-            if not (readFrame.Wait timeoutMs) then
+            if not (readFrame.Wait workerWaitMs) then
                 kill ()
-                RuntimeError(sprintf "worker: no response within %dms. Evaluation process terminated." timeoutMs)
+                RuntimeError(sprintf "worker: no response within %dms. Evaluation process terminated." workerWaitMs)
             else
                 let outcome =
                     match readFrame.Result with
@@ -1000,7 +1037,7 @@ let runInWorker
                 // The frame is in hand, so the child must now exit on its own. Bound that wait
                 // too, because a worker that emitted its frame and then stalled must not block
                 // `WaitForExit`. Kill() the child if it stays past the bound.
-                if not (proc.WaitForExit timeoutMs) then
+                if not (proc.WaitForExit workerWaitMs) then
                     kill ()
 
                 outcome

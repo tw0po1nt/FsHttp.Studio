@@ -32,6 +32,14 @@ let private pngBytes = Array.append pngMagic [| 1uy; 2uy; 3uy; 4uy |]
 /// untitled / unspecified behavior, and they do not depend on the request timeout.
 let private runSource source blockIndex = run source blockIndex None 0
 
+/// The two direct drives, with no injected request bound. Cases that are not about the timeout
+/// take these, so the bound appears once per driver rather than at every call site.
+let private runDirectUnbounded source blockIndex scriptFileName =
+    runInProcessDirect source blockIndex scriptFileName 0
+
+let private runWorkerUnbounded source blockIndex scriptFileName =
+    runInWorker workerTimeoutMs source blockIndex scriptFileName 0
+
 /// Drives `runner` over a script that reads `marker.txt` out of `__SOURCE_DIRECTORY__` and then
 /// requests the route that names its contents. The script itself is never written to disk: only
 /// its *path* travels, which is exactly what FSI's `scriptFileName` overload consumes. A Run
@@ -909,7 +917,7 @@ let tests =
               // number must cover the delay, and it must stay well below the host-side total
               // that also pays for session creation and Setup
               // (docs/spec/0004-run-path-robustness.md, Decision 7).
-              expectTimedRun (fun s i p -> runInProcessDirect s i p 0) (fun requestMs totalMs ->
+              expectTimedRun runDirectUnbounded (fun requestMs totalMs ->
                   Expect.isGreaterThanOrEqual
                       requestMs
                       (float timedRunDelayMs)
@@ -931,7 +939,7 @@ let tests =
               // last case in this list makes the complementary assertion. What matters here is
               // that the number survives `outcomeToWire` / `wireToOutcome`, and a direct drive
               // guarantees it crosses them.
-              expectTimedRun (fun s i p -> runInWorker workerTimeoutMs s i p 0) (fun requestMs _ ->
+              expectTimedRun runWorkerUnbounded (fun requestMs _ ->
                   Expect.isGreaterThanOrEqual
                       requestMs
                       (float timedRunDelayMs)
@@ -988,13 +996,13 @@ let tests =
               // directory, and not against the companion's working directory. Drive
               // `runInProcessDirect`, not `run`: `run` routes on process-global pin state, so it
               // could land in the worker and prove nothing about the warm path.
-              expectResolvesBesideScript "inprocess" (fun s i p -> runInProcessDirect s i p 0)
+              expectResolvesBesideScript "inprocess" runDirectUnbounded
           }
 
           test "a --worker child also resolves __SOURCE_DIRECTORY__ from scriptFileName" {
               // The conflict path must carry the same script path into the throwaway child.
               // Drive `runInWorker` directly, for the same reason as the case above.
-              expectResolvesBesideScript "worker" (fun s i p -> runInWorker workerTimeoutMs s i p 0)
+              expectResolvesBesideScript "worker" runWorkerUnbounded
           }
 
           // --- request timeout (docs/spec/0004-run-path-robustness.md, Seam 1 scenarios 1–6, 8) -
@@ -1052,7 +1060,16 @@ let tests =
               release.Set()
 
               match outcome with
-              | RuntimeError _ -> ()
+              | RuntimeError message ->
+                  // The number in the message is the bound that was *applied*, not the one that
+                  // was injected. The block's own 3 s won, so the user must read 3000 back and
+                  // not the 1500 they would otherwise raise their setting past for nothing
+                  // (docs/spec/0004-run-path-robustness.md, Decision 5).
+                  Expect.stringContains message "3000 ms" "the message must name the block's own applied bound"
+
+                  Expect.isFalse
+                      (message.Contains(string injectedMs))
+                      "the message must not name the injected bound that lost"
               | other -> failtestf "expected RuntimeError when the block's own timeout fires, got %A" other
 
               Expect.isGreaterThan
@@ -1099,12 +1116,35 @@ let tests =
               | Ok(status, _, _, _, _, _) -> Expect.equal status 200 "timeoutMs = 0 must still Run a fast request"
               | other -> failtestf "expected Ok with timeoutMs = 0, got %A" other
 
-              // The invocation's Config.update carries no timeout assignment when timeoutMs is
-              // 0, so Config.timeout stays None at invocation time for a block that set none
-              // (Decision 2 escape hatch).
+              // The invocation's Config.update carries no `Option.orElse` when timeoutMs is 0,
+              // so Config.timeout at invocation time is whatever the block itself set
+              // (Decision 2's escape hatch).
               Expect.isFalse
-                  ((invocationConfigUpdate 0).Contains "timeout")
-                  "timeoutMs = 0 must leave Config.timeout untouched"
+                  ((invocationConfigUpdate 0).Contains "Option.orElse")
+                  "timeoutMs = 0 must inject no timeout default"
+
+              // The Config read at invocation time, asserted through the applied bound the
+              // timeout message names. A block that sets 1 s and a Run that injects nothing must
+              // time out at the block's own 1000 ms. Nothing else could have put a bound there,
+              // so Config.timeout was None until the block set it.
+              use release = new Threading.ManualResetEventSlim(false)
+              use hangServer = new TestServer(Map [ "/hang", hangingHandler release ])
+
+              let ownBound =
+                  script (
+                      sprintf "http {\n    GET \"%s/hang\"\n    config_timeoutInSeconds 1.0\n}\n" hangServer.BaseUrl
+                  )
+
+              let outcome = run ownBound 0 None 0
+              release.Set()
+
+              match outcome with
+              | RuntimeError message ->
+                  Expect.stringContains
+                      message
+                      "1000 ms"
+                      "the applied bound must be the block's own, with nothing injected"
+              | other -> failtestf "expected RuntimeError at the block's own bound, got %A" other
 
               // A delay longer than a short bound still succeeds, which is the behavioral proof
               // that nothing was injected.
