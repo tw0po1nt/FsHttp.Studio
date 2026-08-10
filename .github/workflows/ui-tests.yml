@@ -112,6 +112,15 @@ jobs:
           command: |
             export VSIX="${{ steps.vsix.outputs.path }}"
             export UI_TEST_SKIP_SERVER_BUILD=1
+            # The fixtures directory is the workspace VSCode opens, so an attempt that writes a
+            # fixture leaves the next attempt a different workspace. A retry must start from the
+            # checked-in text. Report the change before restoring it: a fixture that reaches disk
+            # is a defect in the suite, and a silent repair would hide the run that proves it.
+            if ! git diff --quiet -- tests/ui.Tests/fixtures; then
+              echo "::warning::a previous attempt wrote a fixture — restoring the checked-in text"
+              git diff --stat -- tests/ui.Tests/fixtures
+              git checkout -- tests/ui.Tests/fixtures
+            fi
             tests/ui.Tests/run.sh
 
       - name: Upload failure screenshots and logs

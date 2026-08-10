@@ -450,11 +450,25 @@ let private runLensScript (body: string) (arg: objnull) : Async<objnull> =
 
     call |> Async.AwaitPromise
 
+/// Selects one lens anchor with `selectBody` and clicks it through the driver.
+///
+/// The script only finds the anchor and hands the element back. The click must come from the
+/// driver, which presses and releases a real pointer over the element. VSCode runs a CodeLens
+/// command from the editor's own `onMouseUp`, so a `click()` called inside the page invokes
+/// nothing: that call dispatches one untrusted `click` event and no `mousedown` or `mouseup`. The
+/// lens then reads as clicked while the command never runs, and every check that waits on what
+/// the command does times out with a healthy editor on screen.
 let private tryClickLensAnchor (selectBody: string) (arg: objnull) : Async<bool> =
     async {
         try
-            let! clicked = runLensScript selectBody arg
-            return not (isNull clicked) && unbox<bool> clicked
+            let! selected = runLensScript selectBody arg
+
+            if isNull selected then
+                return false
+            else
+                let anchor = unbox<WebElement> selected
+                do! anchor.click () |> Async.AwaitPromise
+                return true
         with _ ->
             return false
     }
@@ -464,9 +478,9 @@ let tryClickCodeLensByTitle (title: string) : Async<bool> =
     tryClickLensAnchor
         """
         for (var i = 0; i < anchors.length; i++) {
-            if (anchors[i].textContent.indexOf(arguments[0]) >= 0) { anchors[i].click(); return true; }
+            if (anchors[i].textContent.indexOf(arguments[0]) >= 0) { return anchors[i]; }
         }
-        return false;
+        return null;
         """
         (box title)
 
@@ -475,9 +489,8 @@ let tryClickCodeLensByTitle (title: string) : Async<bool> =
 let tryClickCodeLensByIndex (index: int) : Async<bool> =
     tryClickLensAnchor
         """
-        if (arguments[0] >= anchors.length) { return false; }
-        anchors[arguments[0]].click();
-        return true;
+        if (arguments[0] >= anchors.length) { return null; }
+        return anchors[arguments[0]];
         """
         (box index)
 
