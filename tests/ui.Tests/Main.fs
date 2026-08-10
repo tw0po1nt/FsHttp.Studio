@@ -14,6 +14,7 @@ Mocha.runTests (
           CorePathTests.tests
           RunOutcomesTests.tests
           LoopLensTests.tests
-          CrossBlockRefusedRunTests.tests ]
+          CrossBlockRefusedRunTests.tests
+          CompileErrorTests.tests ]
 )
 |> ignore
