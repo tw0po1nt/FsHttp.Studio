@@ -78,6 +78,13 @@ let countingHandler (counter: int ref) (ctx: HttpListenerContext) =
     counter.Value <- counter.Value + 1
     textHandler 200 "hit" ctx
 
+/// A handler that waits `delayMs` before writing a `200 OK` text body. It drives the
+/// invocation-bracket timing assertion: `requestMs` must cover this delay and stay below the
+/// whole call's elapsed time.
+let delayedHandler (delayMs: int) (ctx: HttpListenerContext) =
+    Thread.Sleep delayMs
+    textHandler 200 "delayed" ctx
+
 /// A handler that never answers. It blocks on `release` until the test signals it, so the
 /// request send at the other end never completes. It drives the "worker produces no frame and
 /// hangs" path, because the send inside the worker stalls and the worker emits nothing. It

@@ -28,7 +28,16 @@ open Companion.Envelope
 type Diagnostic = { Message: string; Range: BlockRange }
 
 type RunOutcome =
-    | Ok of status: int * reason: string * headers: (string * string) list * contentType: string * bodyBase64: string
+    /// `requestMs` is the invocation bracket only: the single `EvalExpressionNonThrowing` that
+    /// sends the request (docs/spec/0004-run-path-robustness.md, Decision 7). It is not the
+    /// host-side total.
+    | Ok of
+        status: int *
+        reason: string *
+        headers: (string * string) list *
+        contentType: string *
+        bodyBase64: string *
+        requestMs: float
     | CompileError of Diagnostic list
     | RuntimeError of string
     /// The companion refused the Run before it evaluated a block. `code` is the wire spelling.
@@ -457,7 +466,7 @@ let private prop (name: string) (t: Type) : Reflection.PropertyInfo =
     | null -> failwithf "reflection: property '%s' not found on %s" name t.FullName
     | p -> p
 
-let private extractResponse (v: FsiValue) : RunOutcome =
+let private extractResponse (requestMs: float) (v: FsiValue) : RunOutcome =
     let t = v.ReflectionType
     let rv = v.ReflectionValue
     let getValue name = (prop name t).GetValue(rv)
@@ -487,7 +496,7 @@ let private extractResponse (v: FsiValue) : RunOutcome =
         |> Seq.distinctBy fst
         |> Seq.toList
 
-    Ok(statusInt, reason, headers, ctype, Convert.ToBase64String bytes)
+    Ok(statusInt, reason, headers, ctype, Convert.ToBase64String bytes, requestMs)
 
 /// Evaluates the block at `blockIndex` in `source` *in the current process*, and returns its
 /// outcome. The index is 0-based and in source order, which matches the order in a `locate` and
@@ -588,7 +597,13 @@ let private runLocated
                 match setupResult with
                 | Choice2Of2 ex -> RuntimeError ex.Message
                 | Choice1Of2 _ ->
+                    // Bracket the invocation alone. That is the number the status line shows as
+                    // the request time. Session creation and Setup sit outside it
+                    // (docs/spec/0004-run-path-robustness.md, Decision 7).
+                    let sw = Stopwatch.StartNew()
                     let targetResult, targetDiags = evalExpression (invocationText target)
+                    sw.Stop()
+                    let requestMs = sw.Elapsed.TotalMilliseconds
 
                     match targetResult with
                     | Choice2Of2 ex ->
@@ -607,7 +622,7 @@ let private runLocated
                     | Choice1Of2 None -> RuntimeError "expression returned no value"
                     | Choice1Of2(Some v) ->
                         try
-                            extractResponse v
+                            extractResponse requestMs v
                         with ex ->
                             RuntimeError ex.Message
             | errors -> CompileError errors
@@ -636,13 +651,14 @@ let runInProcessDirect (source: string) (blockIndex: int) (scriptFileName: strin
 /// therefore cannot drift apart.
 let outcomeToWire (outcome: RunOutcome) : obj =
     match outcome with
-    | Ok(status, reason, headers, contentType, bodyBase64) ->
+    | Ok(status, reason, headers, contentType, bodyBase64, requestMs) ->
         {| tag = "ok"
            status = status
            reason = reason
            headers = dict headers
            contentType = contentType
-           bodyBase64 = bodyBase64 |}
+           bodyBase64 = bodyBase64
+           requestMs = requestMs |}
     | CompileError diagnostics ->
         {| tag = "compileError"
            diagnostics =
@@ -676,7 +692,8 @@ let private wireToOutcome (root: JsonElement) : RunOutcome =
             jsonString (root.GetProperty "reason"),
             headers,
             jsonString (root.GetProperty "contentType"),
-            jsonString (root.GetProperty "bodyBase64")
+            jsonString (root.GetProperty "bodyBase64"),
+            root.GetProperty("requestMs").GetDouble()
         )
     | "compileError" ->
         [ for d in root.GetProperty("diagnostics").EnumerateArray() do

@@ -107,7 +107,7 @@ body {
 .status-4xx { color: var(--vscode-charts-orange, #d18616); }
 .status-5xx { color: var(--vscode-charts-red,    #f14c4c); }
 .status-other { color: var(--vscode-descriptionForeground); }
-.status-time, .status-size {
+.status-time, .status-total, .status-size {
   color: var(--vscode-descriptionForeground);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

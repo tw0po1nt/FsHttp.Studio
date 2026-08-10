@@ -27,7 +27,8 @@ let private env ct (body: byte[]) =
       Headers = [ "Content-Type", ct ]
       ContentType = ct
       Body = body
-      ElapsedMs = 42.0 }
+      RequestMs = 42.0
+      TotalMs = 100.0 }
 
 let private check (name: string) (cond: bool) =
     if cond then

@@ -21,7 +21,8 @@ let private envelope contentType (body: byte[]) =
       Headers = [ "Content-Type", contentType ]
       ContentType = contentType
       Body = body
-      ElapsedMs = 42.0 }
+      RequestMs = 42.0
+      TotalMs = 100.0 }
 
 let private pngBytes =
     Array.append [| 0x89uy; 0x50uy; 0x4Euy; 0x47uy; 0x0Duy; 0x0Auy; 0x1Auy; 0x0Auy |] [| 1uy; 2uy; 3uy |]
@@ -201,11 +202,13 @@ let httpErrorTests =
 let statusLineTests =
     testList
         "status line + headers"
-        [ test "the status line carries method, URL, colored status, round-trip time, and size" {
+        [ test "the status line carries method, URL, colored status, request time, total, and size" {
               let env =
                   { envelope "text/plain" (utf8 "hi") with
                       Method = "POST"
-                      Url = "https://api.example.com/widgets" }
+                      Url = "https://api.example.com/widgets"
+                      RequestMs = 142.0
+                      TotalMs = 380.0 }
 
               let node = render env
 
@@ -216,10 +219,15 @@ let statusLineTests =
                   "https://api.example.com/widgets"
                   "URL shown"
 
-              Expect.stringContains
+              Expect.equal
                   (innerText (byClass "status-time" node |> List.exactlyOne))
-                  "ms"
-                  "round-trip time shown"
+                  "142 ms"
+                  "status-time shows the request number"
+
+              Expect.equal
+                  (innerText (byClass "status-total" node |> List.exactlyOne))
+                  "· 380 ms total"
+                  "status-total shows the host total, with the separator inside the span"
 
               Expect.isNonEmpty (byClass "status-size" node) "size shown"
 

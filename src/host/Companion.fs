@@ -64,7 +64,8 @@ let private parseRunResult (json: obj) : RunResult =
             unbox<string> (json?reason: obj),
             toHeaders (json?headers: obj),
             unbox<string> (json?contentType: obj),
-            unbox<string> (json?bodyBase64: obj)
+            unbox<string> (json?bodyBase64: obj),
+            unbox<float> (json?requestMs: obj)
         )
     | "compileError" ->
         let diagnostics: obj[] = unbox (json?diagnostics: obj)
