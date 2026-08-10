@@ -24,6 +24,10 @@ type CodeLens =
 
 type TextEditor =
     abstract getCodeLenses: unit -> JS.Promise<CodeLens[]>
+    /// True when the group's active tab carries unsaved changes.
+    abstract isDirty: unit -> JS.Promise<bool>
+    /// The full buffer text of the group's active editor.
+    abstract getText: unit -> JS.Promise<string>
 
 type WebView =
     abstract switchBack: unit -> JS.Promise<unit>
@@ -223,6 +227,11 @@ module TextEditor =
     let getCodeLensByIndex (editor: TextEditor) (index: int) : JS.Promise<CodeLens> =
         emitJsExpr (editor, index) "$0.getCodeLens($1)"
 
+    /// Replaces one 1-based line in the editor. ExTester rewrites the whole buffer through the
+    /// clipboard to do this, so the call is a full replace rather than a surgical edit.
+    let setTextAtLine (editor: TextEditor) (line: int) (text: string) : JS.Promise<unit> =
+        emitJsExpr (editor, line, text) "$0.setTextAtLine($1, $2)"
+
 module WebView =
     [<Import("WebView", "vscode-extension-tester")>]
     let private Ctor: obj = jsNative
@@ -295,6 +304,10 @@ let private holdsOnly (tabTitle: string) (titles: string[]) =
 /// Empties the fixture column and reaches the file through the Explorer. The slow path of
 /// `tryOpenAsSoleTabInFixtureColumn`, which documents why the Explorer rather than
 /// `openResources`, and what the emptying costs.
+///
+/// After `openItem` opens the file, this path must not call `openEditor`. A second open of a
+/// tab the column already holds can concatenate the buffer into itself. If the tab title is not
+/// visible yet, return false and let `Harness.eventually` retry.
 let private tryOpenThroughExplorer (view: EditorView) (tabTitle: string) : Async<bool> =
     async {
         let workbench = Workbench.create ()
@@ -326,11 +339,6 @@ let private tryOpenThroughExplorer (view: EditorView) (tabTitle: string) : Async
             if not opened then
                 return false
             else
-                do!
-                    EditorView.openEditor view tabTitle fixtureGroupIndex
-                    |> Async.AwaitPromise
-                    |> Async.Ignore
-
                 let! groupAfter = editorGroup fixtureGroupIndex
                 let! titles = groupAfter.getOpenEditorTitles () |> Async.AwaitPromise
                 return holdsOnly tabTitle titles
@@ -346,11 +354,10 @@ let private tryOpenThroughExplorer (view: EditorView) (tabTitle: string) : Async
 /// the group, which can be a hidden tab carrying no CodeLens widgets even when the focused tab
 /// has them.
 ///
-/// Idempotent when the column already holds exactly that one tab: a second call selects the tab
-/// and returns, rather than closing the column and reaching through the Explorer again. That
-/// matters because this binding is polled: reopening a file the column already holds can
-/// concatenate the buffer into itself — the same defect `openResources` has when polled — and a
-/// doubled buffer renders doubled lenses.
+/// Idempotent when the column already holds exactly that one tab: a second call returns without
+/// reopening. That matters because this binding is polled: reopening a file the column already
+/// holds can concatenate the buffer into itself — the same defect `openResources` has when
+/// polled — and a doubled buffer renders doubled lenses.
 ///
 /// Session-state cost, deliberate and named here because it is not reversed: this discards the
 /// fixture tab setup proved live (`Harness` FixtureOpen) along with any earlier check's fixture.
@@ -359,18 +366,13 @@ let private tryOpenThroughExplorer (view: EditorView) (tabTitle: string) : Async
 let tryOpenAsSoleTabInFixtureColumn (tabTitle: string) : Async<bool> =
     async {
         try
-            let view = EditorView.create ()
             let! group = editorGroup fixtureGroupIndex
             let! titles = group.getOpenEditorTitles () |> Async.AwaitPromise
 
             if holdsOnly tabTitle titles then
-                do!
-                    EditorView.openEditor view tabTitle fixtureGroupIndex
-                    |> Async.AwaitPromise
-                    |> Async.Ignore
-
                 return true
             else
+                let view = EditorView.create ()
                 return! tryOpenThroughExplorer view tabTitle
         with _ ->
             return false
@@ -550,6 +552,79 @@ let tryCloseBottomPanel () : Async<bool> =
         try
             let panel = BottomBarPanel.create ()
             do! panel.toggle false |> Async.AwaitPromise
+            return true
+        with _ ->
+            return false
+    }
+
+/// The fixture column's active TextEditor, or a thrown failure when the group cannot be reached.
+let private fixtureEditor () : Async<TextEditor> =
+    async {
+        let! group = editorGroup fixtureGroupIndex
+        return TextEditor.createInGroup group
+    }
+
+/// Replaces one 1-based line in the fixture editor with `text`. Idempotent when the buffer already
+/// holds `text` on that path: a poll that finds the broken text present and the tab dirty returns
+/// without rewriting. Pair with `Harness.eventually` — the tell is dirty plus the broken fragment,
+/// not the paste itself.
+///
+/// Does not save. The fixture on disk is never written.
+let trySetFixtureLine (line: int) (text: string) : Async<bool> =
+    async {
+        try
+            let! editor = fixtureEditor ()
+            let! dirty = editor.isDirty () |> Async.AwaitPromise
+            let! current = editor.getText () |> Async.AwaitPromise
+
+            if dirty && current.Contains text then
+                return true
+            else
+                do! TextEditor.setTextAtLine editor line text |> Async.AwaitPromise
+                let! dirtyAfter = editor.isDirty () |> Async.AwaitPromise
+                let! textAfter = editor.getText () |> Async.AwaitPromise
+                return dirtyAfter && textAfter.Contains text
+        with _ ->
+            return false
+    }
+
+/// True when the fixture editor's tab is dirty and its buffer contains `fragment`.
+let tryFixtureBufferHolds (fragment: string) : Async<bool> =
+    async {
+        try
+            let! editor = fixtureEditor ()
+            let! dirty = editor.isDirty () |> Async.AwaitPromise
+            let! text = editor.getText () |> Async.AwaitPromise
+            return dirty && text.Contains fragment
+        with _ ->
+            return false
+    }
+
+/// True when the fixture editor's tab is clean and its buffer does not contain `fragment`.
+let tryFixtureBufferLacks (fragment: string) : Async<bool> =
+    async {
+        try
+            let! editor = fixtureEditor ()
+            let! dirty = editor.isDirty () |> Async.AwaitPromise
+            let! text = editor.getText () |> Async.AwaitPromise
+            return (not dirty) && not (text.Contains fragment)
+        with _ ->
+            return false
+    }
+
+/// Focuses the fixture column and reverts its active file from disk through the workbench's own
+/// revert-file command. Pair with `Harness.eventually` on `tryFixtureBufferLacks` — the command
+/// returns when VSCode has been asked to revert, not when the tab is clean. Does not save.
+let tryRevertFixtureFile () : Async<bool> =
+    async {
+        try
+            let workbench = Workbench.create ()
+
+            do!
+                workbench.executeCommand "workbench.action.focusFirstEditorGroup"
+                |> Async.AwaitPromise
+
+            do! workbench.executeCommand "workbench.action.files.revert" |> Async.AwaitPromise
             return true
         with _ ->
             return false

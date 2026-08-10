@@ -1,5 +1,6 @@
 {
   "files.autoSave": "off",
+  "files.hotExit": "off",
   "window.restoreWindows": "none",
   "workbench.startupEditor": "none",
   "workbench.welcomePage.walkthroughs.openOnInstall": false,

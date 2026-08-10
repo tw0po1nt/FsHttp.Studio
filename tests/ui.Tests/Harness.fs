@@ -47,6 +47,10 @@ let notFoundBody = "ui-test-server:notfound"
 /// and absent on a successful HTTP error response.
 let runtimeErrorLabel = "Runtime error"
 
+/// Substring the host writes into every compile-error viewer update. Present when a Setup or
+/// block does not compile, and absent on a runtime error or a successful response.
+let compileErrorLabel = "Compile error"
+
 let private extensionStatusPrefix = "FsHttp.Studio"
 let private fixtureTabSuffix = "setup.fsx"
 let private fixtureFolderName = "fixtures"
