@@ -1,8 +1,9 @@
 // Companion death is visible and recoverable: hang a Run, wait for the request to arrive at the
 // server, kill every companion process, assert the viewer leaves `Running…` for the stopped
-// message, reload the window, and assert a Run succeeds again. Spec 0011's check half, as one
-// check. Runs last — it kills the companion and reloads the window, so no later check can inherit
-// the session. Teardown releases the hang even when the body fails partway.
+// message and the lenses leave `▶ Run request` for the stopped title, reload the window, and
+// assert a Run succeeds again. Spec 0011's check half, as one check. Runs last — it kills the
+// companion and reloads the window, so no later check can inherit the session. Teardown releases
+// the hang even when the body fails partway.
 module CompanionDeathTests
 
 open Fable.Mocha
@@ -37,11 +38,21 @@ let private tryKilledCompanionsGone (killed: int[]) =
     async { return killed |> Array.forall (fun pid -> not (Proc.isAlive pid)) }
 
 /// The shipped stopped message is present, and `Running…` is gone. Exact wording — a deliberate
-/// change to `Protocol.companionStoppedText` must redden this check.
+/// change to `Refusals.companionStopped.Detail` must redden this check.
 let private tryStoppedMessageRendered () =
     Checks.viewerSatisfies (fun dom ->
         dom.RootText.Contains Harness.companionStoppedText
         && not (dom.RunInProgressLabel.Contains runInProgressLabel))
+
+/// Both lenses now read the stopped title, and neither still offers a Run (ADR-0003's "no
+/// companion, no runnable lenses").
+///
+/// This reads the editor, and not the provider. The provider already returned the correct list
+/// under the earlier rule, and the editor kept the stale `▶ Run request` lens anyway, which is
+/// the defect this claim exists to hold shut. An exact count also catches the opposite failure,
+/// where the stopped title lands beside the lens it was meant to replace.
+let private tryStoppedLensAboveEachBlock () =
+    Checks.tryOnlyLensTitle blockCount Refusals.companionStoppedLensTitle
 
 /// A companion process that is neither absent nor one of the killed ones. The workbench-ready
 /// wait returns while the pre-reload DOM is still up; only a fresh pid proves the reload happened.
@@ -104,6 +115,12 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
                 Harness.ViewerUpdateDeadlineMs
                 "the stopped companion message in the viewer, with Running… gone"
                 tryStoppedMessageRendered
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "the stopped companion title on the lens above each of the two blocks"
+                tryStoppedLensAboveEachBlock
 
         do! ExTester.reloadWindow ()
 

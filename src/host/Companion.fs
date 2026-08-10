@@ -198,7 +198,7 @@ let run (handle: Handle) (source: string) (blockIndex: int) (scriptFileName: str
 
         let entry =
             { Resolve = fun json -> resolve (parseRunResult json)
-              Abandon = fun () -> resolve (RunProtocolError companionStoppedText) }
+              Abandon = fun () -> resolve (RunProtocolError Refusals.companionStopped.Detail) }
 
         send handle (JS.JSON.stringify payload) entry)
 

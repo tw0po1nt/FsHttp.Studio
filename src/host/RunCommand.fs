@@ -132,3 +132,14 @@ let registerExplain () : Disposable =
                 }
                 |> Async.StartImmediate)
     )
+
+/// Registers the command that a `⊘ Cannot run: the companion stopped` CodeLens invokes
+/// (ADR-0003). It reads nothing and asks nothing: the companion that a locate would go to is the
+/// process that stopped, and the lens already knows the only thing left to say. It takes the
+/// lens arguments and ignores them, because every lens passes the pair.
+let registerExplainCompanionStopped () : Disposable =
+    commands.registerCommand (
+        CodeLensProvider.explainStoppedCommandId,
+        System.Action<obj, obj>(fun _documentArg _indexArg ->
+            window.showWarningMessage Refusals.companionStopped.Detail |> ignore)
+    )

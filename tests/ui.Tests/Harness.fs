@@ -61,11 +61,11 @@ let runtimeErrorLabel = "Runtime error"
 /// block does not compile, and absent on a runtime error or a successful response.
 let compileErrorLabel = "Compile error"
 
-/// Exact text a pending Run abandons to when the companion exits. Must match
-/// `Protocol.companionStoppedText` — the host posts it as a plain error update, and the
-/// companion-death check asserts it verbatim in the viewer DOM.
-let companionStoppedText =
-    "The FsHttp.Studio companion stopped. Reload the window to start it again."
+/// Exact text a pending Run abandons to when the companion exits. Taken from the shipped value
+/// rather than copied, because this suite compiles `Refusals.fs` itself — the host posts this
+/// text as a plain error update, and the companion-death check asserts it verbatim in the viewer
+/// DOM.
+let companionStoppedText = Refusals.companionStopped.Detail
 
 let private extensionStatusPrefix = "FsHttp.Studio"
 

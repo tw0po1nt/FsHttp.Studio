@@ -195,9 +195,15 @@ type private Pending =
       Abandon: unit -> unit }
 ```
 
-- `locate` abandons to an **empty list**. The companion is gone, so there are no blocks to show, and
-  the lenses disappear. That is the honest degraded state, and it is what `CodeLensProvider.setReady
-  false` produces anyway. It must not throw, because `runOne` awaits it before it ever sends the Run.
+- `locate` abandons to an **empty list**. The companion is gone, so there are no blocks to read. It
+  must not throw, because `runOne` awaits it before it ever sends the Run.
+
+  > **Update (2026-08-10):** this list is an abandon, and not a reading of the script, so
+  > `CodeLensProvider` must not treat it as one. The lenses no longer disappear when the companion
+  > stops. They keep the ranges of the last successful locate and state the stopped companion
+  > (ADR-0003). The provider therefore re-reads its ready state after each `locate` returns, and
+  > ignores a list that arrived by the abandon path. `runOne` still needs the empty list, and reads
+  > it as "no block at this index".
 - `run` abandons to `RunProtocolError` with the message below.
 
 Flush on **both** terminal paths — the `exit` handler and the `error` handler — through one function,

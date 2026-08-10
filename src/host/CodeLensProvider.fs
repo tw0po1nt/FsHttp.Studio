@@ -1,7 +1,12 @@
 // The `▶ Run request` CodeLens (ADR-0003). It shows one lens for each block that the companion
-// locates in a `.fsx` script. It shows no lens on a `.fs` file, and no lens while the companion
-// is down. That is ADR-0003's "no companion, no lenses" by construction. The status-bar item
-// makes the state legible, so it does not look like a silent failure.
+// locates in a `.fsx` script, and no lens at all on a `.fs` file.
+//
+// A companion that is gone changes what the lenses say, and does not clear them. Every block the
+// last locate found keeps a lens reading `⊘ Cannot run: the companion stopped`. That is ADR-0003's
+// "no companion, no *runnable* lenses". A lens that still promised a Run would promise what
+// nothing can keep. A lens that vanished would read as a failure to find the block
+// (docs/spec/0003-lens-tells-the-truth.md, user story 4). The status-bar item reports the same
+// state, so neither surface contradicts the other.
 module CodeLensProvider
 
 open Fable.Core
@@ -20,10 +25,27 @@ let commandId = "fshttpStudio.runBlock"
 [<Literal>]
 let explainCommandId = "fshttpStudio.explainBlockRefusal"
 
+/// The command that a click on a stopped-companion lens invokes. It is separate from
+/// `explainCommandId` because that handler asks the companion to locate the block again, and the
+/// companion is exactly what is missing here. Not declared in `package.json`'s
+/// `contributes.commands`, for the same reason `explainCommandId` is not.
+[<Literal>]
+let explainStoppedCommandId = "fshttpStudio.explainCompanionStopped"
+
 let private emitter = EventEmitter<unit>()
 
 let mutable private handle: Companion.Handle option = None
 let mutable private ready = false
+
+/// The ranges the last successful `locate` returned for each document, keyed by the document's
+/// own file name. A stopped companion's lenses stand on this. A locate needs the companion, so
+/// the only positions left once the companion is gone are the ones it already reported.
+///
+/// A document that no locate ever covered has no entry here, and therefore no lens. A companion
+/// that is still starting has answered no locate, so it paints nothing and no lens flickers on
+/// the way to ready.
+let private lastLocated =
+    System.Collections.Generic.Dictionary<string, BlockRange list>()
 
 /// Called after `Extension.fs` spawns the companion, so `provideCodeLenses` has a target for
 /// its `locate` requests.
@@ -36,15 +58,13 @@ let setReady (isReady: bool) =
         ready <- isReady
         emitter.fire ()
 
-let private buildCodeLens (document: TextDocument) (i: int) (r: BlockRange) : CodeLens =
+/// One lens at a block's own start, carrying the given title and the command a click invokes.
+/// Every lens this module paints goes through here, so a title can never arrive at a position
+/// that a different lens computed.
+let private lensAt (document: TextDocument) (i: int) (r: BlockRange) (title: string) (command: string) : CodeLens =
     let line = float (toVscodeLine r.StartLine)
     let col = float r.StartCol
     let range = Range(line, col, line, col)
-
-    let title, command =
-        match r.Refusal with
-        | Some code -> Refusals.lensTitle code, explainCommandId
-        | None -> "▶ Run request", commandId
 
     let commandObj: obj =
         createObj
@@ -54,7 +74,28 @@ let private buildCodeLens (document: TextDocument) (i: int) (r: BlockRange) : Co
 
     CodeLens(range, commandObj)
 
+let private buildCodeLens (document: TextDocument) (i: int) (r: BlockRange) : CodeLens =
+    match r.Refusal with
+    | Some code -> lensAt document i r (Refusals.lensTitle code) explainCommandId
+    | None -> lensAt document i r "▶ Run request" commandId
+
+/// Every remembered block reads the same way while the companion is gone. A block's own refusal
+/// is still true, but it is no longer the reason the user cannot run: nothing in this script can
+/// run, whatever its position, and the one action that changes that is a reload of the window.
+let private buildStoppedLens (document: TextDocument) (i: int) (r: BlockRange) : CodeLens =
+    lensAt document i r Refusals.companionStoppedLensTitle explainStoppedCommandId
+
 let private noLenses () : Async<ResizeArray<CodeLens>> = async { return ResizeArray() }
+
+/// The answer for a document while the companion is gone: one stopped lens for each block the
+/// last locate remembered, and no lens at all for a document no locate ever covered.
+let private stoppedLenses (document: TextDocument) : ResizeArray<CodeLens> =
+    if lastLocated.ContainsKey document.fileName then
+        lastLocated.[document.fileName]
+        |> List.mapi (buildStoppedLens document)
+        |> ResizeArray
+    else
+        ResizeArray()
 
 let provider: CodeLensProvider =
     { new CodeLensProvider with
@@ -62,15 +103,30 @@ let provider: CodeLensProvider =
 
         member _.provideCodeLenses(document, _token) =
             let computation =
-                if not ready || not (document.fileName.EndsWith(".fsx")) then
+                if not (document.fileName.EndsWith(".fsx")) then
                     noLenses ()
+                elif not ready then
+                    async { return stoppedLenses document }
                 else
                     match handle with
                     | None -> noLenses ()
                     | Some h ->
                         async {
                             let! ranges = Companion.locate h (document.getText ())
-                            return ranges |> List.mapi (buildCodeLens document) |> ResizeArray
+
+                            // Re-read `ready` after the await. A companion that exits with this
+                            // locate in flight abandons it to an empty list
+                            // (docs/spec/0004-run-path-robustness.md, Decision 6), and that empty
+                            // list is not a reading of the script. Storing it would erase the
+                            // ranges the stopped lenses stand on, and returning it would paint
+                            // the vanishing that this provider no longer does. The exit handler
+                            // sets the state before it flushes the queue, so `ready` is already
+                            // false here when that happens.
+                            if ready then
+                                lastLocated.[document.fileName] <- ranges
+                                return ranges |> List.mapi (buildCodeLens document) |> ResizeArray
+                            else
+                                return stoppedLenses document
                         }
 
             Async.StartAsPromise computation }

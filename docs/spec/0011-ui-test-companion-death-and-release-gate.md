@@ -217,6 +217,20 @@ Two consequences, both recorded rather than hidden:
 provider's readiness flag intends, and the rendered lens usually does not comply. It is filed as
 its own issue (#145), and it is not on this suite's route.
 
+> **Update (2026-08-10):** #145 is closed, and the check now makes one claim about the post-death
+> lens. The product disagreement was settled the other way: ADR-0003's invariant became "no
+> companion, no *runnable* lenses", so the lens stays and reads `⊘ Cannot run: the companion
+> stopped`.
+>
+> That title is stable where presence and absence were not. The provider now returns a lens
+> instead of an empty list. The editor therefore repaints the lens, and no longer has to remove
+> one, which is the step it performed slowly. The check asserts the title on the lens above each
+> block, between the stopped message and the reload.
+>
+> The second click stays dropped. The manual step it came from asserted that a second click
+> re-reports the stopped message in the viewer, and that is no longer the behavior. A click on the
+> stopped lens shows the same sentence in a warning toast, and starts no Run.
+
 ### Cost, and the budget
 
 Prototyping measured the whole check at **14.0–20.1 seconds, median 17.4**, including the reload.

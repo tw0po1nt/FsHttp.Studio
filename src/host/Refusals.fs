@@ -89,6 +89,24 @@ let private glyph = "⊘ "
 /// The CodeLens title for a wire refusal code: the refusal's sentence behind the refusal glyph.
 let lensTitle (code: string) : string = glyph + (forCode code).Title
 
+/// The words for a companion that is gone (ADR-0003). This is not a wire code. `classify` runs in
+/// the companion, so the process that would produce the code is the process that stopped. The
+/// shape is a refusal all the same — a block that cannot run, a reason, and the action that
+/// corrects it — so it lives here with the others rather than in a second home.
+///
+/// `Detail` is the one shipped sentence for a stopped companion. The lens's toast shows it, and a
+/// pending Run abandons to it (docs/spec/0004-run-path-robustness.md, Decision 6). Those two
+/// surfaces therefore cannot drift apart. "Reload" is the accurate instruction, because nothing
+/// restarts the companion today.
+let companionStopped: Refusal =
+    { Title = "Cannot run: the companion stopped"
+      Detail = "The FsHttp.Studio companion stopped. Reload the window to start it again." }
+
+/// The CodeLens title a block carries while the companion is gone (ADR-0003). It takes the same
+/// glyph as every other refusal, because it makes the same claim: this block cannot run now, and
+/// a click explains why.
+let companionStoppedLensTitle: string = glyph + companionStopped.Title
+
 /// The `unboundBlockValue` words (docs/spec/0003, Decision 10). This is a Run outcome only:
 /// `classify` never produces it, so it has no lens and no row in `catalog`, and it needs the
 /// blanked name to say which value went missing.

@@ -8,6 +8,36 @@ The companion's FCS parse finds block ranges. A tree-sitter grammar in the exten
 >
 > The original reasoning stays below as a record of the trade-off at that time.
 
+> **Update (2026-08-10):** The invariant is now "no companion, no **runnable** lenses". It was "no
+> companion, no lenses". This supersedes the first sentence of "Consequences" below, which stays as
+> the record of the earlier rule.
+>
+> A block that the companion located keeps its lens after the companion stops. The lens reads
+> `⊘ Cannot run: the companion stopped`. A click on the lens shows the sentence that a pending Run
+> already abandons to, and starts no Run. A block that no locate ever covered has no lens, so a
+> companion that is still starting shows nothing, as before.
+>
+> Two reasons forced the change.
+>
+> The first reason is that the earlier rule did not hold in the editor. The provider obeyed the
+> rule, because `provideCodeLenses` returned an empty list while the companion was down. VSCode
+> kept the lenses that it had already painted. A prototype stopped the companion 18 times and then
+> read the lens. In 16 of those 18 runs, the stale `▶ Run request` lens was still clickable 20
+> seconds after the companion stopped. The earlier rule therefore described the provider, and the
+> user saw the opposite.
+>
+> The second reason is that a lens that disappears is the worse of the two behaviors.
+> [docs/spec/0003](../spec/0003-lens-tells-the-truth.md), user story 4, asks a block that
+> FsHttp.Studio cannot run to keep its lens. A lens that disappears reads as a failure to find the
+> request. A stopped companion is that case. The stopped lens also gives the one instruction that
+> helps: reload the window.
+>
+> The change costs a second source of block ranges. `CodeLensProvider` remembers the ranges that
+> the last locate returned for each document, because a locate needs the companion. Those ranges do
+> not move with an edit that the user makes after the companion stops. A stopped lens can therefore
+> be one line away from its block. No block can run in that state, and a reload corrects the
+> positions.
+
 ## Considered Options
 
 Research built a working in-host path. `web-tree-sitter` loaded the tree-sitter-fsharp wasm, and located blocks in approximately 1.7 ms with ranges identical to FCS.
