@@ -62,9 +62,11 @@ workflow can therefore ship while packaging and install stay green.
 A machine with no .NET, or a misconfigured runtime path, is not covered. The by-hand walk that this
 suite replaced never covered it either.
 
-**After companion death, the suite asserts neither lens presence nor absence.**
-After the companion dies, the suite does not assert what the lens does. Neither its presence nor
-its absence is stable across runs. See [#145](https://github.com/tw0po1nt/FsHttp.Studio/issues/145).
+**A script first opened after the companion stops shows no lens.**
+The stopped lens stands on the ranges of the last locate. A script that no locate ever covered has
+none. The suite drives the covered case only. It opens the fixture while the companion is ready,
+and then kills the companion. A regression in the uncovered case therefore ships uncaught. See
+[ADR-0003](./adr/0003-block-location-in-companion.md).
 
 **A new untestable surface belongs in this section.**
 A spec that finds a surface no suite drives records that surface here. Prefer to automate the
@@ -84,4 +86,5 @@ surface. Do not leave the instruction only inside a shipped spec.
 - Spec 6 (Compile Error names its source): a type error above the block reports at its source
   location in the viewer.
 - Spec 7 (companion death is visible and recoverable): a kill during a Run leaves `Running…` for the
-  stopped message. A window reload recovers a successful Run.
+  stopped message, and leaves every `▶ Run request` lens for `⊘ Cannot run: the companion stopped`.
+  A window reload recovers a successful Run.

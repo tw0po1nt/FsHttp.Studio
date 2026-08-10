@@ -24,7 +24,7 @@ let private wireCodes =
 let forCodeTests =
     testList
         "Refusals.forCode"
-        [ test "each of the twelve codes maps to a non-empty, distinct title and a non-empty detail" {
+        [ test "every wire code maps to a non-empty, distinct title and a non-empty detail" {
               let refusals = wireCodes |> List.map forCode
 
               refusals
@@ -76,6 +76,37 @@ let lensTitleTests =
                   (lensTitle "loopBody")
                   "⊘ Cannot run: inside a loop"
                   "the lens shows the glyph and the sentence"
+          } ]
+
+[<Tests>]
+let companionStoppedTests =
+    testList
+        "Refusals.companionStopped"
+        [ test "names the companion stopping and tells the user to reload the window" {
+              Expect.equal
+                  companionStopped.Detail
+                  "The FsHttp.Studio companion stopped. Reload the window to start it again."
+                  "a pending run abandons to exactly this text, and the lens's toast shows it (docs/spec/0004-run-path-robustness.md, Decision 6)"
+          }
+
+          test "its heading is the sentence alone, and its lens title carries the refusal glyph" {
+              Expect.isFalse
+                  (companionStopped.Title.Contains "⊘")
+                  "the sentence owns no glyph, for the same reason a catalog title owns none"
+
+              Expect.equal
+                  companionStoppedLensTitle
+                  "⊘ Cannot run: the companion stopped"
+                  "the lens must not promise a Run that no companion can honor"
+          }
+
+          test "it shares no title with any wire code" {
+              wireCodes
+              |> List.iter (fun code ->
+                  Expect.notEqual
+                      (forCode code).Title
+                      companionStopped.Title
+                      (sprintf "%s is a position refusal, and a stopped companion is not" code))
           } ]
 
 [<Tests>]
