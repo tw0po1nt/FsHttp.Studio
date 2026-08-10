@@ -249,6 +249,11 @@ let By: ByStatic = jsNative
 let waitForWorkbench (browser: VSBrowser) (timeoutMs: float) : JS.Promise<unit> =
     emitJsExpr (browser, timeoutMs) "$0.waitForWorkbench($1)"
 
+/// Asks VSCode to open a file. Returns when ExTester has asked, not when the editor has finished
+/// rendering it, so pair it with a later wait on the tab or the buffer.
+let private openResource (browser: VSBrowser) (path: string) : JS.Promise<unit> =
+    emitJsExpr (browser, path) "$0.openResources($1)"
+
 let private switchToFrameTimed (view: WebView) (timeoutMs: float) : JS.Promise<unit> =
     emitJsExpr (view, timeoutMs) "$0.switchToFrame($1)"
 
@@ -289,28 +294,20 @@ let private statusClassFromAttribute (classAttr: string) : string =
         |> Array.tryFind (fun c -> c.StartsWith Viewer.statusClassPrefix && c <> Viewer.statusCodeClass)
         |> Option.defaultValue ""
 
-/// The workspace folder name setup opens. Explorer sections use this title.
-let private fixtureFolderName = "fixtures"
-
-let private openSectionItem (section: ViewSection) (itemTitle: string) : JS.Promise<unit> =
-    emitJsExpr (section, itemTitle) "$0.openItem($1)"
-
 /// True when the fixture column's tabs are exactly one tab, and that tab is `tabTitle`. The
 /// claim both the sole-tab open's precondition and its verdict are written against.
 let private holdsOnly (tabTitle: string) (titles: string[]) =
     titles.Length = 1 && titles |> Array.exists (fun t -> t.Contains tabTitle)
 
-/// What one attempt to open the fixture did. Clicking the Explorer item is the one step in this
-/// suite that must not be repeated, so the outcome says whether that step was reached rather than
-/// folding into a boolean a caller would poll.
+/// What one attempt to open the fixture did. The open is the one step in this suite that must not
+/// be repeated, so the outcome says whether it was reached rather than folding into a boolean a
+/// caller would poll.
 type FixtureOpen =
-    /// The Explorer item was clicked. The tab may not have rendered yet, and the column can still
-    /// hold other tabs — `tryCloseOtherTabsInFixtureColumn` settles both.
+    /// VSCode was asked to open the file. The tab may not have rendered yet, and the column can
+    /// still hold other tabs — `tryCloseOtherTabsInFixtureColumn` settles both.
     | FixtureOpenRequested
-    /// The Explorer was not ready, so nothing was clicked. Safe to retry.
-    | FixtureOpenNotReached of reason: string
-    /// The click itself raised, so the column's state is unknown. Not safe to retry: a second
-    /// click on a file the column already holds concatenates the buffer into itself.
+    /// The open raised, so the column's state is unknown. Not safe to retry: a second open of a
+    /// file the column already holds concatenates the buffer into itself.
     | FixtureOpenRaised of reason: string
 
 /// True when the fixture column holds `tabTitle` and nothing else.
@@ -331,65 +328,34 @@ let tryFixtureColumnHoldsOnly (tabTitle: string) : Async<bool> =
 /// Opens a workspace file in the fixture column, beside whatever that column already holds.
 /// `tryCloseOtherTabsInFixtureColumn` makes it the sole tab afterwards.
 ///
-/// **Reach `FixtureOpenRequested` exactly once per fixture.** Clicking the Explorer item is not
-/// idempotent: a second click on a file the column already holds concatenates the buffer into
-/// itself, and a doubled buffer renders doubled lenses — which reads as a provider that
-/// over-detects rather than as a driver that opened twice. `Checks.openFixtureAsSoleTab` composes
-/// the click and the waits, and is what a check should call.
+/// **Reach `FixtureOpenRequested` exactly once per fixture.** Opening a file the column already
+/// holds concatenates the buffer into itself, and a doubled buffer renders doubled lenses — which
+/// reads as a provider that over-detects rather than as a driver that opened twice.
+/// `Checks.openFixtureAsSoleTab` composes the open and the waits, and is what a check should call.
 ///
 /// Opens first and closes the other tabs second, rather than emptying the column first. A column
 /// with no tabs left stops being a column: the response viewer then slides into the fixture
 /// column's index, and the file opens beside the viewer instead of replacing it.
 ///
-/// The Explorer is resolved before the click, so the one outcome a caller may retry —
-/// `FixtureOpenNotReached` — leaves the workbench untouched.
-///
-/// Takes a tab title, not a path: it reaches the file through the Explorer rather than ExTester's
-/// `openResources`, because once the viewer is open focus sits on it and `openResources` opens
-/// into the focused group — displacing the viewer panel.
-let openFixtureInColumn (tabTitle: string) : Async<FixtureOpen> =
+/// Opens the path rather than clicking the file in the Explorer. Reaching a fixture through the
+/// Explorer was measured loading the file into the buffer twice on about half of all runs — a
+/// 59-line buffer of a 30-line file, reported clean, with the file on disk unchanged. VSCode holds
+/// that buffer as the file's own content, so the workbench revert command treats it as nothing to
+/// revert. `openResources` opens into the focused column, which is why the focus command comes
+/// first: without it the open lands on whichever column last held focus, which is the response
+/// viewer for every check after the core path.
+let openFixtureInColumn (path: string) : Async<FixtureOpen> =
     async {
-        let! fixtures =
-            async {
-                try
-                    let bar = ActivityBar.create ()
-                    let! control = bar.getViewControl "Explorer" |> Async.AwaitPromise
+        try
+            let workbench = Workbench.create ()
+            let browser = VSBrowser.instance
 
-                    if isNull (box control) then
-                        return Error "the Explorer view control is not in the activity bar"
-                    else
-                        let! sideBar = control.openView () |> Async.AwaitPromise
-                        let! sections = sideBar.getContent().getSections () |> Async.AwaitPromise
-                        let mutable found: ViewSection option = None
+            do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
+            do! openResource browser path |> Async.AwaitPromise
 
-                        for section in sections do
-                            if found.IsNone then
-                                let! title = section.getTitle () |> Async.AwaitPromise
-
-                                if title.ToLowerInvariant().Contains fixtureFolderName then
-                                    found <- Some section
-
-                        match found with
-                        | Some section -> return Ok section
-                        | None -> return Error(sprintf "the Explorer shows no %s section" fixtureFolderName)
-                with e ->
-                    return Error(sprintf "the Explorer read raised: %s" e.Message)
-            }
-
-        match fixtures with
-        | Error reason -> return FixtureOpenNotReached reason
-        | Ok section ->
-            try
-                let workbench = Workbench.create ()
-
-                // Focus first, so the Explorer's click opens into the fixture column rather than
-                // into whichever column last held focus — the response viewer, for most checks.
-                do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
-                do! openSectionItem section tabTitle |> Async.AwaitPromise
-
-                return FixtureOpenRequested
-            with e ->
-                return FixtureOpenRaised(sprintf "opening %s from the Explorer raised: %s" tabTitle e.Message)
+            return FixtureOpenRequested
+        with e ->
+            return FixtureOpenRaised(sprintf "opening %s raised: %s" path e.Message)
     }
 
 /// Closes every tab in the fixture column except its active one, and reports whether the column
@@ -780,46 +746,25 @@ let describeFixtureBuffer () : Async<string> =
             return sprintf "a buffer that could not be read: %s" e.Message
     }
 
-/// True when the fixture editor holds about as many lines as the file it was opened from, and
-/// reloads the buffer from disk when it does not.
+/// How many lines the fixture editor holds, or `None` when the buffer cannot be read.
 ///
 /// The fixture column has been observed holding a fixture twice over — a 59-line buffer of a
-/// 30-line file, reported clean, with the file on disk unchanged. VSCode loaded the file into the
-/// buffer twice, so nothing wrote the second copy and no revert of a user edit is being discarded
-/// here. A doubled buffer paints a lens above every duplicated block, which reads as the product
-/// over-detecting.
+/// 30-line file, reported clean, with the file on disk unchanged. A doubled buffer carries a
+/// second copy of every block, so the provider paints a lens above each one and an exact lens
+/// count reads double. A check compares this against the file to keep that state from reaching it
+/// as a product defect.
 ///
-/// Safe to poll: the revert command reloads the buffer from the file and writes nothing, so a poll
-/// that finds the buffer already correct changes nothing.
-///
-/// Compares line counts rather than text. The buffer arrives through the clipboard, which is free
-/// to normalize line endings and trailing whitespace, and a count cannot fail over that. One line
-/// of slack absorbs a trailing newline the two sides disagree about.
-let tryFixtureBufferMatchesDisk (diskLineCount: int) : Async<bool> =
+/// A caller must compare line counts rather than text. The buffer arrives through the clipboard,
+/// which is free to normalize line endings and trailing whitespace, and a count cannot fail over
+/// that.
+let tryFixtureBufferLineCount () : Async<int option> =
     async {
         try
             let! editor = fixtureEditor ()
             let! _, text = bufferState editor
-            let bufferLineCount = text.Split('\n') |> Array.length
-
-            if abs (bufferLineCount - diskLineCount) <= 1 then
-                return true
-            else
-                Proc.log (
-                    sprintf
-                        "the fixture buffer holds %i lines of a %i-line file — reloading it from disk"
-                        bufferLineCount
-                        diskLineCount
-                )
-
-                let workbench = Workbench.create ()
-
-                do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
-                do! workbench.executeCommand "workbench.action.files.revert" |> Async.AwaitPromise
-
-                return false
+            return Some(text.Split('\n') |> Array.length)
         with _ ->
-            return false
+            return None
     }
 
 /// True when the fixture editor's tab is dirty and its buffer contains `fragment`.

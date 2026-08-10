@@ -38,41 +38,24 @@ let private describeFixtureOnDisk (fileName: string) =
     | Some lines -> sprintf "%i lines on disk" lines
     | None -> sprintf "a %s the suite could not read" fileName
 
-/// One attempt to open `tabTitle` in the fixture column. Holds as soon as the Explorer item has
-/// been clicked — *not* when the tab has rendered — because the click must happen once, and a poll
-/// that waited for the tab here would click again while the first open was still settling. The
-/// only repeated poll is the one that reached nothing and changed nothing.
-let private tryOpenFixture (tabTitle: string) =
-    async {
-        let! alreadySoleTab = ExTester.tryFixtureColumnHoldsOnly tabTitle
-
-        if alreadySoleTab then
-            return Harness.Holds
-        else
-            match! ExTester.openFixtureInColumn tabTitle with
-            | ExTester.FixtureOpenRequested -> return Harness.Holds
-            | ExTester.FixtureOpenNotReached reason -> return Harness.Observed reason
-            | ExTester.FixtureOpenRaised reason ->
-                return Assert.fail (sprintf "opening %s in the fixture column failed: %s" tabTitle reason)
-    }
-
 /// Opens a fixture as the sole tab in the fixture column, and returns once the column holds it and
-/// nothing else.
+/// nothing else, with the file loaded once.
 ///
-/// Two waits, because the two steps have opposite retry rules. Clicking the Explorer item is not
-/// idempotent — a second click concatenates the buffer into itself, and the doubled buffer renders
-/// doubled lenses — so the first wait stops at the click. Closing the column's other tabs is
-/// idempotent, so the second wait polls it until the column settles.
+/// The open runs once and is not polled. Opening a file the column already holds concatenates the
+/// buffer into itself, and the doubled buffer renders doubled lenses. Every wait after it is a
+/// read or an idempotent command, so a poll cannot open anything a second time.
 ///
 /// A column that already holds exactly this tab is left alone, so a check may call this against a
 /// fixture the previous check opened without paying the reopen.
 let openFixtureAsSoleTab (tabTitle: string) =
     async {
-        do!
-            Harness.eventuallyObserved
-                Harness.LensAppearanceDeadlineMs
-                (sprintf "the Explorer to offer %s" tabTitle)
-                (fun () -> tryOpenFixture tabTitle)
+        let! alreadySoleTab = ExTester.tryFixtureColumnHoldsOnly tabTitle
+
+        if not alreadySoleTab then
+            match! ExTester.openFixtureInColumn (fixturePath tabTitle) with
+            | ExTester.FixtureOpenRequested -> ()
+            | ExTester.FixtureOpenRaised reason ->
+                Assert.fail (sprintf "opening %s in the fixture column failed: %s" tabTitle reason)
 
         do!
             Harness.eventually
@@ -82,15 +65,27 @@ let openFixtureAsSoleTab (tabTitle: string) =
 
         // A check reads lenses against the fixture, so the buffer must be the fixture. VSCode has
         // been seen loading a file into its buffer twice, and every block then carries a second
-        // lens the fixture does not describe.
+        // lens the fixture does not describe. One line of slack absorbs a trailing newline the
+        // buffer and the file disagree about.
         match fixtureLineCountOnDisk tabTitle with
         | None -> Assert.fail (sprintf "the workspace holds no readable %s to check the buffer against" tabTitle)
         | Some diskLineCount ->
             do!
-                Harness.eventually
+                Harness.eventuallyObserved
                     Harness.LensAppearanceDeadlineMs
                     (sprintf "the %s buffer to hold the file once, not twice" tabTitle)
-                    (fun () -> ExTester.tryFixtureBufferMatchesDisk diskLineCount)
+                    (fun () ->
+                        async {
+                            match! ExTester.tryFixtureBufferLineCount () with
+                            | None -> return Harness.DoesNotHold
+                            | Some bufferLineCount when abs (bufferLineCount - diskLineCount) <= 1 ->
+                                return Harness.Holds
+                            | Some bufferLineCount ->
+                                return
+                                    Harness.Observed(
+                                        sprintf "a buffer of %i lines for a file of %i" bufferLineCount diskLineCount
+                                    )
+                        })
     }
 
 /// The titles a poll read, as one line for a failure message. Quoted individually, because a title
