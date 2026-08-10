@@ -288,7 +288,13 @@ let private tryExtensionActive () =
 /// tell `tryCompanionRunning` cannot give: a pid exists the moment `Companion.start` spawns it,
 /// while `ready` is written only once the process is serving. Until then `CodeLensProvider` holds
 /// every lens back, so a check that opens a fixture sees no lens through no fault of the product.
-let private tryCompanionReady () =
+///
+/// The companion-death check reuses this after its window reload. The reading comes from the
+/// status bar, so it holds only once the page carries a workbench, the extension has activated in
+/// it, and the companion is serving. A reload satisfies those three at three different moments,
+/// and a check that resumes on the first of them sends a workbench command to a page that is still
+/// building one.
+let tryCompanionReady () =
     anyStatusItemSatisfies (fun text -> text.Contains extensionReadyStatus)
 
 /// Matches only the companion that this run's VSCode spawned, by anchoring on the extensions
