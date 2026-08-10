@@ -57,17 +57,13 @@ let private tryRecoveryResponseRendered () =
 
 let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
     async {
-        do!
-            Harness.eventually
-                Harness.LensAppearanceDeadlineMs
-                "the companion-death fixture tab to open as the fixture column's only tab"
-                (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
+        do! Checks.openFixtureAsSoleTab fixtureFileName
 
         do!
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
                 "a Run request lens above each of the two blocks"
-                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount)
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount fixtureFileName)
 
         do!
             Harness.eventually
@@ -117,17 +113,32 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
                 "a fresh companion process after the reload"
                 (fun () -> tryFreshCompanion killed)
 
+        // A fresh pid says the extension host came back. It says nothing about the page, which the
+        // reload emptied and rebuilds on its own schedule. The open below is a workbench command,
+        // and a workbench command sent to a page that is still building a workbench raises.
+        //
+        // The workbench element alone is too weak a tell. It appears, and the reload then replaces
+        // it, so a poll that waits for the element can return between those two moments. The
+        // status bar reading holds only once the workbench is the one the reload settled on.
         do!
             Harness.eventually
-                Harness.LensAppearanceDeadlineMs
-                "the companion-death fixture tab to reopen as the fixture column's only tab"
-                (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
+                Harness.PostReloadRecoveryDeadlineMs
+                "the workbench back in the page after the reload"
+                ExTester.tryWorkbenchPresent
+
+        do!
+            Harness.eventually
+                Harness.PostReloadRecoveryDeadlineMs
+                "the status bar reporting the companion ready after the reload"
+                Harness.tryCompanionReady
+
+        do! Checks.openFixtureAsSoleTab fixtureFileName
 
         do!
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
                 "a Run request lens above each of the two blocks after the reload"
-                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount)
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount fixtureFileName)
 
         do!
             Harness.eventually

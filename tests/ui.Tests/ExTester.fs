@@ -185,10 +185,6 @@ module EditorView =
 
     let create () : EditorView = createInst Ctor
 
-    /// Select a tab by partial title in one editor group.
-    let openEditor (view: EditorView) (title: string) (groupIndex: int) : JS.Promise<obj> =
-        emitJsExpr (view, title, groupIndex) "$0.openEditor($1, $2)"
-
     /// Close every tab in one editor group.
     let closeAllEditors (view: EditorView) (groupIndex: int) : JS.Promise<unit> =
         emitJsExpr (view, groupIndex) "$0.closeAllEditors($1)"
@@ -253,10 +249,9 @@ let By: ByStatic = jsNative
 let waitForWorkbench (browser: VSBrowser) (timeoutMs: float) : JS.Promise<unit> =
     emitJsExpr (browser, timeoutMs) "$0.waitForWorkbench($1)"
 
-/// Opens a file in the workbench. Pair with a later `Harness.eventually` on the tab or the
-/// lenses — `openResources` returns when ExTester has asked VSCode to open the path, not when
-/// the editor has finished rendering it.
-let openResource (browser: VSBrowser) (path: string) : JS.Promise<unit> =
+/// Asks VSCode to open a file. Returns when ExTester has asked, not when the editor has finished
+/// rendering it, so pair it with a later wait on the tab or the buffer.
+let private openResource (browser: VSBrowser) (path: string) : JS.Promise<unit> =
     emitJsExpr (browser, path) "$0.openResources($1)"
 
 let private switchToFrameTimed (view: WebView) (timeoutMs: float) : JS.Promise<unit> =
@@ -299,78 +294,85 @@ let private statusClassFromAttribute (classAttr: string) : string =
         |> Array.tryFind (fun c -> c.StartsWith Viewer.statusClassPrefix && c <> Viewer.statusCodeClass)
         |> Option.defaultValue ""
 
-/// The workspace folder name setup opens. Explorer sections use this title.
-let private fixtureFolderName = "fixtures"
-
-let private openSectionItem (section: ViewSection) (itemTitle: string) : JS.Promise<unit> =
-    emitJsExpr (section, itemTitle) "$0.openItem($1)"
-
 /// True when the fixture column's tabs are exactly one tab, and that tab is `tabTitle`. The
 /// claim both the sole-tab open's precondition and its verdict are written against.
 let private holdsOnly (tabTitle: string) (titles: string[]) =
     titles.Length = 1 && titles |> Array.exists (fun t -> t.Contains tabTitle)
 
-/// Empties the fixture column and reaches the file through the Explorer. The slow path of
-/// `tryOpenAsSoleTabInFixtureColumn`, which documents why the Explorer rather than
-/// `openResources`, and what the emptying costs.
+/// What one attempt to open the fixture did. The open is the one step in this suite that must not
+/// be repeated, so the outcome says whether it was reached rather than folding into a boolean a
+/// caller would poll.
+type FixtureOpen =
+    /// VSCode was asked to open the file. The tab may not have rendered yet, and the column can
+    /// still hold other tabs — `tryCloseOtherTabsInFixtureColumn` settles both.
+    | FixtureOpenRequested
+    /// The open raised, so the column's state is unknown. Not safe to retry: a second open of a
+    /// file the column already holds concatenates the buffer into itself.
+    | FixtureOpenRaised of reason: string
+
+/// True when the fixture column holds `tabTitle` and nothing else.
 ///
-/// After `openItem` opens the file, this path must not call `openEditor`. A second open of a
-/// tab the column already holds can concatenate the buffer into itself. If the tab title is not
-/// visible yet, return false and let `Harness.eventually` retry.
-let private tryOpenThroughExplorer (view: EditorView) (tabTitle: string) : Async<bool> =
+/// Reads and never writes, which is what makes it the poll a check waits on after
+/// `openFixtureAsSoleTab`. The open itself must happen exactly once, so it cannot be the thing
+/// being polled.
+let tryFixtureColumnHoldsOnly (tabTitle: string) : Async<bool> =
     async {
-        let workbench = Workbench.create ()
-
-        do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
-
-        do! EditorView.closeAllEditors view fixtureGroupIndex |> Async.AwaitPromise
-
-        let bar = ActivityBar.create ()
-        let! control = bar.getViewControl "Explorer" |> Async.AwaitPromise
-
-        if isNull (box control) then
+        try
+            let! group = editorGroup fixtureGroupIndex
+            let! titles = group.getOpenEditorTitles () |> Async.AwaitPromise
+            return holdsOnly tabTitle titles
+        with _ ->
             return false
-        else
-            let! sideBar = control.openView () |> Async.AwaitPromise
-            let! sections = sideBar.getContent().getSections () |> Async.AwaitPromise
-            let mutable opened = false
-
-            for section in sections do
-                if not opened then
-                    let! title = section.getTitle () |> Async.AwaitPromise
-
-                    if title.ToLowerInvariant().Contains fixtureFolderName then
-                        do! openSectionItem section tabTitle |> Async.AwaitPromise
-                        opened <- true
-
-            if not opened then
-                return false
-            else
-                let! groupAfter = editorGroup fixtureGroupIndex
-                let! titles = groupAfter.getOpenEditorTitles () |> Async.AwaitPromise
-                return holdsOnly tabTitle titles
     }
 
-/// Opens a workspace file as the *sole* tab in the fixture column, closing whatever else that
-/// column held. Pair with `Harness.eventually`.
+/// Opens a workspace file in the fixture column, beside whatever that column already holds.
+/// `tryCloseOtherTabsInFixtureColumn` makes it the sole tab afterwards.
 ///
-/// Takes a tab title, not a path: it reaches the file through the Explorer rather than
-/// `openResources`, because once the viewer is open focus sits on it and `openResources` opens
-/// into the focused group — displacing the viewer panel. Emptying the column first avoids a
-/// second defect: with several tabs open, `TextEditor` resolves the first `.editor-instance` in
-/// the group, which can be a hidden tab carrying no CodeLens widgets even when the focused tab
-/// has them.
+/// **Reach `FixtureOpenRequested` exactly once per fixture.** Opening a file the column already
+/// holds concatenates the buffer into itself, and a doubled buffer renders doubled lenses — which
+/// reads as a provider that over-detects rather than as a driver that opened twice.
+/// `Checks.openFixtureAsSoleTab` composes the open and the waits, and is what a check should call.
+/// It also measures the size of the document, because VSCode from 1.123.0 loads every file of a
+/// folder workspace twice. `extester.config.json` pins the editor below that version and records
+/// the measurement.
 ///
-/// Idempotent when the column already holds exactly that one tab: a second call returns without
-/// reopening. That matters because this binding is polled: reopening a file the column already
-/// holds can concatenate the buffer into itself — the same defect `openResources` has when
-/// polled — and a doubled buffer renders doubled lenses.
+/// Opens first and closes the other tabs second, rather than emptying the column first. A column
+/// with no tabs left stops being a column: the response viewer then slides into the fixture
+/// column's index, and the file opens beside the viewer instead of replacing it.
 ///
-/// Session-state cost, deliberate and named here because it is not reversed: this discards the
-/// fixture tab setup proved live (`Harness` FixtureOpen) along with any earlier check's fixture.
-/// The workspace folder — the state the extension's activation depends on — is untouched. A later
-/// check must open its own fixture through this binding rather than assume a tab is still there.
-let tryOpenAsSoleTabInFixtureColumn (tabTitle: string) : Async<bool> =
+/// Opens the path rather than clicking the file in the Explorer, because `openResources` names
+/// the file it opens and a click depends on where the tree has scrolled to. A doubled buffer was
+/// once read as a fault in the Explorer route. It was not: the editor doubles the file whichever
+/// route opens it, and the pin in `extester.config.json` is what holds it to one copy.
+/// `openResources` opens into the focused column, which is why the focus command comes
+/// first: without it the open lands on whichever column last held focus, which is the response
+/// viewer for every check after the core path.
+let openFixtureInColumn (path: string) : Async<FixtureOpen> =
+    async {
+        try
+            let workbench = Workbench.create ()
+            let browser = VSBrowser.instance
+
+            do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
+            do! openResource browser path |> Async.AwaitPromise
+
+            return FixtureOpenRequested
+        with e ->
+            return FixtureOpenRaised(sprintf "opening %s raised: %s" path e.Message)
+    }
+
+/// Closes every tab in the fixture column except its active one, and reports whether the column
+/// now holds `tabTitle` and nothing else.
+///
+/// Safe to poll, which is the point: closing the other tabs is idempotent, and it cannot empty the
+/// column, so the response viewer can never slide into the fixture column's index. A column
+/// holding one tab keeps exactly one `.editor-instance` laid out, which is what a CodeLens read
+/// needs — an inactive tab leaves a second editor in the page carrying no lens.
+///
+/// Waits for the fixture tab to appear before it closes anything. The Explorer's click makes the
+/// file it opens the column's active tab, so closing the others while that tab is still on its way
+/// would close the tab this is waiting for, and nothing reopens it.
+let tryCloseOtherTabsInFixtureColumn (tabTitle: string) : Async<bool> =
     async {
         try
             let! group = editorGroup fixtureGroupIndex
@@ -378,9 +380,18 @@ let tryOpenAsSoleTabInFixtureColumn (tabTitle: string) : Async<bool> =
 
             if holdsOnly tabTitle titles then
                 return true
+            elif titles |> Array.exists (fun t -> t.Contains tabTitle) |> not then
+                return false
             else
-                let view = EditorView.create ()
-                return! tryOpenThroughExplorer view tabTitle
+                let workbench = Workbench.create ()
+
+                do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
+
+                do!
+                    workbench.executeCommand "workbench.action.closeOtherEditors"
+                    |> Async.AwaitPromise
+
+                return! tryFixtureColumnHoldsOnly tabTitle
         with _ ->
             return false
     }
@@ -388,17 +399,138 @@ let tryOpenAsSoleTabInFixtureColumn (tabTitle: string) : Async<bool> =
 /// Finds a CodeLens in the fixture's editor and clicks it in the same attempt. Pair with
 /// `Harness.eventually`: a stale handle between find and click fails the attempt, and the next
 /// poll retries both steps together.
-let private tryClickCodeLens (find: TextEditor -> JS.Promise<CodeLens>) : Async<bool> =
+/// Collects the fixture editor's CodeLens anchors into `anchors`, ordered top to bottom, and
+/// returns `null` when the editor is not in the page yet. Every lens binding shares this prologue.
+///
+/// It reads the DOM rather than building an ExTester `TextEditor`. That constructor waits for the
+/// editor to become visible, and the wait was observed to expire after about 5 s per poll while
+/// the page held one editor at 852x691, `display=block`, `visibility=visible`, `opacity=1`, and
+/// uncovered. The wait, and not the workbench, was wrong. A read that costs 5 s also exhausted a
+/// 45 s deadline in about 9 polls, which hid how often it was failing.
+///
+/// Ordered by the anchor's own top edge, not by DOM order: the lens for the second block must be
+/// index 1, and VSCode paints lenses in view zones whose DOM order carries no such promise.
+///
+/// Picks the first *laid-out* `.editor-instance` rather than the first one in the DOM. A column
+/// holding more than one tab keeps the inactive editors in the page at zero size, and the DOM
+/// order of the group carries no promise that the active tab comes first. Reading a hidden editor
+/// finds no lens and reports it as a provider that painted nothing.
+///
+/// Skips a `codelens-decoration` that is hidden. VSCode keeps the lens elements of the document
+/// the editor showed before, hidden and with no `top`, and reuses them for the next document. A
+/// read that counts them reports one lens for each block of the fixture plus one for each block
+/// of the fixture before it. That reads as a provider painting twice, which it is not: the
+/// remaining lenses carry the correct titles at the correct lines.
+let private lensAnchorsPrologue =
+    """
+    var editor = null;
+    var instances = document.querySelectorAll('.editor-instance');
+    for (var e = 0; e < instances.length && !editor; e++) {
+        var box = instances[e].getBoundingClientRect();
+        if (box.width > 0 && box.height > 0) { editor = instances[e]; }
+    }
+    if (!editor) { return null; }
+    var anchors = [];
+    var candidates = editor.querySelectorAll('a[id]');
+    for (var i = 0; i < candidates.length; i++) {
+        var host = candidates[i].closest('[class*="codelens" i]');
+        if (host && getComputedStyle(host).visibility !== 'hidden') { anchors.push(candidates[i]); }
+    }
+    anchors.sort(function (l, r) {
+        return l.getBoundingClientRect().top - r.getBoundingClientRect().top;
+    });
+    """
+
+let private runLensScript (body: string) (arg: objnull) : Async<objnull> =
+    let driver = VSBrowser.instance.driver
+    let script = lensAnchorsPrologue + body
+
+    let call: JS.Promise<objnull> =
+        emitJsExpr (driver, script, arg) "$0.executeScript($1, $2)"
+
+    call |> Async.AwaitPromise
+
+/// Where the lenses sit, for a lens count that read wrong.
+///
+/// Reports each anchor with its title, the `top` its `codelens-decoration` host carries, and
+/// whether that host is visible. A lens the editor kept from the document it showed before is
+/// hidden and carries no `top`, so the reading separates a stale element the read should have
+/// skipped from a lens the provider really painted at the wrong line.
+let describeLensLayout () : Async<string> =
     async {
         try
-            let! group = editorGroup fixtureGroupIndex
-            let editor = TextEditor.createInGroup group
-            let! lens = find editor |> Async.AwaitPromise
+            let body =
+                """
+                var out = [];
+                for (var i = 0; i < anchors.length; i++) {
+                    var host = anchors[i].closest('[class*="codelens" i]');
+                    out.push('"' + anchors[i].textContent.trim() + '" at top '
+                        + (host && host.style.top ? host.style.top : 'unset')
+                        + ' ' + (host ? getComputedStyle(host).visibility : 'no host'));
+                }
+                return out.join('; ');
+                """
 
-            if isNull (box lens) then
+            let! reading = runLensScript body (null: objnull)
+
+            if isNull reading then
+                return "no laid-out editor to measure"
+            else
+                let text = string reading
+                return if text = "" then "no lens element in the editor" else text
+        with e ->
+            return sprintf "no measurement — the layout query raised: %s" e.Message
+    }
+
+/// The highest line number the editor's gutter renders, for a document whose size read wrong.
+///
+/// Monaco renders a gutter number for a line it shows and for no line past the end of the
+/// document, so this reading is a lower bound on the size of the document. It is independent of
+/// `TextEditor.getText`, which reaches the document through the clipboard. A gutter that stops at
+/// the size of the file, against a clipboard reading of twice that size, puts the fault in the
+/// clipboard. A gutter that fills the viewport puts the fault in the document.
+let describeGutterExtent () : Async<string> =
+    async {
+        try
+            let body =
+                """
+                var cells = editor.querySelectorAll('.margin-view-overlays .line-numbers');
+                var highest = 0;
+                for (var i = 0; i < cells.length; i++) {
+                    var n = parseInt(cells[i].textContent, 10);
+                    if (!isNaN(n) && n > highest) { highest = n; }
+                }
+                return cells.length + ' gutter cells, highest line number ' + highest;
+                """
+
+            let! reading = runLensScript body (null: objnull)
+
+            if isNull reading then
+                return "no laid-out editor to measure"
+            else
+                return string reading
+        with e ->
+            return sprintf "no measurement — the gutter query raised: %s" e.Message
+    }
+
+/// Selects one lens anchor with `selectBody` and clicks it through the driver.
+///
+/// The script only finds the anchor and hands the element back. The click must come from the
+/// driver, which presses and releases a real pointer over the element. VSCode runs a CodeLens
+/// command from the editor's own `onMouseUp`, so a `click()` called inside the page invokes
+/// nothing: that call dispatches one untrusted `click` event and no `mousedown` or `mouseup`. The
+/// lens then reads as clicked while the command never runs, and every check that waits on what
+/// the command does times out with a healthy editor on screen.
+let private tryClickLensAnchor (selectBody: string) (arg: objnull) : Async<bool> =
+    async {
+        try
+            let! selected = runLensScript selectBody arg
+
+            if isNull selected then
                 return false
             else
-                do! lens.click () |> Async.AwaitPromise
+                let anchor = unbox<WebElement> selected
+                do! anchor.click () |> Async.AwaitPromise
                 return true
         with _ ->
             return false
@@ -406,35 +538,92 @@ let private tryClickCodeLens (find: TextEditor -> JS.Promise<CodeLens>) : Async<
 
 /// Find-and-click by partial lens title.
 let tryClickCodeLensByTitle (title: string) : Async<bool> =
-    tryClickCodeLens (fun editor -> TextEditor.getCodeLensByTitle editor title)
+    tryClickLensAnchor
+        """
+        for (var i = 0; i < anchors.length; i++) {
+            if (anchors[i].textContent.indexOf(arguments[0]) >= 0) { return anchors[i]; }
+        }
+        return null;
+        """
+        (box title)
 
 /// Find-and-click by zero-based lens index from the top of the editor. Use this to reach the
 /// second of two lenses that share a title.
 let tryClickCodeLensByIndex (index: int) : Async<bool> =
-    tryClickCodeLens (fun editor -> TextEditor.getCodeLensByIndex editor index)
+    tryClickLensAnchor
+        """
+        if (arguments[0] >= anchors.length) { return null; }
+        return anchors[arguments[0]];
+        """
+        (box index)
 
 /// The rendered titles of every CodeLens in the fixture's editor, top to bottom. Empty when the
 /// editor has no lens yet, so a check can wait for the lenses to render and assert their words in
 /// one `Harness.eventually`.
-let tryReadCodeLensTitles () : Async<string[]> =
+/// What one CodeLens read saw. A read that throws is not an editor with no lenses: ExTester raises
+/// when the editor group or the editor itself is not addressable yet, and reporting that as zero
+/// lenses makes a query that never ran indistinguishable from a provider that painted nothing.
+/// Those two failures need different repairs, so the read reports which one it was.
+type LensRead =
+    | LensTitles of titles: string[]
+    | LensReadFailed of reason: string
+
+/// Asks the page what the editor elements actually are, for a read that raised. ExTester's
+/// `TextEditor` waits for `.editor-instance` to become visible and reports only that the wait
+/// expired, which does not say whether the element is missing, collapsed, or covered. Each of
+/// those needs a different repair, so the failure carries the answer rather than a guess.
+let private describeEditorInstances () : Async<string> =
     async {
         try
-            let! group = editorGroup fixtureGroupIndex
-            let editor = TextEditor.createInGroup group
-            let! lenses = editor.getCodeLenses () |> Async.AwaitPromise
+            let driver = VSBrowser.instance.driver
 
-            if isNull (box lenses) then
-                return [||]
+            let script =
+                """
+                var nodes = document.querySelectorAll('.editor-instance');
+                var parts = [];
+                for (var i = 0; i < nodes.length; i++) {
+                    var n = nodes[i];
+                    var r = n.getBoundingClientRect();
+                    var s = window.getComputedStyle(n);
+                    var mid = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                    parts.push(
+                        '#' + i +
+                        ' ' + Math.round(r.width) + 'x' + Math.round(r.height) +
+                        ' display=' + s.display +
+                        ' visibility=' + s.visibility +
+                        ' opacity=' + s.opacity +
+                        ' covered=' + (mid && !n.contains(mid) && mid !== n));
+                }
+                return nodes.length + ' .editor-instance [' + parts.join('; ') + ']';
+                """
+
+            let described: JS.Promise<obj> = emitJsExpr (driver, script) "$0.executeScript($1)"
+            let! result = described |> Async.AwaitPromise
+            return unbox<string> result
+        with e ->
+            return sprintf "the editor-instance probe itself raised: %s" e.Message
+    }
+
+let tryReadCodeLensTitles () : Async<LensRead> =
+    async {
+        try
+            let! read =
+                runLensScript
+                    """
+                    var out = [];
+                    for (var i = 0; i < anchors.length; i++) { out.push(anchors[i].textContent.trim()); }
+                    return out;
+                    """
+                    (null: objnull)
+
+            if isNull read then
+                let! editors = describeEditorInstances ()
+                return LensReadFailed(sprintf "no laid-out editor in the page — %s" editors)
             else
-                let titles = ResizeArray<string>()
-
-                for lens in lenses do
-                    let! title = lens.getText () |> Async.AwaitPromise
-                    titles.Add title
-
-                return titles.ToArray()
-        with _ ->
-            return [||]
+                return LensTitles(unbox<string[]> read)
+        with e ->
+            let! editors = describeEditorInstances ()
+            return LensReadFailed(sprintf "%s — page shows %s" e.Message editors)
     }
 
 /// True when a second editor group is open beside the first *and* holds the response viewer's
@@ -614,6 +803,23 @@ let trySetFixtureLine (line: int) (text: string) : Async<bool> =
             return false
     }
 
+/// The fixture editor's whole buffer, or `None` when the editor cannot be reached.
+///
+/// Reads through `TextEditor.getText`, which copies the document to the clipboard and reads it
+/// back. That copy was once read as unreliable, because it returned the fixture twice over for a
+/// document that painted the correct lenses. The copy was right and the document was wrong: the
+/// lenses of the second copy sat below the viewport, and Monaco renders no lens for a line it does
+/// not show. `Checks` measures the size of this reading against the file on disk.
+let tryFixtureBufferText () : Async<string option> =
+    async {
+        try
+            let! editor = fixtureEditor ()
+            let! text = editor.getText () |> Async.AwaitPromise
+            return Some text
+        with _ ->
+            return None
+    }
+
 /// True when the fixture editor's tab is dirty and its buffer contains `fragment`.
 let tryFixtureBufferHolds (fragment: string) : Async<bool> =
     tryFixtureBuffer (fun dirty text -> dirty && text.Contains fragment)
@@ -644,6 +850,26 @@ let reloadWindow () : Async<unit> =
     async {
         let workbench = Workbench.create ()
         do! workbench.executeCommand "Developer: Reload Window" |> Async.AwaitPromise
+    }
+
+/// True when the workbench is in the page.
+///
+/// A reload takes the workbench out of the page and builds it again. Every page object and every
+/// workbench command starts by finding the workbench, so a call made between those two moments
+/// raises rather than waits, and the raise reads as the command failing. A fresh companion process
+/// does not settle this: the extension host and the page come back on their own schedules.
+let tryWorkbenchPresent () : Async<bool> =
+    async {
+        try
+            let driver = VSBrowser.instance.driver
+            let script = "return document.querySelector('.monaco-workbench') ? 'yes' : 'no';"
+
+            let call: JS.Promise<objnull> = emitJsExpr (driver, script) "$0.executeScript($1)"
+
+            let! reading = call |> Async.AwaitPromise
+            return not (isNull reading) && string reading = "yes"
+        with _ ->
+            return false
     }
 
 /// Enters the response viewer's webview iframe, reads the DOM surfaces the product checks

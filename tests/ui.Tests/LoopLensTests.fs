@@ -4,10 +4,11 @@
 // check does not restate them.
 module LoopLensTests
 
-open Fable.Core
 open Fable.Mocha
 
 let private fixtureFileName = "loop-lens.fsx"
+/// Blocks in `loop-lens.fsx`. Must match the fixture.
+let private blockCount = 1
 let private loopBodyCode = "loopBody"
 
 let private loopBody = Refusals.forCode loopBodyCode
@@ -26,24 +27,21 @@ let private tryNoResponseViewer () =
 /// the refusal lens and its toast. Leaves the viewer closed and the toast dismissed.
 let private loopLensRefusesWithToast =
     async {
-        let path = Checks.fixturePath fixtureFileName
-        let browser = ExTester.VSBrowser.instance
-
         do!
             Harness.eventually
                 Harness.ViewerUpdateDeadlineMs
                 "the response viewer to be closed"
                 ExTester.tryCloseResponseViewer
 
-        // Open once, then wait on lenses — same shape as the core-path check. Do not put
-        // `openResources` inside `eventually`: a second open can concatenate the buffer into itself.
-        do! ExTester.openResource browser path |> Async.AwaitPromise
+        // Same shape as the core-path check: take over the fixture column rather than opening
+        // beside the previous check's tab.
+        do! Checks.openFixtureAsSoleTab fixtureFileName
 
         do!
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
                 "the refusal lens title above the block inside the loop"
-                (fun () -> Checks.tryOnlyLensTitle refusalLensTitle)
+                (fun () -> Checks.tryOnlyLensTitle blockCount refusalLensTitle)
 
         do!
             Harness.eventually

@@ -13,10 +13,36 @@ let lensTitle = "▶ Run request"
 
 /// A fixture checked in beside the sidecar. The sidecar path is the only location the suite is
 /// handed at run time, so every fixture is resolved from it.
-let fixturePath (fileName: string) =
+let private fixturePath (fileName: string) =
     match Proc.sidecarPath () with
     | None -> Assert.fail "UI_TEST_SIDECAR is not set, so the check cannot locate its fixture"
     | Some sidecar -> Path.Combine(Path.GetDirectoryName sidecar, fileName)
+
+/// The one way this suite counts the lines of a document, so a reading taken from disk and a
+/// reading taken from the editor are comparable. Line endings are normalized and a trailing
+/// newline is dropped: a file that ends in a newline and the editor's copy of that file hold the
+/// same lines, and an off-by-one here would fail every fixture.
+let private lineCount (text: string) =
+    text.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').Length
+
+/// The fixture's size as the workspace holds it, or `None` when the file cannot be read. The suite
+/// runs in Node, so it reads the workspace directly rather than asking the editor about it. This is
+/// the size a correctly loaded buffer has.
+let private fixtureLineCountOnDisk (fileName: string) =
+    try
+        let path = fixturePath fileName
+
+        if Proc.fileExists path then
+            Some(lineCount (Proc.readFile path))
+        else
+            None
+    with _ ->
+        None
+
+let private describeFixtureOnDisk (fileName: string) =
+    match fixtureLineCountOnDisk fileName with
+    | Some lines -> sprintf "%i lines on disk" lines
+    | None -> sprintf "a %s the suite could not read" fileName
 
 /// The titles a poll read, as one line for a failure message. Quoted individually, because a title
 /// carries a glyph and a space, and an unquoted list of them cannot show where one ends.
@@ -27,41 +53,128 @@ let private describeTitles (titles: string[]) =
         let quoted = titles |> Array.map (fun t -> sprintf "\"%s\"" t) |> String.concat ", "
         sprintf "%i CodeLenses: %s" titles.Length quoted
 
+/// A read that raised, worded so a reader cannot mistake it for an editor that painted no lens.
+let private describeReadFailure (reason: string) =
+    sprintf "no reading at all — the CodeLens query raised: %s" reason
+
+/// True when the editor holds the fixture once, measured in lines against the file on disk.
+///
+/// VSCode from 1.123.0 loads every file of a folder workspace twice, and `extester.config.json`
+/// pins the editor below that version for exactly this reason. The tab of a doubled document
+/// reports clean and the file on disk is unchanged, so the size is the only tell. Every later
+/// reading answers a doubled document the same way a correct one answers it, up to the point where
+/// a lens count reads like a provider that paints twice — which is a defect in a different
+/// component. This claim separates the two, at the open, and it is what makes a pin that stops
+/// working visible on the run that raises it rather than three checks later.
+let private tryFixtureLoadedOnce (fileName: string) =
+    async {
+        match! ExTester.tryFixtureBufferText () with
+        | None -> return Harness.Observed "no reading at all — the fixture editor could not be reached"
+        | Some text ->
+            match fixtureLineCountOnDisk fileName with
+            | None -> return Harness.Observed(sprintf "a %s the suite could not read" fileName)
+            | Some onDisk ->
+                let held = lineCount text
+
+                if held = onDisk then
+                    return Harness.Holds
+                else
+                    let! gutter = ExTester.describeGutterExtent ()
+
+                    return
+                        Harness.Observed(
+                            sprintf
+                                "a document of %i lines, against %s, with %s"
+                                held
+                                (describeFixtureOnDisk fileName)
+                                gutter
+                        )
+    }
+
+/// Opens a fixture as the sole tab in the fixture column, and returns once the column holds it and
+/// nothing else.
+///
+/// The open runs once and is not polled. Every wait after it is a read or an idempotent command,
+/// so a poll cannot open the same fixture a second time.
+///
+/// A column that already holds exactly this tab is left alone, so a check may call this against a
+/// fixture the previous check opened without paying the reopen.
+let openFixtureAsSoleTab (tabTitle: string) =
+    async {
+        let! alreadySoleTab = ExTester.tryFixtureColumnHoldsOnly tabTitle
+
+        if not alreadySoleTab then
+            match! ExTester.openFixtureInColumn (fixturePath tabTitle) with
+            | ExTester.FixtureOpenRequested -> ()
+            | ExTester.FixtureOpenRaised reason ->
+                Assert.fail (sprintf "opening %s in the fixture column failed: %s" tabTitle reason)
+
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                (sprintf "the fixture column to hold %s and nothing else" tabTitle)
+                (fun () -> ExTester.tryCloseOtherTabsInFixtureColumn tabTitle)
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                (sprintf "the fixture column's document to be %s, loaded once" tabTitle)
+                (fun () -> tryFixtureLoadedOnce tabTitle)
+    }
+
 /// Exactly one lens per block, each carrying the Run request title. An exact count is the claim the
 /// spec makes — a provider that over-detects and stacks an extra lens is as wrong as one that finds
 /// only the first block. Those two defects time out identically, so a poll that does not hold
 /// reports the titles it read and the log names which one occurred without a screenshot.
-let tryRunRequestLensAboveEachBlock (blockCount: int) =
+let tryRunRequestLensAboveEachBlock (blockCount: int) (fileName: string) =
     async {
-        let! titles = ExTester.tryReadCodeLensTitles ()
+        match! ExTester.tryReadCodeLensTitles () with
+        | ExTester.LensReadFailed reason -> return Harness.Observed(describeReadFailure reason)
+        | ExTester.LensTitles titles ->
+            if
+                titles.Length = blockCount
+                && titles |> Array.forall (fun t -> t.Contains lensTitle)
+            then
+                return Harness.Holds
+            else
+                // The disk size and the editor layout are read only on the failing path. Together
+                // they say whether a doubled count comes from a document that holds the file twice
+                // or from lens elements the editor kept from the tab it showed before.
+                let! layout = ExTester.describeLensLayout ()
 
-        if
-            titles.Length = blockCount
-            && titles |> Array.forall (fun t -> t.Contains lensTitle)
-        then
-            return Harness.Holds
-        else
-            return Harness.Observed(describeTitles titles)
+                return
+                    Harness.Observed(
+                        sprintf "%s, against %s, in %s" (describeTitles titles) (describeFixtureOnDisk fileName) layout
+                    )
     }
 
-/// At least one lens carrying `expectedTitle`, and every rendered lens title equal to it. A DOM
-/// that paints the same title twice still holds; a mixed Run-request lens does not.
-let tryOnlyLensTitle (expectedTitle: string) =
+/// Exactly `blockCount` lenses, each title equal to `expectedTitle`. The count is exact for the
+/// same reason `tryRunRequestLensAboveEachBlock` makes it exact: a provider that paints the right
+/// title twice is a defect, and a check that accepts any number above zero cannot see it.
+let tryOnlyLensTitle (blockCount: int) (expectedTitle: string) =
     async {
-        let! titles = ExTester.tryReadCodeLensTitles ()
-
-        if titles.Length >= 1 && titles |> Array.forall (fun t -> t = expectedTitle) then
-            return Harness.Holds
-        else
-            return Harness.Observed(describeTitles titles)
+        match! ExTester.tryReadCodeLensTitles () with
+        | ExTester.LensReadFailed reason -> return Harness.Observed(describeReadFailure reason)
+        | ExTester.LensTitles titles ->
+            if
+                titles.Length = blockCount
+                && titles |> Array.forall (fun t -> t = expectedTitle)
+            then
+                return Harness.Holds
+            else
+                let! layout = ExTester.describeLensLayout ()
+                return Harness.Observed(sprintf "%s, in %s" (describeTitles titles) layout)
     }
 
 /// True when no rendered lens title contains the Run request title. Pair with a prior tell that
 /// the provider has already painted lenses on this block — absence alone is not meaningful.
+/// A read that failed reports `false` rather than absence. This tell claims that no Run request
+/// lens is painted, and a query that never ran is no evidence for that claim.
 let tryNoRunRequestLens () =
     async {
-        let! titles = ExTester.tryReadCodeLensTitles ()
-        return titles |> Array.forall (fun t -> not (t.Contains lensTitle))
+        match! ExTester.tryReadCodeLensTitles () with
+        | ExTester.LensReadFailed _ -> return false
+        | ExTester.LensTitles titles -> return titles |> Array.forall (fun t -> not (t.Contains lensTitle))
     }
 
 /// Reads the viewer's DOM and applies `holds` to it. A frame that cannot be entered yet is a

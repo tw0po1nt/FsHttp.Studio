@@ -55,21 +55,17 @@ let private tryDeadPortRenderedAsRuntimeError () =
         && dom.StatusCodeText = "")
 
 /// Inherits the warm companion and the open viewer from the core-path check, and takes over the
-/// fixture column for its own fixture — see `ExTester.tryOpenAsSoleTabInFixtureColumn` for what
-/// that discards. Runs both outcomes and leaves the viewer showing the runtime error.
+/// fixture column for its own fixture — see `ExTester.openFixtureAsSoleTab` for what that
+/// discards. Runs both outcomes and leaves the viewer showing the runtime error.
 let private runOutcomesRenderHonestly =
     async {
-        do!
-            Harness.eventually
-                Harness.LensAppearanceDeadlineMs
-                "the run-outcomes fixture tab to open as the fixture column's only tab"
-                (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
+        do! Checks.openFixtureAsSoleTab fixtureFileName
 
         do!
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
                 "a Run request lens above each of the two blocks"
-                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount)
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount fixtureFileName)
 
         do!
             Harness.eventually
