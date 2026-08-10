@@ -18,19 +18,25 @@ let private fixturePath (fileName: string) =
     | None -> Assert.fail "UI_TEST_SIDECAR is not set, so the check cannot locate its fixture"
     | Some sidecar -> Path.Combine(Path.GetDirectoryName sidecar, fileName)
 
-/// The fixture as it sits on disk, for a failure that must say whether a buffer the editor shows
-/// doubled is a file the driver opened twice or a file something wrote twice. The suite runs in
-/// Node, so it reads the workspace directly rather than asking the editor about it.
-let private describeFixtureOnDisk (fileName: string) =
+/// How many lines the fixture has in the workspace, or `None` when the file cannot be read. The
+/// suite runs in Node, so it reads the workspace directly rather than asking the editor about it.
+/// This is the size a correctly loaded buffer has, and the tell that separates a provider painting
+/// twice from a file the editor loaded twice.
+let private fixtureLineCountOnDisk (fileName: string) =
     try
         let path = fixturePath fileName
 
         if Proc.fileExists path then
-            sprintf "%i lines on disk" (Proc.readFile(path).Split('\n').Length)
+            Some(Proc.readFile(path).Split('\n').Length)
         else
-            sprintf "no file at %s" path
-    with e ->
-        sprintf "a disk read that raised: %s" e.Message
+            None
+    with _ ->
+        None
+
+let private describeFixtureOnDisk (fileName: string) =
+    match fixtureLineCountOnDisk fileName with
+    | Some lines -> sprintf "%i lines on disk" lines
+    | None -> sprintf "a %s the suite could not read" fileName
 
 /// One attempt to open `tabTitle` in the fixture column. Holds as soon as the Explorer item has
 /// been clicked — *not* when the tab has rendered — because the click must happen once, and a poll
@@ -73,6 +79,18 @@ let openFixtureAsSoleTab (tabTitle: string) =
                 Harness.LensAppearanceDeadlineMs
                 (sprintf "the fixture column to hold %s and nothing else" tabTitle)
                 (fun () -> ExTester.tryCloseOtherTabsInFixtureColumn tabTitle)
+
+        // A check reads lenses against the fixture, so the buffer must be the fixture. VSCode has
+        // been seen loading a file into its buffer twice, and every block then carries a second
+        // lens the fixture does not describe.
+        match fixtureLineCountOnDisk tabTitle with
+        | None -> Assert.fail (sprintf "the workspace holds no readable %s to check the buffer against" tabTitle)
+        | Some diskLineCount ->
+            do!
+                Harness.eventually
+                    Harness.LensAppearanceDeadlineMs
+                    (sprintf "the %s buffer to hold the file once, not twice" tabTitle)
+                    (fun () -> ExTester.tryFixtureBufferMatchesDisk diskLineCount)
     }
 
 /// The titles a poll read, as one line for a failure message. Quoted individually, because a title

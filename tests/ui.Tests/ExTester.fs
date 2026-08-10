@@ -780,6 +780,48 @@ let describeFixtureBuffer () : Async<string> =
             return sprintf "a buffer that could not be read: %s" e.Message
     }
 
+/// True when the fixture editor holds about as many lines as the file it was opened from, and
+/// reloads the buffer from disk when it does not.
+///
+/// The fixture column has been observed holding a fixture twice over — a 59-line buffer of a
+/// 30-line file, reported clean, with the file on disk unchanged. VSCode loaded the file into the
+/// buffer twice, so nothing wrote the second copy and no revert of a user edit is being discarded
+/// here. A doubled buffer paints a lens above every duplicated block, which reads as the product
+/// over-detecting.
+///
+/// Safe to poll: the revert command reloads the buffer from the file and writes nothing, so a poll
+/// that finds the buffer already correct changes nothing.
+///
+/// Compares line counts rather than text. The buffer arrives through the clipboard, which is free
+/// to normalize line endings and trailing whitespace, and a count cannot fail over that. One line
+/// of slack absorbs a trailing newline the two sides disagree about.
+let tryFixtureBufferMatchesDisk (diskLineCount: int) : Async<bool> =
+    async {
+        try
+            let! editor = fixtureEditor ()
+            let! _, text = bufferState editor
+            let bufferLineCount = text.Split('\n') |> Array.length
+
+            if abs (bufferLineCount - diskLineCount) <= 1 then
+                return true
+            else
+                Proc.log (
+                    sprintf
+                        "the fixture buffer holds %i lines of a %i-line file — reloading it from disk"
+                        bufferLineCount
+                        diskLineCount
+                )
+
+                let workbench = Workbench.create ()
+
+                do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
+                do! workbench.executeCommand "workbench.action.files.revert" |> Async.AwaitPromise
+
+                return false
+        with _ ->
+            return false
+    }
+
 /// True when the fixture editor's tab is dirty and its buffer contains `fragment`.
 let tryFixtureBufferHolds (fragment: string) : Async<bool> =
     tryFixtureBuffer (fun dirty text -> dirty && text.Contains fragment)
