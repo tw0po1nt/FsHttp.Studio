@@ -29,8 +29,8 @@ let private toBlockEntry (block: LocatedBlock) : obj =
 
 // `BlockRunner.outcomeToWire` serializes the outcome, so the host response here and the
 // `--worker` child's response emit one identical shape and cannot drift apart.
-let private runResponse (source: string) (blockIndex: int) (scriptFileName: string option) : obj =
-    outcomeToWire (run source blockIndex scriptFileName)
+let private runResponse (source: string) (blockIndex: int) (scriptFileName: string option) (timeoutMs: int) : obj =
+    outcomeToWire (run source blockIndex scriptFileName timeoutMs)
 
 /// Handles one decoded request payload. Returns the response object that the caller
 /// serializes onto the frame channel.
@@ -48,7 +48,11 @@ let respond (request: JsonDocument) : obj =
         let source = root |> getStringProp "source"
         let blockIndex = root |> getIntProp "blockIndex"
         let scriptFileName = root |> getOptionalStringProp "scriptFileName"
-        runResponse source blockIndex scriptFileName
+        // Absent `timeoutMs` reads as 0, which means do not inject a bound. That keeps an older
+        // host talking to a newer companion honest (docs/spec/0004-run-path-robustness.md,
+        // Decision 4).
+        let timeoutMs = root |> getIntProp "timeoutMs"
+        runResponse source blockIndex scriptFileName timeoutMs
     | other ->
         {| tag = "error"
            message = sprintf "unknown request tag '%s'" (string other) |}

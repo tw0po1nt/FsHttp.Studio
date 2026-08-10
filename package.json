@@ -44,6 +44,12 @@
           "type": "string",
           "default": "",
           "markdownDescription": "Absolute path to a `dotnet` executable that carries a .NET 10 SDK or newer. Leave this empty to detect `dotnet` on your `PATH` automatically. Set it when your SDK is not on `PATH`, or to pin a specific installation."
+        },
+        "fshttpStudio.requestTimeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 0,
+          "markdownDescription": "How long a Run waits for a response, in milliseconds, before it gives up. This covers the connection, the request, and the download of the response body. It does not cover the `#r \"nuget:\"` restore, which happens before the request is sent. A block that sets its own timeout keeps it. Set this to `0` to wait as long as `HttpClient` allows."
         }
       }
     }

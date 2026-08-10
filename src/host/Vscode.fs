@@ -73,12 +73,15 @@ let commands: ICommands = jsNative
 
 // --- workspace configuration -----------------------------------------------------------------
 
-/// vscode.WorkspaceConfiguration. Only `get` is used, to read the `fshttpStudio.dotnetPath`
-/// override. The setting declares a `""` default, so this reads back as a string, and the
-/// string is empty when the user has not set the override. The caller treats a blank string as
-/// "not configured".
+/// vscode.WorkspaceConfiguration. `get` reads the `fshttpStudio.dotnetPath` override as a
+/// string. The setting declares a `""` default, so this reads back as a string, and the string
+/// is empty when the user has not set the override. The caller treats a blank string as "not
+/// configured". `getNumber` reads numeric settings such as `requestTimeoutMs`.
 type WorkspaceConfiguration =
     abstract get: section: string -> string
+
+    [<Emit("$0.get($1)")>]
+    abstract getNumber: section: string -> float
 
 type IWorkspace =
     abstract getConfiguration: section: string -> WorkspaceConfiguration
