@@ -38,11 +38,11 @@ let private runCompanion () =
 
     loop ()
 
-// The `--worker` child. It serves exactly one `{ source, blockIndex, scriptFileName? }`
+// The `--worker` child. It serves exactly one `{ source, blockIndex, scriptFileName?, timeoutMs }`
 // request against this process's own fresh ALC, and then exits with its `#r "nuget:"`
 // assemblies. It bypasses `run`'s conflict routing, because a fresh process holds nothing that
 // can conflict. It evaluates in-process directly, so a worker can never spawn another worker
-// recursively.
+// recursively. `timeoutMs` is the request bound; absent or `0` means do not inject.
 let private runWorker () =
     let rawStdin, emit = openFrameChannel ()
 
@@ -54,7 +54,8 @@ let private runWorker () =
         let source = getStringProp "source" root
         let blockIndex = getIntProp "blockIndex" root
         let scriptFileName = getOptionalStringProp "scriptFileName" root
-        emit (BlockRunner.outcomeToWire (BlockRunner.runInProcessDirect source blockIndex scriptFileName))
+        let timeoutMs = getIntProp "timeoutMs" root
+        emit (BlockRunner.outcomeToWire (BlockRunner.runInProcessDirect source blockIndex scriptFileName timeoutMs))
 
 [<EntryPoint>]
 let main argv =

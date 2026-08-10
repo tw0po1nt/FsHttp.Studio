@@ -184,9 +184,16 @@ let locate (handle: Handle) (source: string) : Async<BlockRange list> =
 /// The index is 0-based, and it matches the order of an earlier `locate`. `scriptFileName` is
 /// the script's own absolute path when it is saved on disk, so FSI can set
 /// `__SOURCE_DIRECTORY__`. It is `None` for a script with no such path, which keeps FSI's
-/// default. Abandons to `RunProtocolError` if the companion is gone
+/// default. `timeoutMs` is the request bound from `fshttpStudio.requestTimeoutMs`. `0` means
+/// do not inject a bound. Abandons to `RunProtocolError` if the companion is gone
 /// (docs/spec/0004-run-path-robustness.md, Decision 6).
-let run (handle: Handle) (source: string) (blockIndex: int) (scriptFileName: string option) : Async<RunResult> =
+let run
+    (handle: Handle)
+    (source: string)
+    (blockIndex: int)
+    (scriptFileName: string option)
+    (timeoutMs: int)
+    : Async<RunResult> =
     Async.FromContinuations(fun (resolve, _reject, _cancel) ->
         // One shape, always. The companion reads the empty string as "no value", so the absent
         // case needs no second payload to construct here.
@@ -195,7 +202,8 @@ let run (handle: Handle) (source: string) (blockIndex: int) (scriptFileName: str
                 [ "tag" ==> "run"
                   "source" ==> source
                   "blockIndex" ==> blockIndex
-                  "scriptFileName" ==> defaultArg scriptFileName "" ]
+                  "scriptFileName" ==> defaultArg scriptFileName ""
+                  "timeoutMs" ==> timeoutMs ]
 
         let entry =
             { Resolve = fun json -> resolve (parseRunResult json)

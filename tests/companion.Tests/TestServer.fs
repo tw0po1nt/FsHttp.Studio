@@ -101,6 +101,20 @@ let hangingHandler (release: Threading.ManualResetEventSlim) (ctx: HttpListenerC
     with _ ->
         ()
 
+/// Writes the response headers at once, then waits `delayMs` before it writes the body. That
+/// shape drives the "body download is inside the bound" case: with `ResponseContentRead`, the
+/// send covers the body read, so a bound shorter than `delayMs` must end the Run as a
+/// RuntimeError, and not as a truncated Ok.
+let bodyAfterHeadersHandler (delayMs: int) (body: string) (ctx: HttpListenerContext) =
+    ctx.Response.StatusCode <- 200
+    ctx.Response.ContentType <- "text/plain"
+    ctx.Response.SendChunked <- true
+    ctx.Response.OutputStream.Flush()
+    Thread.Sleep delayMs
+    let bytes = Text.Encoding.UTF8.GetBytes body
+    ctx.Response.OutputStream.Write(bytes, 0, bytes.Length)
+    ctx.Response.OutputStream.Close()
+
 /// Streams `bytes` in chunks, and flushes the headers a moment *before* the body. That shape
 /// makes FsHttp's default `ResponseHeadersRead` return a read-once body stream that is still
 /// tied to the live socket. It reproduces the "stream was already consumed" bug. A body that

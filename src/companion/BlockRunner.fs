@@ -45,12 +45,83 @@ type RunOutcome =
     /// `None`.
     | Refused of code: string * name: string option
 
-/// The response-reading guard, as generated F# source. Two places emit it: the addendum below
-/// applies it to `GlobalConfig.defaults`, and the invocation applies it to the block's own value
-/// (Decision 10). Both interpolate this one string, so the two settings cannot drift apart.
-/// `companionAddendum` carries the reason that each setting is load-bearing.
+/// The response-reading guard alone, as generated F# source. The addendum applies it to
+/// `GlobalConfig.defaults`. The invocation re-applies it on the block's own value (Decision 10
+/// of docs/spec/0002-reach-a-block-anywhere.md), and may also inject a request timeout in the
+/// same `Config.update` (docs/spec/0004-run-path-robustness.md, Decision 3). The two settings
+/// on this string cannot drift apart from the invocation's copy, because
+/// `invocationConfigUpdate` builds on this same text when it injects no timeout.
 let private responseReadingGuard =
     "Config.update (fun c -> { c with bufferResponseContent = true; httpCompletionOption = System.Net.Http.HttpCompletionOption.ResponseContentRead })"
+
+/// The Runtime error text for a request that hit the injected bound. The number is the bound
+/// that this Run carried on the wire, so a user who raised `fshttpStudio.requestTimeoutMs`
+/// reads that number back. Public so Seam 1 can assert the wording without duplicating it.
+let requestTimeoutMessage (timeoutMs: int) : string =
+    sprintf
+        "No response within %d ms. FsHttp.Studio stopped waiting.\nRaise fshttpStudio.requestTimeoutMs to wait longer, or set it to 0 to wait as long as HttpClient allows."
+        timeoutMs
+
+/// The invocation's `Config.update` fragment. `timeoutMs = 0` means do not inject: the update
+/// is the response-reading guard alone, and `Config.timeout` stays whatever the block already
+/// carried (`None` when the block set no timeout). A positive `timeoutMs` adds an
+/// `Option.orElse` default, so a block that already set `config_timeoutInSeconds` keeps it
+/// (docs/spec/0004-run-path-robustness.md, Decisions 2 and 4).
+let invocationConfigUpdate (timeoutMs: int) : string =
+    if timeoutMs <= 0 then
+        responseReadingGuard
+    else
+        sprintf
+            "Config.update (fun c -> { c with bufferResponseContent = true; httpCompletionOption = System.Net.Http.HttpCompletionOption.ResponseContentRead; timeout = c.timeout |> Option.orElse (Some (System.TimeSpan.FromMilliseconds %d.)) })"
+            timeoutMs
+
+/// True when `ex` is the request bound firing. Unwrap `AggregateException` first: a refused
+/// connection arrives wrapped (`AggregateException` → `HttpRequestException` →
+/// `SocketException`), and a timeout arrives bare as `TaskCanceledException`. Any
+/// `OperationCanceledException` in the unwrapped chain is the bound
+/// (docs/spec/0004-run-path-robustness.md, Decision 5).
+let private isRequestTimeout (ex: exn) : bool =
+    let root =
+        match ex with
+        | :? AggregateException as ae ->
+            let flat = ae.Flatten()
+
+            if flat.InnerExceptions.Count > 0 then
+                flat.InnerExceptions.[0]
+            else
+                ex
+        | _ -> ex
+
+    let rec inChain (e: exn) =
+        match e with
+        | :? OperationCanceledException -> true
+        | _ ->
+            match e.InnerException with
+            | null -> false
+            | inner -> inChain inner
+
+    inChain root
+
+/// Maps an invocation exception to a Runtime error. A cancellation that followed a positive
+/// injected bound becomes `requestTimeoutMessage`. Every other failure keeps the unwrapped
+/// exception's own message, so a refused connection still names the connection rather than
+/// AggregateException's generic outer text.
+let private runtimeErrorFrom (timeoutMs: int) (ex: exn) : RunOutcome =
+    let root =
+        match ex with
+        | :? AggregateException as ae ->
+            let flat = ae.Flatten()
+
+            if flat.InnerExceptions.Count > 0 then
+                flat.InnerExceptions.[0]
+            else
+                ex
+        | _ -> ex
+
+    if timeoutMs > 0 && isRequestTimeout ex then
+        RuntimeError(requestTimeoutMessage timeoutMs)
+    else
+        RuntimeError root.Message
 
 /// Companion-side addendum, evaluated after the user's own setup. It silences FsHttp's FSI
 /// debug logging, and it forces a read of the whole response body *before* the value that we
@@ -289,15 +360,18 @@ let private buildSetupText
     Array.append prefixLines [| lastLineText |] |> String.concat "\n", shift, blankedNames
 
 /// The second interaction: invokes the target by its qualified name, and applies the
-/// response-reading guard to its value before sending (Decision 10). The Setup builds the
-/// block's context *inside* itself, and thus before the companion addendum's `GlobalConfig.set`
-/// runs, so the context would otherwise still carry FsHttp's `ResponseHeadersRead` default and
-/// leave the body a read-once stream. `Config.update` re-applies the guard on the built value,
-/// which is idempotent with the addendum's own guard.
-let private invocationText (target: LocatedBlock) : string =
+/// response-reading guard (and the optional request timeout) to its value before sending
+/// (Decision 10 of docs/spec/0002-reach-a-block-anywhere.md; Decisions 2 and 3 of
+/// docs/spec/0004-run-path-robustness.md). The Setup builds the block's context *inside*
+/// itself, and thus before the companion addendum's `GlobalConfig.set` runs, so the context
+/// would otherwise still carry FsHttp's `ResponseHeadersRead` default and leave the body a
+/// read-once stream. `Config.update` re-applies the guard on the built value, which is
+/// idempotent with the addendum's own guard. The timeout rides this same update as an
+/// `Option.orElse` default: it never overrides a bound the block already set.
+let private invocationText (timeoutMs: int) (target: LocatedBlock) : string =
     let qualified = baseInvocation target.Route |> qualifyInvocation target.Qualifier
 
-    sprintf "%s |> %s |> Request.send" qualified responseReadingGuard
+    sprintf "%s |> %s |> Request.send" qualified (invocationConfigUpdate timeoutMs)
 
 let private errorDiagnostics (diags: FSharpDiagnostic[]) =
     diags |> Array.filter (fun d -> d.Severity = FSharpDiagnosticSeverity.Error)
@@ -503,6 +577,8 @@ let private extractResponse (requestMs: float) (v: FsiValue) : RunOutcome =
 /// `blocks` envelope. Each call creates and disposes a fresh `FsiEvaluationSession`, which
 /// gives one fresh session per Run.
 ///
+/// `timeoutMs` is the request bound from the host setting. `0` means do not inject one.
+///
 /// This is the warm fast path. `run` calls it directly when the target's `#r "nuget:"` pins do
 /// not conflict with a version already loaded into this process. The `--worker` entry point
 /// also calls it in a throwaway child process, to serve a conflicting pin against a clean ALC.
@@ -511,6 +587,7 @@ let private runLocated
     (located: LocatedBlock list)
     (blockIndex: int)
     (scriptFileName: string option)
+    (timeoutMs: int)
     : RunOutcome =
     match List.tryItem blockIndex located with
     | None -> Refused("staleBlockIndex", None)
@@ -601,7 +678,7 @@ let private runLocated
                     // the request time. Session creation and Setup sit outside it
                     // (docs/spec/0004-run-path-robustness.md, Decision 7).
                     let sw = Stopwatch.StartNew()
-                    let targetResult, targetDiags = evalExpression (invocationText target)
+                    let targetResult, targetDiags = evalExpression (invocationText timeoutMs target)
                     sw.Stop()
                     let requestMs = sw.Elapsed.TotalMilliseconds
 
@@ -617,23 +694,28 @@ let private runLocated
                             |> Array.map (setupDiagnostic 0 None)
                             |> Array.toList
                         with
-                        | [] -> RuntimeError ex.Message
+                        | [] -> runtimeErrorFrom timeoutMs ex
                         | errors -> CompileError errors
                     | Choice1Of2 None -> RuntimeError "expression returned no value"
                     | Choice1Of2(Some v) ->
                         try
                             extractResponse requestMs v
                         with ex ->
-                            RuntimeError ex.Message
+                            runtimeErrorFrom timeoutMs ex
             | errors -> CompileError errors
 
 /// `runLocated` against a fresh locate of `source`. This is the `--worker` child's entry point,
-/// and the direct in-process path. The child receives source text and an optional absolute
-/// `scriptFileName`, which is the script's own path when it is saved. In the parent,
-/// `run` has already located the blocks to decide the gate, so it calls `runLocated` directly
-/// rather than parse a second time.
-let runInProcessDirect (source: string) (blockIndex: int) (scriptFileName: string option) : RunOutcome =
-    runLocated source (locateBlocks source) blockIndex scriptFileName
+/// and the direct in-process path. The child receives source text, an optional absolute
+/// `scriptFileName`, and the request `timeoutMs` from the parent's worker payload. In the
+/// parent, `run` has already located the blocks to decide the gate, so it calls `runLocated`
+/// directly rather than parse a second time.
+let runInProcessDirect
+    (source: string)
+    (blockIndex: int)
+    (scriptFileName: string option)
+    (timeoutMs: int)
+    : RunOutcome =
+    runLocated source (locateBlocks source) blockIndex scriptFileName timeoutMs
 
 // ---------------------------------------------------------------------------------------------
 // Multi-version isolation. The assemblies that `#r "nuget:"` resolves load into the
@@ -838,16 +920,26 @@ let workerTimeoutMs = 120_000
 /// Runs one block in a throwaway child process (`dotnet Companion.dll --worker`), so that its
 /// `#r "nuget:"` assemblies load into a fresh default ALC. The runtime reclaims that ALC when
 /// the process exits, which avoids the process-global collision. The child reads one framed
-/// `{ source, blockIndex, scriptFileName? }` request, writes one outcome envelope, and then
-/// exits.
+/// `{ source, blockIndex, scriptFileName?, timeoutMs }` request, writes one outcome envelope,
+/// and then exits.
 ///
-/// `timeoutMs` bounds the wait. `Kill()` terminates a worker that does not produce its frame in
-/// time, and also a worker that produces the frame and then stalls before it exits. The Run
-/// then maps to a `RuntimeError`, instead of a block of the caller forever. A user block that
-/// loops forever, or a request that never answers, both cause the first case. `use proc = proc`
-/// disposes the handle but does not unblock a wait. The bound and the kill, not the disposal,
-/// are what guarantee that the Run always terminates.
-let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) (scriptFileName: string option) : RunOutcome =
+/// `timeoutMs` bounds the wait for the child's frame. `Kill()` terminates a worker that does
+/// not produce its frame in time, and also a worker that produces the frame and then stalls
+/// before it exits. The Run then maps to a `RuntimeError`, instead of a block of the caller
+/// forever. A user block that loops forever, or a request that never answers, both cause the
+/// first case. `use proc = proc` disposes the handle but does not unblock a wait. The bound and
+/// the kill, not the disposal, are what guarantee that the Run always terminates.
+///
+/// `requestTimeoutMs` is the request bound the child injects at invocation time. It rides the
+/// worker payload as `timeoutMs`, the same field the warm `run` envelope carries. `0` means do
+/// not inject.
+let runInWorker
+    (timeoutMs: int)
+    (source: string)
+    (blockIndex: int)
+    (scriptFileName: string option)
+    (requestTimeoutMs: int)
+    : RunOutcome =
     let companionDll = typeof<RunOutcome>.Assembly.Location
 
     let psi = ProcessStartInfo(FileName = "dotnet")
@@ -875,10 +967,13 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) (scriptFileN
 
             // One shape, always. `Envelope.getOptionalStringProp` reads the empty string as
             // "no value", so the absent case needs no second record to construct here.
+            // `timeoutMs` on the payload is the request bound. A missing field reads as 0
+            // through `getIntProp`, which means do not inject.
             let request: obj =
                 {| source = source
                    blockIndex = blockIndex
-                   scriptFileName = defaultArg scriptFileName "" |}
+                   scriptFileName = defaultArg scriptFileName ""
+                   timeoutMs = requestTimeoutMs |}
 
             writeFrame proc.StandardInput.BaseStream (JsonSerializer.SerializeToUtf8Bytes request)
             proc.StandardInput.Close()
@@ -929,12 +1024,15 @@ let runInWorker (timeoutMs: int) (source: string) (blockIndex: int) (scriptFileN
 /// Past the gate, `run` routes on one further condition: whether the target's `#r "nuget:"` pins
 /// conflict with a version already loaded in this process. No conflict -> the warm in-process
 /// session. A conflict -> a fresh `--worker` child, whose ALC cannot collide.
-let run (source: string) (blockIndex: int) (scriptFileName: string option) : RunOutcome =
+///
+/// `timeoutMs` is the request bound from the host. Both routes carry it. `0` means do not
+/// inject.
+let run (source: string) (blockIndex: int) (scriptFileName: string option) (timeoutMs: int) : RunOutcome =
     let located = locateBlocks source
 
     match List.tryItem blockIndex located with
     | Some { Route = BlockLocator.Refused code } -> RunOutcome.Refused(codeToWire code, None)
     | _ ->
         match routeAndReserve (extractPins source) with
-        | Worker -> runInWorker workerTimeoutMs source blockIndex scriptFileName
-        | InProcess -> runLocated source located blockIndex scriptFileName
+        | Worker -> runInWorker workerTimeoutMs source blockIndex scriptFileName timeoutMs
+        | InProcess -> runLocated source located blockIndex scriptFileName timeoutMs

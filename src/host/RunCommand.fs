@@ -25,6 +25,23 @@ let private errorUpdate (message: string) : obj =
 let private refusedUpdate (title: string) (detail: string) : obj =
     createObj [ "tag" ==> "refused"; "title" ==> title; "detail" ==> detail ]
 
+/// The shipped default for `fshttpStudio.requestTimeoutMs`. Used when the setting is missing
+/// or not a finite number, so a corrupt config cannot leave the Run unbounded by accident.
+[<Literal>]
+let private defaultRequestTimeoutMs = 30000
+
+/// Reads `fshttpStudio.requestTimeoutMs` for this Run. A change to the setting applies on the
+/// next click with no window reload. `0` means do not inject a bound
+/// (docs/spec/0004-run-path-robustness.md, Decision 1).
+let private configuredRequestTimeoutMs () : int =
+    let n = (workspace.getConfiguration "fshttpStudio").getNumber "requestTimeoutMs"
+    let finite: bool = emitJsExpr n "Number.isFinite($0)"
+
+    if finite && n >= 0.0 then
+        int n
+    else
+        defaultRequestTimeoutMs
+
 /// The two numbers the status line shows. They are both durations in milliseconds, so a bare
 /// pair of floats side by side in a parameter list can be transposed with no compiler help.
 /// `RequestMs` is the companion's invocation bracket, and `TotalMs` is this module's bracket
@@ -70,7 +87,8 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
             | None -> "", ""
 
         let started: float = emitJsExpr (nonNull (box 0)) "Date.now()"
-        let! result = Companion.run h source blockIndex scriptFileName
+        let timeoutMs = configuredRequestTimeoutMs ()
+        let! result = Companion.run h source blockIndex scriptFileName timeoutMs
         let totalMs: float = (emitJsExpr (nonNull (box 0)) "Date.now()") - started
 
         if myGeneration = generation then

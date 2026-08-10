@@ -28,8 +28,9 @@ let private pngMagic =
 
 let private pngBytes = Array.append pngMagic [| 1uy; 2uy; 3uy; 4uy |]
 
-/// A Run with no script path. Existing cases keep today's untitled / unspecified behavior.
-let private runSource source blockIndex = run source blockIndex None
+/// A Run with no script path and no injected request bound. Existing cases keep today's
+/// untitled / unspecified behavior, and they do not depend on the request timeout.
+let private runSource source blockIndex = run source blockIndex None 0
 
 /// Drives `runner` over a script that reads `marker.txt` out of `__SOURCE_DIRECTORY__` and then
 /// requests the route that names its contents. The script itself is never written to disk: only
@@ -880,7 +881,7 @@ let tests =
               let source = script (sprintf "http {\n    GET \"%s/hang\"\n}\n" server.BaseUrl)
 
               let sw = Diagnostics.Stopwatch.StartNew()
-              let outcome = runInWorker 5000 source 0 None
+              let outcome = runInWorker 5000 source 0 None 0
               sw.Stop()
               // Unblock the listener thread, so the server can shut down cleanly.
               release.Set()
@@ -908,7 +909,7 @@ let tests =
               // number must cover the delay, and it must stay well below the host-side total
               // that also pays for session creation and Setup
               // (docs/spec/0004-run-path-robustness.md, Decision 7).
-              expectTimedRun runInProcessDirect (fun requestMs totalMs ->
+              expectTimedRun (fun s i p -> runInProcessDirect s i p 0) (fun requestMs totalMs ->
                   Expect.isGreaterThanOrEqual
                       requestMs
                       (float timedRunDelayMs)
@@ -930,7 +931,7 @@ let tests =
               // last case in this list makes the complementary assertion. What matters here is
               // that the number survives `outcomeToWire` / `wireToOutcome`, and a direct drive
               // guarantees it crosses them.
-              expectTimedRun (runInWorker workerTimeoutMs) (fun requestMs _ ->
+              expectTimedRun (fun s i p -> runInWorker workerTimeoutMs s i p 0) (fun requestMs _ ->
                   Expect.isGreaterThanOrEqual
                       requestMs
                       (float timedRunDelayMs)
@@ -987,13 +988,212 @@ let tests =
               // directory, and not against the companion's working directory. Drive
               // `runInProcessDirect`, not `run`: `run` routes on process-global pin state, so it
               // could land in the worker and prove nothing about the warm path.
-              expectResolvesBesideScript "inprocess" runInProcessDirect
+              expectResolvesBesideScript "inprocess" (fun s i p -> runInProcessDirect s i p 0)
           }
 
           test "a --worker child also resolves __SOURCE_DIRECTORY__ from scriptFileName" {
               // The conflict path must carry the same script path into the throwaway child.
               // Drive `runInWorker` directly, for the same reason as the case above.
-              expectResolvesBesideScript "worker" (runInWorker workerTimeoutMs)
+              expectResolvesBesideScript "worker" (fun s i p -> runInWorker workerTimeoutMs s i p 0)
+          }
+
+          // --- request timeout (docs/spec/0004-run-path-robustness.md, Seam 1 scenarios 1–6, 8) -
+
+          test "a hanging server ends the Run at the request bound" {
+              use release = new Threading.ManualResetEventSlim(false)
+              use server = new TestServer(Map [ "/hang", hangingHandler release ])
+              let boundMs = 1500
+              let source = script (sprintf "http {\n    GET \"%s/hang\"\n}\n" server.BaseUrl)
+
+              let sw = Diagnostics.Stopwatch.StartNew()
+              let outcome = run source 0 None boundMs
+              sw.Stop()
+              release.Set()
+
+              match outcome with
+              | RuntimeError message ->
+                  Expect.stringContains message (string boundMs) "the message must name the bound that fired"
+
+                  Expect.stringContains message "fshttpStudio.requestTimeoutMs" "the message must name the setting"
+
+                  Expect.isFalse
+                      (message.Contains "A task was canceled")
+                      "the message must not ship the raw cancellation text"
+              | other -> failtestf "expected RuntimeError at the bound, got %A" other
+
+              Expect.isGreaterThan
+                  sw.Elapsed.TotalMilliseconds
+                  (float boundMs - 500.0)
+                  "the Run must last near the bound"
+
+              Expect.isLessThan
+                  sw.Elapsed.TotalMilliseconds
+                  (float boundMs + 2000.0)
+                  "the Run must end near the bound, not at HttpClient's default"
+
+              Expect.isLessThan
+                  sw.Elapsed.TotalMilliseconds
+                  (float workerTimeoutMs)
+                  "the request bound must fire well below workerTimeoutMs"
+          }
+
+          test "a block's own timeout wins over the injected bound" {
+              use release = new Threading.ManualResetEventSlim(false)
+              use server = new TestServer(Map [ "/hang", hangingHandler release ])
+              let injectedMs = 1500
+              // The block's own bound is longer than the injected one. Option.orElse must keep
+              // it, so the Run lasts past the injected bound (Decision 2).
+              let source =
+                  script (sprintf "http {\n    GET \"%s/hang\"\n    config_timeoutInSeconds 3.0\n}\n" server.BaseUrl)
+
+              let sw = Diagnostics.Stopwatch.StartNew()
+              let outcome = run source 0 None injectedMs
+              sw.Stop()
+              release.Set()
+
+              match outcome with
+              | RuntimeError _ -> ()
+              | other -> failtestf "expected RuntimeError when the block's own timeout fires, got %A" other
+
+              Expect.isGreaterThan
+                  sw.Elapsed.TotalMilliseconds
+                  (float injectedMs + 200.0)
+                  "the block's own longer timeout must win over the injected bound"
+          }
+
+          test "the body download is inside the request bound" {
+              let boundMs = 1500
+              let bodyDelayMs = 4000
+
+              use server =
+                  new TestServer(Map [ "/dribble", bodyAfterHeadersHandler bodyDelayMs "late-body" ])
+
+              let source = script (sprintf "http {\n    GET \"%s/dribble\"\n}\n" server.BaseUrl)
+
+              match run source 0 None boundMs with
+              | RuntimeError message ->
+                  Expect.stringContains
+                      message
+                      (string boundMs)
+                      "a slow body must time out under the bound, not return a truncated Ok"
+
+                  Expect.isFalse (message.Contains "A task was canceled") "the timeout message must be the written one"
+              | Ok _ as other -> failtestf "expected RuntimeError for a dribbling body, got %A" other
+              | other -> failtestf "expected RuntimeError for a dribbling body, got %A" other
+          }
+
+          test "a fast request is untouched by the default bound" {
+              use server = new TestServer(Map [ "/fast", textHandler 200 "ok" ])
+              let source = script (sprintf "http {\n    GET \"%s/fast\"\n}\n" server.BaseUrl)
+
+              match run source 0 None 30000 with
+              | Ok(status, _, _, _, _, _) -> Expect.equal status 200 "the default bound must not disturb a fast request"
+              | other -> failtestf "expected Ok with the default bound, got %A" other
+          }
+
+          test "timeoutMs = 0 injects no bound" {
+              use server = new TestServer(Map [ "/fast", textHandler 200 "ok" ])
+              let source = script (sprintf "http {\n    GET \"%s/fast\"\n}\n" server.BaseUrl)
+
+              match run source 0 None 0 with
+              | Ok(status, _, _, _, _, _) -> Expect.equal status 200 "timeoutMs = 0 must still Run a fast request"
+              | other -> failtestf "expected Ok with timeoutMs = 0, got %A" other
+
+              // The invocation's Config.update carries no timeout assignment when timeoutMs is
+              // 0, so Config.timeout stays None at invocation time for a block that set none
+              // (Decision 2 escape hatch).
+              Expect.isFalse
+                  ((invocationConfigUpdate 0).Contains "timeout")
+                  "timeoutMs = 0 must leave Config.timeout untouched"
+
+              // A delay longer than a short bound still succeeds, which is the behavioral proof
+              // that nothing was injected.
+              use slow = new TestServer(Map [ "/slow", delayedHandler 2000 ])
+              let slowSource = script (sprintf "http {\n    GET \"%s/slow\"\n}\n" slow.BaseUrl)
+
+              match run slowSource 0 None 0 with
+              | Ok(status, _, _, _, _, _) ->
+                  Expect.equal status 200 "timeoutMs = 0 must not inject a short bound over a 2 s answer"
+              | other -> failtestf "expected Ok against a 2 s server with timeoutMs = 0, got %A" other
+          }
+
+          test "a refused connection reports the connection failure, not the timeout message" {
+              let source = script "http {\n    GET \"http://127.0.0.1:1/nope\"\n}\n"
+
+              match run source 0 None 30000 with
+              | RuntimeError message ->
+                  Expect.isFalse
+                      (message.Contains "fshttpStudio.requestTimeoutMs")
+                      "a refused connection must not be reported as a request timeout"
+
+                  Expect.isFalse
+                      (message.Contains "No response within")
+                      "a refused connection must not use the timeout wording"
+
+                  Expect.isTrue
+                      (message.IndexOf("connection", System.StringComparison.OrdinalIgnoreCase) >= 0
+                       || message.IndexOf("refused", System.StringComparison.OrdinalIgnoreCase) >= 0
+                       || message.IndexOf("actively refused", System.StringComparison.OrdinalIgnoreCase)
+                          >= 0
+                       || message.Contains "HttpRequestException"
+                       || message.Contains "SocketException")
+                      "the message must still name the connection failure"
+              | other -> failtestf "expected RuntimeError for a refused connection, got %A" other
+          }
+
+          test "the worker path, forced by a conflicting pin, honors the request bound" {
+              // Load one pin in-process first, then Run a differently-pinned hang with a short
+              // request bound. Conflict routing sends the second Run to a worker, which must
+              // still inject the bound and return the written timeout message (scenario 8).
+              use server =
+                  new TestServer(Map [ "/png", bytesHandler 200 "image/png" [] pngBytes ])
+
+              let first =
+                  sprintf
+                      "#r \"nuget: FsHttp, %s\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n"
+                      fsHttpRef
+                      server.BaseUrl
+
+              match run first 0 None 0 with
+              | Ok _ -> ()
+              | other -> failtestf "expected the initial pin load to succeed, got %A" other
+
+              use release = new Threading.ManualResetEventSlim(false)
+              use hangServer = new TestServer(Map [ "/hang", hangingHandler release ])
+              let boundMs = 1500
+
+              let workerSource =
+                  sprintf
+                      "#r \"nuget: FsHttp, 13.3.0\"\nopen FsHttp\n\nhttp {\n    GET \"%s/hang\"\n}\n"
+                      hangServer.BaseUrl
+
+              let sw = Diagnostics.Stopwatch.StartNew()
+              let outcome = run workerSource 0 None boundMs
+              sw.Stop()
+              release.Set()
+
+              match outcome with
+              | RuntimeError message ->
+                  Expect.stringContains message (string boundMs) "the pin-forced worker must honor the request bound"
+
+                  Expect.stringContains
+                      message
+                      "fshttpStudio.requestTimeoutMs"
+                      "the worker path must use the same timeout message"
+
+                  Expect.isFalse
+                      (message.Contains "A task was canceled")
+                      "the worker path must not ship the raw cancellation text"
+
+                  Expect.isFalse
+                      (message.Contains "worker: no response within")
+                      "the request bound must fire before the worker wait kill"
+              | other -> failtestf "expected RuntimeError from the pin-forced worker bound, got %A" other
+
+              Expect.isLessThan
+                  sw.Elapsed.TotalMilliseconds
+                  (float boundMs + 5000.0)
+                  "the pin-forced worker must end near the request bound"
           } ]
 
 // Pure pin parsing, with no FSI and no server. It produces the input that `run`'s conflict
