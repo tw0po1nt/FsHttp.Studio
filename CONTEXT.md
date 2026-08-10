@@ -79,21 +79,17 @@ _Avoid_: unsupported, blocked, disabled.
 ### Shipping
 
 **Beta**:
-A candidate build of the extension, cut from `main` and published as a GitHub pre-release. Its version is the target release version with a `-beta.<n>` suffix. A Beta is the thing a Manual check is walked against, and a release requires one.
+An optional pre-release `.vsix` channel, cut from `main` and published as a GitHub pre-release. Its version is the target release version with a `-beta.<n>` suffix. A Beta hands someone an installable build. It is not required for a release, and the UI suite is the release gate.
 _Avoid_: nightly (nothing is scheduled), RC (implies a feature freeze that FsHttp.Studio does not declare), preview (the VSCode Marketplace's own pre-release channel, which FsHttp.Studio does not use).
 
 **Branch build**:
 A build of the extension from an arbitrary ref, delivered as a workflow artifact. It carries no tag and no release, and it skips the CI gate. It exists so that a person can install a change before it merges.
 _Avoid_: dev build, PR build (the ref does not have to belong to a pull request).
 
-**Manual check**:
-The by-hand walk of `docs/manual-check.md` against a Beta, in a real VSCode window. It covers the interop surfaces that no suite drives: the lens, the toast, the response viewer, and the companion's process handling.
-_Avoid_: smoke (`npm run smoke` already names running the bundled renderer under node), QA, regression test.
-
 ### UI test suite
 
 **Check**:
-One test in the UI suite, driving a real VSCode through ExTester. A check is what the Manual check's steps become, so it names a user-visible outcome rather than a unit of code.
+One test in the UI suite, driving a real VSCode through ExTester. A check names a user-visible outcome rather than a unit of code.
 _Avoid_: test, case, scenario, spec (a spec is the written ticket that asks for the check).
 
 **Harness**:

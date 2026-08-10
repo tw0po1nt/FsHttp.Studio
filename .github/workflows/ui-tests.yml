@@ -7,6 +7,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/ui-tests.yml'
+      # The suite steps live in a composite action that release.yml also calls, so a change
+      # to either one must re-run the suite here.
+      - '.github/actions/run-ui-suite/action.yml'
+      - '.github/workflows/release.yml'
       - '.config/dotnet-tools.json'
       - 'esbuild.mjs'
       - 'global.json'
@@ -30,26 +34,16 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  STORAGE: /tmp/fshttp-ui-test-resources
-  EXT_DIR: /tmp/fshttp-ui-test-extensions
-
 jobs:
   ui-tests:
     name: UI test suite
     runs-on: ubuntu-latest
     # Covers three 20-minute suite attempts plus setup. The 20-minute bound that matters
-    # is per attempt, on the step below; this cap only stops a wedged runner billing forever.
+    # is per attempt, inside the composite action; this cap only stops a wedged runner
+    # billing forever.
     timeout-minutes: 70
     steps:
       - uses: actions/checkout@v4
-
-      - name: Read VSCode pin for cache key
-        id: pin
-        run: |
-          set -euo pipefail
-          PIN="$(jq -r .setup.vscodeVersion tests/ui.Tests/extester.config.json)"
-          echo "version=$PIN" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -63,27 +57,8 @@ jobs:
 
       - uses: actions/cache@v4
         with:
-          # Binaries only — never $STORAGE/settings, which run.sh deletes so no VSCode
-          # profile state carries between runs. No restore-keys: a prefix fallback would
-          # serve the previous pin's VSCode, which is the one thing the pinned key prevents.
-          path: |
-            ${{ env.STORAGE }}/VSCode-linux-x64
-            ${{ env.STORAGE }}/chromedriver-linux64
-          key: ${{ runner.os }}-extest-${{ steps.pin.outputs.version }}
-
-      - uses: actions/cache@v4
-        with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
-
-      - name: Install xvfb and libraries for ExTester
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2t64 \
-            || sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2
-
-      - name: Ubuntu 24 AppArmor tweak (ExTester openResources)
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - run: dotnet tool restore
 
@@ -97,50 +72,7 @@ jobs:
           VSIX="$(ls -1 fshttp-studio-*.vsix | tail -1)"
           echo "path=$PWD/$VSIX" >> "$GITHUB_OUTPUT"
 
-      - name: Build test server
-        run: dotnet publish tests/ui.Tests/server/UiTestServer.fsproj -c Release -o out/ui-test-server
-
-      - name: Run UI test suite
-        uses: nick-fields/retry@v4
+      - uses: ./.github/actions/run-ui-suite
         with:
-          timeout_minutes: 20
-          max_attempts: 3
-          retry_wait_seconds: 30
-          # bash, and run.sh invoked directly: piping it into tee would report a red
-          # suite as a green job, and every budget assert depends on red staying red.
-          shell: bash
-          command: |
-            export VSIX="${{ steps.vsix.outputs.path }}"
-            export UI_TEST_SKIP_SERVER_BUILD=1
-            # The fixtures directory is the workspace VSCode opens, so an attempt that writes a
-            # fixture leaves the next attempt a different workspace. A retry must start from the
-            # checked-in text. Report the change before restoring it: a fixture that reaches disk
-            # is a defect in the suite, and a silent repair would hide the run that proves it.
-            if ! git diff --quiet -- tests/ui.Tests/fixtures; then
-              echo "::warning::a previous attempt wrote a fixture — restoring the checked-in text"
-              git diff --stat -- tests/ui.Tests/fixtures
-              git checkout -- tests/ui.Tests/fixtures
-            fi
-            tests/ui.Tests/run.sh
-
-      - name: Report a fixture the suite wrote
-        if: always()
-        # The last attempt has no attempt after it to notice, and a fixture that reaches disk is
-        # the tell that separates a driver that opened a file twice from one that wrote it twice.
-        run: |
-          if git diff --quiet -- tests/ui.Tests/fixtures; then
-            echo "fixtures unchanged on disk"
-          else
-            echo "::warning::the suite wrote a fixture"
-            git diff --stat -- tests/ui.Tests/fixtures
-          fi
-
-      - name: Upload failure screenshots and logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ui-test-failure-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ env.STORAGE }}/screenshots/**/*.png
-            ${{ env.STORAGE }}/chromedriver.log
-          if-no-files-found: ignore
+          vsix-path: ${{ steps.vsix.outputs.path }}
+          failure-artifact-label: ci

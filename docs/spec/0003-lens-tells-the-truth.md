@@ -389,9 +389,15 @@ No test drives the VSCode lens surface or the toast. `CodeLensProvider` and the 
 interop, and ADR-0003's seam puts the testable logic in `Protocol`. Seam 3 covers the map, which is
 where a wording defect lives.
 
-The two surfaces are verified by hand instead. [`docs/manual-check.md`](../manual-check.md) carries
+The two surfaces are verified by hand instead. `docs/manual-check.md` carries
 the steps under *The lens tells the truth*, and the Manual check gates the release. See
 [ADR-0008](../adr/0008-beta-gates-the-release.md).
+
+> **Update (2026-08-10):** The paragraph above is no longer true. The UI test suite drives both
+> surfaces. Spec 4 covers the refusal lens and the warning toast, and spec 5 covers the cross-block
+> Refused Run. The UI suite gates the release, `docs/manual-check.md` is deleted, and
+> [ADR-0009](../adr/0009-ui-suite-gates-the-release.md) supersedes ADR-0008. See
+> [`docs/release-gate.md`](../release-gate.md) for what the suite covers and what it does not.
 
 ## Out of Scope
 

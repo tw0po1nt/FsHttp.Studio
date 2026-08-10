@@ -2,11 +2,14 @@ name: Release
 
 # GitHub Releases channel (direct .vsix download). Manual only — an operator clicks
 # "Run workflow". Registry publishing (vsce / ovsx) stays manual and is out of scope here.
+#
+# The UI suite is the release gate. A red suite refuses the draft Release. The force
+# input skips the suite for an emergency release and logs that skip in the run.
 on:
   workflow_dispatch:
     inputs:
       force:
-        description: 'Release without a Beta for this version.'
+        description: 'Skip the UI suite for an emergency release.'
         type: boolean
         required: false
         default: false
@@ -21,7 +24,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Covers packaging plus three 20-minute UI suite attempts. The per-attempt bound is
+    # inside the run-ui-suite action; this cap only stops a wedged runner.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -41,20 +46,16 @@ jobs:
             exit 1
           fi
 
-      # A tripwire, and not a proof. It shows that a Beta was built, and it cannot
-      # show that an operator walked docs/manual-check.md. It defends against the
-      # real failure: a release that ships before anybody opens a VSCode window.
-      # Set force to release a change that needs no Manual check, such as a README
-      # repair or a re-cut after a bad upload.
-      - name: Require a Beta for this version
-        if: ${{ !inputs.force }}
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
+      # Emergency escape hatch. A release that sets force has no suite gate. The
+      # warning and the banner must both appear in the run log so the skip is visible.
+      - name: Log that the UI suite was skipped
+        if: ${{ inputs.force }}
         run: |
-          if ! git ls-remote --tags origin "refs/tags/v$VERSION-beta.*" | grep -qv '\^{}'; then
-            echo "::error::No Beta exists for v$VERSION. Cut one with the Beta workflow, walk docs/manual-check.md, then release. Set the force input to release without one."
-            exit 1
-          fi
+          echo "::warning::FORCE RELEASE: the UI suite was skipped. This release has no suite gate."
+          echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+          echo "FORCE INPUT SET — UI TEST SUITE SKIPPED FOR THIS RELEASE"
+          echo "This draft Release is not backed by a green suite run."
+          echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -88,7 +89,25 @@ jobs:
 
       # Builds the single universal .vsix (compile + vsce package), output
       # fshttp-studio-<version>.vsix at the repo root.
-      - run: npm run package
+      - name: Package extension (.vsix)
+        id: vsix
+        run: |
+          set -euo pipefail
+          npm run package
+          VSIX="fshttp-studio-${{ steps.version.outputs.version }}.vsix"
+          echo "path=$PWD/$VSIX" >> "$GITHUB_OUTPUT"
+
+      # The release gate. `ui-tests.yml` calls the same composite action, so both paths run
+      # one suite with one set of budgets. The action runs on this runner, against the .vsix
+      # this job packaged and is about to ship — a gate is only worth the artifact it drove.
+      #
+      # The force input skips this one step, and with it every part of the suite. The build
+      # guardrails above it always run, so a forced release still cannot ship a red build.
+      - uses: ./.github/actions/run-ui-suite
+        if: ${{ !inputs.force }}
+        with:
+          vsix-path: ${{ steps.vsix.outputs.path }}
+          failure-artifact-label: release
 
       # Ship a checksum alongside the asset so installers can prove their copy
       # arrived byte-exact — corporate proxies / AV are known to silently rewrite
@@ -110,6 +129,8 @@ jobs:
           draft: true # a human reviews the asset + notes, then clicks Publish
           make_latest: true # takes effect once the draft is published
           generate_release_notes: true
+          body: |
+            Release workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           files: |
             fshttp-studio-${{ steps.version.outputs.version }}.vsix
             fshttp-studio-${{ steps.version.outputs.version }}.vsix.sha256

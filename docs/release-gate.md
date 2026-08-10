@@ -1,8 +1,7 @@
 # Release gate
 
-This document states what the UI test suite covers and what it does not. The suite is still
-growing. Spec 1 shipped the harness and the setup self-check; specs 2 and 3 shipped the first two
-product checks. Later specs add the rest of the product checks that retire `docs/manual-check.md`.
+This document states what the UI test suite covers and what it does not. The suite is the
+release gate. A green Actions run of the suite is the record of what was verified.
 
 ## Prerequisites
 
@@ -15,7 +14,7 @@ The UI suite drives the VSCode version that `extester.config.json` pins, and it 
 Linux only. `package.json` states `"engines": { "vscode": "^1.66.0" }`. The suite does not
 test that minimum version, because ExTester cannot drive it. No other check tests it either — the
 repository has no `@types/vscode` dependency, so no tool checks the declared minimum. A release can
-ship a defect that occurs only on a VSCode version older than the pin. The manual check that this
+ship a defect that occurs only on a VSCode version older than the pin. The by-hand walk that this
 suite replaced had the same gap.
 
 **The pin becomes stale.**
@@ -42,6 +41,22 @@ condition.
 A defect that appears only in `dotnet` discovery or in companion-process handling on macOS or
 Windows ships uncaught. This is a known and accepted cost, not an oversight.
 
+**The suite does not exercise the Beta channel.**
+The suite does not cut a Beta, open its pre-release, or download the `.vsix`. A broken Beta
+workflow can therefore ship while packaging and install stay green.
+
+**A machine with no .NET is not covered.**
+A machine with no .NET, or a misconfigured runtime path, is not covered. The by-hand walk that this
+suite replaced never covered it either.
+
+**After companion death, the suite asserts neither lens presence nor absence.**
+After the companion dies, the suite does not assert what the lens does. Neither its presence nor
+its absence is stable across runs. See [#145](https://github.com/tw0po1nt/FsHttp.Studio/issues/145).
+
+**A new untestable surface belongs in this section.**
+A spec that finds a surface no suite drives records that surface here. Prefer to automate the
+surface. Do not leave the instruction only inside a shipped spec.
+
 ## What the suite covers today
 
 - Spec 1 (harness): packaged `.vsix` in a pinned headless VSCode, test HTTP server with sidecar,
@@ -49,5 +64,11 @@ Windows ships uncaught. This is a known and accepted cost, not an oversight.
 - Spec 2 (the core path): open the fixture, Run one block, then replace that response with the next.
 - Spec 3 (Run outcomes render honestly): a real 404 renders as a response with no failure. A
   dead-port Run renders as plain runtime-error text with no status line.
-
-The remaining product checks land in later specs.
+- Spec 4 (loop lens refuses with toast): a block inside a loop shows a refusal lens. A click raises
+  a warning toast and opens no response viewer.
+- Spec 5 (cross-block Refused Run): a block that uses a value another block binds reports a Refused
+  Run, and marks no fault in the script.
+- Spec 6 (Compile Error names its source): a type error above the block reports at its source
+  location in the viewer.
+- Spec 7 (companion death is visible and recoverable): a kill during a Run leaves `Running…` for the
+  stopped message. A window reload recovers a successful Run.
