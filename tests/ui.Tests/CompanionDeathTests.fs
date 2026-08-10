@@ -57,11 +57,7 @@ let private tryRecoveryResponseRendered () =
 
 let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
     async {
-        do!
-            Harness.eventually
-                Harness.LensAppearanceDeadlineMs
-                "the companion-death fixture tab to open as the fixture column's only tab"
-                (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
+        do! Checks.openFixtureAsSoleTab fixtureFileName
 
         do!
             Harness.eventuallyObserved
@@ -117,11 +113,7 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
                 "a fresh companion process after the reload"
                 (fun () -> tryFreshCompanion killed)
 
-        do!
-            Harness.eventually
-                Harness.LensAppearanceDeadlineMs
-                "the companion-death fixture tab to reopen as the fixture column's only tab"
-                (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
+        do! Checks.openFixtureAsSoleTab fixtureFileName
 
         do!
             Harness.eventuallyObserved

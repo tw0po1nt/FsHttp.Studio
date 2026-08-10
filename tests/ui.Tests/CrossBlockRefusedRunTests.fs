@@ -5,7 +5,6 @@
 // restate them.
 module CrossBlockRefusedRunTests
 
-open Fable.Core
 open Fable.Mocha
 
 let private blockCount = 2
@@ -38,11 +37,7 @@ let private tryRefusedRunRenderedAsNotice () =
 /// again, so the only session state a later check inherits from here is the open viewer.
 let private crossBlockRefusedRun =
     async {
-        do!
-            Harness.eventually
-                Harness.LensAppearanceDeadlineMs
-                "the cross-block fixture tab to open as the fixture column's only tab"
-                (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
+        do! Checks.openFixtureAsSoleTab fixtureFileName
 
         do!
             Harness.eventuallyObserved

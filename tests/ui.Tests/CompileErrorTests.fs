@@ -67,11 +67,7 @@ let private compileErrorNamesItsSource =
 
         let body =
             async {
-                do!
-                    Harness.eventually
-                        Harness.LensAppearanceDeadlineMs
-                        "the compile-error fixture tab to open as the fixture column's only tab"
-                        (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
+                do! Checks.openFixtureAsSoleTab fixtureFileName
 
                 do!
                     Harness.eventuallyObserved

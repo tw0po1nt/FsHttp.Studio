@@ -5,18 +5,52 @@
 // combinator — this module owns nothing but what a check reuses.
 module Checks
 
-open System.IO
-
 /// The lens's rendered title, glyph included, exactly as `CodeLensProvider.buildCodeLens` writes
 /// it. Asserted as rendered, and reused as the partial title a click matches on.
 let lensTitle = "▶ Run request"
 
-/// A fixture checked in beside the sidecar. The sidecar path is the only location the suite is
-/// handed at run time, so every fixture is resolved from it.
-let fixturePath (fileName: string) =
-    match Proc.sidecarPath () with
-    | None -> Assert.fail "UI_TEST_SIDECAR is not set, so the check cannot locate its fixture"
-    | Some sidecar -> Path.Combine(Path.GetDirectoryName sidecar, fileName)
+/// One attempt to hand the fixture column over to `tabTitle`. Holds as soon as the Explorer item
+/// has been clicked — *not* when the tab has rendered — because the click must happen once and a
+/// poll that waited for the tab here would click again while the first open was still settling.
+/// The only repeated poll is the one that reached nothing and changed nothing.
+let private tryTakeOverFixtureColumn (tabTitle: string) =
+    async {
+        let! alreadySoleTab = ExTester.tryFixtureColumnHoldsOnly tabTitle
+
+        if alreadySoleTab then
+            return Harness.Holds
+        else
+            match! ExTester.openFixtureAsSoleTab tabTitle with
+            | ExTester.FixtureOpenRequested -> return Harness.Holds
+            | ExTester.FixtureOpenNotReached reason -> return Harness.Observed reason
+            | ExTester.FixtureOpenRaised reason ->
+                return Assert.fail (sprintf "opening %s as the fixture column's only tab failed: %s" tabTitle reason)
+    }
+
+/// Opens a fixture as the sole tab in the fixture column, and returns once the column holds it and
+/// nothing else.
+///
+/// The open and the wait are two waits on purpose. Emptying the column and clicking the Explorer
+/// item is not idempotent: a second click landing before the close has settled concatenates the
+/// buffer into itself, and the doubled buffer renders doubled lenses. So the first wait stops at
+/// the click, and the second polls `tryFixtureColumnHoldsOnly`, a read that writes nothing.
+///
+/// A column that already holds exactly this tab is left alone, so a check may call this against a
+/// fixture the previous check opened without paying the close and reopen.
+let openFixtureAsSoleTab (tabTitle: string) =
+    async {
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                (sprintf "the Explorer to offer %s" tabTitle)
+                (fun () -> tryTakeOverFixtureColumn tabTitle)
+
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                (sprintf "the fixture column to hold %s and nothing else" tabTitle)
+                (fun () -> ExTester.tryFixtureColumnHoldsOnly tabTitle)
+    }
 
 /// The titles a poll read, as one line for a failure message. Quoted individually, because a title
 /// carries a glyph and a space, and an unquoted list of them cannot show where one ends.

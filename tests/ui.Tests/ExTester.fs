@@ -253,12 +253,6 @@ let By: ByStatic = jsNative
 let waitForWorkbench (browser: VSBrowser) (timeoutMs: float) : JS.Promise<unit> =
     emitJsExpr (browser, timeoutMs) "$0.waitForWorkbench($1)"
 
-/// Opens a file in the workbench. Pair with a later `Harness.eventually` on the tab or the
-/// lenses — `openResources` returns when ExTester has asked VSCode to open the path, not when
-/// the editor has finished rendering it.
-let openResource (browser: VSBrowser) (path: string) : JS.Promise<unit> =
-    emitJsExpr (browser, path) "$0.openResources($1)"
-
 let private switchToFrameTimed (view: WebView) (timeoutMs: float) : JS.Promise<unit> =
     emitJsExpr (view, timeoutMs) "$0.switchToFrame($1)"
 
@@ -310,79 +304,103 @@ let private openSectionItem (section: ViewSection) (itemTitle: string) : JS.Prom
 let private holdsOnly (tabTitle: string) (titles: string[]) =
     titles.Length = 1 && titles |> Array.exists (fun t -> t.Contains tabTitle)
 
-/// Empties the fixture column and reaches the file through the Explorer. The slow path of
-/// `tryOpenAsSoleTabInFixtureColumn`, which documents why the Explorer rather than
-/// `openResources`, and what the emptying costs.
+/// What one attempt to take the fixture column over did. Emptying the column and clicking the
+/// Explorer item is the one step in this suite that must not be repeated, so the outcome says
+/// whether that step was reached rather than folding into a boolean a caller would poll.
+type FixtureOpen =
+    /// The column was emptied and the Explorer item was clicked. The tab may not have rendered
+    /// yet — wait for that with `tryFixtureColumnHoldsOnly`.
+    | FixtureOpenRequested
+    /// The Explorer was not ready, so nothing was closed and nothing was clicked. Safe to retry.
+    | FixtureOpenNotReached of reason: string
+    /// The close or the click itself raised, so the column's state is unknown. Not safe to retry:
+    /// a second click landing on a column that is still closing concatenates the buffer.
+    | FixtureOpenRaised of reason: string
+
+/// True when the fixture column holds `tabTitle` and nothing else.
 ///
-/// After `openItem` opens the file, this path must not call `openEditor`. A second open of a
-/// tab the column already holds can concatenate the buffer into itself. If the tab title is not
-/// visible yet, return false and let `Harness.eventually` retry.
-let private tryOpenThroughExplorer (view: EditorView) (tabTitle: string) : Async<bool> =
+/// Reads and never writes, which is what makes it the poll a check waits on after
+/// `openFixtureAsSoleTab`. The open itself must happen exactly once, so it cannot be the thing
+/// being polled.
+let tryFixtureColumnHoldsOnly (tabTitle: string) : Async<bool> =
     async {
-        let workbench = Workbench.create ()
-
-        do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
-
-        do! EditorView.closeAllEditors view fixtureGroupIndex |> Async.AwaitPromise
-
-        let bar = ActivityBar.create ()
-        let! control = bar.getViewControl "Explorer" |> Async.AwaitPromise
-
-        if isNull (box control) then
+        try
+            let! group = editorGroup fixtureGroupIndex
+            let! titles = group.getOpenEditorTitles () |> Async.AwaitPromise
+            return holdsOnly tabTitle titles
+        with _ ->
             return false
-        else
-            let! sideBar = control.openView () |> Async.AwaitPromise
-            let! sections = sideBar.getContent().getSections () |> Async.AwaitPromise
-            let mutable opened = false
-
-            for section in sections do
-                if not opened then
-                    let! title = section.getTitle () |> Async.AwaitPromise
-
-                    if title.ToLowerInvariant().Contains fixtureFolderName then
-                        do! openSectionItem section tabTitle |> Async.AwaitPromise
-                        opened <- true
-
-            if not opened then
-                return false
-            else
-                let! groupAfter = editorGroup fixtureGroupIndex
-                let! titles = groupAfter.getOpenEditorTitles () |> Async.AwaitPromise
-                return holdsOnly tabTitle titles
     }
 
-/// Opens a workspace file as the *sole* tab in the fixture column, closing whatever else that
-/// column held. Pair with `Harness.eventually`.
+/// Empties the fixture column and reaches a workspace file through the Explorer, opening it as the
+/// *sole* tab in that column.
 ///
-/// Takes a tab title, not a path: it reaches the file through the Explorer rather than
+/// **Reach `FixtureOpenRequested` exactly once per fixture**, then wait on
+/// `tryFixtureColumnHoldsOnly`. Closing the column and clicking the Explorer item is one
+/// non-idempotent action: a second click landing before the close has settled concatenates the
+/// buffer into itself, and a doubled buffer renders doubled lenses — which reads as a provider
+/// that over-detects rather than as a driver that opened twice. `Checks.openFixtureAsSoleTab`
+/// composes the action and the wait, and is what a check should call.
+///
+/// The Explorer is resolved before the column is emptied, so the one outcome a caller may retry —
+/// `FixtureOpenNotReached` — leaves the workbench untouched. Emptying first would let a retry
+/// close the response viewer, which slides into the fixture column's index once that column has
+/// no tabs left.
+///
+/// Takes a tab title, not a path: it reaches the file through the Explorer rather than ExTester's
 /// `openResources`, because once the viewer is open focus sits on it and `openResources` opens
 /// into the focused group — displacing the viewer panel. Emptying the column first avoids a
-/// second defect: with several tabs open, `TextEditor` resolves the first `.editor-instance` in
-/// the group, which can be a hidden tab carrying no CodeLens widgets even when the focused tab
-/// has them.
-///
-/// Idempotent when the column already holds exactly that one tab: a second call returns without
-/// reopening. That matters because this binding is polled: reopening a file the column already
-/// holds can concatenate the buffer into itself — the same defect `openResources` has when
-/// polled — and a doubled buffer renders doubled lenses.
+/// second defect: with several tabs open, a CodeLens read resolves the first laid-out
+/// `.editor-instance` in the page, and a column holding an inactive tab gives it a second one to
+/// choose from.
 ///
 /// Session-state cost, deliberate and named here because it is not reversed: this discards the
 /// fixture tab setup proved live (`Harness` FixtureOpen) along with any earlier check's fixture.
 /// The workspace folder — the state the extension's activation depends on — is untouched. A later
 /// check must open its own fixture through this binding rather than assume a tab is still there.
-let tryOpenAsSoleTabInFixtureColumn (tabTitle: string) : Async<bool> =
+let openFixtureAsSoleTab (tabTitle: string) : Async<FixtureOpen> =
     async {
-        try
-            let! group = editorGroup fixtureGroupIndex
-            let! titles = group.getOpenEditorTitles () |> Async.AwaitPromise
+        let! fixtures =
+            async {
+                try
+                    let bar = ActivityBar.create ()
+                    let! control = bar.getViewControl "Explorer" |> Async.AwaitPromise
 
-            if holdsOnly tabTitle titles then
-                return true
-            else
+                    if isNull (box control) then
+                        return Error "the Explorer view control is not in the activity bar"
+                    else
+                        let! sideBar = control.openView () |> Async.AwaitPromise
+                        let! sections = sideBar.getContent().getSections () |> Async.AwaitPromise
+                        let mutable found: ViewSection option = None
+
+                        for section in sections do
+                            if found.IsNone then
+                                let! title = section.getTitle () |> Async.AwaitPromise
+
+                                if title.ToLowerInvariant().Contains fixtureFolderName then
+                                    found <- Some section
+
+                        match found with
+                        | Some section -> return Ok section
+                        | None -> return Error(sprintf "the Explorer shows no %s section" fixtureFolderName)
+                with e ->
+                    return Error(sprintf "the Explorer read raised: %s" e.Message)
+            }
+
+        match fixtures with
+        | Error reason -> return FixtureOpenNotReached reason
+        | Ok section ->
+            try
+                let workbench = Workbench.create ()
                 let view = EditorView.create ()
-                return! tryOpenThroughExplorer view tabTitle
-        with _ ->
-            return false
+
+                do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
+                do! EditorView.closeAllEditors view fixtureGroupIndex |> Async.AwaitPromise
+                do! openSectionItem section tabTitle |> Async.AwaitPromise
+
+                return FixtureOpenRequested
+            with e ->
+                return FixtureOpenRaised(sprintf "emptying the column and opening %s raised: %s" tabTitle e.Message)
     }
 
 /// Finds a CodeLens in the fixture's editor and clicks it in the same attempt. Pair with
@@ -399,9 +417,19 @@ let tryOpenAsSoleTabInFixtureColumn (tabTitle: string) : Async<bool> =
 ///
 /// Ordered by the anchor's own top edge, not by DOM order: the lens for the second block must be
 /// index 1, and VSCode paints lenses in view zones whose DOM order carries no such promise.
+///
+/// Picks the first *laid-out* `.editor-instance` rather than the first one in the DOM. A column
+/// holding more than one tab keeps the inactive editors in the page at zero size, and the DOM
+/// order of the group carries no promise that the active tab comes first. Reading a hidden editor
+/// finds no lens and reports it as a provider that painted nothing.
 let private lensAnchorsPrologue =
     """
-    var editor = document.querySelector('.editor-instance');
+    var editor = null;
+    var instances = document.querySelectorAll('.editor-instance');
+    for (var e = 0; e < instances.length && !editor; e++) {
+        var box = instances[e].getBoundingClientRect();
+        if (box.width > 0 && box.height > 0) { editor = instances[e]; }
+    }
     if (!editor) { return null; }
     var anchors = [];
     var candidates = editor.querySelectorAll('a[id]');
@@ -514,7 +542,7 @@ let tryReadCodeLensTitles () : Async<LensRead> =
 
             if isNull read then
                 let! editors = describeEditorInstances ()
-                return LensReadFailed(sprintf "no editor in the page — %s" editors)
+                return LensReadFailed(sprintf "no laid-out editor in the page — %s" editors)
             else
                 return LensTitles(unbox<string[]> read)
         with e ->

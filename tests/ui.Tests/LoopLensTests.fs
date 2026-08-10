@@ -4,7 +4,6 @@
 // check does not restate them.
 module LoopLensTests
 
-open Fable.Core
 open Fable.Mocha
 
 let private fixtureFileName = "loop-lens.fsx"
@@ -33,14 +32,8 @@ let private loopLensRefusesWithToast =
                 ExTester.tryCloseResponseViewer
 
         // Same shape as the core-path check: take over the fixture column rather than opening
-        // beside the previous check's tab. The binding is idempotent when the column already holds
-        // exactly this tab, which is what makes it safe to poll — a bare `openResources` under
-        // `eventually` would concatenate the buffer into itself.
-        do!
-            Harness.eventually
-                Harness.LensAppearanceDeadlineMs
-                "the loop-lens fixture tab to open as the fixture column's only tab"
-                (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
+        // beside the previous check's tab.
+        do! Checks.openFixtureAsSoleTab fixtureFileName
 
         do!
             Harness.eventuallyObserved
