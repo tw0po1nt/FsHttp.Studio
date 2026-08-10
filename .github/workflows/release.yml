@@ -21,15 +21,11 @@ concurrency:
 permissions:
   contents: write # create the tag + Release, upload the .vsix asset
 
-env:
-  STORAGE: /tmp/fshttp-ui-test-resources
-  EXT_DIR: /tmp/fshttp-ui-test-extensions
-
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Covers packaging plus three 20-minute UI suite attempts. The per-attempt bound
-    # is on the suite step; this cap only stops a wedged runner.
+    # Covers packaging plus three 20-minute UI suite attempts. The per-attempt bound is
+    # inside the run-ui-suite action; this cap only stops a wedged runner.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -76,39 +72,6 @@ jobs:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
 
-      # Every step from here to the failure-artifact upload carries the same
-      # `if: !inputs.force` guard. A step added inside that run needs the guard too, or a
-      # forced release still pays for the suite setup it was told to skip.
-      - name: Read VSCode pin for cache key
-        if: ${{ !inputs.force }}
-        id: pin
-        run: |
-          set -euo pipefail
-          PIN="$(jq -r .setup.vscodeVersion tests/ui.Tests/extester.config.json)"
-          echo "version=$PIN" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/cache@v4
-        if: ${{ !inputs.force }}
-        with:
-          # Binaries only — never $STORAGE/settings, which run.sh deletes so no VSCode
-          # profile state carries between runs. No restore-keys: a prefix fallback would
-          # serve the previous pin's VSCode, which is the one thing the pinned key prevents.
-          path: |
-            ${{ env.STORAGE }}/VSCode-linux-x64
-            ${{ env.STORAGE }}/chromedriver-linux64
-          key: ${{ runner.os }}-extest-${{ steps.pin.outputs.version }}
-
-      - name: Install xvfb and libraries for ExTester
-        if: ${{ !inputs.force }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2t64 \
-            || sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2
-
-      - name: Ubuntu 24 AppArmor tweak (ExTester openResources)
-        if: ${{ !inputs.force }}
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
       - run: dotnet tool restore
 
       # Same guardrails as ci.yml — a red build can never ship a release.
@@ -134,42 +97,17 @@ jobs:
           VSIX="fshttp-studio-${{ steps.version.outputs.version }}.vsix"
           echo "path=$PWD/$VSIX" >> "$GITHUB_OUTPUT"
 
-      # Same budgets and ×3 job retry as ui-tests.yml. The release path runs its own
-      # suite. It does not gate on a previously-green CI check for this commit.
+      # The release gate. `ui-tests.yml` calls the same composite action, so both paths run
+      # one suite with one set of budgets. The action runs on this runner, against the .vsix
+      # this job packaged and is about to ship — a gate is only worth the artifact it drove.
       #
-      # These steps are copied from ui-tests.yml rather than reached through its
-      # `workflow_call` on purpose. A called workflow runs on its own runner and packages
-      # its own .vsix, so the artifact the suite drove would not be the artifact this job
-      # ships. The gate is only worth what it tested. Keep the copy in step with
-      # ui-tests.yml — a change to either file re-runs the suite through its paths filter.
-      - name: Build test server
+      # The force input skips this one step, and with it every part of the suite. The build
+      # guardrails above it always run, so a forced release still cannot ship a red build.
+      - uses: ./.github/actions/run-ui-suite
         if: ${{ !inputs.force }}
-        run: dotnet publish tests/ui.Tests/server/UiTestServer.fsproj -c Release -o out/ui-test-server
-
-      - name: Run UI test suite
-        if: ${{ !inputs.force }}
-        uses: nick-fields/retry@v4
         with:
-          timeout_minutes: 20
-          max_attempts: 3
-          retry_wait_seconds: 30
-          # bash, and run.sh invoked directly: piping it into tee would report a red
-          # suite as a green job, and every budget assert depends on red staying red.
-          shell: bash
-          command: |
-            export VSIX="${{ steps.vsix.outputs.path }}"
-            export UI_TEST_SKIP_SERVER_BUILD=1
-            tests/ui.Tests/run.sh
-
-      - name: Upload failure screenshots and logs
-        if: ${{ failure() && !inputs.force }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ui-test-failure-release-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ env.STORAGE }}/screenshots/**/*.png
-            ${{ env.STORAGE }}/chromedriver.log
-          if-no-files-found: ignore
+          vsix-path: ${{ steps.vsix.outputs.path }}
+          failure-artifact-label: release
 
       # Ship a checksum alongside the asset so installers can prove their copy
       # arrived byte-exact — corporate proxies / AV are known to silently rewrite
