@@ -73,3 +73,11 @@ let getIntProp (name: string) (root: JsonElement) : int =
     match root.TryGetProperty name with
     | true, v -> v.GetInt32()
     | false, _ -> 0
+
+/// Reads a float property by name. Returns 0.0 when the property is absent, which matches
+/// `getIntProp`'s missing-value default. A duration is the only float on this wire, and an
+/// absent one means "not measured", not "the frame is broken".
+let getFloatProp (name: string) (root: JsonElement) : float =
+    match root.TryGetProperty name with
+    | true, v -> v.GetDouble()
+    | false, _ -> 0.0

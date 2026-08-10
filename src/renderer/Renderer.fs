@@ -19,9 +19,10 @@ type Node =
     | Text of string
 
 /// A response that is ready to render. The companion's `ok` envelope supplies `Status`,
-/// `Reason`, `Headers`, `ContentType`, and the body as bytes. `Method`, `Url`, and `ElapsedMs`
-/// are the request context that the host pairs with it for the status line. The renderer is a
-/// pure function of this record, and the Seam-B suite drives canned instances of it.
+/// `Reason`, `Headers`, `ContentType`, the body as bytes, and `RequestMs` (the invocation
+/// bracket). `Method`, `Url`, and `TotalMs` are the request context that the host pairs with it
+/// for the status line. The renderer is a pure function of this record, and the Seam-B suite
+/// drives canned instances of it.
 type ResponseEnvelope =
     { Method: string
       Url: string
@@ -30,7 +31,8 @@ type ResponseEnvelope =
       Headers: (string * string) list
       ContentType: string
       Body: byte[]
-      ElapsedMs: float }
+      RequestMs: float
+      TotalMs: float }
 
 // --- small Node helpers -------------------------------------------------------------------
 
@@ -236,7 +238,10 @@ let private renderStatusLine (env: ResponseEnvelope) : Node =
               "span"
               [ "class", sprintf "status-code %s" (statusClass env.Status) ]
               [ Node.Text(sprintf "%d %s" env.Status env.Reason) ]
-          span "status-time" (sprintf "%d ms" (int (Math.Round env.ElapsedMs)))
+          span "status-time" (sprintf "%d ms" (int (Math.Round env.RequestMs)))
+          // The separator lives inside the total span so the two numbers stay together when the
+          // line wraps (docs/spec/0004-run-path-robustness.md, Decision 7).
+          span "status-total" (sprintf "· %d ms total" (int (Math.Round env.TotalMs)))
           span "status-size" (humanSize env.Body.Length) ]
 
 let private renderHeaders (headers: (string * string) list) : Node =

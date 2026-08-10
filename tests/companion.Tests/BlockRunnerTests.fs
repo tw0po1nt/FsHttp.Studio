@@ -63,13 +63,32 @@ let private expectResolvesBesideScript (marker: string) (runner: string -> int -
             )
 
         match runner source 0 (Some scriptPath) with
-        | Ok(status, _, _, _, bodyBase64) ->
+        | Ok(status, _, _, _, bodyBase64, _) ->
             Expect.equal status 200 "the sidecar beside the script should be readable"
             let body = Text.Encoding.UTF8.GetString(Convert.FromBase64String bodyBase64)
             Expect.equal body (marker + "-resolved") "the request should use the sidecar's contents"
         | other -> failtestf "expected ok from a beside-script read, got %A" other
     finally
         Directory.Delete(dir, true)
+
+/// The delay the timing cases hold their server at. `requestMs` brackets the invocation, so it
+/// must cover this delay on whichever route the Run takes.
+let private timedRunDelayMs = 200
+
+/// Drives `runner` over a block whose server waits `timedRunDelayMs` before answering, and hands
+/// `check` the `requestMs` off the outcome together with the elapsed time of the whole call. The
+/// in-process case and the worker case need the same fixture over a different route.
+let private expectTimedRun (runner: string -> int -> string option -> RunOutcome) (check: float -> float -> unit) =
+    use server = new TestServer(Map [ "/slow", delayedHandler timedRunDelayMs ])
+    let source = script (sprintf "http {\n    GET \"%s/slow\"\n}\n" server.BaseUrl)
+
+    let sw = Diagnostics.Stopwatch.StartNew()
+    let outcome = runner source 0 None
+    sw.Stop()
+
+    match outcome with
+    | Ok(_, _, _, _, _, requestMs) -> check requestMs sw.Elapsed.TotalMilliseconds
+    | other -> failtestf "expected ok with requestMs, got %A" other
 
 /// Asserts that a diagnostic points somewhere the editor can actually highlight. A setup
 /// diagnostic may be anchored rather than native, so the line is not fixed, but it must still
@@ -99,7 +118,7 @@ let tests =
               let source = script (sprintf "http {\n    GET \"%s/png\"\n}\n" server.BaseUrl)
 
               match runSource source 0 with
-              | Ok(status, _reason, headers, contentType, bodyBase64) ->
+              | Ok(status, _reason, headers, contentType, bodyBase64, _) ->
                   Expect.equal status 200 "status should round-trip"
                   Expect.equal contentType "image/png" "contentType should come from the content header"
 
@@ -123,7 +142,7 @@ let tests =
               let source = script (sprintf "http {\n    GET \"%s/missing\"\n}\n" server.BaseUrl)
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _) -> Expect.equal status 404 "the non-2xx status should come through as ok"
+              | Ok(status, _, _, _, _, _) -> Expect.equal status 404 "the non-2xx status should come through as ok"
               | other -> failtestf "a non-2xx response should still be ok, got %A" other
           }
 
@@ -197,7 +216,7 @@ let tests =
                   let source = script (sourceFor (server.BaseUrl + "/hit"))
 
                   match runSource source 0 with
-                  | Ok(status, _, _, _, _) ->
+                  | Ok(status, _, _, _, _, _) ->
                       Expect.equal status 200 (sprintf "%s should run to a successful response" name)
                       Expect.equal hitCounter.Value 1 (sprintf "%s should send exactly one request" name)
                   | other -> failtestf "%s: expected ok, got %A" name other
@@ -221,7 +240,7 @@ let tests =
                   )
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _) ->
+              | Ok(status, _, _, _, _, _) ->
                   Expect.equal status 200 "a backtick-quoted binding should reach its block"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
@@ -238,7 +257,7 @@ let tests =
                   script (sprintf "let private secret =\n    http {\n        GET \"%s/hit\"\n    }\n" server.BaseUrl)
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _) ->
+              | Ok(status, _, _, _, _, _) ->
                   Expect.equal status 200 "a private binding should still run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
@@ -252,7 +271,7 @@ let tests =
                   script (sprintf "module private Vault =\n    http {\n        GET \"%s/hit\"\n    }\n" server.BaseUrl)
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _) ->
+              | Ok(status, _, _, _, _, _) ->
                   Expect.equal status 200 "a block in a private module should still run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
@@ -272,7 +291,7 @@ let tests =
                   )
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _) ->
+              | Ok(status, _, _, _, _, _) ->
                   Expect.equal status 200 "an internal binding should run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
@@ -296,7 +315,7 @@ let tests =
                   )
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _) ->
+              | Ok(status, _, _, _, _, _) ->
                   Expect.equal status 200 "an attributed binding should run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
@@ -318,7 +337,7 @@ let tests =
                   )
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _) ->
+              | Ok(status, _, _, _, _, _) ->
                   Expect.equal status 200 "the annotated binding should still run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request, not two"
               | other -> failtestf "expected ok, got %A" other
@@ -340,7 +359,7 @@ let tests =
                   )
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _) ->
+              | Ok(status, _, _, _, _, _) ->
                   Expect.equal status 200 "the outer, targeted block must survive the containing sibling span"
                   Expect.equal hitCounter.Value 1 "only the target's own request should fire"
               | other -> failtestf "expected ok, got %A" other
@@ -363,7 +382,7 @@ let tests =
                   )
 
               match runSource source 1 with
-              | Ok(status, _, _, _, _) ->
+              | Ok(status, _, _, _, _, _) ->
                   Expect.equal status 200 "the block below the class and its member should still run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
@@ -478,7 +497,7 @@ let tests =
 
               for i in 1..3 do
                   match runSource source 0 with
-                  | Ok(status, _, _, _, bodyBase64) ->
+                  | Ok(status, _, _, _, bodyBase64, _) ->
                       Expect.equal status 200 (sprintf "Run #%d should be a successful 200" i)
 
                       Expect.equal
@@ -806,7 +825,7 @@ let tests =
 
               for i in 1..3 do
                   match runSource source 0 with
-                  | Ok(status, _, _, _, bodyBase64) ->
+                  | Ok(status, _, _, _, bodyBase64, _) ->
                       Expect.equal status 200 (sprintf "Run #%d should be a successful 200" i)
 
                       Expect.equal
@@ -834,11 +853,11 @@ let tests =
                       server.BaseUrl
 
               match runSource (sourceFor "15.0.3") 0 with
-              | Ok(status, _, _, _, _) -> Expect.equal status 200 "first pin (15.0.3) should run"
+              | Ok(status, _, _, _, _, _) -> Expect.equal status 200 "first pin (15.0.3) should run"
               | other -> failtestf "first pin expected ok, got %A" other
 
               match runSource (sourceFor "13.3.0") 0 with
-              | Ok(status, _, _, _, bodyBase64) ->
+              | Ok(status, _, _, _, bodyBase64, _) ->
                   Expect.equal status 200 "second, differently-pinned Run (13.3.0) should also run"
 
                   Expect.equal
@@ -884,6 +903,40 @@ let tests =
               | other -> failtestf "expected runtimeError, got %A" other
           }
 
+          test "requestMs covers a known server delay and sits below the whole call's elapsed time" {
+              // The companion brackets the invocation alone. Against the delayed server that
+              // number must cover the delay, and it must stay well below the host-side total
+              // that also pays for session creation and Setup
+              // (docs/spec/0004-run-path-robustness.md, Decision 7).
+              expectTimedRun runInProcessDirect (fun requestMs totalMs ->
+                  Expect.isGreaterThanOrEqual
+                      requestMs
+                      (float timedRunDelayMs)
+                      "requestMs must cover the server's known delay"
+
+                  Expect.isLessThan requestMs totalMs "requestMs is the invocation, not the whole call"
+
+                  // Session creation alone is on the order of 100 ms on a warm process. A
+                  // requestMs that is within 50 ms of the total would mean the bracket still
+                  // wrapped the session.
+                  Expect.isLessThan requestMs (totalMs - 50.0) "requestMs must sit well below the total, not beside it")
+          }
+
+          test "the worker path carries requestMs through the wire" {
+              // This drives `runInWorker` directly rather than forcing the route with a
+              // conflicting pin, for the same reason as the __SOURCE_DIRECTORY__ worker case
+              // below: a pin conflict depends on what earlier cases already loaded into the
+              // process-global map, so it proves nothing on its own. The route-forced Run in the
+              // last case in this list makes the complementary assertion. What matters here is
+              // that the number survives `outcomeToWire` / `wireToOutcome`, and a direct drive
+              // guarantees it crosses them.
+              expectTimedRun (runInWorker workerTimeoutMs) (fun requestMs _ ->
+                  Expect.isGreaterThanOrEqual
+                      requestMs
+                      (float timedRunDelayMs)
+                      "the worker path must carry a requestMs that covers the delay")
+          }
+
           // This case stays last in the sequenced list on purpose. It loads FsHttp
           // *version-less*, which records a `Versionless` entry in the process-global load map.
           // That entry would route every later explicitly-pinned Run above to a worker. In last
@@ -903,7 +956,7 @@ let tests =
                   sprintf "#r \"nuget: FsHttp\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n" server.BaseUrl
 
               match runSource versionlessSource 0 with
-              | Ok(status, _, _, _, _) -> Expect.equal status 200 "the version-less Run should load latest and run"
+              | Ok(status, _, _, _, _, _) -> Expect.equal status 200 "the version-less Run should load latest and run"
               | other -> failtestf "version-less Run expected ok, got %A" other
 
               // 13.3.0 is not the latest FsHttp, so this explicit pin differs from the version
@@ -913,8 +966,13 @@ let tests =
                   sprintf "#r \"nuget: FsHttp, 13.3.0\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n" server.BaseUrl
 
               match runSource pinnedSource 0 with
-              | Ok(status, _, _, _, bodyBase64) ->
+              | Ok(status, _, _, _, bodyBase64, requestMs) ->
                   Expect.equal status 200 "the later differently-pinned Run should run without an ALC collision"
+
+                  // This is the one Run in the file that the pin conflict itself routes to a
+                  // worker, so it is where `requestMs` is proven to survive a route the test did
+                  // not choose. The server here has no delay, so positivity is all it can claim.
+                  Expect.isGreaterThan requestMs 0.0 "a pin-forced worker Run must still carry a measured requestMs"
 
                   Expect.equal
                       (Convert.FromBase64String bodyBase64)

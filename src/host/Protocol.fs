@@ -25,7 +25,13 @@ type Diagnostic = { Message: string; Range: BlockRange }
 /// `runtimeError`, and `refused`. It adds one catch-all case for a malformed or unknown
 /// response.
 type RunResult =
-    | RunOk of status: int * reason: string * headers: (string * string) list * contentType: string * bodyBase64: string
+    | RunOk of
+        status: int *
+        reason: string *
+        headers: (string * string) list *
+        contentType: string *
+        bodyBase64: string *
+        requestMs: float
     | RunCompileError of Diagnostic list
     | RunRuntimeError of string
     | RunProtocolError of string

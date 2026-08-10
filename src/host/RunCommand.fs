@@ -25,10 +25,16 @@ let private errorUpdate (message: string) : obj =
 let private refusedUpdate (title: string) (detail: string) : obj =
     createObj [ "tag" ==> "refused"; "title" ==> title; "detail" ==> detail ]
 
+/// The two numbers the status line shows. They are both durations in milliseconds, so a bare
+/// pair of floats side by side in a parameter list can be transposed with no compiler help.
+/// `RequestMs` is the companion's invocation bracket, and `TotalMs` is this module's bracket
+/// around `Companion.run` (docs/spec/0004-run-path-robustness.md, Decision 7).
+type private Timing = { RequestMs: float; TotalMs: float }
+
 let private resultUpdate
     (method: string)
     (url: string)
-    (elapsedMs: float)
+    (timing: Timing)
     (status: int)
     (reason: string)
     (headers: (string * string) list)
@@ -44,7 +50,8 @@ let private resultUpdate
               "headers" ==> (headers |> List.map (fun (k, v) -> [| k; v |]) |> List.toArray)
               "contentType" ==> contentType
               "bodyBase64" ==> bodyBase64
-              "elapsedMs" ==> elapsedMs ]
+              "requestMs" ==> timing.RequestMs
+              "totalMs" ==> timing.TotalMs ]
 
     createObj [ "tag" ==> "result"; "envelope" ==> envelope ]
 
@@ -64,12 +71,16 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
 
         let started: float = emitJsExpr (nonNull (box 0)) "Date.now()"
         let! result = Companion.run h source blockIndex scriptFileName
-        let elapsed: float = (emitJsExpr (nonNull (box 0)) "Date.now()") - started
+        let totalMs: float = (emitJsExpr (nonNull (box 0)) "Date.now()") - started
 
         if myGeneration = generation then
             match result with
-            | RunOk(status, reason, headers, contentType, bodyBase64) ->
-                ResponseViewer.post (resultUpdate method url elapsed status reason headers contentType bodyBase64)
+            | RunOk(status, reason, headers, contentType, bodyBase64, requestMs) ->
+                let timing =
+                    { RequestMs = requestMs
+                      TotalMs = totalMs }
+
+                ResponseViewer.post (resultUpdate method url timing status reason headers contentType bodyBase64)
             | RunCompileError diagnostics -> ResponseViewer.post (errorUpdate (formatCompileError diagnostics))
             | RunRuntimeError message -> ResponseViewer.post (errorUpdate (sprintf "Runtime error: %s" message))
             | RunProtocolError message -> ResponseViewer.post (errorUpdate message)

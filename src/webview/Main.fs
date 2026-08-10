@@ -23,7 +23,8 @@ let private toEnvelope (raw: obj) : ResponseEnvelope =
       Headers = toHeaders (raw?headers: obj)
       ContentType = unbox<string> (raw?contentType: obj)
       Body = Convert.FromBase64String(unbox<string> (raw?bodyBase64: obj))
-      ElapsedMs = unbox<float> (raw?elapsedMs: obj) }
+      RequestMs = unbox<float> (raw?requestMs: obj)
+      TotalMs = unbox<float> (raw?totalMs: obj) }
 
 // The in-flight Run indicator ticks a `setInterval`. The id lives here, so that any terminal
 // message (`result` or `error`), or a second `running` for the next Run, can stop the interval
