@@ -388,30 +388,70 @@ let tryOpenAsSoleTabInFixtureColumn (tabTitle: string) : Async<bool> =
 /// Finds a CodeLens in the fixture's editor and clicks it in the same attempt. Pair with
 /// `Harness.eventually`: a stale handle between find and click fails the attempt, and the next
 /// poll retries both steps together.
-let private tryClickCodeLens (find: TextEditor -> JS.Promise<CodeLens>) : Async<bool> =
+/// Collects the fixture editor's CodeLens anchors into `anchors`, ordered top to bottom, and
+/// returns `null` when the editor is not in the page yet. Every lens binding shares this prologue.
+///
+/// It reads the DOM rather than building an ExTester `TextEditor`. That constructor waits for the
+/// editor to become visible, and the wait was observed to expire after about 5 s per poll while
+/// the page held one editor at 852x691, `display=block`, `visibility=visible`, `opacity=1`, and
+/// uncovered. The wait, and not the workbench, was wrong. A read that costs 5 s also exhausted a
+/// 45 s deadline in about 9 polls, which hid how often it was failing.
+///
+/// Ordered by the anchor's own top edge, not by DOM order: the lens for the second block must be
+/// index 1, and VSCode paints lenses in view zones whose DOM order carries no such promise.
+let private lensAnchorsPrologue =
+    """
+    var editor = document.querySelector('.editor-instance');
+    if (!editor) { return null; }
+    var anchors = [];
+    var candidates = editor.querySelectorAll('a[id]');
+    for (var i = 0; i < candidates.length; i++) {
+        if (candidates[i].closest('[class*="codelens" i]')) { anchors.push(candidates[i]); }
+    }
+    anchors.sort(function (l, r) {
+        return l.getBoundingClientRect().top - r.getBoundingClientRect().top;
+    });
+    """
+
+let private runLensScript (body: string) (arg: objnull) : Async<objnull> =
+    let driver = VSBrowser.instance.driver
+    let script = lensAnchorsPrologue + body
+
+    let call: JS.Promise<objnull> =
+        emitJsExpr (driver, script, arg) "$0.executeScript($1, $2)"
+
+    call |> Async.AwaitPromise
+
+let private tryClickLensAnchor (selectBody: string) (arg: objnull) : Async<bool> =
     async {
         try
-            let! group = editorGroup fixtureGroupIndex
-            let editor = TextEditor.createInGroup group
-            let! lens = find editor |> Async.AwaitPromise
-
-            if isNull (box lens) then
-                return false
-            else
-                do! lens.click () |> Async.AwaitPromise
-                return true
+            let! clicked = runLensScript selectBody arg
+            return not (isNull clicked) && unbox<bool> clicked
         with _ ->
             return false
     }
 
 /// Find-and-click by partial lens title.
 let tryClickCodeLensByTitle (title: string) : Async<bool> =
-    tryClickCodeLens (fun editor -> TextEditor.getCodeLensByTitle editor title)
+    tryClickLensAnchor
+        """
+        for (var i = 0; i < anchors.length; i++) {
+            if (anchors[i].textContent.indexOf(arguments[0]) >= 0) { anchors[i].click(); return true; }
+        }
+        return false;
+        """
+        (box title)
 
 /// Find-and-click by zero-based lens index from the top of the editor. Use this to reach the
 /// second of two lenses that share a title.
 let tryClickCodeLensByIndex (index: int) : Async<bool> =
-    tryClickCodeLens (fun editor -> TextEditor.getCodeLensByIndex editor index)
+    tryClickLensAnchor
+        """
+        if (arguments[0] >= anchors.length) { return false; }
+        anchors[arguments[0]].click();
+        return true;
+        """
+        (box index)
 
 /// The rendered titles of every CodeLens in the fixture's editor, top to bottom. Empty when the
 /// editor has no lens yet, so a check can wait for the lenses to render and assert their words in
@@ -463,20 +503,20 @@ let private describeEditorInstances () : Async<string> =
 let tryReadCodeLensTitles () : Async<LensRead> =
     async {
         try
-            let! group = editorGroup fixtureGroupIndex
-            let editor = TextEditor.createInGroup group
-            let! lenses = editor.getCodeLenses () |> Async.AwaitPromise
+            let! read =
+                runLensScript
+                    """
+                    var out = [];
+                    for (var i = 0; i < anchors.length; i++) { out.push(anchors[i].textContent.trim()); }
+                    return out;
+                    """
+                    (null: objnull)
 
-            if isNull (box lenses) then
-                return LensTitles [||]
+            if isNull read then
+                let! editors = describeEditorInstances ()
+                return LensReadFailed(sprintf "no editor in the page — %s" editors)
             else
-                let titles = ResizeArray<string>()
-
-                for lens in lenses do
-                    let! title = lens.getText () |> Async.AwaitPromise
-                    titles.Add title
-
-                return LensTitles(titles.ToArray())
+                return LensTitles(unbox<string[]> read)
         with e ->
             let! editors = describeEditorInstances ()
             return LensReadFailed(sprintf "%s — page shows %s" e.Message editors)
