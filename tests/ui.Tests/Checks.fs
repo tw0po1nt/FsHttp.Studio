@@ -18,6 +18,13 @@ let private fixturePath (fileName: string) =
     | None -> Assert.fail "UI_TEST_SIDECAR is not set, so the check cannot locate its fixture"
     | Some sidecar -> Path.Combine(Path.GetDirectoryName sidecar, fileName)
 
+/// The one way this suite counts the lines of a document, so a reading taken from disk and a
+/// reading taken from the editor are comparable. Line endings are normalized and a trailing
+/// newline is dropped: a file that ends in a newline and the editor's copy of that file hold the
+/// same lines, and an off-by-one here would fail every fixture.
+let private lineCount (text: string) =
+    text.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').Length
+
 /// The fixture's size as the workspace holds it, or `None` when the file cannot be read. The suite
 /// runs in Node, so it reads the workspace directly rather than asking the editor about it. This is
 /// the size a correctly loaded buffer has.
@@ -26,7 +33,7 @@ let private fixtureLineCountOnDisk (fileName: string) =
         let path = fixturePath fileName
 
         if Proc.fileExists path then
-            Some((Proc.readFile path).Split('\n').Length)
+            Some(lineCount (Proc.readFile path))
         else
             None
     with _ ->
@@ -49,6 +56,40 @@ let private describeTitles (titles: string[]) =
 /// A read that raised, worded so a reader cannot mistake it for an editor that painted no lens.
 let private describeReadFailure (reason: string) =
     sprintf "no reading at all — the CodeLens query raised: %s" reason
+
+/// True when the editor holds the fixture once, measured in lines against the file on disk.
+///
+/// VSCode from 1.123.0 loads every file of a folder workspace twice, and `extester.config.json`
+/// pins the editor below that version for exactly this reason. The tab of a doubled document
+/// reports clean and the file on disk is unchanged, so the size is the only tell. Every later
+/// reading answers a doubled document the same way a correct one answers it, up to the point where
+/// a lens count reads like a provider that paints twice — which is a defect in a different
+/// component. This claim separates the two, at the open, and it is what makes a pin that stops
+/// working visible on the run that raises it rather than three checks later.
+let private tryFixtureLoadedOnce (fileName: string) =
+    async {
+        match! ExTester.tryFixtureBufferText () with
+        | None -> return Harness.Observed "no reading at all — the fixture editor could not be reached"
+        | Some text ->
+            match fixtureLineCountOnDisk fileName with
+            | None -> return Harness.Observed(sprintf "a %s the suite could not read" fileName)
+            | Some onDisk ->
+                let held = lineCount text
+
+                if held = onDisk then
+                    return Harness.Holds
+                else
+                    let! gutter = ExTester.describeGutterExtent ()
+
+                    return
+                        Harness.Observed(
+                            sprintf
+                                "a document of %i lines, against %s, with %s"
+                                held
+                                (describeFixtureOnDisk fileName)
+                                gutter
+                        )
+    }
 
 /// Opens a fixture as the sole tab in the fixture column, and returns once the column holds it and
 /// nothing else.
@@ -73,6 +114,12 @@ let openFixtureAsSoleTab (tabTitle: string) =
                 Harness.LensAppearanceDeadlineMs
                 (sprintf "the fixture column to hold %s and nothing else" tabTitle)
                 (fun () -> ExTester.tryCloseOtherTabsInFixtureColumn tabTitle)
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                (sprintf "the fixture column's document to be %s, loaded once" tabTitle)
+                (fun () -> tryFixtureLoadedOnce tabTitle)
     }
 
 /// Exactly one lens per block, each carrying the Run request title. An exact count is the claim the
@@ -90,10 +137,15 @@ let tryRunRequestLensAboveEachBlock (blockCount: int) (fileName: string) =
             then
                 return Harness.Holds
             else
-                // The fixture's size on disk is read only on the failing path, and names which
-                // fixture the count is wrong for.
+                // The disk size and the editor layout are read only on the failing path. Together
+                // they say whether a doubled count comes from a document that holds the file twice
+                // or from lens elements the editor kept from the tab it showed before.
+                let! layout = ExTester.describeLensLayout ()
+
                 return
-                    Harness.Observed(sprintf "%s, against %s" (describeTitles titles) (describeFixtureOnDisk fileName))
+                    Harness.Observed(
+                        sprintf "%s, against %s, in %s" (describeTitles titles) (describeFixtureOnDisk fileName) layout
+                    )
     }
 
 /// Exactly `blockCount` lenses, each title equal to `expectedTitle`. The count is exact for the
@@ -110,7 +162,8 @@ let tryOnlyLensTitle (blockCount: int) (expectedTitle: string) =
             then
                 return Harness.Holds
             else
-                return Harness.Observed(describeTitles titles)
+                let! layout = ExTester.describeLensLayout ()
+                return Harness.Observed(sprintf "%s, in %s" (describeTitles titles) layout)
     }
 
 /// True when no rendered lens title contains the Run request title. Pair with a prior tell that

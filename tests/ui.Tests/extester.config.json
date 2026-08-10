@@ -1,12 +1,13 @@
 {
   "$schema": "../../node_modules/vscode-extension-tester/resources/extester.schema.json",
   "//": "The VSCode pin, and nothing else. run.sh owns every path and passes it as a flag, so a path here would be a second source of truth that silently loses. ExTester reads setup.vscodeVersion for get-vscode and get-chromedriver, and run.vscodeVersion for run-tests, so the pin is stated in both.",
+  "//pin": "Held at 1.122.0 because 1.123.0 and later load every file of a folder workspace twice. Measured with a 28-byte file opened by `code -r <folder> <file>`: the editor holds 56 bytes, the file itself and then the file again, while the tab reports no unsaved change and the file on disk is unchanged. The suite reads a doubled document as a CodeLens provider that paints one lens for each block of each copy. 1.122.0 and earlier hold 28 bytes for the same open, and the same open of the file alone, with no folder, holds 28 bytes on every version measured. Raise the pin when a later version holds the file once. `Checks.openFixtureAsSoleTab` measures the size of each fixture it opens, so a version that reintroduces this fails at the open and names the size.",
   "setup": {
-    "vscodeVersion": "1.132.0",
+    "vscodeVersion": "1.122.0",
     "type": "stable"
   },
   "run": {
-    "vscodeVersion": "1.132.0",
+    "vscodeVersion": "1.122.0",
     "type": "stable"
   }
 }

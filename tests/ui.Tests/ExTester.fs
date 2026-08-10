@@ -332,16 +332,19 @@ let tryFixtureColumnHoldsOnly (tabTitle: string) : Async<bool> =
 /// holds concatenates the buffer into itself, and a doubled buffer renders doubled lenses — which
 /// reads as a provider that over-detects rather than as a driver that opened twice.
 /// `Checks.openFixtureAsSoleTab` composes the open and the waits, and is what a check should call.
+/// It also measures the size of the document, because VSCode from 1.123.0 loads every file of a
+/// folder workspace twice. `extester.config.json` pins the editor below that version and records
+/// the measurement.
 ///
 /// Opens first and closes the other tabs second, rather than emptying the column first. A column
 /// with no tabs left stops being a column: the response viewer then slides into the fixture
 /// column's index, and the file opens beside the viewer instead of replacing it.
 ///
-/// Opens the path rather than clicking the file in the Explorer. Reaching a fixture through the
-/// Explorer was measured loading the file into the buffer twice on about half of all runs — a
-/// 59-line buffer of a 30-line file, reported clean, with the file on disk unchanged. VSCode holds
-/// that buffer as the file's own content, so the workbench revert command treats it as nothing to
-/// revert. `openResources` opens into the focused column, which is why the focus command comes
+/// Opens the path rather than clicking the file in the Explorer, because `openResources` names
+/// the file it opens and a click depends on where the tree has scrolled to. A doubled buffer was
+/// once read as a fault in the Explorer route. It was not: the editor doubles the file whichever
+/// route opens it, and the pin in `extester.config.json` is what holds it to one copy.
+/// `openResources` opens into the focused column, which is why the focus command comes
 /// first: without it the open lands on whichever column last held focus, which is the response
 /// viewer for every check after the core path.
 let openFixtureInColumn (path: string) : Async<FixtureOpen> =
@@ -412,6 +415,12 @@ let tryCloseOtherTabsInFixtureColumn (tabTitle: string) : Async<bool> =
 /// holding more than one tab keeps the inactive editors in the page at zero size, and the DOM
 /// order of the group carries no promise that the active tab comes first. Reading a hidden editor
 /// finds no lens and reports it as a provider that painted nothing.
+///
+/// Skips a `codelens-decoration` that is hidden. VSCode keeps the lens elements of the document
+/// the editor showed before, hidden and with no `top`, and reuses them for the next document. A
+/// read that counts them reports one lens for each block of the fixture plus one for each block
+/// of the fixture before it. That reads as a provider painting twice, which it is not: the
+/// remaining lenses carry the correct titles at the correct lines.
 let private lensAnchorsPrologue =
     """
     var editor = null;
@@ -424,7 +433,8 @@ let private lensAnchorsPrologue =
     var anchors = [];
     var candidates = editor.querySelectorAll('a[id]');
     for (var i = 0; i < candidates.length; i++) {
-        if (candidates[i].closest('[class*="codelens" i]')) { anchors.push(candidates[i]); }
+        var host = candidates[i].closest('[class*="codelens" i]');
+        if (host && getComputedStyle(host).visibility !== 'hidden') { anchors.push(candidates[i]); }
     }
     anchors.sort(function (l, r) {
         return l.getBoundingClientRect().top - r.getBoundingClientRect().top;
@@ -439,6 +449,69 @@ let private runLensScript (body: string) (arg: objnull) : Async<objnull> =
         emitJsExpr (driver, script, arg) "$0.executeScript($1, $2)"
 
     call |> Async.AwaitPromise
+
+/// Where the lenses sit, for a lens count that read wrong.
+///
+/// Reports each anchor with its title, the `top` its `codelens-decoration` host carries, and
+/// whether that host is visible. A lens the editor kept from the document it showed before is
+/// hidden and carries no `top`, so the reading separates a stale element the read should have
+/// skipped from a lens the provider really painted at the wrong line.
+let describeLensLayout () : Async<string> =
+    async {
+        try
+            let body =
+                """
+                var out = [];
+                for (var i = 0; i < anchors.length; i++) {
+                    var host = anchors[i].closest('[class*="codelens" i]');
+                    out.push('"' + anchors[i].textContent.trim() + '" at top '
+                        + (host && host.style.top ? host.style.top : 'unset')
+                        + ' ' + (host ? getComputedStyle(host).visibility : 'no host'));
+                }
+                return out.join('; ');
+                """
+
+            let! reading = runLensScript body (null: objnull)
+
+            if isNull reading then
+                return "no laid-out editor to measure"
+            else
+                let text = string reading
+                return if text = "" then "no lens element in the editor" else text
+        with e ->
+            return sprintf "no measurement — the layout query raised: %s" e.Message
+    }
+
+/// The highest line number the editor's gutter renders, for a document whose size read wrong.
+///
+/// Monaco renders a gutter number for a line it shows and for no line past the end of the
+/// document, so this reading is a lower bound on the size of the document. It is independent of
+/// `TextEditor.getText`, which reaches the document through the clipboard. A gutter that stops at
+/// the size of the file, against a clipboard reading of twice that size, puts the fault in the
+/// clipboard. A gutter that fills the viewport puts the fault in the document.
+let describeGutterExtent () : Async<string> =
+    async {
+        try
+            let body =
+                """
+                var cells = editor.querySelectorAll('.margin-view-overlays .line-numbers');
+                var highest = 0;
+                for (var i = 0; i < cells.length; i++) {
+                    var n = parseInt(cells[i].textContent, 10);
+                    if (!isNaN(n) && n > highest) { highest = n; }
+                }
+                return cells.length + ' gutter cells, highest line number ' + highest;
+                """
+
+            let! reading = runLensScript body (null: objnull)
+
+            if isNull reading then
+                return "no laid-out editor to measure"
+            else
+                return string reading
+        with e ->
+            return sprintf "no measurement — the gutter query raised: %s" e.Message
+    }
 
 /// Selects one lens anchor with `selectBody` and clicks it through the driver.
 ///
@@ -730,11 +803,22 @@ let trySetFixtureLine (line: int) (text: string) : Async<bool> =
             return false
     }
 
-// No binding here measures the buffer's size. `bufferState` reads through `TextEditor.getText`,
-// which copies the whole document to the clipboard and reads it back. That read has been seen
-// returning the fixture twice over for a document the DOM proved correct, so a size taken from it
-// cannot support a claim about the document. The bindings below ask only whether a fragment the
-// check itself wrote is present, which a doubled read answers the same way as a correct one.
+/// The fixture editor's whole buffer, or `None` when the editor cannot be reached.
+///
+/// Reads through `TextEditor.getText`, which copies the document to the clipboard and reads it
+/// back. That copy was once read as unreliable, because it returned the fixture twice over for a
+/// document that painted the correct lenses. The copy was right and the document was wrong: the
+/// lenses of the second copy sat below the viewport, and Monaco renders no lens for a line it does
+/// not show. `Checks` measures the size of this reading against the file on disk.
+let tryFixtureBufferText () : Async<string option> =
+    async {
+        try
+            let! editor = fixtureEditor ()
+            let! text = editor.getText () |> Async.AwaitPromise
+            return Some text
+        with _ ->
+            return None
+    }
 
 /// True when the fixture editor's tab is dirty and its buffer contains `fragment`.
 let tryFixtureBufferHolds (fragment: string) : Async<bool> =
