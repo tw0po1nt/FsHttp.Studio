@@ -26,9 +26,9 @@ let private tryRunningInViewer () =
 
 /// The hang route has at least one request waiting. Parsed from `/status`, not matched as a
 /// substring — a count of ten would also contain the characters of a zero count.
-let private tryRequestWaitingAtServer (baseUrl: string) =
+let private tryRequestWaitingAtServer (serverBaseUrl: string) =
     async {
-        match Harness.trySlowWaiting baseUrl with
+        match Harness.slowWaitingCount serverBaseUrl with
         | Some waiting when waiting > 0 -> return true
         | _ -> return false
     }
@@ -51,128 +51,108 @@ let private tryFreshCompanion (killed: int[]) =
         return pids |> Array.exists (fun pid -> not (Array.contains pid killed))
     }
 
-/// Same status-code-and-body channels the core-path check uses for a successful `/json` Run.
+/// The recovery Run's success, read on the same channels the core path proves a `/json` Run on.
 let private tryRecoveryResponseRendered () =
-    Checks.viewerSatisfies (fun dom ->
-        dom.StatusCodeText.Contains "200"
-        && dom.UrlText.Contains recoveryUrlPath
-        && dom.JsonBodyText.Contains Harness.jsonProbeKey
-        && dom.JsonBodyText.Contains Harness.jsonProbeValue)
+    Checks.tryJsonProbeResponseRendered recoveryUrlPath
 
-let private baseUrlFromSidecar () =
-    match Proc.sidecarPath () with
-    | None -> Assert.fail "UI_TEST_SIDECAR is not set, so the check cannot reach the test server"
-    | Some path ->
-        match Proc.readSidecar path with
-        | Proc.SidecarLive(baseUrl, _) -> baseUrl
-        | Proc.SidecarMissing -> Assert.fail (sprintf "the sidecar file is missing at %s" path)
-        | Proc.SidecarUnreadable reason -> Assert.fail (sprintf "the sidecar file at %s does not parse: %s" path reason)
+let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
+    async {
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "the companion-death fixture tab to open as the fixture column's only tab"
+                (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "a Run request lens above each of the two blocks"
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount)
+
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "a click on the hang block's Run request lens"
+                tryClickHangLens
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "the response viewer to open beside the editor"
+                ExTester.tryViewerBesideEditor
+
+        do! Harness.eventually Harness.ViewerUpdateDeadlineMs "Running… in the response viewer" tryRunningInViewer
+
+        // The Run's own deadline, not a workbench one: what this waits out is a `#r "nuget:"`
+        // restore followed by a socket, which is the same span the core path already prices at
+        // `ViewerUpdateDeadlineMs` for its cold first Run.
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "the hang request to be waiting at the test server"
+                (fun () -> tryRequestWaitingAtServer serverBaseUrl)
+
+        let killed = Harness.companionPids ()
+
+        if Array.isEmpty killed then
+            Assert.fail "no companion process matched before the kill"
+
+        killed |> Array.iter Proc.kill
+
+        do!
+            Harness.eventually Harness.ViewerUpdateDeadlineMs "every killed companion process to be gone" (fun () ->
+                tryKilledCompanionsGone killed)
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "the stopped companion message in the viewer, with Running… gone"
+                tryStoppedMessageRendered
+
+        do! ExTester.reloadWindow ()
+
+        do!
+            Harness.eventually
+                Harness.PostReloadRecoveryDeadlineMs
+                "a fresh companion process after the reload"
+                (fun () -> tryFreshCompanion killed)
+
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "the companion-death fixture tab to reopen as the fixture column's only tab"
+                (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "a Run request lens above each of the two blocks after the reload"
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount)
+
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "a click on the recovery block's Run request lens"
+                tryClickRecoveryLens
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "status 200, the recovery URL, and the probe body in the response viewer"
+                tryRecoveryResponseRendered
+    }
 
 /// Inherits the warm companion and open viewer from the compile-error check, takes over the
 /// fixture column, and leaves the session after a reload — no later check should inherit it.
 let private companionDeathIsVisibleAndRecoverable =
     async {
-        let baseUrl = baseUrlFromSidecar ()
-        let mutable bodyError: exn option = None
+        let serverBaseUrl = Harness.baseUrl ()
 
-        try
-            do!
-                Harness.eventually
-                    Harness.LensAppearanceDeadlineMs
-                    "the companion-death fixture tab to open as the fixture column's only tab"
-                    (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
+        let releaseTheHang () =
+            async { Harness.releaseHang serverBaseUrl }
 
-            do!
-                Harness.eventuallyObserved
-                    Harness.LensAppearanceDeadlineMs
-                    "a Run request lens above each of the two blocks"
-                    (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount)
-
-            do!
-                Harness.eventually
-                    Harness.LensAppearanceDeadlineMs
-                    "a click on the hang block's Run request lens"
-                    tryClickHangLens
-
-            do!
-                Harness.eventually
-                    Harness.ViewerUpdateDeadlineMs
-                    "the response viewer to open beside the editor"
-                    ExTester.tryViewerBesideEditor
-
-            do! Harness.eventually Harness.ViewerUpdateDeadlineMs "Running… in the response viewer" tryRunningInViewer
-
-            do!
-                Harness.eventually
-                    Harness.ViewerUpdateDeadlineMs
-                    "the hang request to be waiting at the test server"
-                    (fun () -> tryRequestWaitingAtServer baseUrl)
-
-            let killed = Harness.companionPids ()
-
-            if Array.isEmpty killed then
-                Assert.fail "no companion process matched before the kill"
-
-            killed |> Array.iter Proc.kill
-
-            do!
-                Harness.eventually Harness.ViewerUpdateDeadlineMs "every killed companion process to be gone" (fun () ->
-                    tryKilledCompanionsGone killed)
-
-            do!
-                Harness.eventually
-                    Harness.ViewerUpdateDeadlineMs
-                    "the stopped companion message in the viewer, with Running… gone"
-                    tryStoppedMessageRendered
-
-            do! ExTester.reloadWindow ()
-
-            do!
-                Harness.eventually
-                    Harness.PostReloadRecoveryDeadlineMs
-                    "a fresh companion process after the reload"
-                    (fun () -> tryFreshCompanion killed)
-
-            do!
-                Harness.eventually
-                    Harness.LensAppearanceDeadlineMs
-                    "the companion-death fixture tab to reopen as the fixture column's only tab"
-                    (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
-
-            do!
-                Harness.eventuallyObserved
-                    Harness.LensAppearanceDeadlineMs
-                    "a Run request lens above each of the two blocks after the reload"
-                    (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount)
-
-            do!
-                Harness.eventually
-                    Harness.LensAppearanceDeadlineMs
-                    "a click on the recovery block's Run request lens"
-                    tryClickRecoveryLens
-
-            do!
-                Harness.eventually
-                    Harness.ViewerUpdateDeadlineMs
-                    "status 200, the recovery URL, and the probe body in the response viewer"
-                    tryRecoveryResponseRendered
-        with e ->
-            bodyError <- Some e
-
-        let mutable releaseError: exn option = None
-
-        try
-            Harness.releaseHang baseUrl
-        with e ->
-            releaseError <- Some e
-
-        match bodyError, releaseError with
-        | Some body, Some release ->
-            Proc.log (sprintf "the hang release also failed: %s" release.Message)
-            raise body
-        | Some body, None -> raise body
-        | None, Some release -> raise release
-        | None, None -> ()
+        return!
+            Harness.withTeardown "the hang release" releaseTheHang (killTheCompanionUnderAHangAndRecover serverBaseUrl)
     }
 
 let tests =

@@ -178,25 +178,33 @@ let eventually (timeoutMs: int) (subject: string) (predicate: unit -> Async<bool
 let private failSetup (cause: string) =
     Assert.fail (sprintf "Harness setup failed: %s" cause)
 
-let private verifySidecarLive () =
+/// The test server's two URLs, read from the sidecar. The three read outcomes are worded here
+/// once: every caller needing the server's address goes through this rather than walking
+/// `Proc.sidecarPath` and the `SidecarRead` cases again with its own parallel messages.
+let private sidecarUrls () =
     let path =
         match Proc.sidecarPath () with
-        | None -> failSetup "UI_TEST_SIDECAR is not set, so setup cannot find the test server"
+        | None -> failSetup "UI_TEST_SIDECAR is not set, so the harness cannot find the test server"
         | Some path -> path
 
     match Proc.readSidecar path with
     | Proc.SidecarMissing -> failSetup (sprintf "the sidecar file is missing at %s" path)
     | Proc.SidecarUnreadable reason -> failSetup (sprintf "the sidecar file at %s does not parse: %s" path reason)
-    | Proc.SidecarLive(baseUrl, deadUrl) ->
-        let body = Proc.httpBody (baseUrl + "/json")
+    | Proc.SidecarLive(baseUrl, deadUrl) -> baseUrl, deadUrl
 
-        if body <> jsonProbeBody then
-            failSetup (
-                sprintf "test server healthcheck failed at %s/json (got %A, expected %s)" baseUrl body jsonProbeBody
-            )
+/// The test server's base URL. A check that reaches the server directly rather than through a
+/// Run — the companion-death check's arrival wait and its hang release — resolves it here.
+let baseUrl () = fst (sidecarUrls ())
 
-        if not (Proc.curlConnectionRefused deadUrl) then
-            failSetup (sprintf "dead port answered at %s — sidecar may be stale" deadUrl)
+let private verifySidecarLive () =
+    let baseUrl, deadUrl = sidecarUrls ()
+    let body = Proc.httpBody (baseUrl + "/json")
+
+    if body <> jsonProbeBody then
+        failSetup (sprintf "test server healthcheck failed at %s/json (got %A, expected %s)" baseUrl body jsonProbeBody)
+
+    if not (Proc.curlConnectionRefused deadUrl) then
+        failSetup (sprintf "dead port answered at %s — sidecar may be stale" deadUrl)
 
 /// True when the Explorer shows the fixture folder as a workspace root. A workspace folder, not
 /// only an open tab, is what makes the extension's activation and every later check start from
@@ -258,11 +266,11 @@ let private tryExtensionActive () =
 /// Matches only the companion that this run's VSCode spawned, by anchoring on the extensions
 /// directory the `.vsix` was installed into. A bare `Companion.dll` would also match the
 /// developer's own editor, and the tell would pass without the suite having started anything.
-let companionPattern () =
+let private companionPattern () =
     let extensionsDir = Proc.env "UI_TEST_EXTENSIONS_DIR" ""
 
     if extensionsDir = "" then
-        Assert.fail
+        failSetup
             "UI_TEST_EXTENSIONS_DIR is not set, so the companion tell cannot tell this run's companion from any other"
 
     extensionsDir + ".*Companion.dll"
@@ -277,20 +285,50 @@ let private tryCompanionRunning () =
 /// The hang route's waiting count from `GET /status`, or `None` when the body does not parse.
 /// The companion-death check kills only after this rises above zero — a kill timed to the click
 /// or to `Running…` can land during the first `#r "nuget:"` restore, before any request reaches
-/// the server.
-let trySlowWaiting (baseUrl: string) : int option =
-    let body = Proc.httpBody (baseUrl + "/status")
+/// the server. Reads through `slowWaitingKey` rather than the literal, so a server-side rename
+/// cannot leave this polling a key nothing writes.
+let slowWaitingCount (serverBaseUrl: string) : int option =
+    let body = Proc.httpBody (serverBaseUrl + "/status")
 
     try
         let parsed: obj = JS.JSON.parse body
-        Some(unbox<int> (parsed?("slowWaiting"): obj))
+        Some(unbox<int> (parsed?(slowWaitingKey): obj))
     with _ ->
         None
 
 /// Advances the hang route's release generation. Teardown calls this so a stuck `/slow` does not
 /// hold a thread-pool thread for the rest of the job.
-let releaseHang (baseUrl: string) : unit =
-    Proc.httpStatus (baseUrl + "/release") |> ignore
+let releaseHang (serverBaseUrl: string) : unit =
+    Proc.httpStatus (serverBaseUrl + "/release") |> ignore
+
+/// Runs `body`, then `teardown` whether the body held or failed. The body's failure is the
+/// diagnostic one — it carries the `.fs` frame naming the assertion that went red — so a teardown
+/// that fails on top of it is logged under `teardownSubject` rather than raised, and cannot
+/// displace that frame. A teardown that fails on its own is the only failure there is.
+let withTeardown (teardownSubject: string) (teardown: unit -> Async<unit>) (body: Async<unit>) : Async<unit> =
+    async {
+        let mutable bodyError: exn option = None
+
+        try
+            do! body
+        with e ->
+            bodyError <- Some e
+
+        let mutable teardownError: exn option = None
+
+        try
+            do! teardown ()
+        with e ->
+            teardownError <- Some e
+
+        match bodyError, teardownError with
+        | Some bodyFailure, Some teardownFailure ->
+            Proc.log (sprintf "%s also failed: %s" teardownSubject teardownFailure.Message)
+            raise bodyFailure
+        | Some bodyFailure, None -> raise bodyFailure
+        | None, Some teardownFailure -> raise teardownFailure
+        | None, None -> ()
+    }
 
 let private emitTimingTable (caption: string) (rows: Timing.PhaseTiming list) =
     let reachedJobSummary = Proc.appendJobSummary (Timing.renderTable caption rows)

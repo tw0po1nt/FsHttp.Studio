@@ -30,14 +30,8 @@ let private tryClickSecondLens () =
 let private tryRunningInViewer () =
     Checks.viewerSatisfies (fun dom -> dom.RunInProgressLabel.Contains runInProgressLabel)
 
-/// The probe body is matched by its key *and* its value, from the cross-process contract in
-/// `Harness`. The key alone would pass against an empty or wrong value.
 let private tryFirstResponseRendered () =
-    Checks.viewerSatisfies (fun dom ->
-        dom.StatusCodeText.Contains "200"
-        && dom.UrlText.Contains firstBlockUrlPath
-        && dom.JsonBodyText.Contains Harness.jsonProbeKey
-        && dom.JsonBodyText.Contains Harness.jsonProbeValue)
+    Checks.tryJsonProbeResponseRendered firstBlockUrlPath
 
 /// The second response arrived *and* replaced the first. Absence of the first body's key is
 /// asserted only here, inside the same `eventually` that proves the second response is present —
