@@ -113,6 +113,15 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
                 "a fresh companion process after the reload"
                 (fun () -> tryFreshCompanion killed)
 
+        // A fresh pid says the extension host came back. It says nothing about the page, which the
+        // reload emptied and rebuilds on its own schedule. The open below is a workbench command,
+        // and a workbench command sent to a page without a workbench raises.
+        do!
+            Harness.eventually
+                Harness.PostReloadRecoveryDeadlineMs
+                "the workbench back in the page after the reload"
+                ExTester.tryWorkbenchPresent
+
         do! Checks.openFixtureAsSoleTab fixtureFileName
 
         do!

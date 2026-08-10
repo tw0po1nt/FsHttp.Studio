@@ -852,6 +852,26 @@ let reloadWindow () : Async<unit> =
         do! workbench.executeCommand "Developer: Reload Window" |> Async.AwaitPromise
     }
 
+/// True when the workbench is in the page.
+///
+/// A reload takes the workbench out of the page and builds it again. Every page object and every
+/// workbench command starts by finding the workbench, so a call made between those two moments
+/// raises rather than waits, and the raise reads as the command failing. A fresh companion process
+/// does not settle this: the extension host and the page come back on their own schedules.
+let tryWorkbenchPresent () : Async<bool> =
+    async {
+        try
+            let driver = VSBrowser.instance.driver
+            let script = "return document.querySelector('.monaco-workbench') ? 'yes' : 'no';"
+
+            let call: JS.Promise<objnull> = emitJsExpr (driver, script) "$0.executeScript($1)"
+
+            let! reading = call |> Async.AwaitPromise
+            return not (isNull reading) && string reading = "yes"
+        with _ ->
+            return false
+    }
+
 /// Enters the response viewer's webview iframe, reads the DOM surfaces the product checks
 /// assert on, and switches back to the workbench. Returns `None` when the frame cannot be
 /// entered; otherwise returns whatever text and class content is present (empty when a node is
