@@ -2,11 +2,12 @@
 // instead of calling vscode-extension-tester directly.
 //
 // Bindings land when a check needs them: setup owns the workbench tells, the core-path check
-// owns CodeLens titles and clicks plus the viewer-beside-the-editor tell, and product checks
-// that read the response viewer share the DOM read. Every editor-facing binding is scoped to
-// an editor group, because the viewer takes focus when it opens and an unscoped page object
-// would resolve the wrong column's tab. Each binding reads a channel a person reads — the
-// workbench UI or the webview DOM — and adds no seam to the shipping extension.
+// owns CodeLens titles and clicks plus the viewer-beside-the-editor tell, product checks that
+// read the response viewer share the DOM read, and the companion-death check owns the window
+// reload. Every editor-facing binding is scoped to an editor group, because the viewer takes
+// focus when it opens and an unscoped page object would resolve the wrong column's tab. Each
+// binding reads a channel a person reads — the workbench UI or the webview DOM — and adds no
+// seam to the shipping extension.
 module ExTester
 
 open Fable.Core
@@ -634,6 +635,15 @@ let tryRevertFixtureFile () : Async<bool> =
             return true
         with _ ->
             return false
+    }
+
+/// Asks VSCode to reload the window. Returns when ExTester has asked, not when the reload has
+/// finished — the companion-death check waits on a fresh companion process for that. Pre-reload
+/// element handles go stale; every later lookup must be fresh.
+let reloadWindow () : Async<unit> =
+    async {
+        let workbench = Workbench.create ()
+        do! workbench.executeCommand "Developer: Reload Window" |> Async.AwaitPromise
     }
 
 /// Enters the response viewer's webview iframe, reads the DOM surfaces the product checks

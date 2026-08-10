@@ -43,6 +43,15 @@ let pidsMatching (pattern: string) : int[] =
         | true, pid -> Some pid
         | _ -> None)
 
+/// SIGKILL, not SIGTERM: the companion-death check is about the process vanishing, not about a
+/// clean exit the runtime could still report on.
+let kill (pid: int) : unit =
+    run (sprintf "kill -9 %d" pid) |> ignore
+
+/// True when `pid` still exists. Uses `kill -0`, which does not deliver a signal.
+let isAlive (pid: int) : bool =
+    (run (sprintf "kill -0 %d 2>/dev/null && echo alive" pid)).Contains "alive"
+
 let httpStatus (url: string) : string =
     (run (sprintf "curl -sS -m 10 -o /dev/null -w '%%{http_code}' '%s'" url)).Trim()
 

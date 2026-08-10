@@ -54,6 +54,12 @@ let runtimeErrorLabel = "Runtime error"
 /// block does not compile, and absent on a runtime error or a successful response.
 let compileErrorLabel = "Compile error"
 
+/// Exact text a pending Run abandons to when the companion exits. Must match
+/// `Protocol.companionStoppedText` — the host posts it as a plain error update, and the
+/// companion-death check asserts it verbatim in the viewer DOM.
+let companionStoppedText =
+    "The FsHttp.Studio companion stopped. Reload the window to start it again."
+
 let private extensionStatusPrefix = "FsHttp.Studio"
 let private fixtureTabSuffix = "setup.fsx"
 let private fixtureFolderName = "fixtures"
@@ -252,17 +258,39 @@ let private tryExtensionActive () =
 /// Matches only the companion that this run's VSCode spawned, by anchoring on the extensions
 /// directory the `.vsix` was installed into. A bare `Companion.dll` would also match the
 /// developer's own editor, and the tell would pass without the suite having started anything.
-let private companionPattern () =
+let companionPattern () =
     let extensionsDir = Proc.env "UI_TEST_EXTENSIONS_DIR" ""
 
     if extensionsDir = "" then
-        failSetup
+        Assert.fail
             "UI_TEST_EXTENSIONS_DIR is not set, so the companion tell cannot tell this run's companion from any other"
 
     extensionsDir + ".*Companion.dll"
 
+/// Every companion process belonging to this run. Empty when none match. The companion-death
+/// check kills and confirms these, then waits for a fresh pid after reload.
+let companionPids () = Proc.pidsMatching (companionPattern ())
+
 let private tryCompanionRunning () =
-    async { return Proc.pidsMatching (companionPattern ()) |> Array.isEmpty |> not }
+    async { return companionPids () |> Array.isEmpty |> not }
+
+/// The hang route's waiting count from `GET /status`, or `None` when the body does not parse.
+/// The companion-death check kills only after this rises above zero — a kill timed to the click
+/// or to `Running…` can land during the first `#r "nuget:"` restore, before any request reaches
+/// the server.
+let trySlowWaiting (baseUrl: string) : int option =
+    let body = Proc.httpBody (baseUrl + "/status")
+
+    try
+        let parsed: obj = JS.JSON.parse body
+        Some(unbox<int> (parsed?("slowWaiting"): obj))
+    with _ ->
+        None
+
+/// Advances the hang route's release generation. Teardown calls this so a stuck `/slow` does not
+/// hold a thread-pool thread for the rest of the job.
+let releaseHang (baseUrl: string) : unit =
+    Proc.httpStatus (baseUrl + "/release") |> ignore
 
 let private emitTimingTable (caption: string) (rows: Timing.PhaseTiming list) =
     let reachedJobSummary = Proc.appendJobSummary (Timing.renderTable caption rows)

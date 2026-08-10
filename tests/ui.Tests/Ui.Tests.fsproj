@@ -20,6 +20,7 @@
     <Compile Include="LoopLensTests.fs" />
     <Compile Include="CrossBlockRefusedRunTests.fs" />
     <Compile Include="CompileErrorTests.fs" />
+    <Compile Include="CompanionDeathTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 
