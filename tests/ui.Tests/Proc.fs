@@ -43,6 +43,19 @@ let pidsMatching (pattern: string) : int[] =
         | true, pid -> Some pid
         | _ -> None)
 
+/// SIGKILL, not SIGTERM: the companion-death check is about the process vanishing, not about a
+/// clean exit the runtime could still report on.
+let kill (pid: int) : unit =
+    run (sprintf "kill -9 %d" pid) |> ignore
+
+/// True when `pid` still exists and has not become a zombie. Reads `ps` state rather than
+/// `kill -0`: a killed child still answers to `kill -0` until its parent reaps it, and the
+/// companion's parent is killed alongside it, so a confirmation built on `kill -0` would wait on
+/// reaping timing that has nothing to do with the process being gone.
+let isAlive (pid: int) : bool =
+    let state = (run (sprintf "ps -p %d -o stat=" pid)).Trim()
+    state <> "" && not (state.StartsWith "Z")
+
 let httpStatus (url: string) : string =
     (run (sprintf "curl -sS -m 10 -o /dev/null -w '%%{http_code}' '%s'" url)).Trim()
 
