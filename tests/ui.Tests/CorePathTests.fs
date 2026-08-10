@@ -43,14 +43,21 @@ let private trySecondResponseReplacedFirst () =
         && dom.JsonBodyText.Contains Harness.slowWaitingKey
         && not (dom.JsonBodyText.Contains Harness.jsonProbeKey))
 
+/// Opens through `ExTester.tryOpenAsSoleTabInFixtureColumn`, which empties the fixture column
+/// first. This is the suite's first check, so the column still holds the `setup.fsx` tab that
+/// setup proved live. With two tabs open, `TextEditor` resolves the first `.editor-instance` in
+/// the group, which can be the hidden one — it carries no CodeLens widgets, and the wait for it to
+/// become visible fails the whole read.
+///
 /// Leaves the fixture and the viewer open, showing the second response. That is the state spec 3's
 /// check expects to inherit and replace.
 let private theCorePath =
     async {
-        let path = Checks.fixturePath fixtureFileName
-        let browser = ExTester.VSBrowser.instance
-
-        do! ExTester.openResource browser path |> Async.AwaitPromise
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "the core-path fixture tab to open as the fixture column's only tab"
+                (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
 
         do!
             Harness.eventuallyObserved

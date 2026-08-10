@@ -26,18 +26,21 @@ let private tryNoResponseViewer () =
 /// the refusal lens and its toast. Leaves the viewer closed and the toast dismissed.
 let private loopLensRefusesWithToast =
     async {
-        let path = Checks.fixturePath fixtureFileName
-        let browser = ExTester.VSBrowser.instance
-
         do!
             Harness.eventually
                 Harness.ViewerUpdateDeadlineMs
                 "the response viewer to be closed"
                 ExTester.tryCloseResponseViewer
 
-        // Open once, then wait on lenses — same shape as the core-path check. Do not put
-        // `openResources` inside `eventually`: a second open can concatenate the buffer into itself.
-        do! ExTester.openResource browser path |> Async.AwaitPromise
+        // Same shape as the core-path check: take over the fixture column rather than opening
+        // beside the previous check's tab. The binding is idempotent when the column already holds
+        // exactly this tab, which is what makes it safe to poll — a bare `openResources` under
+        // `eventually` would concatenate the buffer into itself.
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "the loop-lens fixture tab to open as the fixture column's only tab"
+                (fun () -> ExTester.tryOpenAsSoleTabInFixtureColumn fixtureFileName)
 
         do!
             Harness.eventuallyObserved
