@@ -13,6 +13,7 @@ let tests =
               Assert.isTrue state.FixtureOpen "the fixture folder is open"
               Assert.isTrue state.ExtensionActive "the extension is active"
               Assert.isTrue state.CompanionRunning "a companion process exists"
+              Assert.isTrue state.CompanionReady "the companion reported ready"
               Assert.isTrue (Harness.isProvenLive ()) "the before hook reached a proven-live workbench"
 
               // Setup emits the table as its last act, so this observes a write that already
