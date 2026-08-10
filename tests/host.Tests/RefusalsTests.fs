@@ -24,7 +24,7 @@ let private wireCodes =
 let forCodeTests =
     testList
         "Refusals.forCode"
-        [ test "each of the twelve codes maps to a non-empty, distinct title and a non-empty detail" {
+        [ test "every wire code maps to a non-empty, distinct title and a non-empty detail" {
               let refusals = wireCodes |> List.map forCode
 
               refusals
@@ -100,7 +100,7 @@ let companionStoppedTests =
                   "the lens must not promise a Run that no companion can honor"
           }
 
-          test "it is not one of the twelve wire codes, and shares no title with them" {
+          test "it shares no title with any wire code" {
               wireCodes
               |> List.iter (fun code ->
                   Expect.notEqual

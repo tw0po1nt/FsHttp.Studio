@@ -37,13 +37,18 @@ let private emitter = EventEmitter<unit>()
 let mutable private handle: Companion.Handle option = None
 let mutable private ready = false
 
-/// The ranges the last successful `locate` returned for each document, keyed by the document's
-/// own file name. A stopped companion's lenses stand on this. A locate needs the companion, so
-/// the only positions left once the companion is gone are the ones it already reported.
+/// The ranges the last successful `locate` returned for each script, keyed by the document's own
+/// file name. A stopped companion's lenses stand on this. A locate needs the companion, so the
+/// only positions left once the companion is gone are the ones it already reported.
 ///
-/// A document that no locate ever covered has no entry here, and therefore no lens. A companion
+/// A script that no locate ever covered has no entry here, and therefore no lens. A companion
 /// that is still starting has answered no locate, so it paints nothing and no lens flickers on
 /// the way to ready.
+///
+/// A ready companion never reads this table, because it locates the script again on every query.
+/// The entries therefore only serve the *next* stop, and `setReady true` clears all of them.
+/// Nothing else removes an entry. What a session holds is one range list for each script that the
+/// user opened since the companion last became ready, which is small.
 let private lastLocated =
     System.Collections.Generic.Dictionary<string, BlockRange list>()
 
@@ -53,9 +58,17 @@ let setHandle (h: Companion.Handle) = handle <- Some h
 
 /// Called on every companion state transition. It fires `onDidChangeCodeLenses` only on a real
 /// change between ready and not-ready, so VSCode does not re-query on an unrelated status tick.
+///
+/// Becoming ready clears the remembered ranges. They came from a companion that is gone, and a
+/// live one answers for itself. Keeping them would let a stop after this point paint lenses from
+/// a parse two companions old.
 let setReady (isReady: bool) =
     if isReady <> ready then
         ready <- isReady
+
+        if isReady then
+            lastLocated.Clear()
+
         emitter.fire ()
 
 /// One lens at a block's own start, carrying the given title and the command a click invokes.
@@ -79,23 +92,21 @@ let private buildCodeLens (document: TextDocument) (i: int) (r: BlockRange) : Co
     | Some code -> lensAt document i r (Refusals.lensTitle code) explainCommandId
     | None -> lensAt document i r "▶ Run request" commandId
 
-/// Every remembered block reads the same way while the companion is gone. A block's own refusal
-/// is still true, but it is no longer the reason the user cannot run: nothing in this script can
-/// run, whatever its position, and the one action that changes that is a reload of the window.
-let private buildStoppedLens (document: TextDocument) (i: int) (r: BlockRange) : CodeLens =
-    lensAt document i r Refusals.companionStoppedLensTitle explainStoppedCommandId
-
 let private noLenses () : Async<ResizeArray<CodeLens>> = async { return ResizeArray() }
 
-/// The answer for a document while the companion is gone: one stopped lens for each block the
-/// last locate remembered, and no lens at all for a document no locate ever covered.
+/// The answer for a script while the companion is gone: one stopped lens for each block the last
+/// locate remembered, and no lens at all for a script no locate ever covered.
+///
+/// Every remembered block reads the same way here. A block's own refusal is still true, but it is
+/// no longer the reason the user cannot run: nothing in this script can run, whatever its
+/// position, and the one action that changes that is a reload of the window.
 let private stoppedLenses (document: TextDocument) : ResizeArray<CodeLens> =
-    if lastLocated.ContainsKey document.fileName then
-        lastLocated.[document.fileName]
-        |> List.mapi (buildStoppedLens document)
+    match lastLocated.TryGetValue document.fileName with
+    | true, ranges ->
+        ranges
+        |> List.mapi (fun i r -> lensAt document i r Refusals.companionStoppedLensTitle explainStoppedCommandId)
         |> ResizeArray
-    else
-        ResizeArray()
+    | _ -> ResizeArray()
 
 let provider: CodeLensProvider =
     { new CodeLensProvider with

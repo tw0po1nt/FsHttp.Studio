@@ -17,6 +17,12 @@ The companion's FCS parse finds block ranges. A tree-sitter grammar in the exten
 > already abandons to, and starts no Run. A block that no locate ever covered has no lens, so a
 > companion that is still starting shows nothing, as before.
 >
+> One case therefore reads two ways, and the two readings are deliberate. A script that was open
+> while the companion was ready keeps a stopped lens on each block. A script first opened after the
+> companion stopped shows no lens at all, because no locate ever covered it. The alternative is a
+> lens on a position that nothing measured, which is a worse claim than no lens. The status-bar item
+> reports the stopped companion in both cases, so neither script looks like a silent failure.
+>
 > Two reasons forced the change.
 >
 > The first reason is that the earlier rule did not hold in the editor. The provider obeyed the

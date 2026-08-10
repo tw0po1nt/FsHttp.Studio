@@ -37,8 +37,9 @@ let private tryRequestWaitingAtServer (serverBaseUrl: string) =
 let private tryKilledCompanionsGone (killed: int[]) =
     async { return killed |> Array.forall (fun pid -> not (Proc.isAlive pid)) }
 
-/// The shipped stopped message is present, and `Running…` is gone. Exact wording — a deliberate
-/// change to `Refusals.companionStopped.Detail` must redden this check.
+/// The shipped stopped message is present, and `Running…` is gone. The text comes from
+/// `Refusals`, so this holds the routing and not the wording: the viewer shows the stopped
+/// sentence, and not the runtime-error text or a bare failure. `RefusalsTests` pins the words.
 let private tryStoppedMessageRendered () =
     Checks.viewerSatisfies (fun dom ->
         dom.RootText.Contains Harness.companionStoppedText

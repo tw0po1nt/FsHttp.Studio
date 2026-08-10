@@ -61,10 +61,12 @@ let runtimeErrorLabel = "Runtime error"
 /// block does not compile, and absent on a runtime error or a successful response.
 let compileErrorLabel = "Compile error"
 
-/// Exact text a pending Run abandons to when the companion exits. Taken from the shipped value
-/// rather than copied, because this suite compiles `Refusals.fs` itself — the host posts this
-/// text as a plain error update, and the companion-death check asserts it verbatim in the viewer
-/// DOM.
+/// The text a pending Run abandons to when the companion exits. Taken from the shipped value, as
+/// `LoopLensTests` and `CrossBlockRefusedRunTests` take theirs: this suite compiles `Refusals.fs`,
+/// and a check that restated the words would pin the wording in a second place
+/// (docs/spec/0003-lens-tells-the-truth.md, user story 11). `RefusalsTests` is where the wording
+/// itself is pinned. What this asserts is that the host put *this* sentence in the viewer, and not
+/// a different one.
 let companionStoppedText = Refusals.companionStopped.Detail
 
 let private extensionStatusPrefix = "FsHttp.Studio"

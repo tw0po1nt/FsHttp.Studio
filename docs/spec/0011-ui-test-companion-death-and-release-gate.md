@@ -343,6 +343,10 @@ check inside its budget.
 
 - **The post-death lens.** The check asserts neither its presence nor its absence. See above. The
 product question is #145.
+  **Superseded (2026-08-10):** #145 settled the product question. The check now asserts the stopped
+  *title* on the lens above each block. The title is stable, where presence and absence were not.
+  One surface stays out of scope. A script first opened after the companion stops carries no lens
+  at all, and `docs/release-gate.md` records that surface.
 - **Restarting the companion automatically.** The message says reload because reload is what recovers
   the product today. Whether the extension should restart the companion itself is a product question.
 - **Killing the companion by other means.** A crash inside the companion, an out-of-memory kill, or

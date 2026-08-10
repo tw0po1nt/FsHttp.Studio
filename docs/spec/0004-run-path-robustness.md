@@ -327,6 +327,13 @@ change with the record.
 asserts its text, and the interop module in Decision 6 has nothing to get wrong but the wiring. A
 pending `locate` abandons to an empty list, so it contributes no second string.
 
+> **Update (2026-08-10):** The abandon string moved to `Refusals.companionStopped.Detail`, and
+> `RefusalsTests` asserts it. `Protocol.fs` no longer holds it. The reason is that the string got a
+> second surface: the CodeLens that a stopped companion leaves behind shows the same sentence in a
+> toast (ADR-0003). `Refusals` is the one file that owns a shipped sentence (spec 0003, user story
+> 11). The seam is unchanged. A pure host module still holds the string, and a host test still
+> asserts its text.
+
 ### What is not tested here
 
 `Companion.fs` is Fable and Node interop, and no suite drives it. The FIFO flush, the closed-handle
@@ -343,9 +350,13 @@ the Beta gate and built the Beta that it needs.
 > drives companion death: it kills the companion during a Run, reads the stopped message in the
 > response viewer, reloads the window, and runs a block again. The UI suite gates the release,
 > `docs/manual-check.md` is deleted, and [ADR-0009](../adr/0009-ui-suite-gates-the-release.md)
-> supersedes ADR-0008. One gap remains open. After the companion dies, the suite asserts neither the
-> presence nor the absence of the lens. See
+> supersedes ADR-0008. One gap remained open at that point. After the companion died, the suite
+> asserted neither the presence nor the absence of the lens. See
 > [`docs/release-gate.md`](../release-gate.md).
+>
+> **Update (2026-08-10):** That gap is closed. #145 settled what the lens does after the companion
+> stops, and the suite now asserts the stopped title on the lens above each block. One narrower
+> surface stays uncovered, and `docs/release-gate.md` records it.
 
 ## Out of Scope
 
