@@ -176,3 +176,36 @@ let parseRunResultTests =
               | RunProtocolError message -> Expect.stringContains message "base64" "the message names the bad encoding"
               | other -> failtestf "expected RunProtocolError, got %A" other
           } ]
+
+[<Tests>]
+let requestContentTypeTests =
+    testList
+        "requestContentType"
+        [ test "reads the Content-Type the companion collected" {
+              let headers =
+                  [ "Accept", "*/*"; "Content-Type", "application/json"; "X-Trace", "abc" ]
+
+              Expect.equal
+                  (requestContentType headers)
+                  "application/json"
+                  "the Content-Type value is what the Request section dispatches the body on"
+          }
+
+          test "matches the header name whatever its case" {
+              // The name on the wire is whatever the server or FsHttp wrote, so an exact match
+              // would silently render a JSON body as plain text.
+              Expect.equal (requestContentType [ "content-type", "application/json" ]) "application/json" "lowercase"
+              Expect.equal (requestContentType [ "CONTENT-TYPE", "text/plain" ]) "text/plain" "uppercase"
+          }
+
+          test "a request with no Content-Type yields the empty string" {
+              // A GET, most often. The renderer's dispatch already treats "" as an unknown type.
+              Expect.equal (requestContentType [ "Accept", "*/*" ]) "" "no Content-Type header"
+              Expect.equal (requestContentType []) "" "no headers at all"
+          }
+
+          test "takes the first Content-Type when the request carries more than one" {
+              let headers = [ "Content-Type", "application/json"; "Content-Type", "text/plain" ]
+
+              Expect.equal (requestContentType headers) "application/json" "the first wins, and the read is total"
+          } ]

@@ -33,7 +33,11 @@ let SetupBudgetMs = 180_000
 /// Green-path budget for one check, first action through last assertion.
 let PerCheckBudgetMs = 45_000
 
-/// Green-path budget for the suite, excluding setup.
+/// Green-path budget for the suite, excluding setup. Deliberately far tighter than the number of
+/// checks times `PerCheckBudgetMs`: no green run comes near the per-check ceiling, and a budget
+/// that summed the ceilings would catch nothing. A green run of eight checks measures around 40 s
+/// locally, so this holds several times over even on a slow runner, and a check added without a
+/// raise here is the intended pressure.
 let SuiteBudgetMs = 240_000
 
 /// Cross-process contract for `GET /json`. Must match `UiTestServer.Server.jsonProbeBody`. The
@@ -52,6 +56,29 @@ let slowWaitingKey = "slowWaiting"
 /// Cross-process contract for `GET /notfound`. Must match `UiTestServer.Server.notFoundBody`.
 /// Distinct from the `/json` probe body, so a catch-all 404 cannot pass this check by accident.
 let notFoundBody = "ui-test-server:notfound"
+
+/// Cross-process contract for `POST /echo`. Must match `UiTestServer.Server.echoAckBody`. The
+/// acknowledgement is what the *response* body carries, and it repeats none of what was posted.
+let echoAckKey = "echoed"
+
+/// Cross-process contract for the body `request-section.fsx` posts. Named in parts for the same
+/// reason the `/json` probe is: a check reads the viewer's pretty-printed DOM, which whitespace
+/// has already moved, so it matches the key and the value rather than the one-line body.
+///
+/// The value is deliberately absent from every other fixture and from the echo acknowledgement,
+/// so finding it in the viewer can only mean the Request section rendered what was sent
+/// (docs/spec/0012-request-as-sent.md, Seam 4).
+let postedBodyKey = "posted"
+
+let postedBodyValue = "request-section-fixture"
+let postedBody = sprintf """{"%s":"%s"}""" postedBodyKey postedBodyValue
+
+/// The request header the fixture sets, and which the Request section must render as a row. A
+/// header the user wrote is the other half of "the request as sent" — the body alone would not
+/// show that the headers travelled.
+let postedHeaderName = "X-Fixture"
+
+let postedHeaderValue = "request-section"
 
 /// Substring the host writes into every runtime-error viewer update. Present on a dead-port Run,
 /// and absent on a successful HTTP error response.

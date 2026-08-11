@@ -117,8 +117,10 @@ body {
 summary { cursor: pointer; user-select: none; list-style: none; }
 summary::-webkit-details-marker { display: none; }
 
-/* headers */
-.headers {
+/* headers, and the request section that mirrors them. `.request` sits between the status line
+   and the response headers, and is styled by the same rules so the two cannot drift apart. */
+.headers,
+.request {
   margin-bottom: 12px;
   border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.25));
   border-radius: 6px;
@@ -136,7 +138,10 @@ summary::-webkit-details-marker { display: none; }
   opacity: 0.7;
   transition: transform 0.12s ease;
 }
-.headers[open] > .headers-summary::before { transform: rotate(90deg); }
+.headers[open] > .headers-summary::before,
+.request[open] > .headers-summary::before {
+  transform: rotate(90deg);
+}
 .header-row {
   display: grid;
   grid-template-columns: minmax(120px, 30%) 1fr;

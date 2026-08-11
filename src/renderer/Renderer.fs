@@ -18,14 +18,29 @@ type Node =
     | Element of tag: string * attrs: (string * string) list * children: Node list
     | Text of string
 
-/// A response that is ready to render. The companion's `ok` envelope supplies `Status`,
-/// `Reason`, `Headers`, `ContentType`, the body as bytes, and `RequestMs` (the invocation
-/// bracket). `Method`, `Url`, and `TotalMs` are the request context that the host pairs with it
-/// for the status line. The renderer is a pure function of this record, and the Seam-B suite
-/// drives canned instances of it.
-type ResponseEnvelope =
+/// A request body as the viewer must see it. Blank must not mean "no body", "captured bytes",
+/// and "we chose not to read it" at once (docs/spec/0012-request-as-sent.md, Decision 8).
+type CapturedBody =
+    | NoBody
+    | Captured of bytes: byte[]
+    | NotCaptured of reason: string
+
+/// The request that was actually sent. Method and URL feed the status line. Headers and body
+/// feed the collapsible Request section (docs/spec/0012-request-as-sent.md, Decision 12).
+type RequestView =
     { Method: string
       Url: string
+      Headers: (string * string) list
+      ContentType: string
+      Body: CapturedBody }
+
+/// A response that is ready to render. The companion's `ok` envelope supplies `Status`,
+/// `Reason`, `Headers`, `ContentType`, the body as bytes, and `RequestMs` (the invocation
+/// bracket). `Request` carries the method, URL, headers, and body that the host pairs with it.
+/// `TotalMs` is the host's own bracket. The renderer is a pure function of this record, and the
+/// Seam-B suite drives canned instances of it.
+type ResponseEnvelope =
+    { Request: RequestView
       Status: int
       Reason: string
       Headers: (string * string) list
@@ -113,9 +128,9 @@ let private looksBinary (bytes: byte[]) : bool =
 
 // --- Content-Type dispatch ----------------------------------------------------------------
 
-let private renderImage (env: ResponseEnvelope) : Node =
-    let mediaType = normalizeContentType env.ContentType
-    let src = sprintf "data:%s;base64,%s" mediaType (toBase64 env.Body)
+let private renderImage (contentType: string) (bytes: byte[]) : Node =
+    let mediaType = normalizeContentType contentType
+    let src = sprintf "data:%s;base64,%s" mediaType (toBase64 bytes)
     el "img" [ "class", "response-image"; "src", src; "alt", "response image" ] []
 
 let private renderHtml (bytes: byte[]) : Node =
@@ -158,11 +173,15 @@ let private hexDump (bytes: byte[]) : string =
     else
         dumped
 
+/// The size-and-hex view for bytes that do not decode as text. The note says "Binary body" and
+/// not "Binary response": `renderContent` puts this same view inside the Request section, where
+/// the bytes are a request body, and a note that called them a response would state something
+/// false about what was sent (docs/spec/0012-request-as-sent.md, Decision 8).
 let private renderBinary (bytes: byte[]) : Node =
     el
         "div"
         [ "class", "response-binary" ]
-        [ el "div" [ "class", "binary-note" ] [ Node.Text(sprintf "Binary response — %s" (humanSize bytes.Length)) ]
+        [ el "div" [ "class", "binary-note" ] [ Node.Text(sprintf "Binary body — %s" (humanSize bytes.Length)) ]
           el "pre" [ "class", "hex-dump" ] [ Node.Text(hexDump bytes) ] ]
 
 /// The fallback for text, XML, and unknown types. It gives readable monospace when the bytes
@@ -212,6 +231,17 @@ let private isJson (ct: string) =
 let private isHtml (ct: string) =
     ct = "text/html" || ct = "application/xhtml+xml"
 
+/// Shared body dispatch for JSON, text, and hex. Image and HTML previews stay out of this path:
+/// a request body is data that was sent, not a document to preview
+/// (docs/spec/0012-request-as-sent.md, Decision 12).
+let renderContent (contentType: string) (body: byte[]) : Node =
+    let ct = normalizeContentType contentType
+
+    if isJson ct then
+        renderJson body
+    else
+        renderTextOrBinary body
+
 /// Dispatches a response body to rendered DOM on its Content-Type. An image goes to an
 /// `&lt;img&gt;` with a `data:` URI. JSON goes to a collapsible highlighted tree. HTML goes to a
 /// sandboxed iframe. All other content, such as plain text, XML, and unknown types, goes to the
@@ -221,19 +251,21 @@ let private isHtml (ct: string) =
 let renderBody (env: ResponseEnvelope) : Node =
     let ct = normalizeContentType env.ContentType
 
-    if ct.StartsWith("image/") then renderImage env
-    elif isJson ct then renderJson env.Body
-    elif isHtml ct then renderHtml env.Body
-    else renderTextOrBinary env.Body
+    if ct.StartsWith("image/") then
+        renderImage env.ContentType env.Body
+    elif isHtml ct then
+        renderHtml env.Body
+    else
+        renderContent env.ContentType env.Body
 
-// --- status line + headers ----------------------------------------------------------------
+// --- status line + headers + request ------------------------------------------------------
 
 let private renderStatusLine (env: ResponseEnvelope) : Node =
     el
         "div"
         [ "class", "status-line" ]
-        [ span "status-method" env.Method
-          span "status-url" env.Url
+        [ span "status-method" env.Request.Method
+          span "status-url" env.Request.Url
           el
               "span"
               [ "class", sprintf "status-code %s" (statusClass env.Status) ]
@@ -244,25 +276,50 @@ let private renderStatusLine (env: ResponseEnvelope) : Node =
           span "status-total" (sprintf "· %d ms total" (int (Math.Round env.TotalMs)))
           span "status-size" (humanSize env.Body.Length) ]
 
-let private renderHeaders (headers: (string * string) list) : Node =
-    let rows =
-        headers
-        |> List.map (fun (name, value) ->
-            el "div" [ "class", "header-row" ] [ span "header-name" name; span "header-value" value ])
+let private headerRows (headers: (string * string) list) : Node list =
+    headers
+    |> List.map (fun (name, value) ->
+        el "div" [ "class", "header-row" ] [ span "header-name" name; span "header-value" value ])
 
+let private renderHeaders (headers: (string * string) list) : Node =
     el
         "details"
         [ "class", "headers" ]
         (el "summary" [ "class", "headers-summary" ] [ Node.Text(sprintf "Headers (%d)" (List.length headers)) ]
-         :: rows)
+         :: headerRows headers)
 
-/// The full response view. It is a thin status line and a collapsible headers section, above the
-/// body that the Content-Type dispatch produced. The webview mounts this view. `renderBody`
-/// stays separate, so a caller can drive the body dispatch on its own.
+let private requestSummary (body: CapturedBody) : string =
+    match body with
+    | Captured bytes -> sprintf "Request (%s)" (humanSize bytes.Length)
+    | NoBody
+    | NotCaptured _ -> "Request"
+
+let private renderRequestBody (request: RequestView) : Node list =
+    match request.Body with
+    | NoBody -> []
+    | NotCaptured reason -> [ el "div" [ "class", "binary-note" ] [ Node.Text reason ] ]
+    | Captured bytes -> [ renderContent request.ContentType bytes ]
+
+/// The collapsible Request section. It sits between the status line and the response headers,
+/// and starts collapsed — the response is what the user came for
+/// (docs/spec/0012-request-as-sent.md, Decision 12).
+let private renderRequest (request: RequestView) : Node =
+    el
+        "details"
+        [ "class", "request" ]
+        (el "summary" [ "class", "headers-summary" ] [ Node.Text(requestSummary request.Body) ]
+         :: headerRows request.Headers
+         @ renderRequestBody request)
+
+/// The full response view. It is a thin status line, a collapsible Request section, and a
+/// collapsible headers section, above the body that the Content-Type dispatch produced. The
+/// webview mounts this view. `renderBody` stays separate, so a caller can drive the body
+/// dispatch on its own.
 let render (env: ResponseEnvelope) : Node =
     el
         "div"
         [ "class", "response" ]
         [ renderStatusLine env
+          renderRequest env.Request
           renderHeaders env.Headers
           el "div" [ "class", "response-body" ] [ renderBody env ] ]

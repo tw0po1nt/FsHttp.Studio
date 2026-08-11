@@ -20,8 +20,12 @@ open Renderer.NodeQuery
 let private utf8 (s: string) = Text.Encoding.UTF8.GetBytes s
 
 let private env ct (body: byte[]) =
-    { Method = "GET"
-      Url = "https://ex/"
+    { Request =
+        { Method = "GET"
+          Url = "https://ex/"
+          Headers = []
+          ContentType = ""
+          Body = NoBody }
       Status = 200
       Reason = "OK"
       Headers = [ "Content-Type", ct ]

@@ -12,10 +12,17 @@ open Renderer.NodeQuery
 
 let private utf8 (s: string) = Encoding.UTF8.GetBytes s
 
+/// A canned request view with no body. Each test can override the fields.
+let private requestWithNoBody (httpMethod: string) (url: string) =
+    { Method = httpMethod
+      Url = url
+      Headers = []
+      ContentType = ""
+      Body = NoBody }
+
 /// A canned envelope with a sensible request context. Each test can override the fields.
 let private envelope contentType (body: byte[]) =
-    { Method = "GET"
-      Url = "https://example.com/thing"
+    { Request = requestWithNoBody "GET" "https://example.com/thing"
       Status = 200
       Reason = "OK"
       Headers = [ "Content-Type", contentType ]
@@ -205,8 +212,7 @@ let statusLineTests =
         [ test "the status line carries method, URL, colored status, request time, total, and size" {
               let env =
                   { envelope "text/plain" (utf8 "hi") with
-                      Method = "POST"
-                      Url = "https://api.example.com/widgets"
+                      Request = requestWithNoBody "POST" "https://api.example.com/widgets"
                       RequestMs = 142.0
                       TotalMs = 380.0 }
 
@@ -235,16 +241,17 @@ let statusLineTests =
               Expect.isTrue (hasClass "status-2xx" statusCode) "a 200 should be colored as 2xx"
           }
 
-          test "the status line sits above the body" {
-              // The response wrapper's children are the status line, the headers, and then the
-              // body, in that order.
+          test "the status line sits above the request, the headers, and the body" {
+              // The response wrapper's children are the status line, the Request section, the
+              // response headers, and then the body, in that order.
               let node = render (envelope "text/plain" (utf8 "x"))
 
               match node with
-              | Node.Element(_, _, [ statusLine; _headers; body ]) ->
+              | Node.Element(_, _, [ statusLine; request; _headers; body ]) ->
                   Expect.isTrue (hasClass "status-line" statusLine) "first child is the status line"
+                  Expect.isTrue (hasClass "request" request) "second child is the Request section"
                   Expect.isTrue (hasClass "response-body" body) "last child is the body"
-              | _ -> failtest "expected the response wrapper to hold status line, headers, and body"
+              | _ -> failtest "expected status line, request, headers, and body"
           }
 
           test "headers live in a collapsible section, one row per header" {
@@ -260,6 +267,140 @@ let statusLineTests =
 
               let names = byClass "header-name" node |> List.map innerText
               Expect.contains names "X-Custom" "each header's name should be shown"
+          } ]
+
+[<Tests>]
+let requestSectionTests =
+    testList
+        "Request section"
+        [ test "a Captured JSON body renders a JSON tree inside the Request section" {
+              let jsonBody = utf8 """{"name":"posted"}"""
+
+              let env =
+                  { envelope "text/plain" (utf8 "ok") with
+                      Request =
+                          { Method = "POST"
+                            Url = "https://api.example.com/items"
+                            Headers = [ "Content-Type", "application/json" ]
+                            ContentType = "application/json"
+                            Body = Captured jsonBody } }
+
+              let node = render env
+              let request = byClass "request" node |> List.exactlyOne
+
+              Expect.isNonEmpty
+                  (byClass "response-json" request)
+                  "a Captured JSON request body should render as a JSON tree inside Request"
+
+              Expect.equal
+                  (innerText (byClass "headers-summary" request |> List.exactlyOne))
+                  (sprintf "Request (%s)" (humanSize jsonBody.Length))
+                  "the summary should show the captured body size"
+          }
+
+          test "a Captured binary body renders a hex dump" {
+              let binaryBody = [| 0uy; 1uy; 2uy; 255uy; 0uy; 128uy |]
+
+              let env =
+                  { envelope "text/plain" (utf8 "ok") with
+                      Request =
+                          { Method = "POST"
+                            Url = "https://api.example.com/blob"
+                            Headers = [ "Content-Type", "application/octet-stream" ]
+                            ContentType = "application/octet-stream"
+                            Body = Captured binaryBody } }
+
+              let node = render env
+              let request = byClass "request" node |> List.exactlyOne
+
+              Expect.isNonEmpty (byClass "hex-dump" request) "a Captured binary body should show a hex dump"
+              Expect.isEmpty (byTag "iframe" request) "a request body must not become an HTML preview"
+              Expect.isEmpty (byTag "img" request) "a request body must not become an image preview"
+          }
+
+          test "a NotCaptured body renders its reason string and no body element" {
+              let reason = "streamed body — not captured, so that the upload is unchanged"
+
+              let env =
+                  { envelope "text/plain" (utf8 "ok") with
+                      Request =
+                          { requestWithNoBody "POST" "https://api.example.com/upload" with
+                              Headers = [ "Content-Type", "application/octet-stream" ]
+                              ContentType = "application/octet-stream"
+                              Body = NotCaptured reason } }
+
+              let node = render env
+              let request = byClass "request" node |> List.exactlyOne
+              let note = byClass "binary-note" request |> List.exactlyOne
+
+              Expect.equal (innerText note) reason "NotCaptured should show the reason in binary-note style"
+              Expect.isEmpty (byClass "response-json" request) "NotCaptured must not render a body tree"
+              Expect.isEmpty (byClass "response-text" request) "NotCaptured must not render a text body"
+              Expect.isEmpty (byClass "hex-dump" request) "NotCaptured must not render a hex dump"
+
+              Expect.equal
+                  (innerText (byClass "headers-summary" request |> List.exactlyOne))
+                  "Request"
+                  "no size when uncaptured"
+          }
+
+          test "NoBody renders the headers and no body area" {
+              let env =
+                  { envelope "text/plain" (utf8 "ok") with
+                      Request =
+                          { requestWithNoBody "GET" "https://api.example.com/thing" with
+                              Headers = [ "Accept", "application/json"; "X-Trace", "abc" ] } }
+
+              let node = render env
+              let request = byClass "request" node |> List.exactlyOne
+
+              Expect.equal (List.length (byClass "header-row" request)) 2 "request headers should render"
+              Expect.isEmpty (byClass "binary-note" request) "NoBody must omit the body area"
+              Expect.isEmpty (byClass "response-text" request) "NoBody must omit the body area"
+              Expect.isEmpty (byClass "response-json" request) "NoBody must omit the body area"
+              Expect.isEmpty (byClass "hex-dump" request) "NoBody must omit the body area"
+
+              Expect.equal
+                  (innerText (byClass "headers-summary" request |> List.exactlyOne))
+                  "Request"
+                  "no size when NoBody"
+          }
+
+          test "the status line shows the method and URL from env.Request" {
+              let env =
+                  { envelope "text/plain" (utf8 "ok") with
+                      Request = requestWithNoBody "PUT" "https://api.example.com/items?q=one%20two" }
+
+              let node = render env
+
+              Expect.equal
+                  (innerText (byClass "status-method" node |> List.exactlyOne))
+                  "PUT"
+                  "status method comes from env.Request"
+
+              Expect.equal
+                  (innerText (byClass "status-url" node |> List.exactlyOne))
+                  "https://api.example.com/items?q=one%20two"
+                  "status URL comes from env.Request, with percent-escapes intact"
+          }
+
+          test "the Request section renders before the response headers, and is collapsed by default" {
+              let env =
+                  { envelope "text/plain" (utf8 "ok") with
+                      Request =
+                          { requestWithNoBody "GET" "https://example.com/" with
+                              Headers = [ "Accept", "*/*" ] }
+                      Headers = [ "Content-Type", "text/plain"; "Server", "kestrel" ] }
+
+              let node = render env
+
+              match node with
+              | Node.Element(_, _, [ _; request; headers; _ ]) ->
+                  Expect.isTrue (hasClass "request" request) "Request section precedes response headers"
+                  Expect.isTrue (hasClass "headers" headers) "response headers follow the Request section"
+                  Expect.equal (tag request) (Some "details") "Request is a collapsible <details>"
+                  Expect.equal (attr "open" request) None "Request is collapsed by default"
+              | _ -> failtest "expected status line, request, headers, and body"
           } ]
 
 [<Tests>]

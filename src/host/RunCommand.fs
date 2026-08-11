@@ -47,25 +47,42 @@ let private configuredRequestTimeoutMs () : int =
 /// around `Companion.run` (docs/spec/0004-run-path-robustness.md, Decision 7).
 type private Timing = { RequestMs: float; TotalMs: float }
 
-let private resultUpdate
-    (method: string)
-    (url: string)
-    (timing: Timing)
-    (status: int)
-    (reason: string)
-    (headers: (string * string) list)
-    (contentType: string)
-    (bodyBase64: string)
-    : obj =
+/// Headers as the viewer update carries them: an array of two-element `[name; value]` arrays.
+/// The request half and the response half of the update use the same shape, so they read it back
+/// through one `toHeaders` in the webview and must be written by one function here.
+let private headersToWire (headers: (string * string) list) : string[][] =
+    headers |> List.map (fun (name, value) -> [| name; value |]) |> List.toArray
+
+/// The three-state body fields the webview's `toEnvelope` reads. Mirrors Decision 10's
+/// `bodyState` / `bodyBase64` / `bodyReason` triple on the companion wire, and spells the state
+/// names through `Protocol`, which is where this end of the host names them once.
+let private requestBodyFields (body: CapturedBody) : string * string * string =
+    match body with
+    | NoBody -> Protocol.NoneState, "", ""
+    | Captured bytes -> Protocol.CapturedState, System.Convert.ToBase64String bytes, ""
+    | NotCaptured reason -> Protocol.NotCapturedState, "", reason
+
+let private resultUpdate (request: RequestData) (timing: Timing) (response: ResponseData) : obj =
+    let bodyState, bodyBase64, bodyReason = requestBodyFields request.Body
+
+    let requestObj: obj =
+        createObj
+            [ "method" ==> request.Method
+              "url" ==> request.Url
+              "headers" ==> headersToWire request.Headers
+              "contentType" ==> Protocol.requestContentType request.Headers
+              "bodyState" ==> bodyState
+              "bodyBase64" ==> bodyBase64
+              "bodyReason" ==> bodyReason ]
+
     let envelope: obj =
         createObj
-            [ "method" ==> method
-              "url" ==> url
-              "status" ==> status
-              "reason" ==> reason
-              "headers" ==> (headers |> List.map (fun (k, v) -> [| k; v |]) |> List.toArray)
-              "contentType" ==> contentType
-              "bodyBase64" ==> bodyBase64
+            [ "request" ==> requestObj
+              "status" ==> response.Status
+              "reason" ==> response.Reason
+              "headers" ==> headersToWire response.Headers
+              "contentType" ==> response.ContentType
+              "bodyBase64" ==> response.BodyBase64
               "requestMs" ==> timing.RequestMs
               "totalMs" ==> timing.TotalMs ]
 
@@ -90,17 +107,7 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
                     { RequestMs = response.RequestMs
                       TotalMs = totalMs }
 
-                ResponseViewer.post (
-                    resultUpdate
-                        request.Method
-                        request.Url
-                        timing
-                        response.Status
-                        response.Reason
-                        response.Headers
-                        response.ContentType
-                        response.BodyBase64
-                )
+                ResponseViewer.post (resultUpdate request timing response)
             | RunCompileError diagnostics -> ResponseViewer.post (errorUpdate (formatCompileError diagnostics))
             | RunRuntimeError message -> ResponseViewer.post (errorUpdate (sprintf "Runtime error: %s" message))
             | RunProtocolError message -> ResponseViewer.post (errorUpdate message)

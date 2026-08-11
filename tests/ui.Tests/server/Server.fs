@@ -38,6 +38,12 @@ let private slowCeiling = TimeSpan.FromMinutes 2.0
 /// Cross-process contract for `GET /notfound`. Match exactly in fixtures and harness checks.
 let notFoundBody = "ui-test-server:notfound"
 
+/// Cross-process contract for `POST /echo`. A fixed acknowledgement that deliberately carries
+/// none of the posted body: the request-section check asserts the posted body inside the viewer's
+/// Request section, and a response that echoed it back would let that assertion pass against the
+/// response body region instead (docs/spec/0012-request-as-sent.md, Seam 4).
+let echoAckBody = """{"echoed":"ui-test-server"}"""
+
 let private catchAllBody = "ui-test-server:unknown"
 
 let private utf8 = Encoding.UTF8
@@ -127,6 +133,12 @@ type UiTestHttpServer() =
             | "GET", "/slow" -> handleSlow ctx
             | "GET", "/release" -> handleRelease ctx
             | "GET", "/status" -> handleStatus ctx
+            // The posted body is read to completion and dropped. Draining it keeps the connection
+            // reusable; not echoing it is what makes the request-section check a real claim.
+            | "POST", "/echo" ->
+                use reader = new StreamReader(ctx.Request.InputStream, utf8)
+                reader.ReadToEnd() |> ignore
+                writeText ctx 200 "application/json" echoAckBody
             | _ -> writeText ctx 404 "text/plain" catchAllBody
         with _ ->
             try

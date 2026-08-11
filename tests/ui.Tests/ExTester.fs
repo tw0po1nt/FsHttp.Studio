@@ -105,12 +105,24 @@ type ResponseViewerDom =
         /// `Renderer.statusClass` produces it.
         StatusClass: string
         UrlText: string
-        /// Text of the rendered JSON body region.
+        /// Text of the rendered JSON *response* body region. Scoped to `.response-body`: a
+        /// captured request body renders through the same classes inside the Request section.
         JsonBodyText: string
-        /// Text of the rendered plain-text body region (`.response-text`).
+        /// Text of the rendered plain-text *response* body region (`.response-text`), scoped to
+        /// `.response-body` for the same reason.
         PlainBodyText: string
         /// Text of the collapsible headers section. Empty when no response headers rendered.
         HeadersText: string
+        /// Rendered text of the collapsible Request section. A `<details>` reports only its
+        /// summary while collapsed, so this carries the headers and body only once the section
+        /// has been expanded — which is exactly the user's own path to them.
+        RequestText: string
+        /// Text of the Request section's summary: `Request`, or `Request (2.1 KB)` with a
+        /// captured body. Empty when no Request section rendered.
+        RequestSummaryText: string
+        /// Whether the Request section is expanded. `<details>` carries `open` only while it is,
+        /// so this is the direct read of collapsed-by-default.
+        RequestOpen: bool
         /// Text of the webview root. Carries the full response render, or the plain error text
         /// a runtime-error update writes with no response structure.
         RootText: string
@@ -131,9 +143,21 @@ module private Viewer =
     let statusLineSelector = ".status-line"
     let statusCodeSelector = ".status-code"
     let urlSelector = ".status-url"
-    let jsonBodySelector = ".response-json"
-    let plainBodySelector = ".response-text"
+    // Both body reads are scoped to `.response-body`. The Request section renders a captured
+    // request body through the same `renderContent` dispatch, and therefore the same
+    // `.response-json` and `.response-text` classes — and it sits *above* the response body in
+    // the DOM, so an unscoped read reaches the request's body first. It reads as empty while the
+    // section is collapsed, which is a read of the wrong region that looks like a viewer that has
+    // not painted yet.
+    let jsonBodySelector = ".response-body .response-json"
+    let plainBodySelector = ".response-body .response-text"
     let headersSelector = ".headers"
+    let requestSelector = ".request"
+
+    /// The Request section's own summary. `.headers-summary` is shared with the response headers
+    /// section, so it must be scoped, or a read reaches whichever of the two comes first.
+    let requestSummarySelector = ".request > .headers-summary"
+
     let rootSelector = "#root"
     let runInProgressSelector = ".pending-label"
     let refusalTitleSelector = ".refused-title"
@@ -894,6 +918,9 @@ let tryReadResponseViewer () : Async<ResponseViewerDom option> =
                 let! jsonBody = tryElementText view Viewer.jsonBodySelector
                 let! plainBody = tryElementText view Viewer.plainBodySelector
                 let! headers = tryElementText view Viewer.headersSelector
+                let! request = tryElementText view Viewer.requestSelector
+                let! requestSummary = tryElementText view Viewer.requestSummarySelector
+                let! requestOpen = tryElementAttribute view Viewer.requestSelector "open"
                 let! root = tryElementText view Viewer.rootSelector
                 let! runInProgress = tryElementText view Viewer.runInProgressSelector
                 let! refusalTitle = tryElementText view Viewer.refusalTitleSelector
@@ -913,6 +940,13 @@ let tryReadResponseViewer () : Async<ResponseViewerDom option> =
                           JsonBodyText = jsonBody
                           PlainBodyText = plainBody
                           HeadersText = headers
+                          RequestText = request
+                          RequestSummaryText = requestSummary
+                          // WebDriver reads a present boolean attribute back as `"true"`, and an
+                          // absent one as null. A missing element reads as `""` from
+                          // `tryElementProperty`, so both blanks must count as not open — an
+                          // absent Request section is not an expanded one.
+                          RequestOpen = not (isNull (box requestOpen)) && requestOpen <> ""
                           RootText = root
                           RunInProgressLabel = runInProgress
                           RefusalTitleText = refusalTitle
@@ -927,4 +961,40 @@ let tryReadResponseViewer () : Async<ResponseViewerDom option> =
                 return None
         with _ ->
             return None
+    }
+
+/// Clicks the Request section's summary, which is how a user expands it. Returns false when the
+/// frame or the summary could not be reached, so a caller pairs this with `Harness.eventually`
+/// rather than treating one attempt as final.
+///
+/// The click goes through the summary and not through a script that sets `open`: the section
+/// being reachable by clicking is part of what this claims. Unlike a CodeLens, this is ordinary
+/// page content, so the element's own `click()` is a real user gesture here.
+let tryExpandRequestSection () : Async<bool> =
+    async {
+        try
+            let! group = editorGroup viewerGroupIndex
+            let view = WebView.createInGroup group
+            let mutable switched = false
+
+            try
+                do! switchToFrameTimed view frameSwitchTimeoutMs |> Async.AwaitPromise
+                switched <- true
+
+                let! summary = view.findWebElement (By.css Viewer.requestSummarySelector) |> Async.AwaitPromise
+                do! summary.click () |> Async.AwaitPromise
+
+                switched <- false
+                do! view.switchBack () |> Async.AwaitPromise
+                return true
+            with _ ->
+                if switched then
+                    try
+                        do! view.switchBack () |> Async.AwaitPromise
+                    with _ ->
+                        ()
+
+                return false
+        with _ ->
+            return false
     }

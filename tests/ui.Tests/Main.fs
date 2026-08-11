@@ -12,6 +12,7 @@ Mocha.runTests (
         "FsHttp.Studio UI tests"
         [ SelfCheckTests.tests
           CorePathTests.tests
+          RequestSectionTests.tests
           RunOutcomesTests.tests
           LoopLensTests.tests
           CrossBlockRefusedRunTests.tests

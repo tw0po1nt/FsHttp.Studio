@@ -15,9 +15,41 @@ let private root: HTMLElement = document.getElementById "root"
 let private toHeaders (raw: obj) : (string * string) list =
     unbox<(string * string)[]> raw |> Array.toList
 
-let private toEnvelope (raw: obj) : ResponseEnvelope =
+// The three `bodyState` names of Decision 10, written once for this end of the viewer-update
+// wire. The host spells the same three in `Protocol`; the two projects cannot share a module,
+// because the extension does not reference the renderer core. Adding a fourth state means an
+// edit here, one in the host, and one in the companion.
+[<Literal>]
+let private NoneState = "none"
+
+[<Literal>]
+let private CapturedState = "captured"
+
+[<Literal>]
+let private NotCapturedState = "notCaptured"
+
+/// Maps the viewer update's three-state body triple onto `CapturedBody`. An unknown state throws
+/// rather than decaying: `NotCaptured` carries a reason that is shown to the user, and Decision 8
+/// reserves that slot for the written reasons the capture produces. A wire term rendered there
+/// would read as an explanation of the request. `handle` turns the throw into the viewer's error
+/// text, which is where a defect on our own wire belongs
+/// (docs/spec/0012-request-as-sent.md, Decision 8; Seam 3, test 15 makes the host's parse agree).
+let private toCapturedBody (raw: obj) : CapturedBody =
+    match unbox<string> (raw?bodyState: obj) with
+    | NoneState -> NoBody
+    | CapturedState -> Captured(Convert.FromBase64String(unbox<string> (raw?bodyBase64: obj)))
+    | NotCapturedState -> NotCaptured(unbox<string> (raw?bodyReason: obj))
+    | other -> failwithf "viewer update: unknown bodyState '%s'" other
+
+let private toRequest (raw: obj) : RequestView =
     { Method = unbox<string> (raw?method: obj)
       Url = unbox<string> (raw?url: obj)
+      Headers = toHeaders (raw?headers: obj)
+      ContentType = unbox<string> (raw?contentType: obj)
+      Body = toCapturedBody raw }
+
+let private toEnvelope (raw: obj) : ResponseEnvelope =
+    { Request = toRequest (raw?request: obj)
       Status = unbox<int> (raw?status: obj)
       Reason = unbox<string> (raw?reason: obj)
       Headers = toHeaders (raw?headers: obj)
@@ -85,12 +117,22 @@ let private showRefused (title: string) (detail: string) =
     container.appendChild body |> ignore
     root.appendChild container |> ignore
 
+/// Renders a result update, or the reason it could not be decoded. `toEnvelope` reads a wire both
+/// ends of which are ours, so a value it rejects is a defect and not a response — showing it as
+/// error text keeps the panel from going silently blank, and keeps a wire term out of the request
+/// view's own reason slot.
+let private showResult (envelope: obj) =
+    try
+        Dom.renderInto root (toEnvelope envelope)
+    with ex ->
+        root.textContent <- ex.Message
+
 let private handle (data: obj) =
     match unbox<string> (data?tag: obj) with
     | "running" -> showRunning ()
     | "result" ->
         clearPending ()
-        Dom.renderInto root (toEnvelope (data?envelope: obj))
+        showResult (data?envelope: obj)
     | "error" ->
         clearPending ()
         root.textContent <- unbox<string> (data?message: obj)
