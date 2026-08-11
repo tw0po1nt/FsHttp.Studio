@@ -414,3 +414,153 @@ let statusClassTests =
               Expect.equal (statusClass 500) "status-5xx" "5xx"
               Expect.equal (statusClass 100) "status-other" "1xx falls to other"
           } ]
+
+[<Tests>]
+let copyTextTests =
+    testList
+        "copyText payloads"
+        [ test "a JSON body copies the raw UTF-8 bytes, not the tree" {
+              let json = """{"name":"fs","tags":["a"]}"""
+              let env = envelope "application/json" (utf8 json)
+
+              match copyText env "response-body" with
+              | Some text ->
+                  Expect.equal text json "copy must equal the body decoded as UTF-8"
+                  Expect.isSome (Renderer.Json.tryParse text) "the result must parse as JSON"
+                  Expect.isFalse (text.Contains "▸") "copy must not include disclosure markers"
+                  Expect.isFalse (text.Contains "Object(") "copy must not include the tree summary"
+              | None -> failtest "a non-empty JSON body must yield Some"
+          }
+
+          test "a binary body copies the truncated hex dump as shown" {
+              // Over the 256-byte hexDump cap, with NUL bytes so looksBinary wins.
+              let body = Array.init 300 (fun i -> if i % 16 = 0 then 0uy else byte (i % 256))
+              let env = envelope "application/octet-stream" body
+              let shown = innerText (byClass "hex-dump" (renderBody env) |> List.exactlyOne)
+
+              match copyText env "response-body" with
+              | Some text ->
+                  Expect.equal text shown "copy must equal the rendered hexDump"
+                  Expect.stringEnds text "… (44 more bytes)" "the truncation note must travel with the paste"
+              | None -> failtest "a non-empty binary body must yield Some"
+          }
+
+          test "an image/svg+xml body copies the SVG source, not a hex dump" {
+              let svg = """<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>"""
+              let env = envelope "image/svg+xml" (utf8 svg)
+
+              match copyText env "response-body" with
+              | Some text ->
+                  Expect.equal text svg "SVG source must copy as text"
+                  Expect.isFalse (text.Contains "… (") "SVG must not become a hex dump"
+              | None -> failtest "an SVG body must yield Some"
+          }
+
+          test "a text/html body copies the page source" {
+              let html = "<html><body><h1>hi</h1></body></html>"
+              let env = envelope "text/html" (utf8 html)
+
+              match copyText env "response-body" with
+              | Some text -> Expect.equal text html "HTML page source must copy as text"
+              | None -> failtest "an HTML body must yield Some"
+          }
+
+          test "a zero-byte response body yields None" {
+              let env = envelope "text/plain" [||]
+              Expect.equal (copyText env "response-body") None "204-style empty body has nothing to copy"
+          }
+
+          test "response-headers starts with the status line, then Name: value lines in order" {
+              let env =
+                  { envelope "application/json" (utf8 "{}") with
+                      Status = 200
+                      Reason = "OK"
+                      Headers = [ "Content-Type", "application/json; charset=utf-8"; "Server", "nginx" ] }
+
+              match copyText env "response-headers" with
+              | Some text ->
+                  Expect.equal
+                      text
+                      "200 OK\nContent-Type: application/json; charset=utf-8\nServer: nginx"
+                      "status line, then headers in order"
+              | None -> failtest "response-headers must always yield Some"
+          }
+
+          test "response-headers with no headers is still Some, with just the status line" {
+              let env =
+                  { envelope "text/plain" (utf8 "x") with
+                      Status = 204
+                      Reason = "No Content"
+                      Headers = [] }
+
+              Expect.equal (copyText env "response-headers") (Some "204 No Content") "status line alone"
+          }
+
+          test "request starts with method and URL, and separates headers from body with a blank line" {
+              let body = """{"name":"fs","tags":["a"]}"""
+
+              let env =
+                  { envelope "text/plain" (utf8 "ok") with
+                      Request =
+                          { Method = "POST"
+                            Url = "https://api.example.com/items"
+                            Headers = [ "Content-Type", "application/json"; "Accept-Encoding", "gzip, deflate" ]
+                            ContentType = "application/json"
+                            Body = Captured(utf8 body) } }
+
+              match copyText env "request" with
+              | Some text ->
+                  Expect.equal
+                      text
+                      ("POST https://api.example.com/items\n"
+                       + "Content-Type: application/json\n"
+                       + "Accept-Encoding: gzip, deflate\n"
+                       + "\n"
+                       + body)
+                      "method URL, headers, blank line, then body"
+              | None -> failtest "request must always yield Some"
+          }
+
+          test "a NoBody request copies the request line and headers, and ends after the last header" {
+              let env =
+                  { envelope "text/plain" (utf8 "ok") with
+                      Request =
+                          { requestWithNoBody "GET" "https://api.example.com/thing" with
+                              Headers = [ "Accept", "application/json"; "X-Trace", "abc" ] } }
+
+              match copyText env "request" with
+              | Some text ->
+                  Expect.equal
+                      text
+                      "GET https://api.example.com/thing\nAccept: application/json\nX-Trace: abc"
+                      "NoBody ends after the last header, with no trailing blank line"
+              | None -> failtest "request must always yield Some"
+          }
+
+          test "a NotCaptured request copies the reason in the body's position" {
+              let reason = "Body not captured: 5.2 MB exceeds the 1 MB cap"
+
+              let env =
+                  { envelope "text/plain" (utf8 "ok") with
+                      Request =
+                          { requestWithNoBody "POST" "https://api.example.com/upload" with
+                              Headers = [ "Content-Type", "multipart/form-data; boundary=abc" ]
+                              ContentType = "multipart/form-data; boundary=abc"
+                              Body = NotCaptured reason } }
+
+              match copyText env "request" with
+              | Some text ->
+                  Expect.equal
+                      text
+                      ("POST https://api.example.com/upload\n"
+                       + "Content-Type: multipart/form-data; boundary=abc\n"
+                       + "\n"
+                       + reason)
+                      "NotCaptured puts its reason where the body would be"
+              | None -> failtest "request must always yield Some"
+          }
+
+          test "an unknown key yields None" {
+              let env = envelope "text/plain" (utf8 "x")
+              Expect.equal (copyText env "nope") None "only the three known keys are defined"
+          } ]
