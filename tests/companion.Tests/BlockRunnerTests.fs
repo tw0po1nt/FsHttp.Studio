@@ -7,6 +7,7 @@ module Companion.Tests.BlockRunnerTests
 
 open System
 open System.IO
+open System.Net.Http
 open System.Text.Json
 open Expecto
 open Companion.BlockRunner
@@ -1449,6 +1450,50 @@ let requestWireTests =
                   | NotCaptured r -> Expect.equal r reason "reason survives"
                   | other -> failtestf "expected NotCaptured, got %A" other
               | other -> failtestf "expected Ok after notCaptured round-trip, got %A" other
+          }
+
+          // Both ends of this wire are `BlockRunner`, so an unrecognized state is our own
+          // defect. Decaying to `NoBody` would hide it behind a false statement to the user.
+          test "an unknown bodyState throws rather than decaying to NoBody" {
+              let json =
+                  """{"tag":"ok","status":200,"reason":"OK","headers":{},"contentType":"","bodyBase64":"","requestMs":1.0,"request":{"method":"GET","url":"https://example.com/","headers":{},"bodyState":"sometime","bodyBase64":"","bodyReason":""}}"""
+
+              use doc = JsonDocument.Parse json
+
+              Expect.throws
+                  (fun () -> wireToOutcome doc.RootElement |> ignore)
+                  "an unknown bodyState is a defect on our own wire"
+          } ]
+
+// The state a missed capture lookup degrades to. The lookup itself is covered in
+// `RequestCaptureTests`; what matters here is that a request that did send a body never
+// reports "no body" (docs/spec/0012-request-as-sent.md, Decisions 7-8).
+[<Tests>]
+let capturedBodyForTests =
+    testList
+        "BlockRunner.capturedBodyFor"
+        [ test "a miss on a message with no content is NoBody" {
+              use message = new HttpRequestMessage(HttpMethod.Get, "https://example.com/a")
+              Expect.equal (capturedBodyFor message) NoBody "a GET with no content sent no body"
+          }
+
+          test "a miss on a message that carried content is NotCaptured, not NoBody" {
+              use message = new HttpRequestMessage(HttpMethod.Post, "https://example.com/a")
+              message.Content <- new StringContent("""{"name":"pikachu"}""")
+
+              match capturedBodyFor message with
+              | NotCaptured reason -> Expect.equal reason uncapturedBodyReason "it names the missed capture"
+              | other -> failtestf "a POST that sent a body must not report NoBody, got %A" other
+          }
+
+          test "a hit returns the stored body unchanged" {
+              use message = new HttpRequestMessage(HttpMethod.Post, "https://example.com/a")
+              message.Content <- new StringContent("hi")
+              captureRequest message |> ignore
+
+              match capturedBodyFor message with
+              | Captured bytes -> Expect.equal bytes (Text.Encoding.UTF8.GetBytes "hi") "the stored bytes"
+              | other -> failtestf "expected the captured body, got %A" other
           } ]
 
 // The pure routing decision that `run` keys off. These tests drive it directly against an

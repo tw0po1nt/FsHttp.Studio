@@ -227,6 +227,20 @@ let private companionAddendum =
 let private asPairs (h: IEnumerable<KeyValuePair<string, IEnumerable<string>>>) =
     h |> Seq.map (fun kv -> kv.Key, String.Join(", ", kv.Value))
 
+/// Joins a message's own headers with its content's, first name winning. The request and the
+/// response both need this exact merge, so one walk serves both and neither can drift from the
+/// other in join character or dedupe order.
+let private mergeHeaders
+    (own: IEnumerable<KeyValuePair<string, IEnumerable<string>>>)
+    (content: HttpContent | null)
+    : (string * string) list =
+    let contentHeaders =
+        match content with
+        | null -> Seq.empty
+        | c -> asPairs c.Headers
+
+    Seq.append (asPairs own) contentHeaders |> Seq.distinctBy fst |> Seq.toList
+
 /// Blanks a span in place across `lines`. It keeps every newline, so every other line's row and
 /// column numbers stay aligned with the original source. `fill` builds the replacement for the
 /// span's own first line, from that line's width. The two callers below differ in `fill` and in
@@ -615,20 +629,53 @@ let private prop (name: string) (t: Type) : Reflection.PropertyInfo =
     | null -> failwithf "reflection: property '%s' not found on %s" name t.FullName
     | p -> p
 
+// The three `bodyState` names of Decision 10, written once. `bodyToWire` and `bodyFromWire`
+// are inverses, so a name spelled separately in each could drift by a letter and the round
+// trip would silently lose a state.
+[<Literal>]
+let private NoneState = "none"
+
+[<Literal>]
+let private CapturedState = "captured"
+
+[<Literal>]
+let private NotCapturedState = "notCaptured"
+
+/// The body to show for a sent request. A hit is the captured body itself. A miss degrades
+/// rather than breaking the status line, because the method, URL, and headers do not depend on
+/// the capture at all (docs/spec/0012-request-as-sent.md, Decision 7).
+///
+/// The content decides which blank state a miss degrades to, not the miss. With no content
+/// there was no body, and "no body" is true. With content there was a body, and the capture
+/// simply never ran — so "no body" would state something false about a real one (Decision 8).
+///
+/// Public so the miss is testable without an FSI value to reflect over.
+let capturedBodyFor (requestMessage: HttpRequestMessage) : CapturedBody =
+    match tryGetCapturedBody requestMessage with
+    | Some body -> body
+    | None ->
+        match requestMessage.Content with
+        | null -> NoBody
+        | _ -> NotCaptured uncapturedBodyReason
+
 /// Maps a captured body onto the wire's three-state `bodyState` / `bodyBase64` / `bodyReason`
 /// triple (docs/spec/0012-request-as-sent.md, Decision 10). Only the matching field carries a
 /// value; the others are empty strings.
 let private bodyToWire (body: CapturedBody) : string * string * string =
     match body with
-    | NoBody -> "none", "", ""
-    | Captured bytes -> "captured", Convert.ToBase64String bytes, ""
-    | NotCaptured reason -> "notCaptured", "", reason
+    | NoBody -> NoneState, "", ""
+    | Captured bytes -> CapturedState, Convert.ToBase64String bytes, ""
+    | NotCaptured reason -> NotCapturedState, "", reason
 
+/// The inverse of `bodyToWire`. An unrecognized state is a defect on our own wire — both ends
+/// are this module — so it throws rather than decaying to `NoBody`, which would tell the user
+/// no body was sent when one was.
 let private bodyFromWire (bodyState: string) (bodyBase64: string) (bodyReason: string) : CapturedBody =
     match bodyState with
-    | "captured" -> Captured(Convert.FromBase64String bodyBase64)
-    | "notCaptured" -> NotCaptured bodyReason
-    | _ -> NoBody
+    | NoneState -> NoBody
+    | CapturedState -> Captured(Convert.FromBase64String bodyBase64)
+    | NotCapturedState -> NotCaptured bodyReason
+    | other -> failwithf "wire: unknown bodyState '%s'" other
 
 let private extractResponse (requestMs: float) (v: FsiValue) : RunOutcome =
     let t = v.ReflectionType
@@ -665,22 +712,9 @@ let private extractResponse (requestMs: float) (v: FsiValue) : RunOutcome =
         // AbsoluteUri keeps percent-escapes (`?q=one%20two`). Uri.ToString() would decode them.
         | uri -> uri.AbsoluteUri
 
-    let requestHeaders =
-        let contentHeaders =
-            match requestMessage.Content with
-            | null -> Seq.empty
-            | c -> asPairs c.Headers
+    let requestHeaders = mergeHeaders requestMessage.Headers requestMessage.Content
 
-        Seq.append (asPairs requestMessage.Headers) contentHeaders
-        |> Seq.distinctBy fst
-        |> Seq.toList
-
-    let requestBody =
-        match tryGetCapturedBody requestMessage with
-        | Some body -> body
-        // A miss degrades to "no body shown", never to a broken status line. Method, URL, and
-        // headers do not depend on the capture (docs/spec/0012-request-as-sent.md, Decision 7).
-        | None -> NoBody
+    let requestBody = capturedBodyFor requestMessage
 
     let bytes = content.ReadAsByteArrayAsync().Result
 
@@ -689,10 +723,7 @@ let private extractResponse (requestMs: float) (v: FsiValue) : RunOutcome =
         | null -> ""
         | c -> string c
 
-    let headers =
-        Seq.append (asPairs respHeaders) (asPairs content.Headers)
-        |> Seq.distinctBy fst
-        |> Seq.toList
+    let headers = mergeHeaders respHeaders content
 
     Ok(
         { Method = requestMessage.Method.ToString()
@@ -882,7 +913,9 @@ let runInProcessDirect
 let outcomeToWire (outcome: RunOutcome) : obj =
     match outcome with
     | Ok(request, response) ->
-        let bodyState, bodyBase64, bodyReason = bodyToWire request.Body
+        // Prefixed: the response carries a `bodyBase64` of its own, and one identifier must
+        // not stand for two different bodies in the one expression below.
+        let requestBodyState, requestBodyBase64, requestBodyReason = bodyToWire request.Body
 
         {| tag = "ok"
            status = response.Status
@@ -895,9 +928,9 @@ let outcomeToWire (outcome: RunOutcome) : obj =
             {| method = request.Method
                url = request.Url
                headers = dict request.Headers
-               bodyState = bodyState
-               bodyBase64 = bodyBase64
-               bodyReason = bodyReason |} |}
+               bodyState = requestBodyState
+               bodyBase64 = requestBodyBase64
+               bodyReason = requestBodyReason |} |}
     | CompileError diagnostics ->
         {| tag = "compileError"
            diagnostics =

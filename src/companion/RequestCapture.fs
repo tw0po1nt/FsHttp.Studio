@@ -44,6 +44,12 @@ let unknownLengthReason =
 [<Literal>]
 let unreadableBodyReason = "body could not be read, so it is not shown"
 
+/// Shown when the lookup finds no entry for a request that carried content. The transformer
+/// stores a body for every request it sees, so a miss means it never ran — and a request with
+/// content did send a body. "No body" would be a false statement about a real one.
+[<Literal>]
+let uncapturedBodyReason = "body was not captured, so it is not shown"
+
 /// Compact size text for the over-cap reason. A deliberate copy of `Renderer.humanSize`: the
 /// renderer is Fable-side and this is the companion, and the two projects share no compilation
 /// unit. Both must render one size the same way, so change them together.
@@ -76,7 +82,8 @@ let private capturedBodies =
 let private store (m: HttpRequestMessage) (body: CapturedBody) = capturedBodies.AddOrUpdate(m, body)
 
 /// Looks up the body stored for `m`. `None` is a miss: no entry was stored for this instance.
-/// A miss does not throw. Callers map it to the viewer's empty-body case.
+/// A miss does not throw. Callers decide the state it degrades to from the content, since only
+/// a request with no content can honestly report "no body" (Decisions 7-8).
 let tryGetCapturedBody (m: HttpRequestMessage) : CapturedBody option =
     match capturedBodies.TryGetValue m with
     | true, body -> Some body
