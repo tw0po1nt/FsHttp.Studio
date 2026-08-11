@@ -478,6 +478,11 @@ let tryCloseOtherTabsInFixtureColumn (tabTitle: string) : Async<bool> =
 /// read that counts them reports one lens for each block of the fixture plus one for each block
 /// of the fixture before it. That reads as a provider painting twice, which it is not: the
 /// remaining lenses carry the correct titles at the correct lines.
+///
+/// A lens with a command id is an `<a id>`. A lens with a title and an empty command id is a
+/// `<span>` (docs/spec/0014-explain-missing-lenses.md, Decision 2). Command lenses keep the
+/// existing `a[id]` walk. Plain-text collection takes only the no-requests title: a wider span
+/// harvest pulled in non-command nodes that stole Run-lens clicks on the core path.
 let private lensAnchorsPrologue =
     """
     var editor = null;
@@ -492,6 +497,22 @@ let private lensAnchorsPrologue =
     for (var i = 0; i < candidates.length; i++) {
         var host = candidates[i].closest('[class*="codelens" i]');
         if (host && getComputedStyle(host).visibility !== 'hidden') { anchors.push(candidates[i]); }
+    }
+    var decorations = editor.querySelectorAll('[class*="codelens-decoration" i]');
+    for (var d = 0; d < decorations.length; d++) {
+        var host = decorations[d];
+        if (getComputedStyle(host).visibility === 'hidden') { continue; }
+        if (host.querySelector('a[id]')) { continue; }
+        for (var c = 0; c < host.children.length; c++) {
+            var child = host.children[c];
+            if (child.tagName !== 'SPAN') { continue; }
+            var text = child.textContent.trim();
+            // Only the no-requests plain-text lens. A broader span harvest pulled in
+            // non-command nodes that stole Run-lens clicks on the core path.
+            if (text.indexOf('No requests found: this script has a syntax error') >= 0) {
+                anchors.push(child);
+            }
+        }
     }
     anchors.sort(function (l, r) {
         return l.getBoundingClientRect().top - r.getBoundingClientRect().top;
@@ -593,24 +614,35 @@ let private tryClickLensAnchor (selectBody: string) (arg: objnull) : Async<bool>
             return false
     }
 
-/// Find-and-click by partial lens title.
+/// Find-and-click by partial lens title. Prefers a command link (`<a id>`) when one matches, so
+/// a plain-text span that carries the same words cannot take the click (VSCode only runs a
+/// command from the link). Falls back to a plain-text span when no link matches, which is how
+/// the no-requests lens is asserted to do nothing on click.
 let tryClickCodeLensByTitle (title: string) : Async<bool> =
     tryClickLensAnchor
         """
+        var link = null;
+        var plain = null;
         for (var i = 0; i < anchors.length; i++) {
-            if (anchors[i].textContent.indexOf(arguments[0]) >= 0) { return anchors[i]; }
+            if (anchors[i].textContent.indexOf(arguments[0]) < 0) { continue; }
+            if (anchors[i].tagName === 'A' && anchors[i].id) { link = anchors[i]; break; }
+            if (!plain && anchors[i].tagName === 'SPAN') { plain = anchors[i]; }
         }
-        return null;
+        return link || plain;
         """
         (box title)
 
-/// Find-and-click by zero-based lens index from the top of the editor. Use this to reach the
-/// second of two lenses that share a title.
+/// Find-and-click by zero-based lens index among command links only, top to bottom. Plain-text
+/// spans are not clickable commands and must not shift the index of a Run or refusal lens.
 let tryClickCodeLensByIndex (index: int) : Async<bool> =
     tryClickLensAnchor
         """
-        if (arguments[0] >= anchors.length) { return null; }
-        return anchors[arguments[0]];
+        var links = [];
+        for (var i = 0; i < anchors.length; i++) {
+            if (anchors[i].tagName === 'A' && anchors[i].id) { links.push(anchors[i]); }
+        }
+        if (arguments[0] >= links.length) { return null; }
+        return links[arguments[0]];
         """
         (box index)
 

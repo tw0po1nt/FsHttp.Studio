@@ -11,6 +11,11 @@ open System.IO
 /// it. Asserted as rendered, and reused as the partial title a click matches on.
 let lensTitle = "▶ Run request"
 
+/// The line-1 lens when the script failed to parse and holds no block, exactly as
+/// `Protocol.noRequestsLensTitle` spells it for `Script(0, true)`
+/// (docs/spec/0014-explain-missing-lenses.md, Decision 2).
+let noRequestsLensTitle = "⊘ No requests found: this script has a syntax error"
+
 /// A fixture checked in beside the sidecar. The sidecar path is the only location the suite is
 /// handed at run time, so every fixture is resolved from it.
 let private fixturePath (fileName: string) =
