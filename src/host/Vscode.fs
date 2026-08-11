@@ -9,6 +9,7 @@ open Fable.Core
 type StatusBarItem =
     abstract text: string with get, set
     abstract show: unit -> unit
+    abstract hide: unit -> unit
     abstract dispose: unit -> unit
 
 type ExtensionContext =
@@ -32,7 +33,14 @@ type TextDocument =
     /// The script's own URI. Only a `file` scheme carries a real local path in `fileName`, which
     /// is what a Run needs for `__SOURCE_DIRECTORY__` (see `Protocol.scriptFileNameFor`).
     abstract uri: Uri
+    /// vscode.TextDocument.languageId. `"fsharp"` for `.fs`, `.fsx`, and `.fsi` buffers.
+    abstract languageId: string
     abstract getText: unit -> string
+
+/// vscode.TextEditor. Narrowed to the document the editor shows, which is what a document-aware
+/// status bar reads when the active editor changes.
+type TextEditor =
+    abstract document: TextDocument
 
 /// vscode.Range. The 4-number overload constructs it (startLine, startChar, endLine, endChar).
 /// It is opaque otherwise, because the extension host only builds one to give to a `CodeLens`,
@@ -107,6 +115,11 @@ type WebviewPanel =
 type IWindow =
     abstract createStatusBarItem: alignment: float * priority: float -> StatusBarItem
     abstract createWebviewPanel: viewType: string * title: string * showOptions: float * options: obj -> WebviewPanel
+    /// The editor that has focus, or `None` when no editor is active.
+    abstract activeTextEditor: TextEditor option
+    /// Fires when the active editor changes. The listener receives `None` when focus leaves every
+    /// editor. Register the returned `Disposable` on `ExtensionContext.subscriptions`.
+    abstract onDidChangeActiveTextEditor: listener: (TextEditor option -> unit) -> Disposable
     /// vscode.window.showWarningMessage(message, item). It shows one button that the user can
     /// click. The promise resolves to the clicked item's label, or to `undefined` when the user
     /// dismisses the message.
