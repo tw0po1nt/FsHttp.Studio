@@ -93,6 +93,11 @@ There are three keys, and no others:
 body in the DOM. A 1 MB response body then costs 1 MB of markup, and the header block appears
 twice. The key costs a few bytes, and it keeps one authority for the payload.
 
+**Why the key is a `string`.** The DOM attribute that carries the key is a string, so `copyText`
+takes the same type and ends with a `_ -> None` case. A three-case `CopyKey` union would make
+`copyText` total and remove that case. The parse from the attribute belongs at the delegated
+listener, so the union is worth revisiting when that listener lands.
+
 **Why a pure function and not a handler on `Node`.** `Node` is a value, and the Seam-B suite asserts
 its shape. A handler of type `unit -> unit` is opaque to a test, so the two rules that this spec
 exists to get right become untestable. A pure function keeps them in the suite.
@@ -406,8 +411,16 @@ Add to `responseStyles` (`ResponseViewer.fs:30`):
 ```
 
 The shell replaces the sections' own `margin-bottom` rules, so that the spacing does not double.
-Move `margin-bottom: 12px` from `.headers`, from `.request`, and from the body container onto
-`.section-shell`.
+Move `margin-bottom: 12px` from `.headers` and from `.request` onto `.section-shell`.
+
+**Amendment.** This decision first included the body container in the move. The body container has
+no `margin-bottom`. Only `.headers` and `.request` have one. A `margin-bottom` on each shell
+therefore adds 12px below the body, where there was no space before. The last shell returns that
+space to zero:
+
+```css
+.section-shell:last-child { margin-bottom: 0; }
+```
 
 The button stays at 55% opacity until the pointer or the keyboard reaches it. It is always present,
 and never hover-only, so a touch user and a keyboard user both reach it.

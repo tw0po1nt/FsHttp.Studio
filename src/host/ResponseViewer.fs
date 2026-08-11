@@ -120,6 +120,9 @@ summary::-webkit-details-marker { display: none; }
 /* Each section sits in a positioned shell so its copy button stays visible while the section is
    collapsed, and does not scroll with the body (docs/spec/0013-copy-buttons.md, Decision 2). */
 .section-shell { position: relative; margin-bottom: 12px; }
+/* The body is the last section, and it had no bottom margin before the shell existed.
+   Zero here holds the spacing where it was (docs/spec/0013-copy-buttons.md, Decision 12). */
+.section-shell:last-child { margin-bottom: 0; }
 .copy-button {
   position: absolute;
   top: 4px;

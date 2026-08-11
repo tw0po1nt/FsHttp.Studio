@@ -596,4 +596,11 @@ let copyButtonPlacementTests =
 
               Expect.isEmpty underDetails "a button inside details is invisible while collapsed"
               Expect.isEmpty underSummary "a button inside summary would toggle the section"
+          }
+
+          test "every copy button announces its own label changes" {
+              let node = render (envelope "application/json" (utf8 """{"ok":true}"""))
+              let live = byClass "copy-button" node |> List.map (attr "aria-live")
+
+              Expect.equal live [ Some "polite"; Some "polite"; Some "polite" ] "aria-live=polite on each button"
           } ]
