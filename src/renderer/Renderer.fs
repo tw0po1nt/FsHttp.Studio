@@ -173,49 +173,6 @@ let private hexDump (bytes: byte[]) : string =
     else
         dumped
 
-/// The text a copy button puts on the clipboard for a body. It reads the bytes, and never the
-/// Content-Type: a JSON body copies the raw bytes (not the tree), and a binary body copies the
-/// same truncated hex dump the panel shows (docs/spec/0013-copy-buttons.md, Decisions 3 and 4).
-let private bodyCopyText (bytes: byte[]) : string =
-    if looksBinary bytes then
-        hexDump bytes
-    else
-        decodeText bytes
-
-/// A message-shaped block: a first line, one `Name: value` line for each header, and an optional
-/// body after a blank line. The request and the response-headers keys share this shape
-/// (docs/spec/0013-copy-buttons.md, Decision 5).
-let private messageText (firstLine: string) (headers: (string * string) list) (body: string option) : string =
-    let headerLines =
-        headers |> List.map (fun (name, value) -> sprintf "%s: %s" name value)
-
-    let head = firstLine :: headerLines |> String.concat "\n"
-
-    match body with
-    | None -> head
-    | Some text -> head + "\n\n" + text
-
-/// The text that a copy button puts on the clipboard, for one copy key. `None` means that there
-/// is nothing to copy, and the renderer then omits the button
-/// (docs/spec/0013-copy-buttons.md, Decision 6).
-let copyText (env: ResponseEnvelope) (key: string) : string option =
-    match key with
-    | "request" ->
-        let body =
-            match env.Request.Body with
-            | NoBody -> None
-            | Captured bytes -> Some(bodyCopyText bytes)
-            | NotCaptured reason -> Some reason
-
-        Some(messageText (sprintf "%s %s" env.Request.Method env.Request.Url) env.Request.Headers body)
-    | "response-headers" -> Some(messageText (sprintf "%d %s" env.Status env.Reason) env.Headers None)
-    | "response-body" ->
-        if env.Body.Length = 0 then
-            None
-        else
-            Some(bodyCopyText env.Body)
-    | _ -> None
-
 /// The size-and-hex view for bytes that do not decode as text. The note says "Binary body" and
 /// not "Binary response": `renderContent` puts this same view inside the Request section, where
 /// the bytes are a request body, and a note that called them a response would state something
@@ -366,3 +323,48 @@ let render (env: ResponseEnvelope) : Node =
           renderRequest env.Request
           renderHeaders env.Headers
           el "div" [ "class", "response-body" ] [ renderBody env ] ]
+
+// --- copy text ----------------------------------------------------------------------------
+
+/// The text a copy button puts on the clipboard for a body. It reads the bytes, and never the
+/// Content-Type: a JSON body copies the raw bytes (not the tree), and a binary body copies the
+/// same truncated hex dump the panel shows (docs/spec/0013-copy-buttons.md, Decisions 3 and 4).
+let private bodyCopyText (bytes: byte[]) : string =
+    if looksBinary bytes then
+        hexDump bytes
+    else
+        decodeText bytes
+
+/// A message-shaped block: a first line, one `Name: value` line for each header, and an optional
+/// body after a blank line. The request and the response-headers keys share this shape
+/// (docs/spec/0013-copy-buttons.md, Decision 5).
+let private messageText (firstLine: string) (headers: (string * string) list) (body: string option) : string =
+    let headerLines =
+        headers |> List.map (fun (name, value) -> sprintf "%s: %s" name value)
+
+    let head = firstLine :: headerLines |> String.concat "\n"
+
+    match body with
+    | None -> head
+    | Some text -> head + "\n\n" + text
+
+/// The text that a copy button puts on the clipboard, for one copy key. `None` means that there
+/// is nothing to copy, and the renderer then omits the button
+/// (docs/spec/0013-copy-buttons.md, Decision 6).
+let copyText (env: ResponseEnvelope) (key: string) : string option =
+    match key with
+    | "request" ->
+        let body =
+            match env.Request.Body with
+            | NoBody -> None
+            | Captured bytes -> Some(bodyCopyText bytes)
+            | NotCaptured reason -> Some reason
+
+        Some(messageText (sprintf "%s %s" env.Request.Method env.Request.Url) env.Request.Headers body)
+    | "response-headers" -> Some(messageText (sprintf "%d %s" env.Status env.Reason) env.Headers None)
+    | "response-body" ->
+        if env.Body.Length = 0 then
+            None
+        else
+            Some(bodyCopyText env.Body)
+    | _ -> None
