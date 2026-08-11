@@ -62,6 +62,10 @@ _Avoid_: request payload, buffered body, recorded body.
 The companion's verdict that neither route reaches a block, named by the block's *shape*: `loopBody`, `innerBinding`, `insideAnotherRequest`, and nine more. `BlockLocator.classify` decides it from the untyped syntax tree, and the code is all that crosses the wire — the host owns every user-facing title and toast, keyed by the code. A code is a position's shape, and not a diagnostic about the user's script: nothing is wrong with a block in a loop.
 _Avoid_: refusal reason, error code, refusal family (the families that group the codes stay internal to the companion).
 
+**Parse failure**:
+The companion's report that FCS's untyped parse of a script found errors. The `blocks` envelope carries it as `parseFailed`, beside the block ranges. A parse failure does not stop block location, because the parser recovers. A script with damage can still have blocks, and the damage can hide the blocks below it. A parse failure is a state of the script. A Compile error is an outcome of a Run, and a parse failure needs no Run.
+_Avoid_: syntax error (the user-facing wording, which the parse-failure lens uses), broken script, invalid script.
+
 ### Run outcomes
 
 **HTTP error response**:

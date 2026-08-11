@@ -17,6 +17,10 @@ open Companion.BlockLocator
 let private fixture name =
     Path.Combine(__SOURCE_DIRECTORY__, "fixtures", name) |> File.ReadAllText
 
+/// Every block in `source`, in source order. These tests assert over the blocks alone, so they
+/// drop the parse-failed flag here rather than at every call site.
+let private blocksOf (source: string) : LocatedBlock list = (locateBlocks source).Blocks
+
 let private isNamedByTheRun =
     function
     | NamedByTheRun -> true
@@ -82,7 +86,7 @@ let tests =
     testList
         "PositionMatrix"
         [ test "matrix.fsx: each of the twelve original cases gets the route the spec's table names" {
-              let blocks = (locateBlocks (fixture "matrix.fsx")).Blocks
+              let blocks = blocksOf (fixture "matrix.fsx")
               Expect.hasLength blocks 14 "matrix.fsx has 14 blocks (case 3 and case 11 are two blocks each)"
 
               let assertRoute = assertRoute blocks
@@ -103,7 +107,7 @@ let tests =
           }
 
           test "extra.fsx: the shapes the matrix does not have get the route the spec's table names" {
-              let blocks = (locateBlocks (fixture "extra.fsx")).Blocks
+              let blocks = blocksOf (fixture "extra.fsx")
               Expect.hasLength blocks 23 "extra.fsx has 23 blocks"
 
               let assertRoute = assertRoute blocks
@@ -165,7 +169,7 @@ let tests =
           // Positions 13 to 15 are the rows that exist to exercise `Qualifier` and
           // `PrivateSpans`, so the route alone does not cover what the spec asks of them.
           test "extra.fsx: the qualifier and the private spans match the enclosing module chain" {
-              let blocks = (locateBlocks (fixture "extra.fsx")).Blocks
+              let blocks = blocksOf (fixture "extra.fsx")
 
               let assertQualifier = assertQualifier blocks
               let assertPrivateSpans = assertPrivateSpans blocks
@@ -190,7 +194,7 @@ let tests =
           // it exists on the R2 route alone. Position 16 is the row that carries an annotation.
           test "extra.fsx: the type annotation span covers the colon and the type, on R2 alone" {
               let source = fixture "extra.fsx"
-              let blocks = (locateBlocks source).Blocks
+              let blocks = blocksOf source
               let assertTypeAnnotation = assertTypeAnnotation source blocks
 
               assertTypeAnnotation 4 "#16 attributed binding, let private attributed: Response" (Some ": Response")

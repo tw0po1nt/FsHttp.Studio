@@ -178,11 +178,14 @@ let private send (handle: Handle) (payloadJson: string) (entry: Pending) =
         handle.Pending.Add(entry)
         handle.Process.stdin.write (encodeFrame (encodeUtf8 payloadJson)) |> ignore
 
-/// The block ranges from a `blocks` response, and whether the companion's parse failed.
+/// A decoded `blocks` response: the block ranges, and whether the companion's parse failed.
 /// `ParseFailed` mirrors the envelope's `parseFailed` property. An absent property decodes to
 /// `false`, which matches the absent-`refusal` rule
 /// (docs/spec/0014-explain-missing-lenses.md, Decision 3).
-type LocateResult =
+///
+/// The companion has its own `LocateResult`, which holds located blocks and not wire ranges.
+/// This type is the host's side of that wire, so it carries the response name.
+type LocateResponse =
     { Ranges: BlockRange list
       ParseFailed: bool }
 
@@ -190,7 +193,7 @@ type LocateResult =
 /// parse-failed flag after the companion's `blocks` response arrives, or with an empty list and
 /// `ParseFailed = false` if the companion is gone (docs/spec/0004-run-path-robustness.md,
 /// Decision 6) — the honest degraded state, since there is nothing left to locate blocks in.
-let locate (handle: Handle) (source: string) : Async<LocateResult> =
+let locate (handle: Handle) (source: string) : Async<LocateResponse> =
     Async.FromContinuations(fun (resolve, _reject, _cancel) ->
         let payload: obj = createObj [ "tag" ==> "locate"; "source" ==> source ]
 
