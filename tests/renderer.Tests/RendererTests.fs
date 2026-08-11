@@ -590,11 +590,9 @@ let copyButtonPlacementTests =
           test "no copy button is a descendant of details or summary" {
               let node = render (envelope "application/json" (utf8 """{"a":[1,2]}"""))
 
-              let underDetails =
-                  byTag "details" node |> List.collect (byClass "copy-button")
+              let underDetails = byTag "details" node |> List.collect (byClass "copy-button")
 
-              let underSummary =
-                  byTag "summary" node |> List.collect (byClass "copy-button")
+              let underSummary = byTag "summary" node |> List.collect (byClass "copy-button")
 
               Expect.isEmpty underDetails "a button inside details is invisible while collapsed"
               Expect.isEmpty underSummary "a button inside summary would toggle the section"

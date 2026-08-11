@@ -360,8 +360,7 @@ let copyText (env: ResponseEnvelope) (key: string) : string option =
 /// (docs/spec/0013-copy-buttons.md, Decision 7).
 let private copyButton (env: ResponseEnvelope) (key: string) : Node list =
     match copyText env key with
-    | Some _ ->
-        [ el "button" [ "class", "copy-button"; "type", "button"; "data-copy", key ] [ Node.Text "Copy" ] ]
+    | Some _ -> [ el "button" [ "class", "copy-button"; "type", "button"; "data-copy", key ] [ Node.Text "Copy" ] ]
     | None -> []
 
 /// Wraps a section so its copy button stays a sibling of the section, never a descendant of
