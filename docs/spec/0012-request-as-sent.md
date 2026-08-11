@@ -234,8 +234,14 @@ request. So the capture stores into a
 the `requestMessage` it already holds. Exact, and the weak table cannot leak.
 
 A lookup that misses yields the "not captured" state of Decision 8 rather than an error. The method,
-URL, and headers do not depend on the capture at all, so a miss degrades to a Request section with
-no body — never to a broken status line.
+URL, and headers do not depend on the capture at all, so a miss degrades to a Request section that
+shows no body — never to a broken status line.
+
+The content of the `requestMessage` decides which blank state a miss degrades to, not the miss
+itself. A message with no content sent no body, so "no body" is true of it. A message with content
+did send a body, so a miss there is the "not captured" state, and it carries the fifth reason of
+Decision 8. A Request section that shows "no body" for a POST states something false about a real
+body.
 
 ### 8. The body is a three-state value, not a string
 
@@ -249,16 +255,18 @@ type CapturedBody =
     | NotCaptured of reason: string
 ```
 
-`reason` is one of four written strings, and it is shown to the user:
+`reason` is one of five written strings, and it is shown to the user:
 
 - `"streamed body — not captured, so that the upload is unchanged"`
 - `"body too large to show (%s)"`, with the size rendered by the existing `humanSize`.
 - `"body length unknown — not captured, so that the send is unchanged"`, for the absent
   `Content-Length` of Decision 6.
 - `"body could not be read, so it is not shown"`, for a content that throws on read.
+- `"body was not captured, so it is not shown"`, for the missed lookup of Decision 7. The capture
+  never ran, so the companion knows nothing about this body beyond the fact that it was sent.
 
-The last two reasons each name their own condition. One string for all four conditions would tell a
-user that a body was streamed when it was not, and the viewer would state something that is false.
+The last three reasons each name their own condition. One string for all five conditions would tell
+a user that a body was streamed when it was not, and the viewer would state something that is false.
 
 The capture must not throw. It runs inside the user's send, so an exception from an exotic
 `HttpContent` would fail a Run that would otherwise succeed. A failed capture costs the body display

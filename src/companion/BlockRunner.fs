@@ -24,20 +24,31 @@ open FSharp.Compiler.Diagnostics
 open FSharp.Compiler.Interactive.Shell
 open Companion.BlockLocator
 open Companion.Envelope
+open Companion.RequestCapture
 
 type Diagnostic = { Message: string; Range: BlockRange }
 
+/// The request that was actually sent, read off `Response.requestMessage` plus the body
+/// capture (docs/spec/0012-request-as-sent.md, Decisions 1 and 9).
+type RequestData =
+    { Method: string
+      Url: string
+      Headers: (string * string) list
+      Body: CapturedBody }
+
+/// The response half of a successful Run. `RequestMs` is the invocation bracket only: the
+/// single `EvalExpressionNonThrowing` that sends the request
+/// (docs/spec/0004-run-path-robustness.md, Decision 7). It is not the host-side total.
+type ResponseData =
+    { Status: int
+      Reason: string
+      Headers: (string * string) list
+      ContentType: string
+      BodyBase64: string
+      RequestMs: float }
+
 type RunOutcome =
-    /// `requestMs` is the invocation bracket only: the single `EvalExpressionNonThrowing` that
-    /// sends the request (docs/spec/0004-run-path-robustness.md, Decision 7). It is not the
-    /// host-side total.
-    | Ok of
-        status: int *
-        reason: string *
-        headers: (string * string) list *
-        contentType: string *
-        bodyBase64: string *
-        requestMs: float
+    | Ok of request: RequestData * response: ResponseData
     | CompileError of Diagnostic list
     | RuntimeError of string
     /// The companion refused the Run before it evaluated a block. `code` is the wire spelling.
@@ -215,6 +226,20 @@ let private companionAddendum =
 
 let private asPairs (h: IEnumerable<KeyValuePair<string, IEnumerable<string>>>) =
     h |> Seq.map (fun kv -> kv.Key, String.Join(", ", kv.Value))
+
+/// Joins a message's own headers with its content's, first name winning. The request and the
+/// response both need this exact merge, so one walk serves both and neither can drift from the
+/// other in join character or dedupe order.
+let private mergeHeaders
+    (own: IEnumerable<KeyValuePair<string, IEnumerable<string>>>)
+    (content: HttpContent | null)
+    : (string * string) list =
+    let contentHeaders =
+        match content with
+        | null -> Seq.empty
+        | c -> asPairs c.Headers
+
+    Seq.append (asPairs own) contentHeaders |> Seq.distinctBy fst |> Seq.toList
 
 /// Blanks a span in place across `lines`. It keeps every newline, so every other line's row and
 /// column numbers stay aligned with the original source. `fill` builds the replacement for the
@@ -604,6 +629,54 @@ let private prop (name: string) (t: Type) : Reflection.PropertyInfo =
     | null -> failwithf "reflection: property '%s' not found on %s" name t.FullName
     | p -> p
 
+// The three `bodyState` names of Decision 10, written once. `bodyToWire` and `bodyFromWire`
+// are inverses, so a name spelled separately in each could drift by a letter and the round
+// trip would silently lose a state.
+[<Literal>]
+let private NoneState = "none"
+
+[<Literal>]
+let private CapturedState = "captured"
+
+[<Literal>]
+let private NotCapturedState = "notCaptured"
+
+/// The body to show for a sent request. A hit is the captured body itself. A miss degrades
+/// rather than breaking the status line, because the method, URL, and headers do not depend on
+/// the capture at all (docs/spec/0012-request-as-sent.md, Decision 7).
+///
+/// The content decides which blank state a miss degrades to, not the miss. With no content
+/// there was no body, and "no body" is true. With content there was a body, and the capture
+/// simply never ran — so "no body" would state something false about a real one (Decision 8).
+///
+/// Public so the miss is testable without an FSI value to reflect over.
+let capturedBodyFor (requestMessage: HttpRequestMessage) : CapturedBody =
+    match tryGetCapturedBody requestMessage with
+    | Some body -> body
+    | None ->
+        match requestMessage.Content with
+        | null -> NoBody
+        | _ -> NotCaptured uncapturedBodyReason
+
+/// Maps a captured body onto the wire's three-state `bodyState` / `bodyBase64` / `bodyReason`
+/// triple (docs/spec/0012-request-as-sent.md, Decision 10). Only the matching field carries a
+/// value; the others are empty strings.
+let private bodyToWire (body: CapturedBody) : string * string * string =
+    match body with
+    | NoBody -> NoneState, "", ""
+    | Captured bytes -> CapturedState, Convert.ToBase64String bytes, ""
+    | NotCaptured reason -> NotCapturedState, "", reason
+
+/// The inverse of `bodyToWire`. An unrecognized state is a defect on our own wire — both ends
+/// are this module — so it throws rather than decaying to `NoBody`, which would tell the user
+/// no body was sent when one was.
+let private bodyFromWire (bodyState: string) (bodyBase64: string) (bodyReason: string) : CapturedBody =
+    match bodyState with
+    | NoneState -> NoBody
+    | CapturedState -> Captured(Convert.FromBase64String bodyBase64)
+    | NotCapturedState -> NotCaptured bodyReason
+    | other -> failwithf "wire: unknown bodyState '%s'" other
+
 let private extractResponse (requestMs: float) (v: FsiValue) : RunOutcome =
     let t = v.ReflectionType
     let rv = v.ReflectionValue
@@ -622,6 +695,27 @@ let private extractResponse (requestMs: float) (v: FsiValue) : RunOutcome =
         | :? Net.Http.Headers.HttpResponseHeaders as h -> h
         | _ -> failwith "reflection: 'headers' property was not HttpResponseHeaders"
 
+    // Method, URL, and headers come from the BCL `HttpRequestMessage` on the Response. The
+    // body cannot — `HttpClient` has already disposed the content — so it is looked up from
+    // the capture table by the same message instance (docs/spec/0012-request-as-sent.md,
+    // Decisions 1-2 and 7). A null `requestMessage` is not expected on a successful Run; fail
+    // loudly rather than invent an empty request.
+    let requestMessage =
+        match getValue "requestMessage" with
+        | null -> failwith "reflection: 'requestMessage' was null"
+        | :? HttpRequestMessage as m -> m
+        | _ -> failwith "reflection: 'requestMessage' property was not an HttpRequestMessage"
+
+    let requestUrl =
+        match requestMessage.RequestUri with
+        | null -> failwith "reflection: requestMessage.RequestUri was null"
+        // AbsoluteUri keeps percent-escapes (`?q=one%20two`). Uri.ToString() would decode them.
+        | uri -> uri.AbsoluteUri
+
+    let requestHeaders = mergeHeaders requestMessage.Headers requestMessage.Content
+
+    let requestBody = capturedBodyFor requestMessage
+
     let bytes = content.ReadAsByteArrayAsync().Result
 
     let ctype =
@@ -629,12 +723,20 @@ let private extractResponse (requestMs: float) (v: FsiValue) : RunOutcome =
         | null -> ""
         | c -> string c
 
-    let headers =
-        Seq.append (asPairs respHeaders) (asPairs content.Headers)
-        |> Seq.distinctBy fst
-        |> Seq.toList
+    let headers = mergeHeaders respHeaders content
 
-    Ok(statusInt, reason, headers, ctype, Convert.ToBase64String bytes, requestMs)
+    Ok(
+        { Method = requestMessage.Method.ToString()
+          Url = requestUrl
+          Headers = requestHeaders
+          Body = requestBody },
+        { Status = statusInt
+          Reason = reason
+          Headers = headers
+          ContentType = ctype
+          BodyBase64 = Convert.ToBase64String bytes
+          RequestMs = requestMs }
+    )
 
 /// Evaluates the block at `blockIndex` in `source` *in the current process*, and returns its
 /// outcome. The index is 0-based and in source order, which matches the order in a `locate` and
@@ -810,14 +912,25 @@ let runInProcessDirect
 /// therefore cannot drift apart.
 let outcomeToWire (outcome: RunOutcome) : obj =
     match outcome with
-    | Ok(status, reason, headers, contentType, bodyBase64, requestMs) ->
+    | Ok(request, response) ->
+        // Prefixed: the response carries a `bodyBase64` of its own, and one identifier must
+        // not stand for two different bodies in the one expression below.
+        let requestBodyState, requestBodyBase64, requestBodyReason = bodyToWire request.Body
+
         {| tag = "ok"
-           status = status
-           reason = reason
-           headers = dict headers
-           contentType = contentType
-           bodyBase64 = bodyBase64
-           requestMs = requestMs |}
+           status = response.Status
+           reason = response.Reason
+           headers = dict response.Headers
+           contentType = response.ContentType
+           bodyBase64 = response.BodyBase64
+           requestMs = response.RequestMs
+           request =
+            {| method = request.Method
+               url = request.Url
+               headers = dict request.Headers
+               bodyState = requestBodyState
+               bodyBase64 = requestBodyBase64
+               bodyReason = requestBodyReason |} |}
     | CompileError diagnostics ->
         {| tag = "compileError"
            diagnostics =
@@ -839,20 +952,36 @@ let outcomeToWire (outcome: RunOutcome) : obj =
            name = name |}
 
 /// Parses a `--worker` child's response frame back into a `RunOutcome`. It is the inverse of
-/// `outcomeToWire`, so the delegation is transparent to `run`'s caller.
-let private wireToOutcome (root: JsonElement) : RunOutcome =
+/// `outcomeToWire`, so the delegation is transparent to `run`'s caller. Public so the wire
+/// round-trip for the request object is testable at the same seam.
+let wireToOutcome (root: JsonElement) : RunOutcome =
     match jsonString (root.GetProperty "tag") with
     | "ok" ->
         let headers =
             [ for p in root.GetProperty("headers").EnumerateObject() -> p.Name, jsonString p.Value ]
 
+        let requestElem = root.GetProperty "request"
+
+        let requestHeaders =
+            [ for p in requestElem.GetProperty("headers").EnumerateObject() -> p.Name, jsonString p.Value ]
+
+        let body =
+            bodyFromWire
+                (jsonString (requestElem.GetProperty "bodyState"))
+                (jsonString (requestElem.GetProperty "bodyBase64"))
+                (jsonString (requestElem.GetProperty "bodyReason"))
+
         Ok(
-            root.GetProperty("status").GetInt32(),
-            jsonString (root.GetProperty "reason"),
-            headers,
-            jsonString (root.GetProperty "contentType"),
-            jsonString (root.GetProperty "bodyBase64"),
-            root |> getFloatProp "requestMs"
+            { Method = jsonString (requestElem.GetProperty "method")
+              Url = jsonString (requestElem.GetProperty "url")
+              Headers = requestHeaders
+              Body = body },
+            { Status = root.GetProperty("status").GetInt32()
+              Reason = jsonString (root.GetProperty "reason")
+              Headers = headers
+              ContentType = jsonString (root.GetProperty "contentType")
+              BodyBase64 = jsonString (root.GetProperty "bodyBase64")
+              RequestMs = root |> getFloatProp "requestMs" }
         )
     | "compileError" ->
         [ for d in root.GetProperty("diagnostics").EnumerateArray() do

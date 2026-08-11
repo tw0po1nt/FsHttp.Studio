@@ -2,7 +2,8 @@ module Companion.Tests.RequestCaptureTests
 
 // Seam 1 of docs/spec/0012-request-as-sent.md (tests 1-5): the body-capture rule. Drives
 // `captureRequest` with hand-built `HttpRequestMessage` values, and sends through `TestServer`
-// to prove the capture never changes what the server receives.
+// to prove the capture never changes what the server receives. Test 6 (AbsoluteUri percent-
+// escapes) lives in `BlockRunnerTests`, because it needs a full Run through `extractResponse`.
 
 open System
 open System.Collections.Generic

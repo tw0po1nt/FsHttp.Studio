@@ -7,8 +7,11 @@ module Companion.Tests.BlockRunnerTests
 
 open System
 open System.IO
+open System.Net.Http
+open System.Text.Json
 open Expecto
 open Companion.BlockRunner
+open Companion.RequestCapture
 open Companion.Tests.TestServer
 
 /// A published FsHttp version. Reflection extraction is stable across versions 13 to 15
@@ -72,9 +75,12 @@ let private expectResolvesBesideScript (marker: string) (runner: string -> int -
             )
 
         match runner source 0 (Some scriptPath) with
-        | Ok(status, _, _, _, bodyBase64, _) ->
-            Expect.equal status 200 "the sidecar beside the script should be readable"
-            let body = Text.Encoding.UTF8.GetString(Convert.FromBase64String bodyBase64)
+        | Ok(_, response) ->
+            Expect.equal response.Status 200 "the sidecar beside the script should be readable"
+
+            let body =
+                Text.Encoding.UTF8.GetString(Convert.FromBase64String response.BodyBase64)
+
             Expect.equal body (marker + "-resolved") "the request should use the sidecar's contents"
         | other -> failtestf "expected ok from a beside-script read, got %A" other
     finally
@@ -96,7 +102,7 @@ let private expectTimedRun (runner: string -> int -> string option -> RunOutcome
     sw.Stop()
 
     match outcome with
-    | Ok(_, _, _, _, _, requestMs) -> check requestMs sw.Elapsed.TotalMilliseconds
+    | Ok(_, response) -> check response.RequestMs sw.Elapsed.TotalMilliseconds
     | other -> failtestf "expected ok with requestMs, got %A" other
 
 /// Asserts that a diagnostic points somewhere the editor can actually highlight. A setup
@@ -127,11 +133,11 @@ let tests =
               let source = script (sprintf "http {\n    GET \"%s/png\"\n}\n" server.BaseUrl)
 
               match runSource source 0 with
-              | Ok(status, _reason, headers, contentType, bodyBase64, _) ->
-                  Expect.equal status 200 "status should round-trip"
-                  Expect.equal contentType "image/png" "contentType should come from the content header"
+              | Ok(_, response) ->
+                  Expect.equal response.Status 200 "status should round-trip"
+                  Expect.equal response.ContentType "image/png" "contentType should come from the content header"
 
-                  let headerMap = dict headers
+                  let headerMap = dict response.Headers
 
                   Expect.equal headerMap.["X-Custom"] "hello" "a response header should be present"
 
@@ -140,7 +146,7 @@ let tests =
                       "image/png"
                       "a content-only header should be merged in too"
 
-                  let bytes = Convert.FromBase64String bodyBase64
+                  let bytes = Convert.FromBase64String response.BodyBase64
                   Expect.equal bytes pngBytes "body bytes should be byte-intact (PNG magic preserved)"
               | other -> failtestf "expected ok, got %A" other
           }
@@ -151,7 +157,7 @@ let tests =
               let source = script (sprintf "http {\n    GET \"%s/missing\"\n}\n" server.BaseUrl)
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _, _) -> Expect.equal status 404 "the non-2xx status should come through as ok"
+              | Ok(_, response) -> Expect.equal response.Status 404 "the non-2xx status should come through as ok"
               | other -> failtestf "a non-2xx response should still be ok, got %A" other
           }
 
@@ -225,8 +231,8 @@ let tests =
                   let source = script (sourceFor (server.BaseUrl + "/hit"))
 
                   match runSource source 0 with
-                  | Ok(status, _, _, _, _, _) ->
-                      Expect.equal status 200 (sprintf "%s should run to a successful response" name)
+                  | Ok(_, response) ->
+                      Expect.equal response.Status 200 (sprintf "%s should run to a successful response" name)
                       Expect.equal hitCounter.Value 1 (sprintf "%s should send exactly one request" name)
                   | other -> failtestf "%s: expected ok, got %A" name other
               }
@@ -249,8 +255,8 @@ let tests =
                   )
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _, _) ->
-                  Expect.equal status 200 "a backtick-quoted binding should reach its block"
+              | Ok(_, response) ->
+                  Expect.equal response.Status 200 "a backtick-quoted binding should reach its block"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
           }
@@ -266,8 +272,8 @@ let tests =
                   script (sprintf "let private secret =\n    http {\n        GET \"%s/hit\"\n    }\n" server.BaseUrl)
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _, _) ->
-                  Expect.equal status 200 "a private binding should still run"
+              | Ok(_, response) ->
+                  Expect.equal response.Status 200 "a private binding should still run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
           }
@@ -280,8 +286,8 @@ let tests =
                   script (sprintf "module private Vault =\n    http {\n        GET \"%s/hit\"\n    }\n" server.BaseUrl)
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _, _) ->
-                  Expect.equal status 200 "a block in a private module should still run"
+              | Ok(_, response) ->
+                  Expect.equal response.Status 200 "a block in a private module should still run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
           }
@@ -300,8 +306,8 @@ let tests =
                   )
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _, _) ->
-                  Expect.equal status 200 "an internal binding should run"
+              | Ok(_, response) ->
+                  Expect.equal response.Status 200 "an internal binding should run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
           }
@@ -324,8 +330,8 @@ let tests =
                   )
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _, _) ->
-                  Expect.equal status 200 "an attributed binding should run"
+              | Ok(_, response) ->
+                  Expect.equal response.Status 200 "an attributed binding should run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
           }
@@ -346,8 +352,8 @@ let tests =
                   )
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _, _) ->
-                  Expect.equal status 200 "the annotated binding should still run"
+              | Ok(_, response) ->
+                  Expect.equal response.Status 200 "the annotated binding should still run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request, not two"
               | other -> failtestf "expected ok, got %A" other
           }
@@ -368,8 +374,8 @@ let tests =
                   )
 
               match runSource source 0 with
-              | Ok(status, _, _, _, _, _) ->
-                  Expect.equal status 200 "the outer, targeted block must survive the containing sibling span"
+              | Ok(_, response) ->
+                  Expect.equal response.Status 200 "the outer, targeted block must survive the containing sibling span"
                   Expect.equal hitCounter.Value 1 "only the target's own request should fire"
               | other -> failtestf "expected ok, got %A" other
           }
@@ -391,8 +397,8 @@ let tests =
                   )
 
               match runSource source 1 with
-              | Ok(status, _, _, _, _, _) ->
-                  Expect.equal status 200 "the block below the class and its member should still run"
+              | Ok(_, response) ->
+                  Expect.equal response.Status 200 "the block below the class and its member should still run"
                   Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
           }
@@ -506,11 +512,11 @@ let tests =
 
               for i in 1..3 do
                   match runSource source 0 with
-                  | Ok(status, _, _, _, bodyBase64, _) ->
-                      Expect.equal status 200 (sprintf "Run #%d should be a successful 200" i)
+                  | Ok(_, response) ->
+                      Expect.equal response.Status 200 (sprintf "Run #%d should be a successful 200" i)
 
                       Expect.equal
-                          (Convert.FromBase64String bodyBase64)
+                          (Convert.FromBase64String response.BodyBase64)
                           body
                           (sprintf "Run #%d body should be byte-intact, not a consumed stream" i)
                   | other -> failtestf "Run #%d expected ok, got %A" i other
@@ -834,11 +840,11 @@ let tests =
 
               for i in 1..3 do
                   match runSource source 0 with
-                  | Ok(status, _, _, _, bodyBase64, _) ->
-                      Expect.equal status 200 (sprintf "Run #%d should be a successful 200" i)
+                  | Ok(_, response) ->
+                      Expect.equal response.Status 200 (sprintf "Run #%d should be a successful 200" i)
 
                       Expect.equal
-                          (Convert.FromBase64String bodyBase64)
+                          (Convert.FromBase64String response.BodyBase64)
                           body
                           (sprintf "Run #%d body should be byte-intact, not a consumed stream" i)
                   | other -> failtestf "Run #%d expected ok, got %A" i other
@@ -862,15 +868,15 @@ let tests =
                       server.BaseUrl
 
               match runSource (sourceFor "15.0.3") 0 with
-              | Ok(status, _, _, _, _, _) -> Expect.equal status 200 "first pin (15.0.3) should run"
+              | Ok(_, response) -> Expect.equal response.Status 200 "first pin (15.0.3) should run"
               | other -> failtestf "first pin expected ok, got %A" other
 
               match runSource (sourceFor "13.3.0") 0 with
-              | Ok(status, _, _, _, bodyBase64, _) ->
-                  Expect.equal status 200 "second, differently-pinned Run (13.3.0) should also run"
+              | Ok(_, response) ->
+                  Expect.equal response.Status 200 "second, differently-pinned Run (13.3.0) should also run"
 
                   Expect.equal
-                      (Convert.FromBase64String bodyBase64)
+                      (Convert.FromBase64String response.BodyBase64)
                       pngBytes
                       "the conflict-routed Run's body should be byte-intact"
               | other -> failtestf "second pin expected ok (no ALC collision), got %A" other
@@ -965,7 +971,7 @@ let tests =
                   sprintf "#r \"nuget: FsHttp\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n" server.BaseUrl
 
               match runSource versionlessSource 0 with
-              | Ok(status, _, _, _, _, _) -> Expect.equal status 200 "the version-less Run should load latest and run"
+              | Ok(_, response) -> Expect.equal response.Status 200 "the version-less Run should load latest and run"
               | other -> failtestf "version-less Run expected ok, got %A" other
 
               // 13.3.0 is not the latest FsHttp, so this explicit pin differs from the version
@@ -975,16 +981,22 @@ let tests =
                   sprintf "#r \"nuget: FsHttp, 13.3.0\"\nopen FsHttp\n\nhttp {\n    GET \"%s/png\"\n}\n" server.BaseUrl
 
               match runSource pinnedSource 0 with
-              | Ok(status, _, _, _, bodyBase64, requestMs) ->
-                  Expect.equal status 200 "the later differently-pinned Run should run without an ALC collision"
+              | Ok(_, response) ->
+                  Expect.equal
+                      response.Status
+                      200
+                      "the later differently-pinned Run should run without an ALC collision"
 
                   // This is the one Run in the file that the pin conflict itself routes to a
                   // worker, so it is where `requestMs` is proven to survive a route the test did
                   // not choose. The server here has no delay, so positivity is all it can claim.
-                  Expect.isGreaterThan requestMs 0.0 "a pin-forced worker Run must still carry a measured requestMs"
+                  Expect.isGreaterThan
+                      response.RequestMs
+                      0.0
+                      "a pin-forced worker Run must still carry a measured requestMs"
 
                   Expect.equal
-                      (Convert.FromBase64String bodyBase64)
+                      (Convert.FromBase64String response.BodyBase64)
                       pngBytes
                       "the conflict-routed Run's body should be byte-intact"
               | other ->
@@ -1104,7 +1116,7 @@ let tests =
               let source = script (sprintf "http {\n    GET \"%s/fast\"\n}\n" server.BaseUrl)
 
               match run source 0 None 30000 with
-              | Ok(status, _, _, _, _, _) -> Expect.equal status 200 "the default bound must not disturb a fast request"
+              | Ok(_, response) -> Expect.equal response.Status 200 "the default bound must not disturb a fast request"
               | other -> failtestf "expected Ok with the default bound, got %A" other
           }
 
@@ -1113,7 +1125,7 @@ let tests =
               let source = script (sprintf "http {\n    GET \"%s/fast\"\n}\n" server.BaseUrl)
 
               match run source 0 None 0 with
-              | Ok(status, _, _, _, _, _) -> Expect.equal status 200 "timeoutMs = 0 must still Run a fast request"
+              | Ok(_, response) -> Expect.equal response.Status 200 "timeoutMs = 0 must still Run a fast request"
               | other -> failtestf "expected Ok with timeoutMs = 0, got %A" other
 
               // The invocation's Config.update carries no `Option.orElse` when timeoutMs is 0,
@@ -1152,8 +1164,8 @@ let tests =
               let slowSource = script (sprintf "http {\n    GET \"%s/slow\"\n}\n" slow.BaseUrl)
 
               match run slowSource 0 None 0 with
-              | Ok(status, _, _, _, _, _) ->
-                  Expect.equal status 200 "timeoutMs = 0 must not inject a short bound over a 2 s answer"
+              | Ok(_, response) ->
+                  Expect.equal response.Status 200 "timeoutMs = 0 must not inject a short bound over a 2 s answer"
               | other -> failtestf "expected Ok against a 2 s server with timeoutMs = 0, got %A" other
           }
 
@@ -1234,6 +1246,95 @@ let tests =
                   sw.Elapsed.TotalMilliseconds
                   (float boundMs + 5000.0)
                   "the pin-forced worker must end near the request bound"
+          }
+
+          // docs/spec/0012-request-as-sent.md, Seam 1 test 6 and the companion half of
+          // Decisions 1 and 9-10: the request on a successful Run comes from requestMessage.
+          test "a computed URL with a query string keeps its percent-escapes on AbsoluteUri" {
+              use server = new TestServer(Map [ "/search", textHandler 200 "ok" ])
+
+              // The URL is built at run time, so the old source-text heuristic would have shown
+              // a blank URL. AbsoluteUri must keep `%20` rather than decoding it to a space.
+              let source =
+                  script (
+                      String.concat
+                          "\n"
+                          [ sprintf "let baseUrl = \"%s\"" server.BaseUrl
+                            "let q = \"one%20two\""
+                            "http {"
+                            "    GET (sprintf \"%s/search?q=%s\" baseUrl q)"
+                            "}"
+                            "" ]
+                  )
+
+              match runSource source 0 with
+              | Ok(request, response) ->
+                  Expect.equal response.Status 200 "the Run itself must succeed"
+                  Expect.equal request.Method "GET" "method comes from requestMessage"
+                  Expect.stringContains request.Url "%20" "AbsoluteUri keeps the percent-escape"
+                  Expect.isFalse (request.Url.Contains "one two") "ToString-style decoding must not win"
+                  Expect.stringContains request.Url "/search?q=one%20two" "the assembled query is intact"
+              | other -> failtestf "expected ok with a preserved query escape, got %A" other
+          }
+
+          test "request headers include ones the HTTP stack added" {
+              use server = new TestServer(Map [ "/hdr", textHandler 200 "ok" ])
+
+              let source =
+                  script (
+                      sprintf
+                          "http {\n    GET \"%s/hdr\"\n    header \"Accept\" \"application/json\"\n    header \"X-Trace\" \"abc\"\n}\n"
+                          server.BaseUrl
+                  )
+
+              match runSource source 0 with
+              | Ok(request, response) ->
+                  Expect.equal response.Status 200 "the Run itself must succeed"
+                  let headerMap = dict request.Headers
+
+                  Expect.isTrue
+                      (headerMap.ContainsKey "Accept-Encoding")
+                      "Accept-Encoding is added by the stack and must appear on requestMessage"
+
+                  Expect.stringContains headerMap.["Accept"] "application/json" "script-set Accept survives"
+
+                  Expect.equal headerMap.["X-Trace"] "abc" "script-set custom header survives"
+              | other -> failtestf "expected ok with stack-added request headers, got %A" other
+          }
+
+          test "a successful Run always carries a non-null requestMessage-backed request" {
+              use server = new TestServer(Map [ "/alive", textHandler 200 "ok" ])
+              let source = script (sprintf "http {\n    GET \"%s/alive\"\n}\n" server.BaseUrl)
+
+              match runSource source 0 with
+              | Ok(request, response) ->
+                  Expect.equal response.Status 200 "the Run itself must succeed"
+                  Expect.isNotEmpty request.Method "method must be present"
+                  Expect.isNotEmpty request.Url "url must be present"
+                  Expect.stringStarts request.Url "http" "url is an absolute URI from requestMessage"
+              | other -> failtestf "expected ok with a populated request, got %A" other
+          }
+
+          test "a POST json body arrives as Captured on the request" {
+              use server = new TestServer(Map [ "/echo", textHandler 200 "ok" ])
+
+              let source =
+                  script (
+                      sprintf
+                          "http {\n    POST \"%s/echo\"\n    body\n    json \"\"\"{\"name\":\"pikachu\"}\"\"\"\n}\n"
+                          server.BaseUrl
+                  )
+
+              match runSource source 0 with
+              | Ok(request, response) ->
+                  Expect.equal response.Status 200 "the Run itself must succeed"
+
+                  match request.Body with
+                  | Captured bytes ->
+                      let text = Text.Encoding.UTF8.GetString bytes
+                      Expect.stringContains text "pikachu" "captured JSON body"
+                  | other -> failtestf "expected Captured body, got %A" other
+              | other -> failtestf "expected ok with a captured request body, got %A" other
           } ]
 
 // Pure pin parsing, with no FSI and no server. It produces the input that `run`'s conflict
@@ -1272,6 +1373,127 @@ let pinTests =
                   (extractPins "#r \"nuget: FsHttp, 15.0.3\"\n#r \"nuget: Newtonsoft.Json, 13.0.3\"")
                   [ "FsHttp", Some "15.0.3"; "Newtonsoft.Json", Some "13.0.3" ]
                   "each pin should appear once, in source order"
+          } ]
+
+/// Pure wire round-trips for the `request` object on an `ok` envelope
+/// (docs/spec/0012-request-as-sent.md, Decision 10). No FSI, no server.
+module private RequestWire =
+
+    let responseStub =
+        { Status = 200
+          Reason = "OK"
+          Headers = [ "Content-Type", "text/plain" ]
+          ContentType = "text/plain"
+          BodyBase64 = Convert.ToBase64String([| 1uy; 2uy |])
+          RequestMs = 12.5 }
+
+    let roundTrip (request: RequestData) =
+        let outcome = Ok(request, responseStub)
+        let bytes = JsonSerializer.SerializeToUtf8Bytes(outcomeToWire outcome)
+        use doc = JsonDocument.Parse(bytes)
+        wireToOutcome doc.RootElement
+
+[<Tests>]
+let requestWireTests =
+    testList
+        "BlockRunner.requestWire"
+        [ test "NoBody round-trips as bodyState none" {
+              let request =
+                  { Method = "GET"
+                    Url = "https://example.com/a"
+                    Headers = [ "Accept", "application/json" ]
+                    Body = NoBody }
+
+              match RequestWire.roundTrip request with
+              | Ok(got, response) ->
+                  Expect.equal got.Method "GET" "method"
+                  Expect.equal got.Url "https://example.com/a" "url"
+                  Expect.equal got.Headers [ "Accept", "application/json" ] "headers"
+                  Expect.equal got.Body NoBody "body"
+                  Expect.equal response.RequestMs 12.5 "response half survives"
+              | other -> failtestf "expected Ok after none round-trip, got %A" other
+          }
+
+          test "Captured body round-trips as bodyState captured with matching bytes" {
+              let payload = Text.Encoding.UTF8.GetBytes("""{"name":"pikachu"}""")
+
+              let request =
+                  { Method = "POST"
+                    Url = "https://example.com/items?q=one%20two"
+                    Headers = [ "Content-Type", "application/json" ]
+                    Body = Captured payload }
+
+              match RequestWire.roundTrip request with
+              | Ok(got, _) ->
+                  Expect.equal got.Method "POST" "method"
+                  Expect.equal got.Url "https://example.com/items?q=one%20two" "percent-escapes survive the wire"
+                  Expect.equal got.Headers [ "Content-Type", "application/json" ] "headers"
+
+                  match got.Body with
+                  | Captured bytes -> Expect.equal bytes payload "captured bytes round-trip"
+                  | other -> failtestf "expected Captured, got %A" other
+              | other -> failtestf "expected Ok after captured round-trip, got %A" other
+          }
+
+          test "NotCaptured body round-trips as bodyState notCaptured with its reason" {
+              let reason = streamedBodyReason
+
+              let request =
+                  { Method = "POST"
+                    Url = "https://example.com/upload"
+                    Headers = []
+                    Body = NotCaptured reason }
+
+              match RequestWire.roundTrip request with
+              | Ok(got, _) ->
+                  match got.Body with
+                  | NotCaptured r -> Expect.equal r reason "reason survives"
+                  | other -> failtestf "expected NotCaptured, got %A" other
+              | other -> failtestf "expected Ok after notCaptured round-trip, got %A" other
+          }
+
+          // Both ends of this wire are `BlockRunner`, so an unrecognized state is our own
+          // defect. Decaying to `NoBody` would hide it behind a false statement to the user.
+          test "an unknown bodyState throws rather than decaying to NoBody" {
+              let json =
+                  """{"tag":"ok","status":200,"reason":"OK","headers":{},"contentType":"","bodyBase64":"","requestMs":1.0,"request":{"method":"GET","url":"https://example.com/","headers":{},"bodyState":"sometime","bodyBase64":"","bodyReason":""}}"""
+
+              use doc = JsonDocument.Parse json
+
+              Expect.throws
+                  (fun () -> wireToOutcome doc.RootElement |> ignore)
+                  "an unknown bodyState is a defect on our own wire"
+          } ]
+
+// The state a missed capture lookup degrades to. The lookup itself is covered in
+// `RequestCaptureTests`; what matters here is that a request that did send a body never
+// reports "no body" (docs/spec/0012-request-as-sent.md, Decisions 7-8).
+[<Tests>]
+let capturedBodyForTests =
+    testList
+        "BlockRunner.capturedBodyFor"
+        [ test "a miss on a message with no content is NoBody" {
+              use message = new HttpRequestMessage(HttpMethod.Get, "https://example.com/a")
+              Expect.equal (capturedBodyFor message) NoBody "a GET with no content sent no body"
+          }
+
+          test "a miss on a message that carried content is NotCaptured, not NoBody" {
+              use message = new HttpRequestMessage(HttpMethod.Post, "https://example.com/a")
+              message.Content <- new StringContent("""{"name":"pikachu"}""")
+
+              match capturedBodyFor message with
+              | NotCaptured reason -> Expect.equal reason uncapturedBodyReason "it names the missed capture"
+              | other -> failtestf "a POST that sent a body must not report NoBody, got %A" other
+          }
+
+          test "a hit returns the stored body unchanged" {
+              use message = new HttpRequestMessage(HttpMethod.Post, "https://example.com/a")
+              message.Content <- new StringContent("hi")
+              captureRequest message |> ignore
+
+              match capturedBodyFor message with
+              | Captured bytes -> Expect.equal bytes (Text.Encoding.UTF8.GetBytes "hi") "the stored bytes"
+              | other -> failtestf "expected the captured body, got %A" other
           } ]
 
 // The pure routing decision that `run` keys off. These tests drive it directly against an
