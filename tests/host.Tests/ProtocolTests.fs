@@ -209,3 +209,79 @@ let requestContentTypeTests =
 
               Expect.equal (requestContentType headers) "application/json" "the first wins, and the read is total"
           } ]
+
+/// Decision 5's status-bar table and Decision 6's visibility rule, driven as pure values
+/// (docs/spec/0014-explain-missing-lenses.md, Seam 3).
+[<Tests>]
+let statusTextTests =
+    testList
+        "statusText"
+        [ test "hides the item when there is no F# document, whatever the companion state is" {
+              for state in [ Starting; Ready; SdkNotFound; Stopped ] do
+                  Expect.equal
+                      (statusText state NoFSharpDocument)
+                      None
+                      (sprintf "%A + NoFSharpDocument hides the item" state)
+          }
+
+          test "a companion state other than Ready outranks the script view" {
+              // A Script view that would otherwise report a count still reports the companion's
+              // own state. Starting, SdkNotFound, and Stopped each win over the count.
+              let scriptWithRequests = Script(2, false)
+
+              Expect.equal (statusText Starting scriptWithRequests) (Some "starting…") "Starting outranks"
+
+              Expect.equal
+                  (statusText SdkNotFound scriptWithRequests)
+                  (Some ".NET SDK not found")
+                  "SdkNotFound outranks"
+
+              Expect.equal (statusText Stopped scriptWithRequests) (Some "companion stopped") "Stopped outranks"
+          }
+
+          test "maps each Ready row of Decision 5 to its text" {
+              Expect.equal (statusText Ready NotAScript) (Some "not an .fsx script") "Ready + not .fsx"
+
+              Expect.equal
+                  (statusText Ready ScriptPending)
+                  (Some "looking for requests…")
+                  "Ready + .fsx, no response yet"
+
+              Expect.equal (statusText Ready (Script(1, false))) (Some "1 request") "Ready + clean + 1"
+              Expect.equal (statusText Ready (Script(2, false))) (Some "2 requests") "Ready + clean + N > 1"
+              Expect.equal (statusText Ready (Script(0, false))) (Some "no requests found") "Ready + clean + 0"
+
+              Expect.equal
+                  (statusText Ready (Script(0, true)))
+                  (Some "no requests found — syntax error")
+                  "Ready + failed + 0"
+
+              Expect.equal
+                  (statusText Ready (Script(3, true)))
+                  (Some "3 requests — a syntax error can hide others")
+                  "Ready + failed + N >= 1"
+          }
+
+          test "one request is singular, and two are plural" {
+              Expect.equal (statusText Ready (Script(1, false))) (Some "1 request") "singular"
+              Expect.equal (statusText Ready (Script(2, false))) (Some "2 requests") "plural"
+          } ]
+
+[<Tests>]
+let noRequestsLensTitleTests =
+    testList
+        "noRequestsLensTitle"
+        [ test "returns Some only for Script(0, true)" {
+              Expect.equal
+                  (noRequestsLensTitle (Script(0, true)))
+                  (Some "⊘ No requests found: this script has a syntax error")
+                  "zero blocks and a failed parse"
+          }
+
+          test "returns None for every other ScriptView" {
+              Expect.equal (noRequestsLensTitle (Script(0, false))) None "clean empty script"
+              Expect.equal (noRequestsLensTitle (Script(2, true))) None "partial loss stays off the lens"
+              Expect.equal (noRequestsLensTitle ScriptPending) None "no response yet"
+              Expect.equal (noRequestsLensTitle NotAScript) None "not a script"
+              Expect.equal (noRequestsLensTitle NoFSharpDocument) None "no F# document"
+          } ]

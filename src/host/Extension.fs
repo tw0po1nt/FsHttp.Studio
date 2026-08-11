@@ -5,14 +5,18 @@ open Fable.Core.JsInterop
 open Js
 open Vscode
 open Node
+open Protocol
 
 let mutable private statusItem: StatusBarItem option = None
 let mutable private companionHandle: Companion.Handle option = None
 
-let private setStatusText (text: string) =
-    match statusItem with
-    | Some item -> item.text <- "FsHttp.Studio: " + text
-    | None -> ()
+/// Writes the status-bar body when `statusText` returns `Some`. A later ticket wires a real
+/// `ScriptView` and hides the item on `None`. Until then, callers pass `ScriptPending`, so the
+/// Ready state reads `looking for requests…` rather than the retired `ready` word.
+let private setStatusText (text: string option) =
+    match statusItem, text with
+    | Some item, Some body -> item.text <- "FsHttp.Studio: " + body
+    | _ -> ()
 
 [<Literal>]
 let private getSdkLabel = "Get the .NET SDK"
@@ -83,7 +87,8 @@ let activate (context: ExtensionContext) =
     // None. Otherwise the item shows empty until the companion's first state arrives, and
     // "starting…" — the one status that says activation happened — is never seen.
     statusItem <- Some item
-    setStatusText (Companion.statusText Companion.Starting)
+    // ScriptPending stands in until the document-aware status bar supplies a real ScriptView.
+    setStatusText (statusText Starting ScriptPending)
     item.show ()
     context.subscriptions.Add(box item)
 
@@ -109,8 +114,8 @@ let activate (context: ExtensionContext) =
         |> Option.defaultValue fallbackRequiredMajor
 
     let onState state =
-        setStatusText (Companion.statusText state)
-        CodeLensProvider.setReady (state = Companion.Ready)
+        setStatusText (statusText state ScriptPending)
+        CodeLensProvider.setReady (state = Ready)
 
     let startCompanion (dotnetPath: string) =
         let handle = Companion.start dotnetPath companionDll onState
@@ -133,7 +138,7 @@ let activate (context: ExtensionContext) =
     // user at the download page and the override. When the override is set but did not resolve
     // to an SDK, report that, instead of "none was found".
     let notifyNoSdk () =
-        setStatusText (Companion.statusText Companion.SdkNotFound)
+        setStatusText (statusText SdkNotFound ScriptPending)
 
         let message =
             match dotnetPathOverride with
