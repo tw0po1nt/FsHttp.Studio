@@ -1246,44 +1246,6 @@ let tests =
                   sw.Elapsed.TotalMilliseconds
                   (float boundMs + 5000.0)
                   "the pin-forced worker must end near the request bound"
-          } ]
-
-// Pure pin parsing, with no FSI and no server. It produces the input that `run`'s conflict
-// routing keys off. It stays outside the sequenced integration list above, so it remains a fast
-// unit that does not depend on order.
-[<Tests>]
-let pinTests =
-    testList
-        "BlockRunner.extractPins"
-        [ test "an explicit pin parses to (package, Some version)" {
-              Expect.equal
-                  (extractPins "#r \"nuget: FsHttp, 15.0.3\"")
-                  [ "FsHttp", Some "15.0.3" ]
-                  "a single explicit pin should carry its version"
-          }
-
-          test "a version-less pin carries no version" {
-              Expect.equal
-                  (extractPins "#r \"nuget: FsHttp\"")
-                  [ "FsHttp", None ]
-                  "a version-less #r should parse to (package, None)"
-          }
-
-          test "a trailing option after the version is not folded into the version" {
-              // For `#r "nuget: FsHttp, 15.0.3, PreRelease"`, the version group must stop at the
-              // comma. A capture of "15.0.3," would never equal a loaded "15.0.3", and it would
-              // route an identical re-pin to an unnecessary worker.
-              Expect.equal
-                  (extractPins "#r \"nuget: FsHttp, 15.0.3, PreRelease\"")
-                  [ "FsHttp", Some "15.0.3" ]
-                  "the version must be '15.0.3', with the trailing option and its comma excluded"
-          }
-
-          test "multiple pins parse in source order" {
-              Expect.equal
-                  (extractPins "#r \"nuget: FsHttp, 15.0.3\"\n#r \"nuget: Newtonsoft.Json, 13.0.3\"")
-                  [ "FsHttp", Some "15.0.3"; "Newtonsoft.Json", Some "13.0.3" ]
-                  "each pin should appear once, in source order"
           }
 
           // docs/spec/0012-request-as-sent.md, Seam 1 test 6 and the companion half of
@@ -1373,6 +1335,44 @@ let pinTests =
                       Expect.stringContains text "pikachu" "captured JSON body"
                   | other -> failtestf "expected Captured body, got %A" other
               | other -> failtestf "expected ok with a captured request body, got %A" other
+          } ]
+
+// Pure pin parsing, with no FSI and no server. It produces the input that `run`'s conflict
+// routing keys off. It stays outside the sequenced integration list above, so it remains a fast
+// unit that does not depend on order.
+[<Tests>]
+let pinTests =
+    testList
+        "BlockRunner.extractPins"
+        [ test "an explicit pin parses to (package, Some version)" {
+              Expect.equal
+                  (extractPins "#r \"nuget: FsHttp, 15.0.3\"")
+                  [ "FsHttp", Some "15.0.3" ]
+                  "a single explicit pin should carry its version"
+          }
+
+          test "a version-less pin carries no version" {
+              Expect.equal
+                  (extractPins "#r \"nuget: FsHttp\"")
+                  [ "FsHttp", None ]
+                  "a version-less #r should parse to (package, None)"
+          }
+
+          test "a trailing option after the version is not folded into the version" {
+              // For `#r "nuget: FsHttp, 15.0.3, PreRelease"`, the version group must stop at the
+              // comma. A capture of "15.0.3," would never equal a loaded "15.0.3", and it would
+              // route an identical re-pin to an unnecessary worker.
+              Expect.equal
+                  (extractPins "#r \"nuget: FsHttp, 15.0.3, PreRelease\"")
+                  [ "FsHttp", Some "15.0.3" ]
+                  "the version must be '15.0.3', with the trailing option and its comma excluded"
+          }
+
+          test "multiple pins parse in source order" {
+              Expect.equal
+                  (extractPins "#r \"nuget: FsHttp, 15.0.3\"\n#r \"nuget: Newtonsoft.Json, 13.0.3\"")
+                  [ "FsHttp", Some "15.0.3"; "Newtonsoft.Json", Some "13.0.3" ]
+                  "each pin should appear once, in source order"
           } ]
 
 /// Pure wire round-trips for the `request` object on an `ok` envelope
