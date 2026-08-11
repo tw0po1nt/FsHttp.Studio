@@ -311,19 +311,6 @@ let private renderRequest (request: RequestView) : Node =
          :: headerRows request.Headers
          @ renderRequestBody request)
 
-/// The full response view. It is a thin status line, a collapsible Request section, and a
-/// collapsible headers section, above the body that the Content-Type dispatch produced. The
-/// webview mounts this view. `renderBody` stays separate, so a caller can drive the body
-/// dispatch on its own.
-let render (env: ResponseEnvelope) : Node =
-    el
-        "div"
-        [ "class", "response" ]
-        [ renderStatusLine env
-          renderRequest env.Request
-          renderHeaders env.Headers
-          el "div" [ "class", "response-body" ] [ renderBody env ] ]
-
 // --- copy text ----------------------------------------------------------------------------
 
 /// The text a copy button puts on the clipboard for a body. It reads the bytes, and never the
@@ -368,3 +355,36 @@ let copyText (env: ResponseEnvelope) (key: string) : string option =
         else
             Some(bodyCopyText env.Body)
     | _ -> None
+
+/// A copy button for one key, or nothing when `copyText` yields `None`
+/// (docs/spec/0013-copy-buttons.md, Decision 7). `aria-live` is static markup, so it ships with
+/// the button rather than with the label flash that reads it (Decision 8).
+let private copyButton (env: ResponseEnvelope) (key: string) : Node list =
+    match copyText env key with
+    | Some _ ->
+        [ el
+              "button"
+              [ "class", "copy-button"
+                "type", "button"
+                "data-copy", key
+                "aria-live", "polite" ]
+              [ Node.Text "Copy" ] ]
+    | None -> []
+
+/// Wraps a section so its copy button stays a sibling of the section, never a descendant of
+/// `<details>`, `<summary>`, or a scrolling body (docs/spec/0013-copy-buttons.md, Decision 2).
+let private sectionShell (env: ResponseEnvelope) (key: string) (section: Node) : Node =
+    el "div" [ "class", "section-shell" ] (copyButton env key @ [ section ])
+
+/// The full response view. It is a thin status line, a collapsible Request section, and a
+/// collapsible headers section, above the body that the Content-Type dispatch produced. The
+/// webview mounts this view. `renderBody` stays separate, so a caller can drive the body
+/// dispatch on its own.
+let render (env: ResponseEnvelope) : Node =
+    el
+        "div"
+        [ "class", "response" ]
+        [ renderStatusLine env
+          sectionShell env "request" (renderRequest env.Request)
+          sectionShell env "response-headers" (renderHeaders env.Headers)
+          sectionShell env "response-body" (el "div" [ "class", "response-body" ] [ renderBody env ]) ]

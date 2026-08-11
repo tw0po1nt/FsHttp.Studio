@@ -242,16 +242,18 @@ let statusLineTests =
           }
 
           test "the status line sits above the request, the headers, and the body" {
-              // The response wrapper's children are the status line, the Request section, the
-              // response headers, and then the body, in that order.
+              // The response wrapper's children are the status line and three section shells, in
+              // that order. Each shell holds its section.
               let node = render (envelope "text/plain" (utf8 "x"))
 
               match node with
-              | Node.Element(_, _, [ statusLine; request; _headers; body ]) ->
+              | Node.Element(_, _, [ statusLine; requestShell; _headersShell; bodyShell ]) ->
                   Expect.isTrue (hasClass "status-line" statusLine) "first child is the status line"
-                  Expect.isTrue (hasClass "request" request) "second child is the Request section"
-                  Expect.isTrue (hasClass "response-body" body) "last child is the body"
-              | _ -> failtest "expected status line, request, headers, and body"
+                  Expect.isTrue (hasClass "section-shell" requestShell) "second child is the Request shell"
+                  Expect.isNonEmpty (byClass "request" requestShell) "Request section lives in its shell"
+                  Expect.isTrue (hasClass "section-shell" bodyShell) "last child is the body shell"
+                  Expect.isNonEmpty (byClass "response-body" bodyShell) "body lives in its shell"
+              | _ -> failtest "expected status line and three section shells"
           }
 
           test "headers live in a collapsible section, one row per header" {
@@ -395,12 +397,16 @@ let requestSectionTests =
               let node = render env
 
               match node with
-              | Node.Element(_, _, [ _; request; headers; _ ]) ->
-                  Expect.isTrue (hasClass "request" request) "Request section precedes response headers"
-                  Expect.isTrue (hasClass "headers" headers) "response headers follow the Request section"
+              | Node.Element(_, _, [ _; requestShell; headersShell; _ ]) ->
+                  let request = byClass "request" requestShell |> List.exactlyOne
+                  let headers = byClass "headers" headersShell |> List.exactlyOne
+
+                  Expect.isTrue (hasClass "section-shell" requestShell) "Request lives in a shell"
+                  Expect.isTrue (hasClass "section-shell" headersShell) "headers live in a shell"
                   Expect.equal (tag request) (Some "details") "Request is a collapsible <details>"
                   Expect.equal (attr "open" request) None "Request is collapsed by default"
-              | _ -> failtest "expected status line, request, headers, and body"
+                  Expect.isTrue (hasClass "headers" headers) "response headers follow the Request section"
+              | _ -> failtest "expected status line and three section shells"
           } ]
 
 [<Tests>]
@@ -552,4 +558,49 @@ let copyTextTests =
           test "an unknown key yields None" {
               let env = envelope "text/plain" (utf8 "x")
               Expect.equal (copyText env "nope") None "only the three known keys are defined"
+          } ]
+
+[<Tests>]
+let copyButtonPlacementTests =
+    testList
+        "copy button placement"
+        [ test "a full render has three copy buttons with the three keys" {
+              let node = render (envelope "application/json" (utf8 """{"ok":true}"""))
+              let buttons = byClass "copy-button" node
+              let keys = buttons |> List.map (attr "data-copy") |> List.choose id
+
+              Expect.equal (List.length buttons) 3 "a full render has exactly three copy buttons"
+              Expect.equal keys [ "request"; "response-headers"; "response-body" ] "keys in section order"
+          }
+
+          test "a 204 No Content render has two copy buttons, and no response-body button" {
+              let env =
+                  { envelope "text/plain" [||] with
+                      Status = 204
+                      Reason = "No Content" }
+
+              let node = render env
+              let buttons = byClass "copy-button" node
+              let keys = buttons |> List.map (attr "data-copy") |> List.choose id
+
+              Expect.equal (List.length buttons) 2 "an empty body omits the response-body button"
+              Expect.equal keys [ "request"; "response-headers" ] "only request and response-headers"
+          }
+
+          test "no copy button is a descendant of details or summary" {
+              let node = render (envelope "application/json" (utf8 """{"a":[1,2]}"""))
+
+              let underDetails = byTag "details" node |> List.collect (byClass "copy-button")
+
+              let underSummary = byTag "summary" node |> List.collect (byClass "copy-button")
+
+              Expect.isEmpty underDetails "a button inside details is invisible while collapsed"
+              Expect.isEmpty underSummary "a button inside summary would toggle the section"
+          }
+
+          test "every copy button announces its own label changes" {
+              let node = render (envelope "application/json" (utf8 """{"ok":true}"""))
+              let live = byClass "copy-button" node |> List.map (attr "aria-live")
+
+              Expect.equal live [ Some "polite"; Some "polite"; Some "polite" ] "aria-live=polite on each button"
           } ]
