@@ -34,16 +34,18 @@ let statusText (state: State) (view: ScriptView) : string option =
     | Ready, ScriptPending -> Some "looking for requests…"
     | Ready, Script(1, false) -> Some "1 request"
     | Ready, Script(n, false) when n > 1 -> Some(sprintf "%d requests" n)
-    | Ready, Script(0, false) -> Some "no requests found"
-    | Ready, Script(0, true) -> Some "no requests found — syntax error"
     | Ready, Script(n, true) when n >= 1 -> Some(sprintf "%d requests — a syntax error can hide others" n)
-    | Ready, Script _ -> None
+    // A count at or below zero reads as "none found". `int` admits a negative the wire never
+    // sends; folding it in here keeps `None` meaning only "hide the item" (Decision 6).
+    | Ready, Script(_, false) -> Some "no requests found"
+    | Ready, Script(_, true) -> Some "no requests found — syntax error"
 
 /// The CodeLens title for a script that failed to parse and holds no block. `Some` only for
-/// `Script(0, true)` (docs/spec/0014-explain-missing-lenses.md, Decision 2).
+/// `Script(0, true)` (docs/spec/0014-explain-missing-lenses.md, Decision 2). A count at or below
+/// zero reads as zero, as it does in `statusText` above.
 let noRequestsLensTitle (view: ScriptView) : string option =
     match view with
-    | Script(0, true) -> Some "⊘ No requests found: this script has a syntax error"
+    | Script(n, true) when n <= 0 -> Some "⊘ No requests found: this script has a syntax error"
     | _ -> None
 
 /// A source range in FCS's own numbering: 1-based lines, 0-based columns (ADR-0003). It mirrors

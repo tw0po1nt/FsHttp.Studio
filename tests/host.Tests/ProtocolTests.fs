@@ -265,6 +265,17 @@ let statusTextTests =
           test "one request is singular, and two are plural" {
               Expect.equal (statusText Ready (Script(1, false))) (Some "1 request") "singular"
               Expect.equal (statusText Ready (Script(2, false))) (Some "2 requests") "plural"
+          }
+
+          test "a count below zero reads as none found, and never hides the item" {
+              // `int` admits a negative the wire never sends. Decision 6 gives `None` one meaning
+              // — hide the item — so a malformed count must not blank the status bar.
+              Expect.equal (statusText Ready (Script(-1, false))) (Some "no requests found") "clean, below zero"
+
+              Expect.equal
+                  (statusText Ready (Script(-1, true)))
+                  (Some "no requests found — syntax error")
+                  "failed parse, below zero"
           } ]
 
 [<Tests>]
@@ -276,6 +287,13 @@ let noRequestsLensTitleTests =
                   (noRequestsLensTitle (Script(0, true)))
                   (Some "⊘ No requests found: this script has a syntax error")
                   "zero blocks and a failed parse"
+          }
+
+          test "a count below zero reads as zero, as it does in statusText" {
+              Expect.equal
+                  (noRequestsLensTitle (Script(-1, true)))
+                  (Some "⊘ No requests found: this script has a syntax error")
+                  "below zero and a failed parse"
           }
 
           test "returns None for every other ScriptView" {

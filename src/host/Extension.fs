@@ -10,13 +10,22 @@ open Protocol
 let mutable private statusItem: StatusBarItem option = None
 let mutable private companionHandle: Companion.Handle option = None
 
-/// Writes the status-bar body when `statusText` returns `Some`. A later ticket wires a real
-/// `ScriptView` and hides the item on `None`. Until then, callers pass `ScriptPending`, so the
-/// Ready state reads `looking for requests…` rather than the retired `ready` word.
+/// Writes the status-bar body, or hides the item when `statusText` has nothing to say
+/// (docs/spec/0014-explain-missing-lenses.md, Decision 6). A no-op until `activate` registers
+/// the item.
 let private setStatusText (text: string option) =
     match statusItem, text with
-    | Some item, Some body -> item.text <- "FsHttp.Studio: " + body
-    | _ -> ()
+    | Some item, Some body ->
+        item.text <- "FsHttp.Studio: " + body
+        item.show ()
+    | Some item, None -> item.hide ()
+    | None, _ -> ()
+
+/// The status bar for a companion state. `ScriptPending` stands in until a later ticket feeds
+/// the active editor's real `ScriptView` through here — this is the extension's only placeholder,
+/// so that ticket has one edit site. Until then the Ready row reads `looking for requests…`
+/// rather than the retired `ready` word, in every document.
+let private setCompanionStatus (state: State) = setStatusText (statusText state ScriptPending)
 
 [<Literal>]
 let private getSdkLabel = "Get the .NET SDK"
@@ -83,13 +92,12 @@ let private hasSdkAtLeast (requiredMajor: int) (listSdksOutput: string) : bool =
 
 let activate (context: ExtensionContext) =
     let item = window.createStatusBarItem (statusBarAlignmentLeft, 100.0)
-    // Register the item before the first `setStatusText`, which is a no-op while `statusItem` is
-    // None. Otherwise the item shows empty until the companion's first state arrives, and
-    // "starting…" — the one status that says activation happened — is never seen.
+    // Register the item before the first `setCompanionStatus`, which is a no-op while
+    // `statusItem` is None. Otherwise the item shows empty until the companion's first state
+    // arrives, and "starting…" — the one status that says activation happened — is never seen.
+    // The write itself shows the item, so no separate `show` is needed here.
     statusItem <- Some item
-    // ScriptPending stands in until the document-aware status bar supplies a real ScriptView.
-    setStatusText (statusText Starting ScriptPending)
-    item.show ()
+    setCompanionStatus Starting
     context.subscriptions.Add(box item)
 
     RunCommand.setExtensionUri context.extensionUri
@@ -114,7 +122,7 @@ let activate (context: ExtensionContext) =
         |> Option.defaultValue fallbackRequiredMajor
 
     let onState state =
-        setStatusText (statusText state ScriptPending)
+        setCompanionStatus state
         CodeLensProvider.setReady (state = Ready)
 
     let startCompanion (dotnetPath: string) =
@@ -138,7 +146,7 @@ let activate (context: ExtensionContext) =
     // user at the download page and the override. When the override is set but did not resolve
     // to an SDK, report that, instead of "none was found".
     let notifyNoSdk () =
-        setStatusText (statusText SdkNotFound ScriptPending)
+        setCompanionStatus SdkNotFound
 
         let message =
             match dotnetPathOverride with
