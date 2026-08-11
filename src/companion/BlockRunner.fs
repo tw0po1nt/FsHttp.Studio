@@ -178,13 +178,38 @@ let private runtimeErrorFrom (readAppliedTimeoutMs: unit -> int) (ex: exn) : Run
 /// into an FSI value the invocation can prepend to `httpMessageTransformers`. Both are
 /// declared here, and not in the invocation, because the invocation is a single expression
 /// and has nowhere to put a declaration.
+/// The `captureRequestBinding` declaration. The lookup is total: a companion whose capture the
+/// reflection cannot find binds `id` instead, so the Run still sends and only the body display
+/// is lost. A throwing lookup here would break every Run, not only the capture.
+///
+/// Public so Seam 1 can evaluate this text in an FSI session of its own and drive the resulting
+/// function, rather than assert that a string contains a name. Reflection into a loaded assembly
+/// is the one part of the addendum that a type checker cannot verify.
+let captureRequestDeclaration =
+    [ sprintf
+          "let %s : System.Net.Http.HttpRequestMessage -> System.Net.Http.HttpRequestMessage ="
+          captureRequestBinding
+      "    try"
+      "        System.AppDomain.CurrentDomain.GetAssemblies()"
+      "        |> Array.tryPick (fun a ->"
+      "            match a.GetType \"Companion.RequestCapture\" with"
+      "            | null -> None"
+      "            | t ->"
+      "                match t.GetMethod \"captureRequest\" with"
+      "                | null -> None"
+      "                | m -> Some m)"
+      "        |> function"
+      "            | Some mi -> fun m -> mi.Invoke(null, [| box m |]) :?> System.Net.Http.HttpRequestMessage"
+      "            | None -> id"
+      "    with _ ->"
+      "        id" ]
+    |> String.concat "\n"
+
 let private companionAddendum =
     [ "open FsHttp"
       "FsHttp.Fsi.disableDebugLogs()"
       sprintf "let mutable %s = 0." appliedTimeoutBinding
-      sprintf
-          "let %s : System.Net.Http.HttpRequestMessage -> System.Net.Http.HttpRequestMessage = let mi = System.AppDomain.CurrentDomain.GetAssemblies() |> Array.pick (fun a -> match a.GetType \"Companion.RequestCapture\" with null -> None | t -> match t.GetMethod \"captureRequest\" with null -> None | m -> Some m) in fun m -> mi.Invoke(null, [| box m |]) :?> System.Net.Http.HttpRequestMessage"
-          captureRequestBinding
+      captureRequestDeclaration
       sprintf "GlobalConfig.set (GlobalConfig.defaults |> %s)" responseReadingGuard ]
     |> String.concat "\n"
 

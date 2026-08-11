@@ -142,6 +142,13 @@ context
 Measured working end to end on **13.2.0, 14.5.1 and 15.0.3**, against a local `HttpListener` that
 echoes back the byte count it received.
 
+**The invocation reaches `captureRequest` by reflection.** The fragment above names the function
+directly, but the invocation runs inside FSI, and FSI cannot close over a companion CLR value. So the
+companion addendum declares one binding that finds `Companion.RequestCapture.captureRequest` in the
+loaded assemblies, and the invocation prepends that binding. The lookup is total: a lookup that finds
+nothing, or that throws, binds `id` instead. A Run must not fail because the capture could not be
+found, so the cost of a failed lookup is the body display alone.
+
 ### 5. The capture never forces a streaming body into memory, and never touches a nested part
 
 This is the rule, and both halves of it were found by measurement.
@@ -209,7 +216,8 @@ double the companion's peak memory.
 
 Cap the capture at **1 MB (1_048_576 bytes)**, decided from the top-level
 `Content-Length` **before** any read, so an oversized body is never buffered at all. A content whose
-length is absent is not captured either.
+length is absent is not captured either, and it carries its own reason in Decision 8: a body that is
+not streamed must never tell the user that it was streamed.
 
 This is a constant, not a setting. v0.2 already adds one setting in #98, and nobody has yet asked to
 see a request body larger than a megabyte.
@@ -241,10 +249,20 @@ type CapturedBody =
     | NotCaptured of reason: string
 ```
 
-`reason` is one of two written strings, and it is shown to the user:
+`reason` is one of four written strings, and it is shown to the user:
 
 - `"streamed body — not captured, so that the upload is unchanged"`
 - `"body too large to show (%s)"`, with the size rendered by the existing `humanSize`.
+- `"body length unknown — not captured, so that the send is unchanged"`, for the absent
+  `Content-Length` of Decision 6.
+- `"body could not be read, so it is not shown"`, for a content that throws on read.
+
+The last two reasons each name their own condition. One string for all four conditions would tell a
+user that a body was streamed when it was not, and the viewer would state something that is false.
+
+The capture must not throw. It runs inside the user's send, so an exception from an exotic
+`HttpContent` would fail a Run that would otherwise succeed. A failed capture costs the body display
+alone, and the reason above says so.
 
 ### 9. `RunOutcome.Ok` becomes records rather than a wider tuple
 

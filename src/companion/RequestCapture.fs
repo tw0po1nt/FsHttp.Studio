@@ -30,8 +30,23 @@ let private maxCaptureBytes = 1_048_576L
 let streamedBodyReason =
     "streamed body — not captured, so that the upload is unchanged"
 
-/// Compact size text for the over-cap reason. Matches `Renderer.humanSize` so the viewer and
-/// the capture reason agree on the same number.
+/// Shown when the top-level `Content-Length` is absent on a content that is not streamed. The
+/// cap of Decision 6 needs a known size before any read, so an unknown size is a refusal to
+/// read. It is a separate sentence from `streamedBodyReason`, because the user must not read
+/// "streamed body" about a body that is not streamed.
+[<Literal>]
+let unknownLengthReason =
+    "body length unknown — not captured, so that the send is unchanged"
+
+/// Shown when the read itself failed. An exotic `HttpContent` may throw on read. The capture
+/// is a bystander to the Run: it reports the failure here rather than letting it reach the
+/// send.
+[<Literal>]
+let unreadableBodyReason = "body could not be read, so it is not shown"
+
+/// Compact size text for the over-cap reason. A deliberate copy of `Renderer.humanSize`: the
+/// renderer is Fable-side and this is the companion, and the two projects share no compilation
+/// unit. Both must render one size the same way, so change them together.
 let private humanSize (bytes: int64) : string =
     let b = float bytes
 
@@ -75,7 +90,7 @@ let private captureContent (c: HttpContent) : CapturedBody =
         | None ->
             // Top-level length is unknown. Do not buffer: the cap check needs a known size
             // before any read (Decision 6).
-            NotCaptured streamedBodyReason
+            NotCaptured unknownLengthReason
         | Some len when len > maxCaptureBytes -> NotCaptured(tooLargeReason len)
         | Some _ ->
             let bytes = c.ReadAsByteArrayAsync().Result
@@ -83,11 +98,18 @@ let private captureContent (c: HttpContent) : CapturedBody =
 
 /// `httpMessageTransformers` entry. Decides whether to read, stores the result under `m`, and
 /// returns `m` unchanged so the send itself is untouched.
+///
+/// Nothing here may throw. The transformer runs inside the user's send, so an exception from a
+/// content that refuses to be read would fail a Run that would otherwise have succeeded. A
+/// failed capture costs the body display alone.
 let captureRequest (m: HttpRequestMessage) : HttpRequestMessage =
     let body =
-        match m.Content with
-        | null -> NoBody
-        | c -> captureContent c
+        try
+            match m.Content with
+            | null -> NoBody
+            | c -> captureContent c
+        with _ ->
+            NotCaptured unreadableBodyReason
 
     store m body
     m

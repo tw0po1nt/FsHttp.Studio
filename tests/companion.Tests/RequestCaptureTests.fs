@@ -10,11 +10,36 @@ open System.IO
 open System.Net.Http
 open System.Text
 open Expecto
+open FSharp.Compiler.Interactive.Shell
 open Companion.RequestCapture
 open Companion.BlockRunner
 open Companion.Tests.TestServer
 
 let private utf8 (s: string) = Encoding.UTF8.GetBytes s
+
+/// A content that reports no length, and is not a `StreamContent`. `FormUrlEncodedContent` and
+/// friends all know their size, so this shape is the only way to drive the unknown-length branch.
+type private UnknownLengthContent() =
+    inherit HttpContent()
+
+    override _.SerializeToStreamAsync(stream, _) =
+        let bytes = Encoding.UTF8.GetBytes "unknown-length"
+        stream.WriteAsync(bytes, 0, bytes.Length)
+
+    override _.TryComputeLength(length: byref<int64>) =
+        length <- 0L
+        false
+
+/// A content whose read throws. An exotic `HttpContent` may do this, and the capture must not
+/// carry the throw into the user's send.
+type private ThrowingContent() =
+    inherit HttpContent()
+
+    override _.SerializeToStreamAsync(_, _) = raise (InvalidOperationException "no")
+
+    override _.TryComputeLength(length: byref<int64>) =
+        length <- 4L
+        true
 
 let private formContent (pairs: (string * string) list) =
     new FormUrlEncodedContent(pairs |> List.map KeyValuePair)
@@ -268,8 +293,77 @@ let tests =
               Expect.equal missed None "no store means a miss"
           }
 
+          test "a body of unknown length is not captured, and says so in its own words" {
+              use m = new HttpRequestMessage(HttpMethod.Post, "http://example.invalid/")
+              m.Content <- new UnknownLengthContent()
+              captureRequest m |> ignore
+
+              match tryGetCapturedBody m with
+              | Some(NotCaptured reason) ->
+                  Expect.equal reason unknownLengthReason "unknown length has its own reason"
+
+                  Expect.notEqual reason streamedBodyReason "a body that is not streamed must not be called streamed"
+              | other -> failtestf "expected NotCaptured, got %A" other
+          }
+
+          test "a content that throws on read is reported, and the throw does not reach the send" {
+              use m = new HttpRequestMessage(HttpMethod.Post, "http://example.invalid/")
+              m.Content <- new ThrowingContent()
+
+              let returned = captureRequest m
+              Expect.isTrue (Object.ReferenceEquals(returned, m)) "the transformer returns its own message"
+
+              match tryGetCapturedBody m with
+              | Some(NotCaptured reason) -> Expect.equal reason unreadableBodyReason "read failure reason"
+              | other -> failtestf "expected NotCaptured, got %A" other
+          }
+
           test "invocationConfigUpdate installs the capture transformer" {
               let src = invocationConfigUpdate 0
               Expect.stringContains src "httpMessageTransformers" "transformer field"
               Expect.stringContains src "__fsHttpStudioCaptureRequest" "capture binding"
+          }
+
+          test "the addendum's binding resolves the capture and applies it inside FSI" {
+              // The declaration reaches `captureRequest` by reflection, because FSI cannot close
+              // over a companion CLR value. A type checker cannot verify that lookup, the boxed
+              // `Invoke`, or the cast back, so this evaluates the real text in a real session.
+              let fsiConfig = FsiEvaluationSession.GetDefaultConfiguration()
+              use inReader = new StringReader("")
+
+              use session =
+                  FsiEvaluationSession.Create(
+                      fsiConfig,
+                      [| "fsi.exe"; "--noninteractive"; "--nologo" |],
+                      inReader,
+                      Console.Error,
+                      Console.Error,
+                      collectible = true
+                  )
+
+              match session.EvalInteractionNonThrowing captureRequestDeclaration with
+              | Choice2Of2 ex, _ -> failtestf "the addendum's declaration should evaluate, got %A" ex
+              | Choice1Of2 _, _ -> ()
+
+              // Two steps, because `EvalExpression` takes one expression. The message is built
+              // FSI-side, exactly as a Run's own message is.
+              let build =
+                  [ """let m = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, "http://example.invalid/")"""
+                    """m.Content <- new System.Net.Http.StringContent("from-fsi")""" ]
+                  |> String.concat "\n"
+
+              match session.EvalInteractionNonThrowing build with
+              | Choice2Of2 ex, _ -> failtestf "the probe message should build, got %A" ex
+              | Choice1Of2 _, _ -> ()
+
+              match session.EvalExpressionNonThrowing "__fsHttpStudioCaptureRequest m" with
+              | Choice1Of2(Some value), _ ->
+                  match value.ReflectionValue with
+                  | :? HttpRequestMessage as m ->
+                      match tryGetCapturedBody m with
+                      | Some(Captured bytes) ->
+                          Expect.equal (Encoding.UTF8.GetString bytes) "from-fsi" "the FSI-side send stored its body"
+                      | other -> failtestf "expected the FSI-applied transformer to capture, got %A" other
+                  | other -> failtestf "the binding should return the message it was given, got %A" other
+              | _, _ -> failtest "the addendum's binding should apply to a message and return it"
           } ]
