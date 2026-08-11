@@ -44,6 +44,7 @@ let respond (request: JsonDocument) : obj =
         let source = root |> getStringProp "source"
         let located = locateBlocks source
         let ranges = located.Blocks |> List.map toBlockEntry
+
         {| tag = "blocks"
            parseFailed = located.ParseFailed
            ranges = ranges |}

@@ -207,11 +207,7 @@ let locate (handle: Handle) (source: string) : Async<LocateResult> =
                                 false
                             else
                                 unbox<bool> parseFailed }
-              Abandon =
-                fun () ->
-                    resolve
-                        { Ranges = []
-                          ParseFailed = false } }
+              Abandon = fun () -> resolve { Ranges = []; ParseFailed = false } }
 
         send handle (JS.JSON.stringify payload) entry)
 
