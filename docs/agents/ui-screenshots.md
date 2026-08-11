@@ -57,11 +57,21 @@ Commit the image to `docs/screenshots/` on the feature branch. `.vscodeignore` e
 so the image never ships inside the `.vsix`.
 
 Name the file `<issue>-<subject>.png`, for example `210-copy-buttons.png`. Reference it from the
-pull request body by its raw URL on the branch:
+pull request body by its raw URL, and pin that URL to a commit:
 
 ```markdown
-![Both header sections collapsed, each showing its copy button](https://raw.githubusercontent.com/tw0po1nt/FsHttp.Studio/<branch>/docs/screenshots/210-copy-buttons.png)
+![Both header sections collapsed, each showing its copy button](https://raw.githubusercontent.com/tw0po1nt/FsHttp.Studio/<commit>/docs/screenshots/210-copy-buttons.png)
 ```
+
+Push the image first, and then read the commit with `git rev-parse HEAD`.
+
+**A branch name in this URL is a broken link later.** This repository allows a squash merge only,
+so the commits of a feature branch never reach the main line. The branch itself survives the merge,
+because `deleteBranchOnMerge` is off, but a later cleanup removes it. Every link that names that
+branch then fails, inside a pull request that is already part of the record. A commit does not move.
+
+After the merge, the image is also on the main line at the same path, so a reader can still find it
+by name.
 
 The `gh` command line cannot upload an image to a pull request, because that endpoint needs a
 browser session. A committed image is therefore the only route an agent can take alone.
