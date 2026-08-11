@@ -21,17 +21,66 @@ type BlockRange =
 
 type Diagnostic = { Message: string; Range: BlockRange }
 
+/// A request body as the viewer must see it. Blank must not mean "no body", "captured bytes",
+/// and "we chose not to read it" at once (docs/spec/0012-request-as-sent.md, Decision 8).
+type CapturedBody =
+    | NoBody
+    | Captured of bytes: byte[]
+    | NotCaptured of reason: string
+
+/// The request that was actually sent, as the companion put it on the `ok` envelope. Mirrors
+/// `BlockRunner.RequestData` (docs/spec/0012-request-as-sent.md, Decisions 9-10).
+type RequestData =
+    { Method: string
+      Url: string
+      Headers: (string * string) list
+      Body: CapturedBody }
+
+/// The response half of a successful Run. Mirrors `BlockRunner.ResponseData`, which exists so
+/// that neither side carries a ten-field tuple whose positional call sites are a defect waiting
+/// to happen (docs/spec/0012-request-as-sent.md, Decision 9).
+type ResponseData =
+    { Status: int
+      Reason: string
+      Headers: (string * string) list
+      ContentType: string
+      BodyBase64: string
+      RequestMs: float }
+
+/// The wire's three-state body triple, exactly as the `request` object spells it. The three
+/// fields only ever travel together, and only `capturedBodyFromWire` below reads them
+/// (docs/spec/0012-request-as-sent.md, Decision 10).
+type WireBody =
+    { State: string
+      Base64: string
+      Reason: string }
+
+/// The nested `request` object on an `ok` envelope. The JS side fills this in after it reads the
+/// properties; `requestFromWire` turns it into `RequestData`.
+type WireRequest =
+    { Method: string
+      Url: string
+      Headers: (string * string) list
+      Body: WireBody }
+
+/// A `run` response after the JS side has read its properties, named for the glossary's
+/// **Envelope** rather than for `Envelope.fs`'s length-prefixed transport frame. The pure parse
+/// below maps this shape onto `RunResult`, so Seam 3 can drive it without Fable interop.
+///
+/// On `OkEnvelope`, a `request` of `None` means the property was absent, which is a protocol
+/// error rather than a crash.
+type RunEnvelope =
+    | OkEnvelope of response: ResponseData * request: WireRequest option
+    | CompileErrorEnvelope of Diagnostic list
+    | RuntimeErrorEnvelope of string
+    | RefusedEnvelope of code: string * name: string option
+    | ProtocolErrorEnvelope of string
+
 /// The extension-host mirror of the companion's `run` response tags: `ok`, `compileError`,
 /// `runtimeError`, and `refused`. It adds one catch-all case for a malformed or unknown
 /// response.
 type RunResult =
-    | RunOk of
-        status: int *
-        reason: string *
-        headers: (string * string) list *
-        contentType: string *
-        bodyBase64: string *
-        requestMs: float
+    | RunOk of request: RequestData * response: ResponseData
     | RunCompileError of Diagnostic list
     | RunRuntimeError of string
     | RunProtocolError of string
@@ -71,48 +120,51 @@ let formatCompileError (diagnostics: Diagnostic list) : string =
     let body = diagnostics |> List.map formatOne |> String.concat "\n"
     sprintf "Compile error:\n%s" body
 
-/// Reconstructs the exact source text that `r` covers. It mirrors the companion's own
-/// `BlockLocator.sliceRange`, so the extension host can read a block's own text for the status
-/// line's method and URL, without an extra companion round trip.
-let sliceRange (source: string) (r: BlockRange) : string =
-    let lines = source.Replace("\r\n", "\n").Split('\n')
+/// Decodes base64 without throwing. The companion writes this field, so a value that will not
+/// decode is a defect on our own wire — but it reaches `parseRunResult`, which owes its caller a
+/// `RunProtocolError` and not an exception raised inside a promise callback.
+let private tryFromBase64 (encoded: string) : byte[] option =
+    try
+        Some(System.Convert.FromBase64String encoded)
+    with _ ->
+        None
 
-    if r.StartLine = r.EndLine then
-        lines.[r.StartLine - 1].Substring(r.StartCol, r.EndCol - r.StartCol)
-    else
-        let parts = ResizeArray<string>()
-        parts.Add(lines.[r.StartLine - 1].Substring(r.StartCol))
+/// Maps the wire's three-state body triple onto `CapturedBody`
+/// (docs/spec/0012-request-as-sent.md, Decision 10). An unknown state is a protocol error: both
+/// ends of this wire are ours, so a bad value is a defect. Undecodable bytes are the same kind of
+/// defect, and are reported rather than decayed to `NoBody`, which would tell the reader no body
+/// was sent when one was.
+let private capturedBodyFromWire (body: WireBody) : Result<CapturedBody, string> =
+    match body.State with
+    | "none" -> Ok NoBody
+    | "captured" ->
+        match tryFromBase64 body.Base64 with
+        | Some bytes -> Ok(Captured bytes)
+        | None -> Error "ok envelope has a captured request body that is not valid base64"
+    | "notCaptured" -> Ok(NotCaptured body.Reason)
+    | other -> Error(sprintf "ok envelope has unknown bodyState '%s'" other)
 
-        for i in r.StartLine .. r.EndLine - 2 do
-            parts.Add(lines.[i])
+/// Turns the wire's `request` object into the `RequestData` the viewer reads. Lives beside
+/// `WireRequest`, so the field-by-field mapping is not spread through the parse below.
+let private requestFromWire (request: WireRequest) : Result<RequestData, string> =
+    capturedBodyFromWire request.Body
+    |> Result.map (fun body ->
+        { Method = request.Method
+          Url = request.Url
+          Headers = request.Headers
+          Body = body })
 
-        parts.Add(lines.[r.EndLine - 1].Substring(0, r.EndCol))
-        parts |> String.concat "\n"
-
-let private httpVerbs =
-    [ "GET"; "POST"; "PUT"; "DELETE"; "PATCH"; "HEAD"; "OPTIONS"; "TRACE" ]
-
-/// A block's own text always starts with a bare HTTP-verb call, such as `GET "url"`. Every
-/// companion test fixture uses that shape. A light heuristic over the raw text is therefore
-/// enough to read the verb and its URL literal for the status line, without a parse of the CE.
-/// Falls back to empty strings, so an unrecognized shape degrades to a blank method and URL
-/// instead of a throw. A computed URL or an unusual verb produces such a shape.
-let extractMethodAndUrl (blockText: string) : string * string =
-    let tokens =
-        blockText.Split([| ' '; '\n'; '\r'; '\t'; '{'; '}' |], System.StringSplitOptions.RemoveEmptyEntries)
-
-    match tokens |> Array.tryFind (fun t -> List.contains t httpVerbs) with
-    | None -> "", ""
-    | Some verb ->
-        let searchFrom = blockText.IndexOf(verb) + verb.Length
-        let q1 = blockText.IndexOf('"', searchFrom)
-
-        if q1 < 0 then
-            verb, ""
-        else
-            let q2 = blockText.IndexOf('"', q1 + 1)
-
-            if q2 < 0 then
-                verb, ""
-            else
-                verb, blockText.Substring(q1 + 1, q2 - q1 - 1)
+/// Turns a decoded `run` response into a `RunResult`. An `ok` envelope with no `request` object,
+/// with an unknown `bodyState`, or with an undecodable captured body, is a `RunProtocolError` and
+/// not a crash (docs/spec/0012-request-as-sent.md, Seam 3).
+let parseRunResult (envelope: RunEnvelope) : RunResult =
+    match envelope with
+    | CompileErrorEnvelope diagnostics -> RunCompileError diagnostics
+    | RuntimeErrorEnvelope message -> RunRuntimeError message
+    | RefusedEnvelope(code, name) -> RunRefused(code, name)
+    | ProtocolErrorEnvelope message -> RunProtocolError message
+    | OkEnvelope(_, None) -> RunProtocolError "ok envelope is missing the request object"
+    | OkEnvelope(response, Some request) ->
+        match requestFromWire request with
+        | Error message -> RunProtocolError message
+        | Ok requestData -> RunOk(requestData, response)

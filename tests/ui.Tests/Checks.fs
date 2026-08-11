@@ -186,14 +186,18 @@ let viewerSatisfies (holds: ExTester.ResponseViewerDom -> bool) =
         | Some dom -> return holds dom
     }
 
-/// A successful `/json` Run as the viewer renders it: status 200, the block's own URL path, and
-/// the probe body matched by its key *and* its value from the cross-process contract in `Harness`.
-/// The key alone would pass against an empty or wrong value. The core path proves this shape
-/// first and the companion-death check reuses it for the recovery Run, so the two cannot drift on
-/// what a Run having succeeded looks like.
-let tryJsonProbeResponseRendered (urlPath: string) =
+/// A successful `/json` Run as the viewer renders it: status 200, `urlTell` somewhere in the
+/// status line's URL, and the probe body matched by its key *and* its value from the
+/// cross-process contract in `Harness`. The key alone would pass against an empty or wrong value.
+/// The core path proves this shape first and the companion-death check reuses it for the recovery
+/// Run, so the two cannot drift on what a Run having succeeded looks like.
+///
+/// `urlTell` is whatever the calling check needs the URL to carry: the core path passes the whole
+/// absolute URL, because proving the URL is the one the block *sent* is its business; a check that
+/// only needs to tell two routes apart passes a path segment.
+let tryJsonProbeResponseRendered (urlTell: string) =
     viewerSatisfies (fun dom ->
         dom.StatusCodeText.Contains "200"
-        && dom.UrlText.Contains urlPath
+        && dom.UrlText.Contains urlTell
         && dom.JsonBodyText.Contains Harness.jsonProbeKey
         && dom.JsonBodyText.Contains Harness.jsonProbeValue)

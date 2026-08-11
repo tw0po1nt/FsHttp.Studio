@@ -2,19 +2,32 @@
 // click the second block's lens and assert the viewer replaces the first response. Spec 0006
 // steps 1–7, as one check — the spec prices all seven steps against one per-check budget, and a
 // split would also make the second half depend silently on the first half having run.
+//
+// Both fixture blocks compute their URL, and both URL assertions here are for the absolute URL
+// that went on the wire. That is what carries spec 0012's Seam 4: `RunCommand.runOne` has no
+// suite of its own, so this is where the host reading method and URL off the run result is
+// claimed against the running product.
 module CorePathTests
 
 open Fable.Mocha
 
 let private blockCount = 2
 let private fixtureFileName = "core-path.fsx"
-/// Path segment of the first block's URL, as it appears in the status line. The line shows the
-/// block's own source text (`Protocol.extractMethodAndUrl`), so `GET $"{baseUrl}/json"` renders
-/// as `{baseUrl}/json` — the `/json` path is the tell that distinguishes it from `/status`.
-let private firstBlockUrlPath = "/json"
-/// Path segment of the second block's URL. Together with the `/status` body keys from `Harness`,
-/// it is the positive tell that the viewer shows the second response rather than a stale first one.
-let private secondBlockUrlPath = "/status"
+
+/// The first block's URL exactly as it went on the wire, scheme and port included. Both fixture
+/// blocks compute their URL (`GET $"{baseUrl}/json"`), so this is the claim that the status line
+/// reads the URL off the run result rather than re-deriving it from the block's own source text
+/// (docs/spec/0012-request-as-sent.md, Decision 11): source text renders `{baseUrl}/json`, which
+/// carries neither host nor port and cannot contain this. Built at call time, not at module load —
+/// the address comes from the sidecar, which only setup has proven readable.
+///
+/// The `/json` path is also what distinguishes this response from `/status`.
+let private firstBlockUrl () = Harness.baseUrl () + "/json"
+
+/// The second block's URL, on the same terms. Together with the `/status` body keys from
+/// `Harness`, it is the positive tell that the viewer shows the second response rather than a
+/// stale first one.
+let private secondBlockUrl () = Harness.baseUrl () + "/status"
 let private runInProgressLabel = "Running…"
 /// Zero-based index of the second block's lens. Both lenses share `lensTitle`, so a title match
 /// cannot reach the second block.
@@ -30,14 +43,14 @@ let private tryRunningInViewer () =
     Checks.viewerSatisfies (fun dom -> dom.RunInProgressLabel.Contains runInProgressLabel)
 
 let private tryFirstResponseRendered () =
-    Checks.tryJsonProbeResponseRendered firstBlockUrlPath
+    Checks.tryJsonProbeResponseRendered (firstBlockUrl ())
 
 /// The second response arrived *and* replaced the first. Absence of the first body's key is
 /// asserted only here, inside the same `eventually` that proves the second response is present —
 /// absence at a fixed time proves nothing.
 let private trySecondResponseReplacedFirst () =
     Checks.viewerSatisfies (fun dom ->
-        dom.UrlText.Contains secondBlockUrlPath
+        dom.UrlText.Contains(secondBlockUrl ())
         && dom.JsonBodyText.Contains Harness.slowSeenKey
         && dom.JsonBodyText.Contains Harness.slowWaitingKey
         && not (dom.JsonBodyText.Contains Harness.jsonProbeKey))
@@ -79,7 +92,7 @@ let private theCorePath =
         do!
             Harness.eventually
                 Harness.ViewerUpdateDeadlineMs
-                "status 200, the first block's URL, and the probe body in the response viewer"
+                "status 200, the absolute URL the first block sent, and the probe body in the response viewer"
                 tryFirstResponseRendered
 
         do!
@@ -91,7 +104,7 @@ let private theCorePath =
         do!
             Harness.eventually
                 Harness.ViewerUpdateDeadlineMs
-                "the second block's URL and status keys in the viewer, with the first body gone"
+                "the absolute URL the second block sent and its status keys in the viewer, with the first body gone"
                 trySecondResponseReplacedFirst
     }
 
