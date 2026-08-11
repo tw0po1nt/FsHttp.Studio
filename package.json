@@ -2,7 +2,7 @@
   "name": "fshttp-studio",
   "displayName": "FsHttp.Studio",
   "description": "Run a single FsHttp request from an F# script and see the response rendered.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "twopoint",
   "license": "MIT",
   "repository": {
