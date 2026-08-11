@@ -67,6 +67,13 @@ let private responseReadingGuard =
 /// also the invocation-time `Config` read that Seam 1 scenario 5 asserts against.
 let private appliedTimeoutBinding = "__fsHttpStudioAppliedTimeoutMs"
 
+/// The FSI name of the body-capture transformer. The addendum binds it once by reflecting into
+/// `Companion.RequestCapture.captureRequest` (already loaded in this process). The invocation's
+/// `Config.update` then prepends it to `httpMessageTransformers`
+/// (docs/spec/0012-request-as-sent.md, Decision 4). FSI cannot close over a companion CLR value
+/// directly, so the addendum resolves the method through the loaded assembly instead of a `#r`.
+let private captureRequestBinding = "__fsHttpStudioCaptureRequest"
+
 /// The Runtime error text for a request that hit its bound. `timeoutMs` is the bound that was
 /// applied, so a user who raised `fshttpStudio.requestTimeoutMs`, or who set a timeout on the
 /// block, reads their own number back. Public so Seam 1 can assert the wording without
@@ -76,12 +83,13 @@ let requestTimeoutMessage (timeoutMs: int) : string =
         "No response within %d ms. FsHttp.Studio stopped waiting.\nRaise fshttpStudio.requestTimeoutMs to wait longer, or set it to 0 to wait as long as HttpClient allows."
         timeoutMs
 
-/// The invocation's `Config.update` fragment: the response-reading fields, an optional injected
-/// timeout, and the write to `appliedTimeoutBinding`. `timeoutMs = 0` means do not inject, so
-/// `Config.timeout` stays whatever the block already carried (`None` when the block set none).
-/// A positive `timeoutMs` adds an `Option.orElse` default, so a block that already set
-/// `config_timeoutInSeconds` keeps it (docs/spec/0004-run-path-robustness.md, Decisions 2
-/// and 4).
+/// The invocation's `Config.update` fragment: the response-reading fields, the body-capture
+/// transformer, an optional injected timeout, and the write to `appliedTimeoutBinding`.
+/// `timeoutMs = 0` means do not inject, so `Config.timeout` stays whatever the block already
+/// carried (`None` when the block set none). A positive `timeoutMs` adds an `Option.orElse`
+/// default, so a block that already set `config_timeoutInSeconds` keeps it
+/// (docs/spec/0004-run-path-robustness.md, Decisions 2 and 4;
+/// docs/spec/0012-request-as-sent.md, Decision 4).
 let invocationConfigUpdate (timeoutMs: int) : string =
     let timeoutField =
         if timeoutMs <= 0 then
@@ -89,9 +97,13 @@ let invocationConfigUpdate (timeoutMs: int) : string =
         else
             sprintf "; timeout = c.timeout |> Option.orElse (Some (System.TimeSpan.FromMilliseconds %d.))" timeoutMs
 
+    let captureField =
+        sprintf "; httpMessageTransformers = %s :: c.httpMessageTransformers" captureRequestBinding
+
     sprintf
-        "Config.update (fun c -> let applied = { c with %s%s } in (%s <- (match applied.timeout with Some t -> t.TotalMilliseconds | None -> 0.)); applied)"
+        "Config.update (fun c -> let applied = { c with %s%s%s } in (%s <- (match applied.timeout with Some t -> t.TotalMilliseconds | None -> 0.)); applied)"
         responseReadingFields
+        captureField
         timeoutField
         appliedTimeoutBinding
 
@@ -162,12 +174,42 @@ let private runtimeErrorFrom (readAppliedTimeoutMs: unit -> int) (ex: exn) : Run
 /// `bufferResponseContent` stays on as a second guard.
 ///
 /// It also declares `appliedTimeoutBinding`, which the invocation writes and the companion
-/// reads back. It is declared here, and not in the invocation, because the invocation is a
-/// single expression and has nowhere to put a declaration.
+/// reads back, and `captureRequestBinding`, which resolves the companion's `captureRequest`
+/// into an FSI value the invocation can prepend to `httpMessageTransformers`. Both are
+/// declared here, and not in the invocation, because the invocation is a single expression
+/// and has nowhere to put a declaration.
+/// The `captureRequestBinding` declaration. The lookup is total: a companion whose capture the
+/// reflection cannot find binds `id` instead, so the Run still sends and only the body display
+/// is lost. A throwing lookup here would break every Run, not only the capture.
+///
+/// Public so Seam 1 can evaluate this text in an FSI session of its own and drive the resulting
+/// function, rather than assert that a string contains a name. Reflection into a loaded assembly
+/// is the one part of the addendum that a type checker cannot verify.
+let captureRequestDeclaration =
+    [ sprintf
+          "let %s : System.Net.Http.HttpRequestMessage -> System.Net.Http.HttpRequestMessage ="
+          captureRequestBinding
+      "    try"
+      "        System.AppDomain.CurrentDomain.GetAssemblies()"
+      "        |> Array.tryPick (fun a ->"
+      "            match a.GetType \"Companion.RequestCapture\" with"
+      "            | null -> None"
+      "            | t ->"
+      "                match t.GetMethod \"captureRequest\" with"
+      "                | null -> None"
+      "                | m -> Some m)"
+      "        |> function"
+      "            | Some mi -> fun m -> mi.Invoke(null, [| box m |]) :?> System.Net.Http.HttpRequestMessage"
+      "            | None -> id"
+      "    with _ ->"
+      "        id" ]
+    |> String.concat "\n"
+
 let private companionAddendum =
     [ "open FsHttp"
       "FsHttp.Fsi.disableDebugLogs()"
       sprintf "let mutable %s = 0." appliedTimeoutBinding
+      captureRequestDeclaration
       sprintf "GlobalConfig.set (GlobalConfig.defaults |> %s)" responseReadingGuard ]
     |> String.concat "\n"
 

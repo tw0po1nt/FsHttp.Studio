@@ -140,3 +140,17 @@ let streamingBytesHandler (contentType: string) (bytes: byte[]) (ctx: HttpListen
         off <- off + n
 
     ctx.Response.OutputStream.Close()
+
+/// Reads the whole request body into `sink`, then answers `200 OK`. Drives the body-capture
+/// wire-identity checks: the bytes the server received with the capture installed must match
+/// the bytes it received without it.
+///
+/// The listener answers each request on a thread of its own, so the append takes `sink` as its
+/// lock. The current callers send one request at a time, and this keeps that from being a
+/// silent condition of correctness.
+let recordingHandler (sink: ResizeArray<byte[]>) (ctx: HttpListenerContext) =
+    use ms = new IO.MemoryStream()
+    ctx.Request.InputStream.CopyTo ms
+    let bytes = ms.ToArray()
+    lock sink (fun () -> sink.Add bytes)
+    textHandler 200 "ok" ctx
