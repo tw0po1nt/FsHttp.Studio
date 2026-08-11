@@ -6,83 +6,97 @@ module CopyButtonsTests
 
 open Fable.Mocha
 
-let private fixtureFileName = "request-section.fsx"
-let private blockCount = 1
-
-let private echoUrl () = Harness.baseUrl () + "/echo"
-
-/// The response arrived and is the echo route's acknowledgement. Asserted before any copy click,
-/// so a later clipboard read cannot race a viewer that has not painted this Run yet.
-let private tryEchoResponseRendered () =
-    Checks.viewerSatisfies (fun dom ->
-        dom.StatusCodeText.Contains "200"
-        && dom.UrlText.Contains(echoUrl ())
-        && dom.JsonBodyText.Contains Harness.echoAckKey)
-
 /// Both header sections collapsed, each copy button laid out, and the three shell margins as
 /// Decision 12 requires: 12px, 12px, then 0 on the last shell (the body had no bottom margin).
+///
+/// `Displayed` claims the button is present and has a size. Decision 2's defect — a button that
+/// the browser reports as visible while it paints nothing inside a closed `<details>` — is not
+/// what this measures; the spec says only a screenshot shows that, and the PR carries one.
 let private tryCollapsedButtonsAndSpacing () =
-    Checks.viewerSatisfies (fun dom ->
-        not dom.RequestOpen
-        && not dom.HeadersOpen
-        && dom.CopyButtons.Length = 3
-        && (dom.CopyButtons
-            |> Array.forall (fun b ->
-                (b.Key = "request" || b.Key = "response-headers" || b.Key = "response-body")
-                && b.Displayed
-                && b.Label = "Copy"))
-        && dom.ShellMarginsPx.Length = 3
-        && dom.ShellMarginsPx[0] = 12.
-        && dom.ShellMarginsPx[1] = 12.
-        && dom.ShellMarginsPx[2] = 0.)
+    async {
+        match! ExTester.tryReadCopySurface () with
+        | None -> return false
+        | Some surface ->
+            return
+                not surface.RequestOpen
+                && not surface.HeadersOpen
+                && surface.Buttons.Length = 3
+                && (surface.Buttons
+                    |> Array.forall (fun b ->
+                        (b.Key = "request" || b.Key = "response-headers" || b.Key = "response-body")
+                        && b.Displayed
+                        && b.Label = ExTester.copyButtonRestingLabel))
+                && surface.ShellMarginsPx.Length = 3
+                && surface.ShellMarginsPx[0] = 12.
+                && surface.ShellMarginsPx[1] = 12.
+                && surface.ShellMarginsPx[2] = 0.
+    }
 
-/// A successful copy click: label `Copied`, the witness holds `holds` against the written text,
-/// and neither collapsible section changed its open state from the values taken before the click.
+/// A successful copy click: label `Copied`, the write was granted and `holds` against the text it
+/// was handed, and neither collapsible section changed its open state from before the click.
 let private tryCopySucceeded (key: string) (requestWasOpen: bool) (headersWereOpen: bool) (holds: string -> bool) =
     async {
-        match! ExTester.tryClickCopyButton key with
+        match! ExTester.tryClickCopyButton ExTester.Granted key with
         | None -> return false
         | Some reading ->
             return
                 reading.Label = "Copied"
+                && reading.Granted
                 && reading.RequestOpen = requestWasOpen
                 && reading.HeadersOpen = headersWereOpen
-                && (match reading.CopiedText with
+                && (match reading.WrittenText with
                     | Some text -> holds text
                     | None -> false)
     }
 
+/// The refused write, which no platform in this suite produces on its own: the witness rejects,
+/// and the button has to say so rather than leave the user to paste whatever was there before
+/// (Decision 8, user story 8).
+let private tryCopyReportedFailure (key: string) =
+    async {
+        match! ExTester.tryClickCopyButton ExTester.Refused key with
+        | None -> return false
+        | Some reading -> return reading.Label = "Copy failed" && not reading.Granted
+    }
+
 let private requestPayloadHolds (text: string) =
-    text.StartsWith("POST " + echoUrl ())
+    text.StartsWith("POST " + Checks.echoUrl ())
     && text.Contains(Harness.postedHeaderName + ": " + Harness.postedHeaderValue)
     && text.Contains("\n\n" + Harness.postedBody)
 
 let private headersPayloadHolds (text: string) =
     text.StartsWith "200 " && text.Contains "Content-Type:"
 
-let private bodyPayloadHolds (text: string) = text = Harness.echoAckBody
+/// The echo acknowledgement as it went on the wire. Matched in parts for the reason `Harness`
+/// names that contract in parts, plus the absence of a newline: the viewer pretty-prints this
+/// body across several lines, so a one-line paste is the tell that the copy read the response
+/// bytes and not the rendered tree (Decision 3, and user story 1).
+let private bodyPayloadHolds (text: string) =
+    text.Contains("\"" + Harness.echoAckKey + "\"")
+    && text.Contains("\"" + Harness.echoAckValue + "\"")
+    && not (text.Contains "\n")
 
-/// Opens through `Checks.openFixtureAsSoleTab` for the reason the core path documents: a second
-/// tab in the column can put the lens read on a hidden editor that carries no widgets.
-let private theCopyButtons =
+/// Every copy click and its flash, against one Run of the echo fixture.
+///
+/// Each click is followed by the wait for its own label to return to `Copy`. Leaving a button
+/// mid-flash would let the next `eventually` retry land inside a running flash, which is the
+/// state a non-re-entrant flash breaks on.
+let private clickAndAwaitRevert (key: string) (description: string) (holds: string -> bool) =
     async {
-        do! Checks.openFixtureAsSoleTab fixtureFileName
-
         do!
-            Harness.eventuallyObserved
-                Harness.LensAppearanceDeadlineMs
-                "a Run request lens above the fixture's single block"
-                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount fixtureFileName)
-
-        do!
-            Harness.eventually Harness.LensAppearanceDeadlineMs "a click on the Run request lens" (fun () ->
-                ExTester.tryClickCodeLensByTitle Checks.lensTitle)
+            Harness.eventually Harness.ViewerUpdateDeadlineMs description (fun () ->
+                tryCopySucceeded key false false holds)
 
         do!
             Harness.eventually
                 Harness.ViewerUpdateDeadlineMs
-                "status 200, the absolute URL the block posted to, and the echo acknowledgement"
-                tryEchoResponseRendered
+                (sprintf "the %s copy button label to return to %s" key ExTester.copyButtonRestingLabel)
+                (fun () -> ExTester.tryCopyButtonLabel key ExTester.copyButtonRestingLabel)
+    }
+
+let private theCopyButtons =
+    async {
+        do! Checks.runEchoFixture ()
 
         do!
             Harness.eventually
@@ -91,28 +105,34 @@ let private theCopyButtons =
                 tryCollapsedButtonsAndSpacing
 
         do!
-            Harness.eventually
-                Harness.ViewerUpdateDeadlineMs
+            clickAndAwaitRevert
+                "request"
                 "a click on the request copy button puts the sent request on the clipboard"
-                (fun () -> tryCopySucceeded "request" false false requestPayloadHolds)
+                requestPayloadHolds
 
         do!
-            Harness.eventually
-                Harness.ViewerUpdateDeadlineMs
+            clickAndAwaitRevert
+                "response-headers"
                 "a click on the response-headers copy button puts the status and headers on the clipboard"
-                (fun () -> tryCopySucceeded "response-headers" false false headersPayloadHolds)
+                headersPayloadHolds
 
         do!
-            Harness.eventually
-                Harness.ViewerUpdateDeadlineMs
+            clickAndAwaitRevert
+                "response-body"
                 "a click on the response-body copy button puts the raw JSON body on the clipboard"
-                (fun () -> tryCopySucceeded "response-body" false false bodyPayloadHolds)
+                bodyPayloadHolds
 
         do!
             Harness.eventually
                 Harness.ViewerUpdateDeadlineMs
-                "the response-body copy button label reverts to Copy after the flash"
-                (fun () -> ExTester.tryCopyButtonLabel "response-body" "Copy")
+                "a refused clipboard write reported as Copy failed on the button"
+                (fun () -> tryCopyReportedFailure "response-body")
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                (sprintf "the Copy failed label to return to %s" ExTester.copyButtonRestingLabel)
+                (fun () -> ExTester.tryCopyButtonLabel "response-body" ExTester.copyButtonRestingLabel)
     }
 
 let tests =

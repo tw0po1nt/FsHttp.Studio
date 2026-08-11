@@ -356,6 +356,12 @@ let copyText (env: ResponseEnvelope) (key: string) : string option =
             Some(bodyCopyText env.Body)
     | _ -> None
 
+/// The label a copy button rests at. Lives beside `copyText` rather than inside `copyButton`,
+/// because the webview's label flash has to restore exactly this text after it reports an
+/// outcome, and the two would otherwise be one string typed twice across Seam B
+/// (docs/spec/0013-copy-buttons.md, Decision 8).
+let copyButtonLabel = "Copy"
+
 /// A copy button for one key, or nothing when `copyText` yields `None`
 /// (docs/spec/0013-copy-buttons.md, Decision 7). `aria-live` is static markup, so it ships with
 /// the button rather than with the label flash that reads it (Decision 8).
@@ -368,7 +374,7 @@ let private copyButton (env: ResponseEnvelope) (key: string) : Node list =
                 "type", "button"
                 "data-copy", key
                 "aria-live", "polite" ]
-              [ Node.Text "Copy" ] ]
+              [ Node.Text copyButtonLabel ] ]
     | None -> []
 
 /// Wraps a section so its copy button stays a sibling of the section, never a descendant of

@@ -186,6 +186,53 @@ let viewerSatisfies (holds: ExTester.ResponseViewerDom -> bool) =
         | Some dom -> return holds dom
     }
 
+// --- the echo fixture ---------------------------------------------------------------------
+
+/// The fixture that POSTs a header and a body to `/echo`, and the single block it holds. Two
+/// checks drive it: the Request section reads what was sent, and the copy buttons put it on the
+/// clipboard. Named here so neither can drift onto a different fixture than the other.
+let echoFixtureFileName = "request-section.fsx"
+
+let private echoBlockCount = 1
+
+/// The absolute URL the block sent, scheme and port included, on the same terms as the core
+/// path's: the fixture computes it, so a status line built from source text could not contain it.
+let echoUrl () = Harness.baseUrl () + "/echo"
+
+/// The response arrived and is the echo route's acknowledgement. Asserted before a check reaches
+/// its own subject, so a later read cannot race a viewer that has not painted this Run yet.
+let tryEchoResponseRendered () =
+    viewerSatisfies (fun dom ->
+        dom.StatusCodeText.Contains "200"
+        && dom.UrlText.Contains(echoUrl ())
+        && dom.JsonBodyText.Contains Harness.echoAckKey)
+
+/// Opens the echo fixture as the sole tab, runs its one block, and returns once the viewer has
+/// painted the acknowledgement.
+///
+/// Opens through `openFixtureAsSoleTab` for the reason the core path documents: a second tab in
+/// the column can put the lens read on a hidden editor that carries no widgets.
+let runEchoFixture () =
+    async {
+        do! openFixtureAsSoleTab echoFixtureFileName
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "a Run request lens above the fixture's single block"
+                (fun () -> tryRunRequestLensAboveEachBlock echoBlockCount echoFixtureFileName)
+
+        do!
+            Harness.eventually Harness.LensAppearanceDeadlineMs "a click on the Run request lens" (fun () ->
+                ExTester.tryClickCodeLensByTitle lensTitle)
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "status 200, the absolute URL the block posted to, and the echo acknowledgement"
+                tryEchoResponseRendered
+    }
+
 /// A successful `/json` Run as the viewer renders it: status 200, `urlTell` somewhere in the
 /// status line's URL, and the probe body matched by its key *and* its value from the
 /// cross-process contract in `Harness`. The key alone would pass against an empty or wrong value.

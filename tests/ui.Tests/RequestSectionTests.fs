@@ -15,21 +15,6 @@ module RequestSectionTests
 
 open Fable.Mocha
 
-let private fixtureFileName = "request-section.fsx"
-let private blockCount = 1
-
-/// The absolute URL the block sent, scheme and port included, on the same terms as the core path's:
-/// the fixture computes it, so a status line built from source text could not contain this.
-let private echoUrl () = Harness.baseUrl () + "/echo"
-
-/// The response arrived and is the echo route's acknowledgement. Asserted before the section is
-/// opened, so a later read cannot be racing a viewer that has not painted this Run yet.
-let private tryEchoResponseRendered () =
-    Checks.viewerSatisfies (fun dom ->
-        dom.StatusCodeText.Contains "200"
-        && dom.UrlText.Contains(echoUrl ())
-        && dom.JsonBodyText.Contains Harness.echoAckKey)
-
 /// The section as the user first meets it: present, collapsed, and — because the fixture sent a
 /// body — labelled with that body's size. `<details>` reports only its summary while collapsed,
 /// so the absence of the posted text here is a second reading of the same fact as `RequestOpen`.
@@ -54,27 +39,11 @@ let private tryRequestShowsWhatWasSent () =
         && dom.RequestText.Contains Harness.postedBodyKey
         && dom.RequestText.Contains Harness.postedBodyValue)
 
-/// Opens through `Checks.openFixtureAsSoleTab` for the reason the core path documents: a second
-/// tab in the column can put the lens read on a hidden editor that carries no widgets.
+/// Runs the echo fixture through `Checks.runEchoFixture`, then reads the section: collapsed
+/// first, then opened.
 let private theRequestSection =
     async {
-        do! Checks.openFixtureAsSoleTab fixtureFileName
-
-        do!
-            Harness.eventuallyObserved
-                Harness.LensAppearanceDeadlineMs
-                "a Run request lens above the fixture's single block"
-                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount fixtureFileName)
-
-        do!
-            Harness.eventually Harness.LensAppearanceDeadlineMs "a click on the Run request lens" (fun () ->
-                ExTester.tryClickCodeLensByTitle Checks.lensTitle)
-
-        do!
-            Harness.eventually
-                Harness.ViewerUpdateDeadlineMs
-                "status 200, the absolute URL the block posted to, and the echo acknowledgement"
-                tryEchoResponseRendered
+        do! Checks.runEchoFixture ()
 
         do!
             Harness.eventually

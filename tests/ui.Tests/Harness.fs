@@ -59,10 +59,11 @@ let notFoundBody = "ui-test-server:notfound"
 
 /// Cross-process contract for `POST /echo`. Must match `UiTestServer.Server.echoAckBody`. The
 /// acknowledgement is what the *response* body carries, and it repeats none of what was posted.
+/// Named in parts, and never reassembled into the whole body: the server owns that one line, and
+/// a copy of it here would assert equality against a literal the server is free to re-space.
 let echoAckKey = "echoed"
 
 let echoAckValue = "ui-test-server"
-let echoAckBody = sprintf """{"%s":"%s"}""" echoAckKey echoAckValue
 
 /// Cross-process contract for the body `request-section.fsx` posts. Named in parts for the same
 /// reason the `/json` probe is: a check reads the viewer's pretty-printed DOM, which whitespace

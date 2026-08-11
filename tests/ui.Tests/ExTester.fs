@@ -94,13 +94,30 @@ type BottomBarPanel =
 type ByStatic =
     abstract css: selector: string -> obj
 
-/// One copy button as the viewer paints it. `Displayed` is the laid-out box, not CSS
-/// `visibility`: a button inside a closed `<details>` still reports visible styles while the
-/// browser paints nothing (docs/spec/0013-copy-buttons.md, Decision 2).
+/// One copy button as the viewer paints it.
+///
+/// `Displayed` is the laid-out box from `getBoundingClientRect`. It claims the button is present
+/// and has a size — nothing more. It is *not* a witness for Decision 2's defect: the spec
+/// measured a button inside a closed `<details>` still reporting a 29x23 box with
+/// `visibility: visible`, "so no measurement in code detects the defect. Only a screenshot shows
+/// it". The screenshot on the PR is that evidence; this field is the weaker claim beside it.
 type CopyButtonReading =
     { Key: string
       Label: string
       Displayed: bool }
+
+/// The copy buttons, the section-shell spacing, and both collapsible sections' open state, read
+/// together in one trip into the viewer frame. Kept out of `ResponseViewerDom` on purpose: it
+/// costs an `executeScript` round-trip, and only the copy checks read it, while every check in
+/// the suite reads the viewer DOM.
+type CopySurfaceReading =
+    {
+        Buttons: CopyButtonReading[]
+        /// Computed `margin-bottom` of each `.section-shell`, in CSS pixels, in DOM order.
+        ShellMarginsPx: float[]
+        RequestOpen: bool
+        HeadersOpen: bool
+    }
 
 /// One read of the response viewer's rendered DOM. Empty strings mean the node was absent; a
 /// check waits with `Harness.eventually` for the tell it cares about, rather than asserting the
@@ -131,13 +148,6 @@ type ResponseViewerDom =
         /// Whether the Request section is expanded. `<details>` carries `open` only while it is,
         /// so this is the direct read of collapsed-by-default.
         RequestOpen: bool
-        /// Whether the response headers section is expanded. Same `open` attribute contract as
-        /// `RequestOpen`.
-        HeadersOpen: bool
-        /// Every `.copy-button`, in DOM order. Empty when the viewer has not painted a response.
-        CopyButtons: CopyButtonReading[]
-        /// Computed `margin-bottom` of each `.section-shell`, in CSS pixels, in DOM order.
-        ShellMarginsPx: float[]
         /// Text of the webview root. Carries the full response render, or the plain error text
         /// a runtime-error update writes with no response structure.
         RootText: string
@@ -149,6 +159,12 @@ type ResponseViewerDom =
         /// rendered.
         RefusalDetailText: string
     }
+
+/// The label a copy button rests at, as `Renderer.copyButtonLabel` writes it and `Dom.flash`
+/// restores it. Restated here because this suite does not compile the renderer; it is a
+/// cross-boundary contract on the same terms as the selectors below, and the check that watches
+/// the label return to it after a flash is what keeps the two spellings honest.
+let copyButtonRestingLabel = "Copy"
 
 /// Cross-boundary contract with the shipping renderer. Each selector must match the class name
 /// `Renderer` writes and `ResponseViewer`'s stylesheet colors; the viewer tab title must match the
@@ -918,10 +934,10 @@ let tryWorkbenchPresent () : Async<bool> =
 /// `tryElementProperty`, so both blanks must count as not set.
 let private attributeIsPresent (value: string) = not (isNull (box value)) && value <> ""
 
-/// Reads every copy button and every section shell's computed margin inside the viewer frame.
-/// One script keeps the layout claims on one trip, and uses the laid-out box for `Displayed`
-/// because CSS visibility alone cannot see Decision 2's defect.
-let private readCopySurface (driver: obj) : Async<CopyButtonReading[] * float[]> =
+/// Reads every copy button and every section shell's computed margin. Runs against whatever
+/// document is current, so the caller must already be inside the viewer frame. One script keeps
+/// both layout claims on one trip.
+let private readCopySurface (driver: obj) : Async<CopySurfaceReading> =
     async {
         let script =
             """
@@ -941,7 +957,14 @@ let private readCopySurface (driver: obj) : Async<CopyButtonReading[] * float[]>
             for (var s = 0; s < shells.length; s++) {
                 margins.push(parseFloat(getComputedStyle(shells[s]).marginBottom) || 0);
             }
-            return { buttons: buttonOut, margins: margins };
+            var request = document.querySelector('.request');
+            var headers = document.querySelector('.headers');
+            return {
+                buttons: buttonOut,
+                margins: margins,
+                requestOpen: !!(request && request.hasAttribute('open')),
+                headersOpen: !!(headers && headers.hasAttribute('open'))
+            };
             """
 
         let call: JS.Promise<obj> = emitJsExpr (driver, script) "$0.executeScript($1)"
@@ -956,7 +979,12 @@ let private readCopySurface (driver: obj) : Async<CopyButtonReading[] * float[]>
                   Displayed = unbox<bool> (b?displayed: obj) })
 
         let margins: float[] = unbox (raw?margins: obj)
-        return buttons, margins
+
+        return
+            { Buttons = buttons
+              ShellMarginsPx = margins
+              RequestOpen = unbox<bool> (raw?requestOpen: obj)
+              HeadersOpen = unbox<bool> (raw?headersOpen: obj) }
     }
 
 /// Enters the response viewer's webview iframe, reads the DOM surfaces the product checks
@@ -984,8 +1012,6 @@ let tryReadResponseViewer () : Async<ResponseViewerDom option> =
                 let! request = tryElementText view Viewer.requestSelector
                 let! requestSummary = tryElementText view Viewer.requestSummarySelector
                 let! requestOpen = tryElementAttribute view Viewer.requestSelector "open"
-                let! headersOpen = tryElementAttribute view Viewer.headersSelector "open"
-                let! copyButtons, shellMargins = readCopySurface VSBrowser.instance.driver
                 let! root = tryElementText view Viewer.rootSelector
                 let! runInProgress = tryElementText view Viewer.runInProgressSelector
                 let! refusalTitle = tryElementText view Viewer.refusalTitleSelector
@@ -1008,9 +1034,6 @@ let tryReadResponseViewer () : Async<ResponseViewerDom option> =
                           RequestText = request
                           RequestSummaryText = requestSummary
                           RequestOpen = attributeIsPresent requestOpen
-                          HeadersOpen = attributeIsPresent headersOpen
-                          CopyButtons = copyButtons
-                          ShellMarginsPx = shellMargins
                           RootText = root
                           RunInProgressLabel = runInProgress
                           RefusalTitleText = refusalTitle
@@ -1068,39 +1091,92 @@ type CopyClickReading =
     {
         /// The button's label after the click settled on success or failure.
         Label: string
-        /// The text a resolved `navigator.clipboard.writeText` received. `None` when the write
-        /// never resolved, or the witness was not installed.
-        CopiedText: string option
+        /// The text `navigator.clipboard.writeText` was handed, whether or not the write then
+        /// resolved. `None` when the witness recorded no call at all.
+        ///
+        /// This is the write's argument, and not a read back off the system clipboard: headless
+        /// Linux here has no clipboard tool to read one with. It proves what the extension put
+        /// on the clipboard, not what a paste elsewhere would produce.
+        WrittenText: string option
+        /// Whether that write resolved. False on the refused path Decision 8 reports as
+        /// `Copy failed`.
+        Granted: bool
         RequestOpen: bool
         HeadersOpen: bool
     }
 
-/// Installs a witness over `navigator.clipboard.writeText` in the viewer frame. The real write
-/// still runs; on resolve the text is stored for the suite. Headless Linux in this suite has no
-/// clipboard tool, and a resolved write is what Decision 11 measured VSCode granting.
+/// Whether the witness lets the real `navigator.clipboard.writeText` run, or makes it reject.
+///
+/// `Refused` is the only way a check reaches Decision 8's failure path: the platform this suite
+/// runs on grants the write, and the spec is explicit that "the failure path is not decoration".
+type ClipboardGrant =
+    | Granted
+    | Refused
+
+/// Installs a witness over `navigator.clipboard.writeText` in the viewer frame, and sets whether
+/// the next write is granted. The real write still runs when granted; either way the text handed
+/// in is stored with the outcome. Headless Linux in this suite has no clipboard tool, and a
+/// resolved write is what Decision 11 measured VSCode granting.
 let private installClipboardWitnessScript =
     """
+    var refuses = arguments[0];
     if (!window.__fshttpCopyWitness) {
       window.__fshttpCopyWitness = true;
-      window.__fshttpLastCopied = null;
       var orig = navigator.clipboard.writeText.bind(navigator.clipboard);
       navigator.clipboard.writeText = function (text) {
+        if (window.__fshttpCopyRefuses) {
+          window.__fshttpLastCopy = { text: text, granted: false };
+          return Promise.reject(new Error('ui-test: clipboard refused'));
+        }
         return orig(text).then(function () {
-          window.__fshttpLastCopied = text;
+          window.__fshttpLastCopy = { text: text, granted: true };
         }, function (err) {
-          window.__fshttpLastCopied = null;
+          window.__fshttpLastCopy = { text: text, granted: false };
           return Promise.reject(err);
         });
       };
     }
-    window.__fshttpLastCopied = null;
+    window.__fshttpCopyRefuses = refuses;
+    window.__fshttpLastCopy = null;
     """
 
-/// Clicks the copy button for `key`, waits for its label to leave `Copy`, and reads the
-/// clipboard witness plus the two collapsible sections' open state. Pair with
+/// Reads the button's settled label, the witness, and both sections' open state. Returns null
+/// until the write has been recorded *and* the label has left its resting text: a retry that
+/// lands on a leftover `Copied` must not report before the new write is in.
+let private readCopyClickScript =
+    """
+    var key = arguments[0];
+    var resting = arguments[1];
+    var button = document.querySelector('.copy-button[data-copy="' + key + '"]');
+    if (!button) { return null; }
+    var label = (button.textContent || '').trim();
+    var copy = window.__fshttpLastCopy;
+    if (copy == null || label === resting) { return null; }
+    var request = document.querySelector('.request');
+    var headers = document.querySelector('.headers');
+    return {
+      label: label,
+      written: copy.text,
+      granted: copy.granted,
+      requestOpen: !!(request && request.hasAttribute('open')),
+      headersOpen: !!(headers && headers.hasAttribute('open'))
+    };
+    """
+
+/// How long one click waits inside the frame for the clipboard promise to settle and the label to
+/// flash. Deliberately not a check-tunable deadline, on the same terms as `frameSwitchTimeoutMs`:
+/// it bounds one in-frame interaction, and not a product surface a check waits on.
+let private copySettleTimeoutMs = 3_000.
+
+/// The gap between two reads of the settling label. Well under the 1200 ms the flash lasts, so a
+/// label that has already flashed cannot be restored between two polls and missed entirely.
+let private copySettlePollMs = 50
+
+/// Clicks the copy button for `key` under `grant`, waits for its label to leave its resting text,
+/// and reads the clipboard witness plus the two collapsible sections' open state. Pair with
 /// `Harness.eventually`: a missed frame switch or a button that has not painted yet fails the
 /// attempt.
-let tryClickCopyButton (key: string) : Async<CopyClickReading option> =
+let tryClickCopyButton (grant: ClipboardGrant) (key: string) : Async<CopyClickReading option> =
     async {
         try
             let! group = editorGroup viewerGroupIndex
@@ -1112,8 +1188,10 @@ let tryClickCopyButton (key: string) : Async<CopyClickReading option> =
                 do! switchToFrameTimed view frameSwitchTimeoutMs |> Async.AwaitPromise
                 switched <- true
 
+                let refuses = grant = Refused
+
                 let install: JS.Promise<objnull> =
-                    emitJsExpr (driver, installClipboardWitnessScript) "$0.executeScript($1)"
+                    emitJsExpr (driver, installClipboardWitnessScript, refuses) "$0.executeScript($1, $2)"
 
                 do! install |> Async.AwaitPromise |> Async.Ignore
 
@@ -1123,32 +1201,14 @@ let tryClickCopyButton (key: string) : Async<CopyClickReading option> =
 
                 // The flash is asynchronous on the clipboard promise. Poll inside the frame so
                 // one attempt covers click through settled label without leaving and re-entering.
-                // Gate on the witness *and* the label: a retry that finds a leftover `Copied`
-                // label must not return before the new write has stored its text.
-                let waitLabel =
-                    """
-                    var key = arguments[0];
-                    var button = document.querySelector('.copy-button[data-copy="' + key + '"]');
-                    if (!button) { return null; }
-                    var label = (button.textContent || '').trim();
-                    var copied = window.__fshttpLastCopied;
-                    if (copied == null || label === 'Copy') { return null; }
-                    var request = document.querySelector('.request');
-                    var headers = document.querySelector('.headers');
-                    return {
-                      label: label,
-                      copied: copied,
-                      requestOpen: !!(request && request.hasAttribute('open')),
-                      headersOpen: !!(headers && headers.hasAttribute('open'))
-                    };
-                    """
-
-                let deadline = Proc.now () + 3_000.
+                let deadline = Proc.now () + copySettleTimeoutMs
 
                 let rec poll () =
                     async {
                         let call: JS.Promise<objnull> =
-                            emitJsExpr (driver, waitLabel, key) "$0.executeScript($1, $2)"
+                            emitJsExpr
+                                (driver, readCopyClickScript, key, copyButtonRestingLabel)
+                                "$0.executeScript($1, $2, $3)"
 
                         let! raw = call |> Async.AwaitPromise
 
@@ -1157,7 +1217,7 @@ let tryClickCopyButton (key: string) : Async<CopyClickReading option> =
                             if Proc.now () >= deadline then
                                 return None
                             else
-                                do! Async.Sleep 50
+                                do! Async.Sleep copySettlePollMs
                                 return! poll ()
                         | settled -> return Some(unbox<obj> settled)
                     }
@@ -1170,17 +1230,18 @@ let tryClickCopyButton (key: string) : Async<CopyClickReading option> =
                 match settled with
                 | None -> return None
                 | Some raw ->
-                    let copiedObj: objnull = raw?copied: objnull
+                    let writtenObj: objnull = raw?written: objnull
 
-                    let copied =
-                        match copiedObj with
+                    let written =
+                        match writtenObj with
                         | null -> None
                         | text -> Some(unbox<string> text)
 
                     return
                         Some
                             { Label = unbox<string> (raw?label: obj)
-                              CopiedText = copied
+                              WrittenText = written
+                              Granted = unbox<bool> (raw?granted: obj)
                               RequestOpen = unbox<bool> (raw?requestOpen: obj)
                               HeadersOpen = unbox<bool> (raw?headersOpen: obj) }
             with _ ->
@@ -1195,11 +1256,42 @@ let tryClickCopyButton (key: string) : Async<CopyClickReading option> =
             return None
     }
 
+/// Enters the viewer frame, reads the copy buttons and the shell spacing, and switches back.
+/// `None` when the frame cannot be entered. Separate from `tryReadResponseViewer` so that only
+/// the copy checks pay for the extra script round-trip.
+let tryReadCopySurface () : Async<CopySurfaceReading option> =
+    async {
+        try
+            let! group = editorGroup viewerGroupIndex
+            let view = WebView.createInGroup group
+            let mutable switched = false
+
+            try
+                do! switchToFrameTimed view frameSwitchTimeoutMs |> Async.AwaitPromise
+                switched <- true
+
+                let! surface = readCopySurface VSBrowser.instance.driver
+
+                switched <- false
+                do! view.switchBack () |> Async.AwaitPromise
+                return Some surface
+            with _ ->
+                if switched then
+                    try
+                        do! view.switchBack () |> Async.AwaitPromise
+                    with _ ->
+                        ()
+
+                return None
+        with _ ->
+            return None
+    }
+
 /// True when the copy button for `key` shows exactly `label`. Pair with `Harness.eventually` for
-/// the label's return to `Copy` after the flash.
+/// the label's return to its resting text after the flash.
 let tryCopyButtonLabel (key: string) (label: string) : Async<bool> =
     async {
-        match! tryReadResponseViewer () with
+        match! tryReadCopySurface () with
         | None -> return false
-        | Some dom -> return dom.CopyButtons |> Array.exists (fun b -> b.Key = key && b.Label = label)
+        | Some surface -> return surface.Buttons |> Array.exists (fun b -> b.Key = key && b.Label = label)
     }

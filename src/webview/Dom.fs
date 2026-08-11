@@ -32,13 +32,24 @@ let rec private mountNode (node: Node) : Types.Node =
 /// Turns a rendered `Node` tree into a detached DOM node, ready to append into the panel.
 let mount (node: Node) : Types.Node = mountNode node
 
-/// Puts a short-lived label on the button, then restores the previous text. Success and failure
+/// Puts a short-lived label on the button, then restores `copyButtonLabel`. Success and failure
 /// both use this path, so the user never sees a silent clipboard outcome
 /// (docs/spec/0013-copy-buttons.md, Decision 8).
+///
+/// The restore is the renderer's constant and not the label read at the click, and a click
+/// inside a running flash cancels that flash's timer. Reading the label back would capture
+/// `Copied` on a second click within the window and keep it there for good; leaving the first
+/// timer to run would cut the second flash short. User story 7 is the one a stuck label breaks.
 let private flash (button: HTMLElement) (text: string) =
-    let original = button.textContent
+    // `clearTimeout` ignores an `undefined` handle, so the first flash on a button needs no guard.
+    let element: obj = !!button
+    emitJsExpr<unit> element "clearTimeout($0.__fshttpFlashTimer)"
     button.textContent <- text
-    window.setTimeout ((fun () -> button.textContent <- original), 1200) |> ignore
+
+    let timer =
+        window.setTimeout ((fun () -> button.textContent <- copyButtonLabel), 1200)
+
+    emitJsExpr<unit> (element, timer) "$0.__fshttpFlashTimer = $1"
 
 /// `navigator.clipboard` is not in Fable's Browser.Navigator bindings. Reach it the same way
 /// `ResponseViewer.nonce` reaches `crypto.getRandomValues`.
