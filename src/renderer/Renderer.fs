@@ -173,11 +173,15 @@ let private hexDump (bytes: byte[]) : string =
     else
         dumped
 
+/// The size-and-hex view for bytes that do not decode as text. The note says "Binary body" and
+/// not "Binary response": `renderContent` puts this same view inside the Request section, where
+/// the bytes are a request body, and a note that called them a response would state something
+/// false about what was sent (docs/spec/0012-request-as-sent.md, Decision 8).
 let private renderBinary (bytes: byte[]) : Node =
     el
         "div"
         [ "class", "response-binary" ]
-        [ el "div" [ "class", "binary-note" ] [ Node.Text(sprintf "Binary response — %s" (humanSize bytes.Length)) ]
+        [ el "div" [ "class", "binary-note" ] [ Node.Text(sprintf "Binary body — %s" (humanSize bytes.Length)) ]
           el "pre" [ "class", "hex-dump" ] [ Node.Text(hexDump bytes) ] ]
 
 /// The fallback for text, XML, and unknown types. It gives readable monospace when the bytes

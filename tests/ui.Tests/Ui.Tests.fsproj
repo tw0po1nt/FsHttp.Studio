@@ -16,6 +16,7 @@
     <Compile Include="Checks.fs" />
     <Compile Include="SelfCheckTests.fs" />
     <Compile Include="CorePathTests.fs" />
+    <Compile Include="RequestSectionTests.fs" />
     <Compile Include="RunOutcomesTests.fs" />
     <Compile Include="LoopLensTests.fs" />
     <Compile Include="CrossBlockRefusedRunTests.fs" />

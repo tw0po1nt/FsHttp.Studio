@@ -47,21 +47,20 @@ let private configuredRequestTimeoutMs () : int =
 /// around `Companion.run` (docs/spec/0004-run-path-robustness.md, Decision 7).
 type private Timing = { RequestMs: float; TotalMs: float }
 
-/// The Content-Type the Request section uses for body dispatch. It comes from the request
-/// headers the companion already collected, not from a separate field on the wire.
-let private requestContentType (headers: (string * string) list) : string =
-    headers
-    |> List.tryFind (fun (name, _) -> name.Equals("Content-Type", System.StringComparison.OrdinalIgnoreCase))
-    |> Option.map snd
-    |> Option.defaultValue ""
+/// Headers as the viewer update carries them: an array of two-element `[name; value]` arrays.
+/// The request half and the response half of the update use the same shape, so they read it back
+/// through one `toHeaders` in the webview and must be written by one function here.
+let private headersToWire (headers: (string * string) list) : string[][] =
+    headers |> List.map (fun (name, value) -> [| name; value |]) |> List.toArray
 
 /// The three-state body fields the webview's `toEnvelope` reads. Mirrors Decision 10's
-/// `bodyState` / `bodyBase64` / `bodyReason` triple on the companion wire.
+/// `bodyState` / `bodyBase64` / `bodyReason` triple on the companion wire, and spells the state
+/// names through `Protocol`, which is where this end of the host names them once.
 let private requestBodyFields (body: CapturedBody) : string * string * string =
     match body with
-    | NoBody -> "none", "", ""
-    | Captured bytes -> "captured", System.Convert.ToBase64String bytes, ""
-    | NotCaptured reason -> "notCaptured", "", reason
+    | NoBody -> Protocol.NoneState, "", ""
+    | Captured bytes -> Protocol.CapturedState, System.Convert.ToBase64String bytes, ""
+    | NotCaptured reason -> Protocol.NotCapturedState, "", reason
 
 let private resultUpdate (request: RequestData) (timing: Timing) (response: ResponseData) : obj =
     let bodyState, bodyBase64, bodyReason = requestBodyFields request.Body
@@ -70,9 +69,8 @@ let private resultUpdate (request: RequestData) (timing: Timing) (response: Resp
         createObj
             [ "method" ==> request.Method
               "url" ==> request.Url
-              "headers"
-              ==> (request.Headers |> List.map (fun (k, v) -> [| k; v |]) |> List.toArray)
-              "contentType" ==> requestContentType request.Headers
+              "headers" ==> headersToWire request.Headers
+              "contentType" ==> Protocol.requestContentType request.Headers
               "bodyState" ==> bodyState
               "bodyBase64" ==> bodyBase64
               "bodyReason" ==> bodyReason ]
@@ -82,8 +80,7 @@ let private resultUpdate (request: RequestData) (timing: Timing) (response: Resp
             [ "request" ==> requestObj
               "status" ==> response.Status
               "reason" ==> response.Reason
-              "headers"
-              ==> (response.Headers |> List.map (fun (k, v) -> [| k; v |]) |> List.toArray)
+              "headers" ==> headersToWire response.Headers
               "contentType" ==> response.ContentType
               "bodyBase64" ==> response.BodyBase64
               "requestMs" ==> timing.RequestMs

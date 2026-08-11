@@ -129,6 +129,20 @@ let private tryFromBase64 (encoded: string) : byte[] option =
     with _ ->
         None
 
+// The three `bodyState` names of Decision 10, written once for the host. `capturedBodyFromWire`
+// reads them off the companion's envelope and `RunCommand` writes the same three onto the viewer
+// update, so a name spelled separately at each end could drift by a letter and a state would be
+// lost between the two. The companion and the webview each spell them once too — neither shares
+// an assembly with this one.
+[<Literal>]
+let NoneState = "none"
+
+[<Literal>]
+let CapturedState = "captured"
+
+[<Literal>]
+let NotCapturedState = "notCaptured"
+
 /// Maps the wire's three-state body triple onto `CapturedBody`
 /// (docs/spec/0012-request-as-sent.md, Decision 10). An unknown state is a protocol error: both
 /// ends of this wire are ours, so a bad value is a defect. Undecodable bytes are the same kind of
@@ -136,12 +150,12 @@ let private tryFromBase64 (encoded: string) : byte[] option =
 /// was sent when one was.
 let private capturedBodyFromWire (body: WireBody) : Result<CapturedBody, string> =
     match body.State with
-    | "none" -> Ok NoBody
-    | "captured" ->
+    | NoneState -> Ok NoBody
+    | CapturedState ->
         match tryFromBase64 body.Base64 with
         | Some bytes -> Ok(Captured bytes)
         | None -> Error "ok envelope has a captured request body that is not valid base64"
-    | "notCaptured" -> Ok(NotCaptured body.Reason)
+    | NotCapturedState -> Ok(NotCaptured body.Reason)
     | other -> Error(sprintf "ok envelope has unknown bodyState '%s'" other)
 
 /// Turns the wire's `request` object into the `RequestData` the viewer reads. Lives beside
@@ -153,6 +167,23 @@ let private requestFromWire (request: WireRequest) : Result<RequestData, string>
           Url = request.Url
           Headers = request.Headers
           Body = body })
+
+/// The Content-Type the Request section dispatches a request body on. It is read back out of the
+/// request headers the companion already collected, rather than carried as a fourth field on the
+/// wire: `RequestData` has no `ContentType` (Decision 9), and one derived here cannot disagree
+/// with the header row the same section renders.
+///
+/// The lookup is case-insensitive, because a header name on the wire is whatever the server or
+/// FsHttp wrote. A request with no Content-Type — a `GET`, most often — yields `""`, which the
+/// renderer's dispatch already treats as an unknown type.
+///
+/// Lives here rather than in `RunCommand`, which is Fable and VSCode interop with no suite of its
+/// own (docs/spec/0012-request-as-sent.md, Seam 3).
+let requestContentType (headers: (string * string) list) : string =
+    headers
+    |> List.tryFind (fun (name, _) -> name.Equals("Content-Type", System.StringComparison.OrdinalIgnoreCase))
+    |> Option.map snd
+    |> Option.defaultValue ""
 
 /// Turns a decoded `run` response into a `RunResult`. An `ok` envelope with no `request` object,
 /// with an unknown `bodyState`, or with an undecodable captured body, is a `RunProtocolError` and

@@ -13,7 +13,7 @@ open Renderer.NodeQuery
 let private utf8 (s: string) = Encoding.UTF8.GetBytes s
 
 /// A canned request view with no body. Each test can override the fields.
-let private emptyRequest (httpMethod: string) (url: string) =
+let private requestWithNoBody (httpMethod: string) (url: string) =
     { Method = httpMethod
       Url = url
       Headers = []
@@ -22,7 +22,7 @@ let private emptyRequest (httpMethod: string) (url: string) =
 
 /// A canned envelope with a sensible request context. Each test can override the fields.
 let private envelope contentType (body: byte[]) =
-    { Request = emptyRequest "GET" "https://example.com/thing"
+    { Request = requestWithNoBody "GET" "https://example.com/thing"
       Status = 200
       Reason = "OK"
       Headers = [ "Content-Type", contentType ]
@@ -212,7 +212,7 @@ let statusLineTests =
         [ test "the status line carries method, URL, colored status, request time, total, and size" {
               let env =
                   { envelope "text/plain" (utf8 "hi") with
-                      Request = emptyRequest "POST" "https://api.example.com/widgets"
+                      Request = requestWithNoBody "POST" "https://api.example.com/widgets"
                       RequestMs = 142.0
                       TotalMs = 380.0 }
 
@@ -324,7 +324,7 @@ let requestSectionTests =
               let env =
                   { envelope "text/plain" (utf8 "ok") with
                       Request =
-                          { emptyRequest "POST" "https://api.example.com/upload" with
+                          { requestWithNoBody "POST" "https://api.example.com/upload" with
                               Headers = [ "Content-Type", "application/octet-stream" ]
                               ContentType = "application/octet-stream"
                               Body = NotCaptured reason } }
@@ -348,7 +348,7 @@ let requestSectionTests =
               let env =
                   { envelope "text/plain" (utf8 "ok") with
                       Request =
-                          { emptyRequest "GET" "https://api.example.com/thing" with
+                          { requestWithNoBody "GET" "https://api.example.com/thing" with
                               Headers = [ "Accept", "application/json"; "X-Trace", "abc" ] } }
 
               let node = render env
@@ -369,7 +369,7 @@ let requestSectionTests =
           test "the status line shows the method and URL from env.Request" {
               let env =
                   { envelope "text/plain" (utf8 "ok") with
-                      Request = emptyRequest "PUT" "https://api.example.com/items?q=one%20two" }
+                      Request = requestWithNoBody "PUT" "https://api.example.com/items?q=one%20two" }
 
               let node = render env
 
@@ -388,7 +388,7 @@ let requestSectionTests =
               let env =
                   { envelope "text/plain" (utf8 "ok") with
                       Request =
-                          { emptyRequest "GET" "https://example.com/" with
+                          { requestWithNoBody "GET" "https://example.com/" with
                               Headers = [ "Accept", "*/*" ] }
                       Headers = [ "Content-Type", "text/plain"; "Server", "kestrel" ] }
 

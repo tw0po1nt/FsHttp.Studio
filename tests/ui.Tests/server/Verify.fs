@@ -25,11 +25,22 @@ let private get (client: HttpClient) (url: string) =
         return int resp.StatusCode, contentType, body
     }
 
+let private post (client: HttpClient) (url: string) (contentType: string) (body: string) =
+    task {
+        use content = new StringContent(body, Text.Encoding.UTF8, contentType)
+        use! resp = client.PostAsync(url, content)
+        let! responseBody = resp.Content.ReadAsStringAsync()
+        return int resp.StatusCode, responseBody
+    }
+
 let run (baseUrl: string) =
     use client = new HttpClient()
     client.Timeout <- pollTimeout
 
     let get path = get client (baseUrl + path)
+
+    let post path contentType body =
+        post client (baseUrl + path) contentType body
 
     task {
         let! code, contentType, body = get "/json"
@@ -52,6 +63,23 @@ let run (baseUrl: string) =
 
         if catchAllBody = namedNotFoundBody then
             failwith "/notfound must be a named route, distinguishable from the catch-all"
+
+        // The echo route accepts a POST and acknowledges it without repeating the body. Both
+        // halves are asserted: a 200 says the route exists, and the absence of the sent text says
+        // the request-section check cannot be satisfied by the response body region.
+        let sentText = """{"posted":"ui-test-server-echo"}"""
+        let! code, ack = post "/echo" "application/json" sentText
+
+        if code <> 200 || ack <> echoAckBody then
+            failwithf "POST /echo: expected 200 with the ack body, got %d %s" code ack
+
+        if ack.Contains "posted" then
+            failwith "POST /echo must not echo the posted body back, or the Request section check proves nothing"
+
+        let! code, _, _ = get "/echo"
+
+        if code <> 404 then
+            failwithf "GET /echo: expected the catch-all 404, since only POST is routed, got %d" code
 
         let readStatus () =
             task {
