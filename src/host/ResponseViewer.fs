@@ -117,11 +117,35 @@ body {
 summary { cursor: pointer; user-select: none; list-style: none; }
 summary::-webkit-details-marker { display: none; }
 
+/* Each section sits in a positioned shell so its copy button stays visible while the section is
+   collapsed, and does not scroll with the body (docs/spec/0013-copy-buttons.md, Decision 2). */
+.section-shell { position: relative; margin-bottom: 12px; }
+.copy-button {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  padding: 2px 8px;
+  font-family: var(--vscode-font-family);
+  font-size: 0.82em;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 4px;
+  background: var(--vscode-button-secondaryBackground, rgba(128,128,128,0.2));
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  opacity: 0.55;
+  cursor: pointer;
+}
+.copy-button:hover,
+.copy-button:focus-visible {
+  opacity: 1;
+  background: var(--vscode-button-secondaryHoverBackground, rgba(128,128,128,0.3));
+}
+
 /* headers, and the request section that mirrors them. `.request` sits between the status line
-   and the response headers, and is styled by the same rules so the two cannot drift apart. */
+   and the response headers, and is styled by the same rules so the two cannot drift apart.
+   Spacing lives on `.section-shell`, so it does not double (docs/spec/0013-copy-buttons.md,
+   Decision 12). */
 .headers,
 .request {
-  margin-bottom: 12px;
   border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.25));
   border-radius: 6px;
   overflow: hidden;
