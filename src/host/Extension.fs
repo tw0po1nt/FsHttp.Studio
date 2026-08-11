@@ -25,7 +25,8 @@ let private setStatusText (text: string option) =
 /// the active editor's real `ScriptView` through here — this is the extension's only placeholder,
 /// so that ticket has one edit site. Until then the Ready row reads `looking for requests…`
 /// rather than the retired `ready` word, in every document.
-let private setCompanionStatus (state: State) = setStatusText (statusText state ScriptPending)
+let private setCompanionStatus (state: State) =
+    setStatusText (statusText state ScriptPending)
 
 [<Literal>]
 let private getSdkLabel = "Get the .NET SDK"
