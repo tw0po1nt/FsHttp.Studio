@@ -13,6 +13,7 @@ Mocha.runTests (
         [ SelfCheckTests.tests
           CorePathTests.tests
           RequestSectionTests.tests
+          CopyButtonsTests.tests
           RunOutcomesTests.tests
           LoopLensTests.tests
           CrossBlockRefusedRunTests.tests

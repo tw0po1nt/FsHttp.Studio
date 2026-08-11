@@ -61,6 +61,9 @@ let notFoundBody = "ui-test-server:notfound"
 /// acknowledgement is what the *response* body carries, and it repeats none of what was posted.
 let echoAckKey = "echoed"
 
+let echoAckValue = "ui-test-server"
+let echoAckBody = sprintf """{"%s":"%s"}""" echoAckKey echoAckValue
+
 /// Cross-process contract for the body `request-section.fsx` posts. Named in parts for the same
 /// reason the `/json` probe is: a check reads the viewer's pretty-printed DOM, which whitespace
 /// has already moved, so it matches the key and the value rather than the one-line body.

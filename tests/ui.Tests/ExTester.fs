@@ -94,6 +94,14 @@ type BottomBarPanel =
 type ByStatic =
     abstract css: selector: string -> obj
 
+/// One copy button as the viewer paints it. `Displayed` is the laid-out box, not CSS
+/// `visibility`: a button inside a closed `<details>` still reports visible styles while the
+/// browser paints nothing (docs/spec/0013-copy-buttons.md, Decision 2).
+type CopyButtonReading =
+    { Key: string
+      Label: string
+      Displayed: bool }
+
 /// One read of the response viewer's rendered DOM. Empty strings mean the node was absent; a
 /// check waits with `Harness.eventually` for the tell it cares about, rather than asserting the
 /// DOM tree shape.
@@ -123,6 +131,13 @@ type ResponseViewerDom =
         /// Whether the Request section is expanded. `<details>` carries `open` only while it is,
         /// so this is the direct read of collapsed-by-default.
         RequestOpen: bool
+        /// Whether the response headers section is expanded. Same `open` attribute contract as
+        /// `RequestOpen`.
+        HeadersOpen: bool
+        /// Every `.copy-button`, in DOM order. Empty when the viewer has not painted a response.
+        CopyButtons: CopyButtonReading[]
+        /// Computed `margin-bottom` of each `.section-shell`, in CSS pixels, in DOM order.
+        ShellMarginsPx: float[]
         /// Text of the webview root. Carries the full response render, or the plain error text
         /// a runtime-error update writes with no response structure.
         RootText: string
@@ -157,6 +172,8 @@ module private Viewer =
     /// The Request section's own summary. `.headers-summary` is shared with the response headers
     /// section, so it must be scoped, or a read reaches whichever of the two comes first.
     let requestSummarySelector = ".request > .headers-summary"
+
+    let copyButtonSelector = ".copy-button"
 
     let rootSelector = "#root"
     let runInProgressSelector = ".pending-label"
@@ -896,6 +913,52 @@ let tryWorkbenchPresent () : Async<bool> =
             return false
     }
 
+/// True when a boolean HTML attribute is present. WebDriver reads a present boolean attribute
+/// back as `"true"`, and an absent one as null. A missing element reads as `""` from
+/// `tryElementProperty`, so both blanks must count as not set.
+let private attributeIsPresent (value: string) = not (isNull (box value)) && value <> ""
+
+/// Reads every copy button and every section shell's computed margin inside the viewer frame.
+/// One script keeps the layout claims on one trip, and uses the laid-out box for `Displayed`
+/// because CSS visibility alone cannot see Decision 2's defect.
+let private readCopySurface (driver: obj) : Async<CopyButtonReading[] * float[]> =
+    async {
+        let script =
+            """
+            var buttons = document.querySelectorAll('.copy-button');
+            var buttonOut = [];
+            for (var i = 0; i < buttons.length; i++) {
+                var b = buttons[i];
+                var box = b.getBoundingClientRect();
+                buttonOut.push({
+                    key: b.getAttribute('data-copy') || '',
+                    label: (b.textContent || '').trim(),
+                    displayed: box.width > 0 && box.height > 0
+                });
+            }
+            var shells = document.querySelectorAll('.section-shell');
+            var margins = [];
+            for (var s = 0; s < shells.length; s++) {
+                margins.push(parseFloat(getComputedStyle(shells[s]).marginBottom) || 0);
+            }
+            return { buttons: buttonOut, margins: margins };
+            """
+
+        let call: JS.Promise<obj> = emitJsExpr (driver, script) "$0.executeScript($1)"
+        let! raw = call |> Async.AwaitPromise
+        let buttonObjs: obj[] = unbox (raw?buttons: obj)
+
+        let buttons =
+            buttonObjs
+            |> Array.map (fun (b: obj) ->
+                { Key = unbox<string> (b?key: obj)
+                  Label = unbox<string> (b?label: obj)
+                  Displayed = unbox<bool> (b?displayed: obj) })
+
+        let margins: float[] = unbox (raw?margins: obj)
+        return buttons, margins
+    }
+
 /// Enters the response viewer's webview iframe, reads the DOM surfaces the product checks
 /// assert on, and switches back to the workbench. Returns `None` when the frame cannot be
 /// entered; otherwise returns whatever text and class content is present (empty when a node is
@@ -921,6 +984,8 @@ let tryReadResponseViewer () : Async<ResponseViewerDom option> =
                 let! request = tryElementText view Viewer.requestSelector
                 let! requestSummary = tryElementText view Viewer.requestSummarySelector
                 let! requestOpen = tryElementAttribute view Viewer.requestSelector "open"
+                let! headersOpen = tryElementAttribute view Viewer.headersSelector "open"
+                let! copyButtons, shellMargins = readCopySurface VSBrowser.instance.driver
                 let! root = tryElementText view Viewer.rootSelector
                 let! runInProgress = tryElementText view Viewer.runInProgressSelector
                 let! refusalTitle = tryElementText view Viewer.refusalTitleSelector
@@ -942,11 +1007,10 @@ let tryReadResponseViewer () : Async<ResponseViewerDom option> =
                           HeadersText = headers
                           RequestText = request
                           RequestSummaryText = requestSummary
-                          // WebDriver reads a present boolean attribute back as `"true"`, and an
-                          // absent one as null. A missing element reads as `""` from
-                          // `tryElementProperty`, so both blanks must count as not open — an
-                          // absent Request section is not an expanded one.
-                          RequestOpen = not (isNull (box requestOpen)) && requestOpen <> ""
+                          RequestOpen = attributeIsPresent requestOpen
+                          HeadersOpen = attributeIsPresent headersOpen
+                          CopyButtons = copyButtons
+                          ShellMarginsPx = shellMargins
                           RootText = root
                           RunInProgressLabel = runInProgress
                           RefusalTitleText = refusalTitle
@@ -997,4 +1061,145 @@ let tryExpandRequestSection () : Async<bool> =
                 return false
         with _ ->
             return false
+    }
+
+/// What one copy-button click produced inside the viewer frame.
+type CopyClickReading =
+    {
+        /// The button's label after the click settled on success or failure.
+        Label: string
+        /// The text a resolved `navigator.clipboard.writeText` received. `None` when the write
+        /// never resolved, or the witness was not installed.
+        CopiedText: string option
+        RequestOpen: bool
+        HeadersOpen: bool
+    }
+
+/// Installs a witness over `navigator.clipboard.writeText` in the viewer frame. The real write
+/// still runs; on resolve the text is stored for the suite. Headless Linux in this suite has no
+/// clipboard tool, and a resolved write is what Decision 11 measured VSCode granting.
+let private installClipboardWitnessScript =
+    """
+    if (!window.__fshttpCopyWitness) {
+      window.__fshttpCopyWitness = true;
+      window.__fshttpLastCopied = null;
+      var orig = navigator.clipboard.writeText.bind(navigator.clipboard);
+      navigator.clipboard.writeText = function (text) {
+        return orig(text).then(function () {
+          window.__fshttpLastCopied = text;
+        }, function (err) {
+          window.__fshttpLastCopied = null;
+          return Promise.reject(err);
+        });
+      };
+    }
+    window.__fshttpLastCopied = null;
+    """
+
+/// Clicks the copy button for `key`, waits for its label to leave `Copy`, and reads the
+/// clipboard witness plus the two collapsible sections' open state. Pair with
+/// `Harness.eventually`: a missed frame switch or a button that has not painted yet fails the
+/// attempt.
+let tryClickCopyButton (key: string) : Async<CopyClickReading option> =
+    async {
+        try
+            let! group = editorGroup viewerGroupIndex
+            let view = WebView.createInGroup group
+            let driver = VSBrowser.instance.driver
+            let mutable switched = false
+
+            try
+                do! switchToFrameTimed view frameSwitchTimeoutMs |> Async.AwaitPromise
+                switched <- true
+
+                let install: JS.Promise<objnull> =
+                    emitJsExpr (driver, installClipboardWitnessScript) "$0.executeScript($1)"
+
+                do! install |> Async.AwaitPromise |> Async.Ignore
+
+                let selector = sprintf "%s[data-copy=\"%s\"]" Viewer.copyButtonSelector key
+                let! button = view.findWebElement (By.css selector) |> Async.AwaitPromise
+                do! button.click () |> Async.AwaitPromise
+
+                // The flash is asynchronous on the clipboard promise. Poll inside the frame so
+                // one attempt covers click through settled label without leaving and re-entering.
+                // Gate on the witness *and* the label: a retry that finds a leftover `Copied`
+                // label must not return before the new write has stored its text.
+                let waitLabel =
+                    """
+                    var key = arguments[0];
+                    var button = document.querySelector('.copy-button[data-copy="' + key + '"]');
+                    if (!button) { return null; }
+                    var label = (button.textContent || '').trim();
+                    var copied = window.__fshttpLastCopied;
+                    if (copied == null || label === 'Copy') { return null; }
+                    var request = document.querySelector('.request');
+                    var headers = document.querySelector('.headers');
+                    return {
+                      label: label,
+                      copied: copied,
+                      requestOpen: !!(request && request.hasAttribute('open')),
+                      headersOpen: !!(headers && headers.hasAttribute('open'))
+                    };
+                    """
+
+                let deadline = Proc.now () + 3_000.
+
+                let rec poll () =
+                    async {
+                        let call: JS.Promise<objnull> =
+                            emitJsExpr (driver, waitLabel, key) "$0.executeScript($1, $2)"
+
+                        let! raw = call |> Async.AwaitPromise
+
+                        match raw with
+                        | null ->
+                            if Proc.now () >= deadline then
+                                return None
+                            else
+                                do! Async.Sleep 50
+                                return! poll ()
+                        | settled -> return Some(unbox<obj> settled)
+                    }
+
+                let! settled = poll ()
+
+                switched <- false
+                do! view.switchBack () |> Async.AwaitPromise
+
+                match settled with
+                | None -> return None
+                | Some raw ->
+                    let copiedObj: objnull = raw?copied: objnull
+
+                    let copied =
+                        match copiedObj with
+                        | null -> None
+                        | text -> Some(unbox<string> text)
+
+                    return
+                        Some
+                            { Label = unbox<string> (raw?label: obj)
+                              CopiedText = copied
+                              RequestOpen = unbox<bool> (raw?requestOpen: obj)
+                              HeadersOpen = unbox<bool> (raw?headersOpen: obj) }
+            with _ ->
+                if switched then
+                    try
+                        do! view.switchBack () |> Async.AwaitPromise
+                    with _ ->
+                        ()
+
+                return None
+        with _ ->
+            return None
+    }
+
+/// True when the copy button for `key` shows exactly `label`. Pair with `Harness.eventually` for
+/// the label's return to `Copy` after the flash.
+let tryCopyButtonLabel (key: string) (label: string) : Async<bool> =
+    async {
+        match! tryReadResponseViewer () with
+        | None -> return false
+        | Some dom -> return dom.CopyButtons |> Array.exists (fun b -> b.Key = key && b.Label = label)
     }
