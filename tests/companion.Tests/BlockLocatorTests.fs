@@ -15,7 +15,7 @@ let private slice = sliceRange
 /// The range of every block in `source`, in source order. These tests assert over ranges alone,
 /// so they drop the rest of each `LocatedBlock` here rather than at every call site.
 let private locate (source: string) : BlockRange list =
-    locateBlocks source |> List.map (fun lb -> lb.Block)
+    (locateBlocks source).Blocks |> List.map (fun lb -> lb.Block)
 
 [<Tests>]
 let tests =
@@ -174,7 +174,7 @@ let a =
     |> ignore
 """
 
-              let blocks = locateBlocks source
+              let blocks = (locateBlocks source).Blocks
               Expect.hasLength blocks 1 "one block expected"
               let blankText = slice source blocks.[0].Blank
               Expect.stringStarts blankText "let a =" "blank span starts at the let keyword"
@@ -190,7 +190,7 @@ http {
 |> Request.send
 """
 
-              let blocks = locateBlocks source
+              let blocks = (locateBlocks source).Blocks
               Expect.hasLength blocks 1 "one block expected"
               let blankText = slice source blocks.[0].Blank
               Expect.stringStarts blankText "http {" "blank span starts at the builder head"
@@ -207,7 +207,7 @@ type Api() =
         }
 """
 
-              let blocks = locateBlocks source
+              let blocks = (locateBlocks source).Blocks
               Expect.hasLength blocks 1 "one block expected"
               let blankText = slice source blocks.[0].Blank
               Expect.stringStarts blankText "http {" "member blank span is the right side only, not the member head"
@@ -224,7 +224,7 @@ type Api() =
 let wrapped = (http { GET "https://example.com/paren" })
 """
 
-              let blocks = locateBlocks source
+              let blocks = (locateBlocks source).Blocks
               Expect.hasLength blocks 1 "one block expected"
               Expect.equal blocks.[0].Route (NamedByTheBinding "wrapped") "parentheses are transparent to R2"
           }
@@ -235,7 +235,7 @@ let wrapped = (http { GET "https://example.com/paren" })
 let annotated: FsHttp.Domain.HeaderContext = http { GET "https://example.com/typed" }
 """
 
-              let blocks = locateBlocks source
+              let blocks = (locateBlocks source).Blocks
               Expect.hasLength blocks 1 "one block expected"
               Expect.equal blocks.[0].Route (NamedByTheBinding "annotated") "a type annotation is transparent to R2"
           }
@@ -248,7 +248,7 @@ let annotated: FsHttp.Domain.HeaderContext = http { GET "https://example.com/typ
 (http { GET "https://example.com/paren-bare" })
 """
 
-              let blocks = locateBlocks source
+              let blocks = (locateBlocks source).Blocks
               Expect.hasLength blocks 1 "one block expected"
               Expect.notEqual blocks.[0].Route NamedByTheRun "parentheses are not transparent to R1"
           }
@@ -260,7 +260,7 @@ let annotated: FsHttp.Domain.HeaderContext = http { GET "https://example.com/typ
 let _ = http { GET "https://example.com/wildcard" }
 """
 
-              let blocks = locateBlocks source
+              let blocks = (locateBlocks source).Blocks
               Expect.hasLength blocks 1 "one block expected"
 
               match blocks.[0].Route with
@@ -280,7 +280,7 @@ let _ = http { GET "https://example.com/wildcard" }
 let inHead = http { GET "https://example.com/head" }
 """
 
-              let blocks = locateBlocks source
+              let blocks = (locateBlocks source).Blocks
               Expect.hasLength blocks 1 "one block expected"
               Expect.equal blocks.[0].Qualifier [ "Head" ] "the header module qualifies the invocation"
               Expect.hasLength blocks.[0].PrivateSpans 1 "the header module's private is on the path"
@@ -295,7 +295,7 @@ let inHead = http { GET "https://example.com/head" }
 let bare = http { GET "https://example.com/bare" }
 """
 
-              let blocks = locateBlocks source
+              let blocks = (locateBlocks source).Blocks
               Expect.hasLength blocks 1 "one block expected"
               Expect.isEmpty blocks.[0].Qualifier "an anonymous module contributes no name"
           }
@@ -310,7 +310,7 @@ http { GET "https://example.com/bare-run" }
 let named = http { GET "https://example.com/named-run" }
 """
 
-              let blocks = locateBlocks source
+              let blocks = (locateBlocks source).Blocks
               Expect.hasLength blocks 2 "two blocks expected"
 
               blocks
@@ -334,7 +334,7 @@ http {
 }
 """
 
-              let blocks = locateBlocks source
+              let blocks = (locateBlocks source).Blocks
               Expect.hasLength blocks 2 "two blocks expected: the outer and the nested one"
 
               Expect.equal blocks.[0].Route NamedByTheRun "the outer block is runnable"
@@ -362,7 +362,7 @@ let matched =
     | _ -> http { GET "https://example.com/other" }
 """
 
-              let blocks = locateBlocks source
+              let blocks = (locateBlocks source).Blocks
               Expect.hasLength blocks 4 "four blocks expected"
 
               let routeOf i = blocks.[i].Route
@@ -395,4 +395,84 @@ let matched =
                   let reason = reasonFor code
                   Expect.isNotEmpty reason (sprintf "%A has a reason" code)
                   Expect.isFalse (reason.Contains "Syn") (sprintf "%A must not name an FCS type" code))
+          }
+
+          // docs/spec/0014-explain-missing-lenses.md, Seam 1: ParseFailed comes from
+          // ParseHadErrors, and recovery keeps or drops blocks by where the damage sits.
+          test "a clean script with blocks reports ParseFailed = false" {
+              let source =
+                  """
+http {
+    GET "https://example.com/1"
+}
+
+http {
+    GET "https://example.com/2"
+}
+"""
+
+              let located = locateBlocks source
+              Expect.isFalse located.ParseFailed "a clean script must not report parse failure"
+              Expect.hasLength located.Blocks 2 "two blocks expected"
+          }
+
+          test "a clean script with no blocks reports ParseFailed = false" {
+              let located = locateBlocks "let x = 1\n"
+              Expect.isFalse located.ParseFailed "a clean empty script must not report parse failure"
+              Expect.isEmpty located.Blocks "no blocks expected"
+          }
+
+          test "damage above every block reports ParseFailed = true and no block" {
+              // An unterminated string before the first block: the probe's "above" case.
+              let source =
+                  """
+let s = "oops
+http {
+    GET "https://example.com/1"
+}
+"""
+
+              let located = locateBlocks source
+              Expect.isTrue located.ParseFailed "damage above the blocks must set ParseFailed"
+              Expect.isEmpty located.Blocks "recovery must find no block when damage sits above them"
+          }
+
+          test "damage below every block reports ParseFailed = true and each block" {
+              // Trailing incomplete binding: the probe's "below" case that keeps each earlier block.
+              let source =
+                  """
+http {
+    GET "https://example.com/1"
+}
+
+http {
+    GET "https://example.com/2"
+}
+
+let c =
+"""
+
+              let located = locateBlocks source
+              Expect.isTrue located.ParseFailed "damage below the blocks must set ParseFailed"
+              Expect.hasLength located.Blocks 2 "each earlier block must survive"
+          }
+
+          test "damage between two blocks reports ParseFailed = true and one block" {
+              // A stray `}` between two blocks: the probe's partial-loss case.
+              let source =
+                  """
+http {
+    GET "https://example.com/1"
+}
+
+}
+
+http {
+    GET "https://example.com/2"
+}
+"""
+
+              let located = locateBlocks source
+              Expect.isTrue located.ParseFailed "damage between blocks must set ParseFailed"
+              Expect.hasLength located.Blocks 1 "recovery keeps one of the two blocks"
           } ]

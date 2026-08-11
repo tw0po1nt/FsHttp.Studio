@@ -123,7 +123,8 @@ let provider: CodeLensProvider =
                     | None -> noLenses ()
                     | Some h ->
                         async {
-                            let! ranges = Companion.locate h (document.getText ())
+                            let! located = Companion.locate h (document.getText ())
+                            let ranges = located.Ranges
 
                             // Re-read `ready` after the await. A companion that exits with this
                             // locate in flight abandons it to an empty list

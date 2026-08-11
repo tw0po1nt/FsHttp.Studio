@@ -178,11 +178,19 @@ let private send (handle: Handle) (payloadJson: string) (entry: Pending) =
         handle.Pending.Add(entry)
         handle.Process.stdin.write (encodeFrame (encodeUtf8 payloadJson)) |> ignore
 
-/// Sends a `locate` request over the framed envelope. It resolves with the block ranges after
-/// the companion's `blocks` response arrives, or with an empty list if the companion is gone
-/// (docs/spec/0004-run-path-robustness.md, Decision 6) — the honest degraded state, since there
-/// is nothing left to locate blocks in.
-let locate (handle: Handle) (source: string) : Async<BlockRange list> =
+/// The block ranges from a `blocks` response, and whether the companion's parse failed.
+/// `ParseFailed` mirrors the envelope's `parseFailed` property. An absent property decodes to
+/// `false`, which matches the absent-`refusal` rule
+/// (docs/spec/0014-explain-missing-lenses.md, Decision 3).
+type LocateResult =
+    { Ranges: BlockRange list
+      ParseFailed: bool }
+
+/// Sends a `locate` request over the framed envelope. It resolves with the block ranges and the
+/// parse-failed flag after the companion's `blocks` response arrives, or with an empty list and
+/// `ParseFailed = false` if the companion is gone (docs/spec/0004-run-path-robustness.md,
+/// Decision 6) — the honest degraded state, since there is nothing left to locate blocks in.
+let locate (handle: Handle) (source: string) : Async<LocateResult> =
     Async.FromContinuations(fun (resolve, _reject, _cancel) ->
         let payload: obj = createObj [ "tag" ==> "locate"; "source" ==> source ]
 
@@ -190,8 +198,20 @@ let locate (handle: Handle) (source: string) : Async<BlockRange list> =
             { Resolve =
                 fun json ->
                     let ranges: obj[] = unbox (json?ranges: obj)
-                    resolve (ranges |> Array.map toBlockRange |> Array.toList)
-              Abandon = fun () -> resolve [] }
+                    let parseFailed: obj = json?parseFailed
+
+                    resolve
+                        { Ranges = ranges |> Array.map toBlockRange |> Array.toList
+                          ParseFailed =
+                            if isNullish parseFailed then
+                                false
+                            else
+                                unbox<bool> parseFailed }
+              Abandon =
+                fun () ->
+                    resolve
+                        { Ranges = []
+                          ParseFailed = false } }
 
         send handle (JS.JSON.stringify payload) entry)
 
