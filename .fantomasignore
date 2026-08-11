@@ -1,0 +1,5 @@
+# Intentionally unparseable UI fixtures for the no-requests lens
+# (docs/spec/0014-explain-missing-lenses.md, Decision 1). Fantomas must not try to format them.
+tests/ui.Tests/fixtures/no-requests-above.fsx
+tests/ui.Tests/fixtures/no-requests-below.fsx
+tests/ui.Tests/fixtures/no-requests-between.fsx
