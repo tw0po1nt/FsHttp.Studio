@@ -22,9 +22,10 @@ let private tryClickNotFoundLens () =
 let private tryClickDeadPortLens () =
     ExTester.tryClickCodeLensByIndex deadPortLensIndex
 
-/// The status line shows the block's own source text, so the 404 block renders as
-/// `{baseUrl}/notfound` — the URL *ends* in the path. A containment match would also accept
-/// `/notfound/x`, which is a different route.
+/// The status line shows the URL the block sent, and that URL *ends* in the path. A containment
+/// match would also accept `/notfound/x`, which is a different route. Which route answered is this
+/// check's business; that the URL is the sent one is the core path's, so this one asks only for
+/// the ending.
 let private urlEndsInNotFound (urlText: string) =
     urlText.TrimEnd().EndsWith notFoundUrlPath
 

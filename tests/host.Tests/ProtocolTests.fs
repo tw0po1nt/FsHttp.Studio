@@ -85,51 +85,63 @@ let formatCompileErrorTests =
                   "one header, one line per diagnostic"
           } ]
 
-/// Builds an ok frame with the given request bodyState triple. Shared by the three bodyState
-/// cases so each test only names the state under check.
-let private okFrameWithRequest (bodyState: string) (bodyBase64: string) (bodyReason: string) =
-    OkFrame
-        { Status = 200
-          Reason = "OK"
-          Headers = [ "Content-Type", "application/json" ]
-          ContentType = "application/json"
-          BodyBase64 = "e30="
-          RequestMs = 12.5
-          Request =
-            Some
-                { Method = "POST"
-                  Url = "https://api.example.com/items?q=one%20two"
-                  Headers = [ "Content-Type", "application/json" ]
-                  BodyState = bodyState
-                  BodyBase64 = bodyBase64
-                  BodyReason = bodyReason } }
+let private okResponse =
+    { Status = 200
+      Reason = "OK"
+      Headers = [ "Content-Type", "application/json" ]
+      ContentType = "application/json"
+      BodyBase64 = "e30="
+      RequestMs = 12.5 }
+
+/// The wire's three body states, each built by the one field it populates. A test that names a
+/// state cannot then set a field the companion never sets for it.
+let private noBodyOnWire =
+    { State = "none"
+      Base64 = ""
+      Reason = "" }
+
+let private capturedOnWire base64 : WireBody =
+    { State = "captured"
+      Base64 = base64
+      Reason = "" }
+
+let private notCapturedOnWire reason : WireBody =
+    { State = "notCaptured"
+      Base64 = ""
+      Reason = reason }
+
+/// Builds an ok envelope carrying the given wire body. Shared by the bodyState cases so each test
+/// only names the state under check.
+let private okEnvelopeWithBody (body: WireBody) =
+    OkEnvelope(
+        okResponse,
+        Some
+            { Method = "POST"
+              Url = "https://api.example.com/items?q=one%20two"
+              Headers = [ "Content-Type", "application/json" ]
+              Body = body }
+    )
 
 [<Tests>]
 let parseRunResultTests =
     testList
         "parseRunResult"
         [ test "reads request with bodyState none" {
-              match parseRunResult (okFrameWithRequest "none" "" "") with
-              | RunOk(request, status, reason, headers, contentType, bodyBase64, requestMs) ->
+              match parseRunResult (okEnvelopeWithBody noBodyOnWire) with
+              | RunOk(request, response) ->
                   Expect.equal request.Method "POST" "method"
                   Expect.equal request.Url "https://api.example.com/items?q=one%20two" "url keeps percent-escapes"
                   Expect.equal request.Headers [ "Content-Type", "application/json" ] "request headers"
                   Expect.equal request.Body NoBody "none maps to NoBody"
-                  Expect.equal status 200 "status"
-                  Expect.equal reason "OK" "reason"
-                  Expect.equal headers [ "Content-Type", "application/json" ] "response headers"
-                  Expect.equal contentType "application/json" "contentType"
-                  Expect.equal bodyBase64 "e30=" "response body"
-                  Expect.equal requestMs 12.5 "requestMs"
+                  Expect.equal response okResponse "the response half passes through unchanged"
               | other -> failtestf "expected RunOk, got %A" other
           }
 
           test "reads request with bodyState captured" {
               let bytes = System.Text.Encoding.UTF8.GetBytes("""{"a":1}""")
-              let bodyBase64 = System.Convert.ToBase64String bytes
 
-              match parseRunResult (okFrameWithRequest "captured" bodyBase64 "") with
-              | RunOk(request, _, _, _, _, _, _) ->
+              match parseRunResult (okEnvelopeWithBody (capturedOnWire (System.Convert.ToBase64String bytes))) with
+              | RunOk(request, _) ->
                   match request.Body with
                   | Captured got -> Expect.equal got bytes "captured bytes round-trip from base64"
                   | other -> failtestf "expected Captured, got %A" other
@@ -139,31 +151,28 @@ let parseRunResultTests =
           test "reads request with bodyState notCaptured" {
               let reason = "streamed body — not captured, so that the upload is unchanged"
 
-              match parseRunResult (okFrameWithRequest "notCaptured" "" reason) with
-              | RunOk(request, _, _, _, _, _, _) ->
-                  Expect.equal request.Body (NotCaptured reason) "notCaptured keeps its reason"
+              match parseRunResult (okEnvelopeWithBody (notCapturedOnWire reason)) with
+              | RunOk(request, _) -> Expect.equal request.Body (NotCaptured reason) "notCaptured keeps its reason"
               | other -> failtestf "expected RunOk, got %A" other
           }
 
-          test "an ok frame missing request is a RunProtocolError, not a crash" {
-              let frame =
-                  OkFrame
-                      { Status = 200
-                        Reason = "OK"
-                        Headers = []
-                        ContentType = ""
-                        BodyBase64 = ""
-                        RequestMs = 1.0
-                        Request = None }
-
-              match parseRunResult frame with
+          test "an ok envelope missing request is a RunProtocolError, not a crash" {
+              match parseRunResult (OkEnvelope(okResponse, None)) with
               | RunProtocolError message ->
                   Expect.stringContains message "request" "the message names the missing object"
               | other -> failtestf "expected RunProtocolError, got %A" other
           }
 
           test "an unknown bodyState is a RunProtocolError, not a crash" {
-              match parseRunResult (okFrameWithRequest "sometime" "" "") with
+              let body = { noBodyOnWire with State = "sometime" }
+
+              match parseRunResult (okEnvelopeWithBody body) with
               | RunProtocolError message -> Expect.stringContains message "bodyState" "the message names the bad field"
+              | other -> failtestf "expected RunProtocolError, got %A" other
+          }
+
+          test "a captured body that is not valid base64 is a RunProtocolError, not a crash" {
+              match parseRunResult (okEnvelopeWithBody (capturedOnWire "not base64 at all!")) with
+              | RunProtocolError message -> Expect.stringContains message "base64" "the message names the bad encoding"
               | other -> failtestf "expected RunProtocolError, got %A" other
           } ]

@@ -85,13 +85,21 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
 
         if myGeneration = generation then
             match result with
-            | RunOk(request, status, reason, headers, contentType, bodyBase64, requestMs) ->
+            | RunOk(request, response) ->
                 let timing =
-                    { RequestMs = requestMs
+                    { RequestMs = response.RequestMs
                       TotalMs = totalMs }
 
                 ResponseViewer.post (
-                    resultUpdate request.Method request.Url timing status reason headers contentType bodyBase64
+                    resultUpdate
+                        request.Method
+                        request.Url
+                        timing
+                        response.Status
+                        response.Reason
+                        response.Headers
+                        response.ContentType
+                        response.BodyBase64
                 )
             | RunCompileError diagnostics -> ResponseViewer.post (errorUpdate (formatCompileError diagnostics))
             | RunRuntimeError message -> ResponseViewer.post (errorUpdate (sprintf "Runtime error: %s" message))

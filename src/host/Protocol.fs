@@ -28,56 +28,59 @@ type CapturedBody =
     | Captured of bytes: byte[]
     | NotCaptured of reason: string
 
-/// The request that was actually sent, as the companion put it on the `ok` frame
-/// (docs/spec/0012-request-as-sent.md, Decisions 9-10).
+/// The request that was actually sent, as the companion put it on the `ok` envelope. Mirrors
+/// `BlockRunner.RequestData` (docs/spec/0012-request-as-sent.md, Decisions 9-10).
 type RequestData =
     { Method: string
       Url: string
       Headers: (string * string) list
       Body: CapturedBody }
 
-/// Wire fields for the nested `request` object on an `ok` frame. The JS side fills these after
-/// it reads the properties. `parseRunResult` turns them into `RequestData`.
-type OkRequestFields =
-    { Method: string
-      Url: string
-      Headers: (string * string) list
-      BodyState: string
-      BodyBase64: string
-      BodyReason: string }
-
-/// An `ok` frame's top-level fields, plus an optional nested request. `Request = None` means
-/// the property was absent, which is a protocol error rather than a crash.
-type OkFields =
+/// The response half of a successful Run. Mirrors `BlockRunner.ResponseData`, which exists so
+/// that neither side carries a ten-field tuple whose positional call sites are a defect waiting
+/// to happen (docs/spec/0012-request-as-sent.md, Decision 9).
+type ResponseData =
     { Status: int
       Reason: string
       Headers: (string * string) list
       ContentType: string
       BodyBase64: string
-      RequestMs: float
-      Request: OkRequestFields option }
+      RequestMs: float }
 
-/// A `run` response after the JS side has read its properties. The pure parse below maps this
-/// shape onto `RunResult`, so Seam 3 can drive it without Fable interop.
-type RunFrame =
-    | OkFrame of OkFields
-    | CompileErrorFrame of Diagnostic list
-    | RuntimeErrorFrame of string
-    | RefusedFrame of code: string * name: string option
-    | ProtocolErrorFrame of string
+/// The wire's three-state body triple, exactly as the `request` object spells it. The three
+/// fields only ever travel together, and only `capturedBodyFromWire` below reads them
+/// (docs/spec/0012-request-as-sent.md, Decision 10).
+type WireBody =
+    { State: string
+      Base64: string
+      Reason: string }
+
+/// The nested `request` object on an `ok` envelope. The JS side fills this in after it reads the
+/// properties; `requestFromWire` turns it into `RequestData`.
+type WireRequest =
+    { Method: string
+      Url: string
+      Headers: (string * string) list
+      Body: WireBody }
+
+/// A `run` response after the JS side has read its properties, named for the glossary's
+/// **Envelope** rather than for `Envelope.fs`'s length-prefixed transport frame. The pure parse
+/// below maps this shape onto `RunResult`, so Seam 3 can drive it without Fable interop.
+///
+/// On `OkEnvelope`, a `request` of `None` means the property was absent, which is a protocol
+/// error rather than a crash.
+type RunEnvelope =
+    | OkEnvelope of response: ResponseData * request: WireRequest option
+    | CompileErrorEnvelope of Diagnostic list
+    | RuntimeErrorEnvelope of string
+    | RefusedEnvelope of code: string * name: string option
+    | ProtocolErrorEnvelope of string
 
 /// The extension-host mirror of the companion's `run` response tags: `ok`, `compileError`,
 /// `runtimeError`, and `refused`. It adds one catch-all case for a malformed or unknown
 /// response.
 type RunResult =
-    | RunOk of
-        request: RequestData *
-        status: int *
-        reason: string *
-        headers: (string * string) list *
-        contentType: string *
-        bodyBase64: string *
-        requestMs: float
+    | RunOk of request: RequestData * response: ResponseData
     | RunCompileError of Diagnostic list
     | RunRuntimeError of string
     | RunProtocolError of string
@@ -117,45 +120,51 @@ let formatCompileError (diagnostics: Diagnostic list) : string =
     let body = diagnostics |> List.map formatOne |> String.concat "\n"
     sprintf "Compile error:\n%s" body
 
-/// Maps the wire's three-state `bodyState` / `bodyBase64` / `bodyReason` triple onto
-/// `CapturedBody` (docs/spec/0012-request-as-sent.md, Decision 10). An unknown state is a
-/// protocol error: both ends of this wire are ours, so a bad value is a defect.
-let private capturedBodyFromWire
-    (bodyState: string)
-    (bodyBase64: string)
-    (bodyReason: string)
-    : Result<CapturedBody, string> =
-    match bodyState with
-    | "none" -> Ok NoBody
-    | "captured" -> Ok(Captured(System.Convert.FromBase64String bodyBase64))
-    | "notCaptured" -> Ok(NotCaptured bodyReason)
-    | other -> Error(sprintf "ok frame has unknown bodyState '%s'" other)
+/// Decodes base64 without throwing. The companion writes this field, so a value that will not
+/// decode is a defect on our own wire — but it reaches `parseRunResult`, which owes its caller a
+/// `RunProtocolError` and not an exception raised inside a promise callback.
+let private tryFromBase64 (encoded: string) : byte[] option =
+    try
+        Some(System.Convert.FromBase64String encoded)
+    with _ ->
+        None
 
-/// Turns a decoded `run` response into a `RunResult`. An `ok` frame with no `request` object,
-/// or with an unknown `bodyState`, is a `RunProtocolError` and not a crash
-/// (docs/spec/0012-request-as-sent.md, Seam 3).
-let parseRunResult (frame: RunFrame) : RunResult =
-    match frame with
-    | CompileErrorFrame diagnostics -> RunCompileError diagnostics
-    | RuntimeErrorFrame message -> RunRuntimeError message
-    | RefusedFrame(code, name) -> RunRefused(code, name)
-    | ProtocolErrorFrame message -> RunProtocolError message
-    | OkFrame fields ->
-        match fields.Request with
-        | None -> RunProtocolError "ok frame is missing the request object"
-        | Some req ->
-            match capturedBodyFromWire req.BodyState req.BodyBase64 req.BodyReason with
-            | Error message -> RunProtocolError message
-            | Ok body ->
-                RunOk(
-                    { Method = req.Method
-                      Url = req.Url
-                      Headers = req.Headers
-                      Body = body },
-                    fields.Status,
-                    fields.Reason,
-                    fields.Headers,
-                    fields.ContentType,
-                    fields.BodyBase64,
-                    fields.RequestMs
-                )
+/// Maps the wire's three-state body triple onto `CapturedBody`
+/// (docs/spec/0012-request-as-sent.md, Decision 10). An unknown state is a protocol error: both
+/// ends of this wire are ours, so a bad value is a defect. Undecodable bytes are the same kind of
+/// defect, and are reported rather than decayed to `NoBody`, which would tell the reader no body
+/// was sent when one was.
+let private capturedBodyFromWire (body: WireBody) : Result<CapturedBody, string> =
+    match body.State with
+    | "none" -> Ok NoBody
+    | "captured" ->
+        match tryFromBase64 body.Base64 with
+        | Some bytes -> Ok(Captured bytes)
+        | None -> Error "ok envelope has a captured request body that is not valid base64"
+    | "notCaptured" -> Ok(NotCaptured body.Reason)
+    | other -> Error(sprintf "ok envelope has unknown bodyState '%s'" other)
+
+/// Turns the wire's `request` object into the `RequestData` the viewer reads. Lives beside
+/// `WireRequest`, so the field-by-field mapping is not spread through the parse below.
+let private requestFromWire (request: WireRequest) : Result<RequestData, string> =
+    capturedBodyFromWire request.Body
+    |> Result.map (fun body ->
+        { Method = request.Method
+          Url = request.Url
+          Headers = request.Headers
+          Body = body })
+
+/// Turns a decoded `run` response into a `RunResult`. An `ok` envelope with no `request` object,
+/// with an unknown `bodyState`, or with an undecodable captured body, is a `RunProtocolError` and
+/// not a crash (docs/spec/0012-request-as-sent.md, Seam 3).
+let parseRunResult (envelope: RunEnvelope) : RunResult =
+    match envelope with
+    | CompileErrorEnvelope diagnostics -> RunCompileError diagnostics
+    | RuntimeErrorEnvelope message -> RunRuntimeError message
+    | RefusedEnvelope(code, name) -> RunRefused(code, name)
+    | ProtocolErrorEnvelope message -> RunProtocolError message
+    | OkEnvelope(_, None) -> RunProtocolError "ok envelope is missing the request object"
+    | OkEnvelope(response, Some request) ->
+        match requestFromWire request with
+        | Error message -> RunProtocolError message
+        | Ok requestData -> RunOk(requestData, response)

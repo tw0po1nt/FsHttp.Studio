@@ -426,14 +426,30 @@ The renderer is pure, so these are canned-envelope assertions in the existing su
 
 ### Seam 3: the host's pure part
 
-13. `parseRunResult` reads the `request` object from an `ok` frame, in all three `bodyState` values.
-14. A frame missing the `request` object is a `RunProtocolError` and not a crash.
+13. `parseRunResult` reads the `request` object from an `ok` envelope, in all three `bodyState`
+    values.
+14. An envelope missing the `request` object is a `RunProtocolError` and not a crash.
+15. An unknown `bodyState` is a `RunProtocolError`. Both ends of this wire are ours, so an unknown
+    state is a defect. The parse reports it, and does not decay to `NoBody`. `NoBody` would state
+    that no body was sent when one was.
+16. A `"captured"` body whose base64 does not decode is a `RunProtocolError`. The decode is the one
+    step in this parse that can throw.
 
-### What is not tested here
+### Seam 4: the UI suite, against the running editor
 
-`RunCommand.runOne` is Fable and VSCode interop with no suite. The deletion of the `locate` call is
-verified by hand and recorded in the PR: a Run against a computed URL must show the real URL, and
-the response viewer must still show the response.
+`RunCommand.runOne` is Fable and VSCode interop. The suite therefore claims the deletion of the
+`locate` call against the running product, and not by hand.
+
+17. The core-path check reads the response viewer's status line, and asserts the absolute URL that
+    each block sent: scheme, host, port, and path. Both blocks of its fixture compute their URL, as
+    `GET $"{baseUrl}/json"`. A status line built from the block's own source text renders
+    `{baseUrl}/json`, which carries neither host nor port. The claim therefore fails on the deleted
+    path and holds on this one. The same check already asserts that the viewer renders the response.
+
+This check replaces the hand check that this spec first asked for. The suite already opened that
+fixture, clicked that lens, and read that status line. It asserted a path segment, which both the
+old heuristic and the new run result satisfy. One constant turns that existing check into the claim
+above.
 
 ## Out of Scope
 
