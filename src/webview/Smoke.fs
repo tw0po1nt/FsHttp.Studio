@@ -91,4 +91,13 @@ let run () : unit =
          |> List.exists (fun n -> (innerText n).Contains "404")
          && not (List.isEmpty (byClass "response-json" notFound)))
 
+    // One JSON payload exercises decodeText, looksBinary, and the string path together under
+    // Fable. The .NET Expecto suite cannot see a StringBuilder-shaped hole in the JS bundle
+    // (docs/spec/0013-copy-buttons.md, Testing Decisions: The JavaScript runtime smoke).
+    let copyJson = """{"a":1,"b":[true,null,"x"]}"""
+
+    check
+        "copyText JSON body is the raw UTF-8 text"
+        (copyText (env "application/json" (utf8 copyJson)) "response-body" = Some copyJson)
+
     printfn "renderer JS smoke: all checks passed"
