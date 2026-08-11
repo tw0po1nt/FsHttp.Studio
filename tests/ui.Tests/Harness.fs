@@ -103,9 +103,10 @@ let companionStoppedText = Refusals.companionStopped.Detail
 let private extensionStatusPrefix = "FsHttp.Studio"
 
 /// The status bar text the extension shows once the companion reports `ready`, exactly as
-/// `Extension.setStatusText` and `Companion.statusText` compose it. Asserted as rendered — it is
-/// the only surface that publishes the companion's state to a reader.
-let private extensionReadyStatus = "FsHttp.Studio: ready"
+/// `Extension.setCompanionStatus` composes it. Asserted as rendered — it is the only surface
+/// that publishes the companion's state to a reader. The retired `ready` word is gone; this is
+/// the Ready + `ScriptPending` row of Decision 5.
+let private extensionReadyStatus = "FsHttp.Studio: looking for requests…"
 let private fixtureTabSuffix = "setup.fsx"
 let private fixtureFolderName = "fixtures"
 let private setupPhaseName = "Harness setup"

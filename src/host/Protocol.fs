@@ -4,6 +4,50 @@
 // renderer core and the companion already use the same seam isolation.
 module Protocol
 
+/// The companion process's lifecycle, as the status bar and CodeLens gate see it. Lives here
+/// rather than in `Companion.fs` so `statusText` below can take it without a reverse dependency
+/// (`Protocol.fs` compiles before `Companion.fs`).
+type State =
+    | Starting
+    | Ready
+    | SdkNotFound
+    | Stopped
+
+/// What the active editor holds, as the status bar and the no-requests lens see it
+/// (docs/spec/0014-explain-missing-lenses.md, Decision 5).
+type ScriptView =
+    | NoFSharpDocument
+    | NotAScript // .fs or .fsi
+    | ScriptPending // .fsx, no blocks response yet
+    | Script of blocks: int * parseFailed: bool
+
+/// The status-bar text for a companion state and a script view, or `None` to hide the item.
+/// Companion states other than `Ready` outrank the script view. `NoFSharpDocument` hides the
+/// item whatever the companion state is (docs/spec/0014-explain-missing-lenses.md, Decisions 5-6).
+let statusText (state: State) (view: ScriptView) : string option =
+    match state, view with
+    | _, NoFSharpDocument -> None
+    | Starting, _ -> Some "starting…"
+    | SdkNotFound, _ -> Some ".NET SDK not found"
+    | Stopped, _ -> Some "companion stopped"
+    | Ready, NotAScript -> Some "not an .fsx script"
+    | Ready, ScriptPending -> Some "looking for requests…"
+    | Ready, Script(1, false) -> Some "1 request"
+    | Ready, Script(n, false) when n > 1 -> Some(sprintf "%d requests" n)
+    | Ready, Script(n, true) when n >= 1 -> Some(sprintf "%d requests — a syntax error can hide others" n)
+    // A count at or below zero reads as "none found". `int` admits a negative the wire never
+    // sends; folding it in here keeps `None` meaning only "hide the item" (Decision 6).
+    | Ready, Script(_, false) -> Some "no requests found"
+    | Ready, Script(_, true) -> Some "no requests found — syntax error"
+
+/// The CodeLens title for a script that failed to parse and holds no block. `Some` only for
+/// `Script(0, true)` (docs/spec/0014-explain-missing-lenses.md, Decision 2). A count at or below
+/// zero reads as zero, as it does in `statusText` above.
+let noRequestsLensTitle (view: ScriptView) : string option =
+    match view with
+    | Script(n, true) when n <= 0 -> Some "⊘ No requests found: this script has a syntax error"
+    | _ -> None
+
 /// A source range in FCS's own numbering: 1-based lines, 0-based columns (ADR-0003). It mirrors
 /// `Companion.BlockLocator.BlockRange` on the wire. The two sides never share an assembly, so
 /// this duplicate shape is deliberate, and neither side reaches across the process boundary.

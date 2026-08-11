@@ -14,19 +14,6 @@ open Node
 open Envelope
 open Protocol
 
-type State =
-    | Starting
-    | Ready
-    | SdkNotFound
-    | Stopped
-
-let statusText =
-    function
-    | Starting -> "starting…"
-    | Ready -> "ready"
-    | SdkNotFound -> ".NET SDK not found"
-    | Stopped -> "companion stopped"
-
 [<NoComparison; NoEquality>]
 type private Pending =
     { Resolve: obj -> unit
