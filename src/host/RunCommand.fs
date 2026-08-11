@@ -47,25 +47,45 @@ let private configuredRequestTimeoutMs () : int =
 /// around `Companion.run` (docs/spec/0004-run-path-robustness.md, Decision 7).
 type private Timing = { RequestMs: float; TotalMs: float }
 
-let private resultUpdate
-    (method: string)
-    (url: string)
-    (timing: Timing)
-    (status: int)
-    (reason: string)
-    (headers: (string * string) list)
-    (contentType: string)
-    (bodyBase64: string)
-    : obj =
+/// The Content-Type the Request section uses for body dispatch. It comes from the request
+/// headers the companion already collected, not from a separate field on the wire.
+let private requestContentType (headers: (string * string) list) : string =
+    headers
+    |> List.tryFind (fun (name, _) -> name.Equals("Content-Type", System.StringComparison.OrdinalIgnoreCase))
+    |> Option.map snd
+    |> Option.defaultValue ""
+
+/// The three-state body fields the webview's `toEnvelope` reads. Mirrors Decision 10's
+/// `bodyState` / `bodyBase64` / `bodyReason` triple on the companion wire.
+let private requestBodyFields (body: CapturedBody) : string * string * string =
+    match body with
+    | NoBody -> "none", "", ""
+    | Captured bytes -> "captured", System.Convert.ToBase64String bytes, ""
+    | NotCaptured reason -> "notCaptured", "", reason
+
+let private resultUpdate (request: RequestData) (timing: Timing) (response: ResponseData) : obj =
+    let bodyState, bodyBase64, bodyReason = requestBodyFields request.Body
+
+    let requestObj: obj =
+        createObj
+            [ "method" ==> request.Method
+              "url" ==> request.Url
+              "headers"
+              ==> (request.Headers |> List.map (fun (k, v) -> [| k; v |]) |> List.toArray)
+              "contentType" ==> requestContentType request.Headers
+              "bodyState" ==> bodyState
+              "bodyBase64" ==> bodyBase64
+              "bodyReason" ==> bodyReason ]
+
     let envelope: obj =
         createObj
-            [ "method" ==> method
-              "url" ==> url
-              "status" ==> status
-              "reason" ==> reason
-              "headers" ==> (headers |> List.map (fun (k, v) -> [| k; v |]) |> List.toArray)
-              "contentType" ==> contentType
-              "bodyBase64" ==> bodyBase64
+            [ "request" ==> requestObj
+              "status" ==> response.Status
+              "reason" ==> response.Reason
+              "headers"
+              ==> (response.Headers |> List.map (fun (k, v) -> [| k; v |]) |> List.toArray)
+              "contentType" ==> response.ContentType
+              "bodyBase64" ==> response.BodyBase64
               "requestMs" ==> timing.RequestMs
               "totalMs" ==> timing.TotalMs ]
 
@@ -90,17 +110,7 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
                     { RequestMs = response.RequestMs
                       TotalMs = totalMs }
 
-                ResponseViewer.post (
-                    resultUpdate
-                        request.Method
-                        request.Url
-                        timing
-                        response.Status
-                        response.Reason
-                        response.Headers
-                        response.ContentType
-                        response.BodyBase64
-                )
+                ResponseViewer.post (resultUpdate request timing response)
             | RunCompileError diagnostics -> ResponseViewer.post (errorUpdate (formatCompileError diagnostics))
             | RunRuntimeError message -> ResponseViewer.post (errorUpdate (sprintf "Runtime error: %s" message))
             | RunProtocolError message -> ResponseViewer.post (errorUpdate message)

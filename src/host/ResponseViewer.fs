@@ -117,9 +117,17 @@ body {
 summary { cursor: pointer; user-select: none; list-style: none; }
 summary::-webkit-details-marker { display: none; }
 
+/* request (mirrors .headers; sits between the status line and the response headers) */
+.request {
+  margin-bottom: 12px;
+}
+
 /* headers */
 .headers {
   margin-bottom: 12px;
+}
+.headers,
+.request {
   border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.25));
   border-radius: 6px;
   overflow: hidden;
@@ -136,7 +144,8 @@ summary::-webkit-details-marker { display: none; }
   opacity: 0.7;
   transition: transform 0.12s ease;
 }
-.headers[open] > .headers-summary::before { transform: rotate(90deg); }
+.headers[open] > .headers-summary::before,
+.request[open] > .headers-summary::before { transform: rotate(90deg); }
 .header-row {
   display: grid;
   grid-template-columns: minmax(120px, 30%) 1fr;

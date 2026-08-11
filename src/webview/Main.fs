@@ -15,9 +15,24 @@ let private root: HTMLElement = document.getElementById "root"
 let private toHeaders (raw: obj) : (string * string) list =
     unbox<(string * string)[]> raw |> Array.toList
 
-let private toEnvelope (raw: obj) : ResponseEnvelope =
+let private toCapturedBody (raw: obj) : CapturedBody =
+    match unbox<string> (raw?bodyState: obj) with
+    | "none" -> NoBody
+    | "captured" -> Captured(Convert.FromBase64String(unbox<string> (raw?bodyBase64: obj)))
+    | "notCaptured" -> NotCaptured(unbox<string> (raw?bodyReason: obj))
+    // Both ends of this wire are ours. An unknown state is a defect on the host side. Treat it
+    // as not captured rather than invent a body the Run never sent.
+    | other -> NotCaptured(sprintf "unknown bodyState '%s'" other)
+
+let private toRequest (raw: obj) : RequestView =
     { Method = unbox<string> (raw?method: obj)
       Url = unbox<string> (raw?url: obj)
+      Headers = toHeaders (raw?headers: obj)
+      ContentType = unbox<string> (raw?contentType: obj)
+      Body = toCapturedBody raw }
+
+let private toEnvelope (raw: obj) : ResponseEnvelope =
+    { Request = toRequest (raw?request: obj)
       Status = unbox<int> (raw?status: obj)
       Reason = unbox<string> (raw?reason: obj)
       Headers = toHeaders (raw?headers: obj)
