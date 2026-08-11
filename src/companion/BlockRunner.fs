@@ -894,7 +894,7 @@ let runInProcessDirect
     (scriptFileName: string option)
     (timeoutMs: int)
     : RunOutcome =
-    runLocated source (locateBlocks source) blockIndex scriptFileName timeoutMs
+    runLocated source (locateBlocks source).Blocks blockIndex scriptFileName timeoutMs
 
 // ---------------------------------------------------------------------------------------------
 // Multi-version isolation. The assemblies that `#r "nuget:"` resolves load into the
@@ -1236,7 +1236,7 @@ let runInWorker
 /// `timeoutMs` is the request bound from the host. Both routes carry it. `0` means do not
 /// inject.
 let run (source: string) (blockIndex: int) (scriptFileName: string option) (timeoutMs: int) : RunOutcome =
-    let located = locateBlocks source
+    let located = (locateBlocks source).Blocks
 
     match List.tryItem blockIndex located with
     | Some { Route = BlockLocator.Refused code } -> RunOutcome.Refused(codeToWire code, None)

@@ -162,9 +162,9 @@ let registerExplain () : Disposable =
                 let blockIndex = unbox<int> idx
 
                 async {
-                    let! ranges = Companion.locate h (document.getText ())
+                    let! located = Companion.locate h (document.getText ())
 
-                    match List.tryItem blockIndex ranges |> Option.bind (fun r -> r.Refusal) with
+                    match List.tryItem blockIndex located.Ranges |> Option.bind (fun r -> r.Refusal) with
                     | Some code -> window.showWarningMessage ((Refusals.forCode code).Detail) |> ignore
                     | None -> ()
                 }

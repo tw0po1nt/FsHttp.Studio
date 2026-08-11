@@ -529,12 +529,23 @@ let private parse (source: string) =
     checker.ParseFile(syntheticFileName, SourceText.ofString source, parsingOptions)
     |> Async.RunSynchronously
 
+/// The blocks a locate found, and whether FCS's untyped parse reported errors. `ParseFailed`
+/// comes from `ParseHadErrors`, not from a severity filter over `Diagnostics`
+/// (docs/spec/0014-explain-missing-lenses.md, Decision 4). The host's `blocks` envelope carries
+/// this as `parseFailed`.
+type LocateResult =
+    { Blocks: LocatedBlock list
+      ParseFailed: bool }
+
 /// Parses `source` as a `.fsx` script and returns every `http { }` block it finds, in source
-/// order, with its route and its supporting spans. The parse needs no project, no NuGet
-/// resolution, and no type-check, so an undefined `http` identifier or an unresolved `#r` does
-/// not prevent location.
-let locateBlocks (source: string) : LocatedBlock list =
-    (parse source).ParseTree |> findLocatedBlocks
+/// order, with its route and its supporting spans, beside whether the parse failed. The parse
+/// needs no project, no NuGet resolution, and no type-check, so an undefined `http` identifier
+/// or an unresolved `#r` does not prevent location.
+let locateBlocks (source: string) : LocateResult =
+    let parsed = parse source
+
+    { Blocks = parsed.ParseTree |> findLocatedBlocks
+      ParseFailed = parsed.ParseHadErrors }
 
 /// Reconstructs the exact source text that a range covers. Uses FCS's own numbering: 1-based
 /// lines, 0-based columns.

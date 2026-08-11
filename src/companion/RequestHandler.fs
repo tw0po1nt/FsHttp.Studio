@@ -42,8 +42,12 @@ let respond (request: JsonDocument) : obj =
     | "hello" -> {| tag = "ready" |}
     | "locate" ->
         let source = root |> getStringProp "source"
-        let ranges = locateBlocks source |> List.map toBlockEntry
-        {| tag = "blocks"; ranges = ranges |}
+        let located = locateBlocks source
+        let ranges = located.Blocks |> List.map toBlockEntry
+
+        {| tag = "blocks"
+           parseFailed = located.ParseFailed
+           ranges = ranges |}
     | "run" ->
         let source = root |> getStringProp "source"
         let blockIndex = root |> getIntProp "blockIndex"

@@ -182,4 +182,34 @@ let tests =
                   (withPath.GetProperty("ranges").GetRawText())
                   (withoutPath.GetProperty("ranges").GetRawText())
                   "locate ranges must not depend on scriptFileName"
+          }
+
+          // docs/spec/0014-explain-missing-lenses.md, Seam 2: the blocks envelope carries
+          // parseFailed beside the ranges.
+          test "locate request on a clean source carries parseFailed false" {
+              let request =
+                  JsonSerializer.Serialize(
+                      {| tag = "locate"
+                         source = "http {\n    GET \"https://example.com/1\"\n}\n" |}
+                  )
+
+              let response = respondTo request
+              Expect.equal (response.GetProperty("tag").GetString()) "blocks" "tag should be blocks"
+              Expect.isFalse (response.GetProperty("parseFailed").GetBoolean()) "clean source must not set parseFailed"
+              Expect.equal (response.GetProperty("ranges").GetArrayLength()) 1 "one range expected"
+          }
+
+          test "locate request on a broken source carries parseFailed true and each recovered range" {
+              // Damage below every block: ParseFailed is true, and each earlier block survives.
+              let request =
+                  JsonSerializer.Serialize(
+                      {| tag = "locate"
+                         source =
+                          "http {\n    GET \"https://example.com/1\"\n}\n\nhttp {\n    GET \"https://example.com/2\"\n}\n\nlet c =\n" |}
+                  )
+
+              let response = respondTo request
+              Expect.equal (response.GetProperty("tag").GetString()) "blocks" "tag should be blocks"
+              Expect.isTrue (response.GetProperty("parseFailed").GetBoolean()) "broken source must set parseFailed"
+              Expect.equal (response.GetProperty("ranges").GetArrayLength()) 2 "recovery must keep both ranges"
           } ]
