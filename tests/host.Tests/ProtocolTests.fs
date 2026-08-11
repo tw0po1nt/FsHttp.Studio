@@ -85,56 +85,85 @@ let formatCompileErrorTests =
                   "one header, one line per diagnostic"
           } ]
 
-[<Tests>]
-let sliceRangeTests =
-    testList
-        "sliceRange"
-        [ test "single-line range slices within one line" {
-              let source = "http {\n    GET \"https://example.com\"\n}\n"
-              let r = range 2 4 2 29
-              Expect.equal (sliceRange source r) "GET \"https://example.com\"" "should slice the GET line"
-          }
-
-          test "multi-line range spans the full block" {
-              let source = "http {\n    GET \"https://example.com\"\n}\n"
-              let r = range 1 0 3 1
-
-              Expect.equal
-                  (sliceRange source r)
-                  "http {\n    GET \"https://example.com\"\n}"
-                  "should slice the whole block"
-          }
-
-          test "normalizes CRLF before slicing" {
-              let source = "http {\r\n    GET \"https://example.com\"\r\n}\r\n"
-              let r = range 2 4 2 29
-
-              Expect.equal
-                  (sliceRange source r)
-                  "GET \"https://example.com\""
-                  "CRLF line endings must not shift columns"
-          } ]
+/// Builds an ok frame with the given request bodyState triple. Shared by the three bodyState
+/// cases so each test only names the state under check.
+let private okFrameWithRequest (bodyState: string) (bodyBase64: string) (bodyReason: string) =
+    OkFrame
+        { Status = 200
+          Reason = "OK"
+          Headers = [ "Content-Type", "application/json" ]
+          ContentType = "application/json"
+          BodyBase64 = "e30="
+          RequestMs = 12.5
+          Request =
+            Some
+                { Method = "POST"
+                  Url = "https://api.example.com/items?q=one%20two"
+                  Headers = [ "Content-Type", "application/json" ]
+                  BodyState = bodyState
+                  BodyBase64 = bodyBase64
+                  BodyReason = bodyReason } }
 
 [<Tests>]
-let extractMethodAndUrlTests =
+let parseRunResultTests =
     testList
-        "extractMethodAndUrl"
-        [ test "pulls the verb and URL out of a bare GET block" {
-              let blockText = "http {\n    GET \"https://example.com\"\n}"
-              Expect.equal (extractMethodAndUrl blockText) ("GET", "https://example.com") "verb + URL"
+        "parseRunResult"
+        [ test "reads request with bodyState none" {
+              match parseRunResult (okFrameWithRequest "none" "" "") with
+              | RunOk(request, status, reason, headers, contentType, bodyBase64, requestMs) ->
+                  Expect.equal request.Method "POST" "method"
+                  Expect.equal request.Url "https://api.example.com/items?q=one%20two" "url keeps percent-escapes"
+                  Expect.equal request.Headers [ "Content-Type", "application/json" ] "request headers"
+                  Expect.equal request.Body NoBody "none maps to NoBody"
+                  Expect.equal status 200 "status"
+                  Expect.equal reason "OK" "reason"
+                  Expect.equal headers [ "Content-Type", "application/json" ] "response headers"
+                  Expect.equal contentType "application/json" "contentType"
+                  Expect.equal bodyBase64 "e30=" "response body"
+                  Expect.equal requestMs 12.5 "requestMs"
+              | other -> failtestf "expected RunOk, got %A" other
           }
 
-          test "recognizes POST" {
-              let blockText = "http {\n    POST \"https://example.com/create\"\n}"
-              Expect.equal (extractMethodAndUrl blockText) ("POST", "https://example.com/create") "verb + URL"
+          test "reads request with bodyState captured" {
+              let bytes = System.Text.Encoding.UTF8.GetBytes("""{"a":1}""")
+              let bodyBase64 = System.Convert.ToBase64String bytes
+
+              match parseRunResult (okFrameWithRequest "captured" bodyBase64 "") with
+              | RunOk(request, _, _, _, _, _, _) ->
+                  match request.Body with
+                  | Captured got -> Expect.equal got bytes "captured bytes round-trip from base64"
+                  | other -> failtestf "expected Captured, got %A" other
+              | other -> failtestf "expected RunOk, got %A" other
           }
 
-          test "falls back to blanks when no known verb is present" {
-              let blockText = "http {\n    UNKNOWNVERB \"https://example.com\"\n}"
-              Expect.equal (extractMethodAndUrl blockText) ("", "") "no throw, blank fallback"
+          test "reads request with bodyState notCaptured" {
+              let reason = "streamed body — not captured, so that the upload is unchanged"
+
+              match parseRunResult (okFrameWithRequest "notCaptured" "" reason) with
+              | RunOk(request, _, _, _, _, _, _) ->
+                  Expect.equal request.Body (NotCaptured reason) "notCaptured keeps its reason"
+              | other -> failtestf "expected RunOk, got %A" other
           }
 
-          test "falls back to a blank URL when the verb has no following quoted literal" {
-              let blockText = "http {\n    GET undefinedBaseUrl\n}"
-              Expect.equal (extractMethodAndUrl blockText) ("GET", "") "verb found, URL blank"
+          test "an ok frame missing request is a RunProtocolError, not a crash" {
+              let frame =
+                  OkFrame
+                      { Status = 200
+                        Reason = "OK"
+                        Headers = []
+                        ContentType = ""
+                        BodyBase64 = ""
+                        RequestMs = 1.0
+                        Request = None }
+
+              match parseRunResult frame with
+              | RunProtocolError message ->
+                  Expect.stringContains message "request" "the message names the missing object"
+              | other -> failtestf "expected RunProtocolError, got %A" other
+          }
+
+          test "an unknown bodyState is a RunProtocolError, not a crash" {
+              match parseRunResult (okFrameWithRequest "sometime" "" "") with
+              | RunProtocolError message -> Expect.stringContains message "bodyState" "the message names the bad field"
+              | other -> failtestf "expected RunProtocolError, got %A" other
           } ]

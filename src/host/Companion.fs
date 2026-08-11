@@ -56,17 +56,31 @@ let private toHeaders (h: obj) : (string * string) list =
     let keys: string[] = JsInterop.emitJsExpr h "Object.keys($0)"
     keys |> Array.map (fun k -> k, unbox<string> (h?(k): obj)) |> Array.toList
 
-let private parseRunResult (json: obj) : RunResult =
+let private toOkRequestFields (request: obj) : OkRequestFields =
+    { Method = unbox<string> (request?method: obj)
+      Url = unbox<string> (request?url: obj)
+      Headers = toHeaders (request?headers: obj)
+      BodyState = unbox<string> (request?bodyState: obj)
+      BodyBase64 = unbox<string> (request?bodyBase64: obj)
+      BodyReason = unbox<string> (request?bodyReason: obj) }
+
+let private decodeRunFrame (json: obj) : RunFrame =
     match unbox<string> (json?tag: obj) with
     | "ok" ->
-        RunOk(
-            unbox<int> (json?status: obj),
-            unbox<string> (json?reason: obj),
-            toHeaders (json?headers: obj),
-            unbox<string> (json?contentType: obj),
-            unbox<string> (json?bodyBase64: obj),
-            unbox<float> (json?requestMs: obj)
-        )
+        let request: obj = json?request
+
+        OkFrame
+            { Status = unbox<int> (json?status: obj)
+              Reason = unbox<string> (json?reason: obj)
+              Headers = toHeaders (json?headers: obj)
+              ContentType = unbox<string> (json?contentType: obj)
+              BodyBase64 = unbox<string> (json?bodyBase64: obj)
+              RequestMs = unbox<float> (json?requestMs: obj)
+              Request =
+                if isNullish request then
+                    None
+                else
+                    Some(toOkRequestFields request) }
     | "compileError" ->
         let diagnostics: obj[] = unbox (json?diagnostics: obj)
 
@@ -75,15 +89,15 @@ let private parseRunResult (json: obj) : RunResult =
             { Message = unbox<string> (d?message: obj)
               Range = toBlockRange (d?range: obj) })
         |> Array.toList
-        |> RunCompileError
-    | "runtimeError" -> RunRuntimeError(unbox<string> (json?message: obj))
+        |> CompileErrorFrame
+    | "runtimeError" -> RuntimeErrorFrame(unbox<string> (json?message: obj))
     | "refused" ->
         // The companion omits `name` for every code it produces today, so a missing property
         // decodes to `None` rather than to `undefined` (the same shape as `refusal` above).
         let name: obj = json?name
 
-        RunRefused(unbox<string> (json?code: obj), (if isNullish name then None else Some(unbox<string> name)))
-    | _ -> RunProtocolError(unbox<string> (json?message: obj))
+        RefusedFrame(unbox<string> (json?code: obj), (if isNullish name then None else Some(unbox<string> name)))
+    | _ -> ProtocolErrorFrame(unbox<string> (json?message: obj))
 
 /// Abandons every pending entry along its own path and marks the handle closed
 /// (docs/spec/0004-run-path-robustness.md, Decision 6), so a `send` that arrives afterwards
@@ -206,7 +220,7 @@ let run
                   "timeoutMs" ==> timeoutMs ]
 
         let entry =
-            { Resolve = fun json -> resolve (parseRunResult json)
+            { Resolve = fun json -> resolve (parseRunResult (decodeRunFrame json))
               Abandon = fun () -> resolve (RunProtocolError Refusals.companionStopped.Detail) }
 
         send handle (JS.JSON.stringify payload) entry)

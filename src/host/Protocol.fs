@@ -21,11 +21,57 @@ type BlockRange =
 
 type Diagnostic = { Message: string; Range: BlockRange }
 
+/// A request body as the viewer must see it. Blank must not mean "no body", "captured bytes",
+/// and "we chose not to read it" at once (docs/spec/0012-request-as-sent.md, Decision 8).
+type CapturedBody =
+    | NoBody
+    | Captured of bytes: byte[]
+    | NotCaptured of reason: string
+
+/// The request that was actually sent, as the companion put it on the `ok` frame
+/// (docs/spec/0012-request-as-sent.md, Decisions 9-10).
+type RequestData =
+    { Method: string
+      Url: string
+      Headers: (string * string) list
+      Body: CapturedBody }
+
+/// Wire fields for the nested `request` object on an `ok` frame. The JS side fills these after
+/// it reads the properties. `parseRunResult` turns them into `RequestData`.
+type OkRequestFields =
+    { Method: string
+      Url: string
+      Headers: (string * string) list
+      BodyState: string
+      BodyBase64: string
+      BodyReason: string }
+
+/// An `ok` frame's top-level fields, plus an optional nested request. `Request = None` means
+/// the property was absent, which is a protocol error rather than a crash.
+type OkFields =
+    { Status: int
+      Reason: string
+      Headers: (string * string) list
+      ContentType: string
+      BodyBase64: string
+      RequestMs: float
+      Request: OkRequestFields option }
+
+/// A `run` response after the JS side has read its properties. The pure parse below maps this
+/// shape onto `RunResult`, so Seam 3 can drive it without Fable interop.
+type RunFrame =
+    | OkFrame of OkFields
+    | CompileErrorFrame of Diagnostic list
+    | RuntimeErrorFrame of string
+    | RefusedFrame of code: string * name: string option
+    | ProtocolErrorFrame of string
+
 /// The extension-host mirror of the companion's `run` response tags: `ok`, `compileError`,
 /// `runtimeError`, and `refused`. It adds one catch-all case for a malformed or unknown
 /// response.
 type RunResult =
     | RunOk of
+        request: RequestData *
         status: int *
         reason: string *
         headers: (string * string) list *
@@ -71,48 +117,45 @@ let formatCompileError (diagnostics: Diagnostic list) : string =
     let body = diagnostics |> List.map formatOne |> String.concat "\n"
     sprintf "Compile error:\n%s" body
 
-/// Reconstructs the exact source text that `r` covers. It mirrors the companion's own
-/// `BlockLocator.sliceRange`, so the extension host can read a block's own text for the status
-/// line's method and URL, without an extra companion round trip.
-let sliceRange (source: string) (r: BlockRange) : string =
-    let lines = source.Replace("\r\n", "\n").Split('\n')
+/// Maps the wire's three-state `bodyState` / `bodyBase64` / `bodyReason` triple onto
+/// `CapturedBody` (docs/spec/0012-request-as-sent.md, Decision 10). An unknown state is a
+/// protocol error: both ends of this wire are ours, so a bad value is a defect.
+let private capturedBodyFromWire
+    (bodyState: string)
+    (bodyBase64: string)
+    (bodyReason: string)
+    : Result<CapturedBody, string> =
+    match bodyState with
+    | "none" -> Ok NoBody
+    | "captured" -> Ok(Captured(System.Convert.FromBase64String bodyBase64))
+    | "notCaptured" -> Ok(NotCaptured bodyReason)
+    | other -> Error(sprintf "ok frame has unknown bodyState '%s'" other)
 
-    if r.StartLine = r.EndLine then
-        lines.[r.StartLine - 1].Substring(r.StartCol, r.EndCol - r.StartCol)
-    else
-        let parts = ResizeArray<string>()
-        parts.Add(lines.[r.StartLine - 1].Substring(r.StartCol))
-
-        for i in r.StartLine .. r.EndLine - 2 do
-            parts.Add(lines.[i])
-
-        parts.Add(lines.[r.EndLine - 1].Substring(0, r.EndCol))
-        parts |> String.concat "\n"
-
-let private httpVerbs =
-    [ "GET"; "POST"; "PUT"; "DELETE"; "PATCH"; "HEAD"; "OPTIONS"; "TRACE" ]
-
-/// A block's own text always starts with a bare HTTP-verb call, such as `GET "url"`. Every
-/// companion test fixture uses that shape. A light heuristic over the raw text is therefore
-/// enough to read the verb and its URL literal for the status line, without a parse of the CE.
-/// Falls back to empty strings, so an unrecognized shape degrades to a blank method and URL
-/// instead of a throw. A computed URL or an unusual verb produces such a shape.
-let extractMethodAndUrl (blockText: string) : string * string =
-    let tokens =
-        blockText.Split([| ' '; '\n'; '\r'; '\t'; '{'; '}' |], System.StringSplitOptions.RemoveEmptyEntries)
-
-    match tokens |> Array.tryFind (fun t -> List.contains t httpVerbs) with
-    | None -> "", ""
-    | Some verb ->
-        let searchFrom = blockText.IndexOf(verb) + verb.Length
-        let q1 = blockText.IndexOf('"', searchFrom)
-
-        if q1 < 0 then
-            verb, ""
-        else
-            let q2 = blockText.IndexOf('"', q1 + 1)
-
-            if q2 < 0 then
-                verb, ""
-            else
-                verb, blockText.Substring(q1 + 1, q2 - q1 - 1)
+/// Turns a decoded `run` response into a `RunResult`. An `ok` frame with no `request` object,
+/// or with an unknown `bodyState`, is a `RunProtocolError` and not a crash
+/// (docs/spec/0012-request-as-sent.md, Seam 3).
+let parseRunResult (frame: RunFrame) : RunResult =
+    match frame with
+    | CompileErrorFrame diagnostics -> RunCompileError diagnostics
+    | RuntimeErrorFrame message -> RunRuntimeError message
+    | RefusedFrame(code, name) -> RunRefused(code, name)
+    | ProtocolErrorFrame message -> RunProtocolError message
+    | OkFrame fields ->
+        match fields.Request with
+        | None -> RunProtocolError "ok frame is missing the request object"
+        | Some req ->
+            match capturedBodyFromWire req.BodyState req.BodyBase64 req.BodyReason with
+            | Error message -> RunProtocolError message
+            | Ok body ->
+                RunOk(
+                    { Method = req.Method
+                      Url = req.Url
+                      Headers = req.Headers
+                      Body = body },
+                    fields.Status,
+                    fields.Reason,
+                    fields.Headers,
+                    fields.ContentType,
+                    fields.BodyBase64,
+                    fields.RequestMs
+                )

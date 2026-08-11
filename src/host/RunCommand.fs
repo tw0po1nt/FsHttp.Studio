@@ -1,9 +1,8 @@
 // The Run command that a CodeLens click invokes. It opens or reveals the response viewer, which
-// shows `Running…`. It then locates the block again, to read its method and URL for the status
-// line. Each Run therefore makes a fresh locate-and-run pair, which matches the companion's own
-// "fresh session per Run" philosophy. It then runs the block and posts the outcome into the
-// panel. The latest click wins: a generation counter discards the result of a superseded Run,
-// instead of a race onto the panel.
+// shows `Running…`. It then runs the block and posts the outcome into the panel. Method and URL
+// for the status line arrive on the run result, so this path does not locate the block again
+// (docs/spec/0012-request-as-sent.md, Decision 11). The latest click wins: a generation counter
+// discards the result of a superseded Run, instead of a race onto the panel.
 module RunCommand
 
 open Fable.Core.JsInterop
@@ -79,13 +78,6 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
         // `__SOURCE_DIRECTORY__`. Anything else has no real local path, so the Run sends none.
         let scriptFileName = scriptFileNameFor document.uri.scheme document.fileName
 
-        let! ranges = Companion.locate h source
-
-        let method, url =
-            match List.tryItem blockIndex ranges with
-            | Some r -> extractMethodAndUrl (sliceRange source r)
-            | None -> "", ""
-
         let started: float = emitJsExpr (nonNull (box 0)) "Date.now()"
         let timeoutMs = configuredRequestTimeoutMs ()
         let! result = Companion.run h source blockIndex scriptFileName timeoutMs
@@ -93,12 +85,14 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
 
         if myGeneration = generation then
             match result with
-            | RunOk(status, reason, headers, contentType, bodyBase64, requestMs) ->
+            | RunOk(request, status, reason, headers, contentType, bodyBase64, requestMs) ->
                 let timing =
                     { RequestMs = requestMs
                       TotalMs = totalMs }
 
-                ResponseViewer.post (resultUpdate method url timing status reason headers contentType bodyBase64)
+                ResponseViewer.post (
+                    resultUpdate request.Method request.Url timing status reason headers contentType bodyBase64
+                )
             | RunCompileError diagnostics -> ResponseViewer.post (errorUpdate (formatCompileError diagnostics))
             | RunRuntimeError message -> ResponseViewer.post (errorUpdate (sprintf "Runtime error: %s" message))
             | RunProtocolError message -> ResponseViewer.post (errorUpdate message)

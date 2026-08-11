@@ -9,8 +9,8 @@ open Fable.Mocha
 let private blockCount = 2
 let private fixtureFileName = "core-path.fsx"
 /// Path segment of the first block's URL, as it appears in the status line. The line shows the
-/// block's own source text (`Protocol.extractMethodAndUrl`), so `GET $"{baseUrl}/json"` renders
-/// as `{baseUrl}/json` — the `/json` path is the tell that distinguishes it from `/status`.
+/// URL that was actually sent, so `GET $"{baseUrl}/json"` renders with a real host and the
+/// `/json` path — that path is the tell that distinguishes it from `/status`.
 let private firstBlockUrlPath = "/json"
 /// Path segment of the second block's URL. Together with the `/status` body keys from `Harness`,
 /// it is the positive tell that the viewer shows the second response rather than a stale first one.
