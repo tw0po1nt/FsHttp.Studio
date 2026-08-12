@@ -28,13 +28,14 @@ FsHttp.Studio closes that gap. The request stays pure F#, and the editor renders
 
 Open a `.fsx` script that contains FsHttp requests. A **`▶ Run request` CodeLens** appears above each `http { }` block. Click the CodeLens, and:
 
-- Only *that* block runs. FsHttp.Studio blanks every other block, and then evaluates your script from the top down to the end of that block. It stops there. Nothing after the block runs.
+- Only *that* block runs. FsHttp.Studio blanks every other block, and then evaluates your script from the top down to the end of that block. It stops there. Nothing after the block runs. This reaches top-level, named, nested, and module-qualified blocks alike. Anything that can't be reached shows a `⊘ Cannot run: …` lens instead of failing silently.
 - A **response viewer** panel opens beside your editor. The panel renders the body, and dispatches on the body's `Content-Type`:
   - **images** display inline,
   - **JSON** displays as a collapsible, syntax-highlighted tree,
   - **HTML** displays as a rendered page,
   - all other content displays as readable, wrapped text.
-- A thin status line shows the method, the URL, a color-coded status code, the round-trip time, and the size. The headers stay one click away in a collapsible section.
+- A thin status line shows the method, the URL, a color-coded status code, the round-trip time, and the size. A collapsible **Request** section shows the method, URL, headers, and body exactly as sent — not just as written, since FsHttp's transformers can rewrite any of them. Response headers stay one click away in their own collapsible section.
+- Each of those three sections — Request, response headers, response body — has a **Copy** button, so you can paste any of them elsewhere without hand-selecting text out of a panel.
 
 FsHttp.Studio honors your `#r "nuget: FsHttp, x.y.z"` version pin exactly.
 
@@ -127,16 +128,21 @@ The companion extracts the response by *reflection* instead of a direct referenc
 
 The companion runs on the **.NET 10 SDK or newer**. FsHttp.Studio detects `dotnet` on your `PATH` automatically. If your SDK is in another location, set the `fshttpStudio.dotnetPath` setting to your `dotnet` executable.
 
+A Run is bounded by `fshttpStudio.requestTimeoutMs` (30 seconds by default), which covers the connection, the request, and the response download. A stall past that bound fails loudly instead of hanging. Set it to `0` to wait as long as `HttpClient` allows.
+
 [`docs/adr/`](./docs/adr/) records the architectural decisions and their trade-offs. [`CONTEXT.md`](./CONTEXT.md) holds the domain vocabulary.
 
 ## Future improvements
 
 - The **request tree**: grouping, naming, and a Testing-API-style tree of your requests.
-- **Settings.**
-- **`.fs`-in-a-project** execution. v0.1 supports `.fsx` only. Blocks in compiled `.fs` files show no Run affordance, by design.
-- **Request chaining**, for a block that needs the *response* of an earlier request, such as an auth token.
+- A **session model**: reusing an FSI session across Runs, request chaining for a block that needs the *response* of an earlier request (such as an auth token), and sending a block to a specific existing session.
+- **Cancel** a Run in progress.
+- **Save a response to a file**, for a large or binary body.
+- **Copy as curl**, building on the request-as-sent view.
+- A **first-run walkthrough**.
+- A **copy button on the error render**.
+- **`.fs`-in-a-project** execution. FsHttp.Studio supports `.fsx` only. Blocks in compiled `.fs` files show no Run affordance, by design.
 - The **inline-card** presentation, which renders under the block instead of in a panel.
-- Dedicated rendering for **errors, timeouts, and very large bodies**.
 - Support for other editors.
 
 Feature requests welcome!
