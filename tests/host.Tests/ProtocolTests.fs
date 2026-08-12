@@ -337,13 +337,9 @@ let parseFailedFromWireTests =
               Expect.isFalse (parseFailedFromWire None) "an old companion that omits the property"
           }
 
-          test "a present false decodes to false" {
-              Expect.isFalse (parseFailedFromWire (Some false)) "a clean source"
-          }
+          test "a present false decodes to false" { Expect.isFalse (parseFailedFromWire (Some false)) "a clean source" }
 
-          test "a present true decodes to true" {
-              Expect.isTrue (parseFailedFromWire (Some true)) "a broken source"
-          } ]
+          test "a present true decodes to true" { Expect.isTrue (parseFailedFromWire (Some true)) "a broken source" } ]
 
 /// Decision 5's guard on which `locate` response reaches the status bar. It lives here because the
 /// UI suite cannot drive it: a second visible script does not locate again on demand, so a check
