@@ -183,6 +183,72 @@ let tryNoRunRequestLens () =
         | ExTester.LensTitles titles -> return titles |> Array.forall (fun t -> not (t.Contains lensTitle))
     }
 
+/// The full status-bar text Decision 5 writes for a Ready script view, including the product
+/// prefix `Extension.setStatusText` adds.
+let statusBarText (body: string) = "FsHttp.Studio: " + body
+
+/// The account a status poll gives of the reading it took. Written once, because the three status
+/// polls below differ only in which reading holds — a second copy of these sentences would let two
+/// timeouts describe the same workbench in different words.
+let private describeStatus (status: ExTester.FsHttpStatus) =
+    match status with
+    | ExTester.StatusText text -> sprintf "status %s" text
+    | ExTester.StatusHidden -> "a hidden FsHttp.Studio status item"
+    | ExTester.StatusUnreadable reason -> sprintf "no status reading: %s" reason
+
+/// True when the status bar shows exactly `expected` (prefix included).
+let tryStatusBarText (expected: string) =
+    async {
+        match! ExTester.tryReadFsHttpStatus () with
+        | ExTester.StatusText text when text = expected -> return Harness.Holds
+        | other -> return Harness.Observed(describeStatus other)
+    }
+
+/// True when no visible FsHttp.Studio status-bar item is in the workbench (Decision 6).
+let tryStatusBarHidden () =
+    async {
+        match! ExTester.tryReadFsHttpStatus () with
+        | ExTester.StatusHidden -> return Harness.Holds
+        | other -> return Harness.Observed(describeStatus other)
+    }
+
+/// `expected` is on the item, and has been since `stableUntil` was computed. A reading that
+/// matches before the settle window closes is not yet the claim — the point is that nothing
+/// overwrote the item while a second visible document could still be locating.
+let tryStatusBarTextStays (expected: string) (stableUntil: float) =
+    async {
+        match! ExTester.tryReadFsHttpStatus () with
+        | ExTester.StatusText text when text = expected ->
+            return
+                (if Proc.now () < stableUntil then
+                     Harness.DoesNotHold
+                 else
+                     Harness.Holds)
+        | other -> return Harness.Observed(describeStatus other)
+    }
+
+/// Opens a fixture as the active tab and leaves every other fixture-column tab alone. The
+/// inactive-document status-bar check needs two open scripts so a background `locate` can fire.
+let openFixtureKeepingOthers (tabTitle: string) =
+    async {
+        match! ExTester.openFixtureInColumn (fixturePath tabTitle) with
+        | ExTester.FixtureOpenRequested -> ()
+        | ExTester.FixtureOpenRaised reason ->
+            Assert.fail (sprintf "opening %s in the fixture column failed: %s" tabTitle reason)
+
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                (sprintf "the fixture column to show %s as a tab" tabTitle)
+                (fun () -> ExTester.tryFixtureColumnShowsTab tabTitle)
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                (sprintf "the fixture column's document to be %s, loaded once" tabTitle)
+                (fun () -> tryFixtureLoadedOnce tabTitle)
+    }
+
 /// Reads the viewer's DOM and applies `holds` to it. A frame that cannot be entered yet is a
 /// normal poll result, so it reads as "does not hold" rather than an exception.
 let viewerSatisfies (holds: ExTester.ResponseViewerDom -> bool) =

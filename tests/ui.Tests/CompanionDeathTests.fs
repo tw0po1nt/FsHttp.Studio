@@ -123,6 +123,26 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
                 "the stopped companion title on the lens above each of the two blocks"
                 tryStoppedLensAboveEachBlock
 
+        // The viewer took focus when the Run opened it, and has held it since, so no text editor
+        // is active. That is Decision 6's other hiding case, and the only place in the suite that
+        // reaches it without contriving one: the item is hidden even though the companion has
+        // just died and has something to say.
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "the FsHttp.Studio status item hidden while the viewer holds focus"
+                Checks.tryStatusBarHidden
+
+        // Restore the fixture column, so an F# document is active again and the companion's own
+        // state is what the item reports.
+        do! ExTester.focusFixtureEditor ()
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "FsHttp.Studio: companion stopped while an F# document is active"
+                (fun () -> Checks.tryStatusBarText (Checks.statusBarText "companion stopped"))
+
         do! ExTester.reloadWindow ()
 
         do!

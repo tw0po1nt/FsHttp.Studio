@@ -21,6 +21,25 @@ type ScriptView =
     | ScriptPending // .fsx, no blocks response yet
     | Script of blocks: int * parseFailed: bool
 
+/// True when a file name names a Script, which is the `.fsx` surface FsHttp.Studio supports.
+/// The CodeLens provider and the status bar both decide this, and they must decide it the same
+/// way: a lens count on screen and the count the status bar reports come from one `locate`, so a
+/// second copy of this test drifting would let one surface treat a buffer as a Script while the
+/// other did not.
+let isScriptFileName (fileName: string) = fileName.EndsWith ".fsx"
+
+/// True when a `locate` response should be mirrored onto the status bar, which is when it belongs
+/// to the document the user is looking at. `activeFileName` is `None` for a workbench with no
+/// active text editor at all.
+///
+/// VSCode asks for lenses on every visible F# document, so a response for a second visible editor
+/// arrives while the first is still active, and mirroring it would report a count against a script
+/// the user is not reading (docs/spec/0014-explain-missing-lenses.md, Decision 5). Pure, and
+/// separate from the interop that reads the active editor, because that is what makes the rule
+/// assertable — the workbench cannot be made to produce the losing response on demand.
+let mirrorsActiveDocument (activeFileName: string option) (locatedFileName: string) =
+    activeFileName = Some locatedFileName
+
 /// The status-bar text for a companion state and a script view, or `None` to hide the item.
 /// Companion states other than `Ready` outrank the script view. `NoFSharpDocument` hides the
 /// item whatever the companion state is (docs/spec/0014-explain-missing-lenses.md, Decisions 5-6).
