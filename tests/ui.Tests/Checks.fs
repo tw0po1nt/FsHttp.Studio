@@ -11,10 +11,11 @@ open System.IO
 /// it. Asserted as rendered, and reused as the partial title a click matches on.
 let lensTitle = "▶ Run request"
 
-/// The line-1 lens when the script failed to parse and holds no block, exactly as
-/// `Protocol.noRequestsLensTitle` spells it for `Script(0, true)`
-/// (docs/spec/0014-explain-missing-lenses.md, Decision 2).
-let noRequestsLensTitle = "⊘ No requests found: this script has a syntax error"
+/// The line-1 lens when the script failed to parse and holds no block
+/// (docs/spec/0014-explain-missing-lenses.md, Decision 2). Named here beside `lensTitle` so a
+/// check reads the two together, and derived from the product in `ExTester`, whose lens harvest
+/// has to recognize the same span. Not retyped: two copies of a shipped sentence drift apart.
+let noRequestsLensTitle = ExTester.noRequestsLensTitle
 
 /// A fixture checked in beside the sidecar. The sidecar path is the only location the suite is
 /// handed at run time, so every fixture is resolved from it.
@@ -51,7 +52,7 @@ let private describeFixtureOnDisk (fileName: string) =
 
 /// The titles a poll read, as one line for a failure message. Quoted individually, because a title
 /// carries a glyph and a space, and an unquoted list of them cannot show where one ends.
-let private describeTitles (titles: string[]) =
+let describeTitles (titles: string[]) =
     if Array.isEmpty titles then
         "0 CodeLenses"
     else
@@ -59,7 +60,7 @@ let private describeTitles (titles: string[]) =
         sprintf "%i CodeLenses: %s" titles.Length quoted
 
 /// A read that raised, worded so a reader cannot mistake it for an editor that painted no lens.
-let private describeReadFailure (reason: string) =
+let describeReadFailure (reason: string) =
     sprintf "no reading at all — the CodeLens query raised: %s" reason
 
 /// True when the editor holds the fixture once, measured in lines against the file on disk.

@@ -25,7 +25,24 @@ let private tryNoResponseViewer () =
         return not openBeside
     }
 
-/// Damage above every block: exactly one line-1 lens, no Run lens, and a click opens nothing.
+/// The lens carries no command, so VSCode paints its title as plain text: the decoration holds a
+/// `<span>` and no `<a id>` (spec 0014, Decision 2). Read from the DOM rather than from a click:
+/// this fixture locates no block, so nothing this lens could have carried would open a viewer,
+/// and a click that opens nothing is no evidence about the command.
+let private tryNoRequestsLensIsPlainText () =
+    async {
+        match! ExTester.tryReadLensRendering Checks.noRequestsLensTitle with
+        | ExTester.RenderedAsPlainText -> return Harness.Holds
+        | ExTester.RenderedAsCommandLink ->
+            return Harness.Observed "a command link (`<a id>`), so the lens carries a command"
+        | ExTester.TitleNotRendered ->
+            let! layout = ExTester.describeLensLayout ()
+            return Harness.Observed(sprintf "no visible lens carrying the no-requests title, in %s" layout)
+        | ExTester.RenderingUnreadable reason -> return Harness.Observed(Checks.describeReadFailure reason)
+    }
+
+/// Damage above every block: exactly one line-1 lens, no Run lens, plain text rather than a
+/// command, and a click that opens nothing.
 let private syntaxErrorAbovePaintsLine1Lens =
     async {
         do!
@@ -47,6 +64,12 @@ let private syntaxErrorAbovePaintsLine1Lens =
                 Harness.LensAppearanceDeadlineMs
                 "no Run request lens beside the no-requests lens"
                 Checks.tryNoRunRequestLens
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "the no-requests lens rendered as plain text, with no command link"
+                tryNoRequestsLensIsPlainText
 
         do! Harness.eventually Harness.LensAppearanceDeadlineMs "a click on the no-requests lens" tryClickNoRequestsLens
 
@@ -83,20 +106,15 @@ let private syntaxErrorBetweenKeepsOneRunLens =
 
 /// A clean script with no `http { }` block paints nothing. Opens after the above-damage fixture
 /// so the provider has already answered once. After the empty fixture loads, empty titles must
-/// hold for a settle window: an empty reading before locate returns is not evidence, and a lens
-/// that appears mid-window fails the check.
-let private emptySettleMs = 3_000.0
-
+/// hold through `Harness.LensAbsenceSettleMs`, which is where the suite states why an absence
+/// needs a window at all.
 let private tryNoCodeLensesThroughSettle (settleUntil: float) =
     async {
         match! ExTester.tryReadCodeLensTitles () with
-        | ExTester.LensReadFailed reason ->
-            return Harness.Observed(sprintf "no reading at all — the CodeLens query raised: %s" reason)
+        | ExTester.LensReadFailed reason -> return Harness.Observed(Checks.describeReadFailure reason)
         | ExTester.LensTitles titles when titles.Length > 0 ->
             let! layout = ExTester.describeLensLayout ()
-            let quoted = titles |> Array.map (fun t -> sprintf "\"%s\"" t) |> String.concat ", "
-
-            return Harness.Observed(sprintf "%i CodeLenses: %s, in %s" titles.Length quoted layout)
+            return Harness.Observed(sprintf "%s, in %s" (Checks.describeTitles titles) layout)
         | ExTester.LensTitles _ when Proc.now () < settleUntil -> return Harness.DoesNotHold
         | ExTester.LensTitles _ -> return Harness.Holds
     }
@@ -113,7 +131,7 @@ let private cleanEmptyScriptPaintsNoLens =
 
         do! Checks.openFixtureAsSoleTab emptyFixture
 
-        let settleUntil = Proc.now () + emptySettleMs
+        let settleUntil = Proc.now () + Harness.LensAbsenceSettleMs
 
         do!
             Harness.eventuallyObserved

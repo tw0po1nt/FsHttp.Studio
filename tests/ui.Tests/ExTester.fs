@@ -479,12 +479,24 @@ let tryCloseOtherTabsInFixtureColumn (tabTitle: string) : Async<bool> =
 /// of the fixture before it. That reads as a provider painting twice, which it is not: the
 /// remaining lenses carry the correct titles at the correct lines.
 ///
+/// The one plain-text lens this suite reads, taken from the product rather than retyped:
+/// `Ui.Tests.fsproj` links `Protocol.fs`, so the harvest below and every check that names the
+/// title move together with the shipped words (docs/spec/0014-explain-missing-lenses.md,
+/// Decision 2). `None` would mean the product paints no lens for `Script(0, true)` at all, which
+/// no reading here could assert around, so the suite fails on the spot rather than harvesting
+/// against a placeholder.
+let noRequestsLensTitle =
+    match Protocol.noRequestsLensTitle (Protocol.Script(0, true)) with
+    | Some title -> title
+    | None -> Assert.fail "Protocol.noRequestsLensTitle paints no lens for Script(0, true)"
+
 /// A lens with a command id is an `<a id>`. A lens with a title and an empty command id is a
 /// `<span>` (docs/spec/0014-explain-missing-lenses.md, Decision 2). Command lenses keep the
 /// existing `a[id]` walk. Plain-text collection takes only the no-requests title: a wider span
 /// harvest pulled in non-command nodes that stole Run-lens clicks on the core path.
 let private lensAnchorsPrologue =
-    """
+    sprintf
+        """
     var editor = null;
     var instances = document.querySelectorAll('.editor-instance');
     for (var e = 0; e < instances.length && !editor; e++) {
@@ -506,18 +518,14 @@ let private lensAnchorsPrologue =
         for (var c = 0; c < host.children.length; c++) {
             var child = host.children[c];
             if (child.tagName !== 'SPAN') { continue; }
-            var text = child.textContent.trim();
-            // Only the no-requests plain-text lens. A broader span harvest pulled in
-            // non-command nodes that stole Run-lens clicks on the core path.
-            if (text.indexOf('No requests found: this script has a syntax error') >= 0) {
-                anchors.push(child);
-            }
+            if (child.textContent.trim().indexOf('%s') >= 0) { anchors.push(child); }
         }
     }
     anchors.sort(function (l, r) {
         return l.getBoundingClientRect().top - r.getBoundingClientRect().top;
     });
     """
+        noRequestsLensTitle
 
 let private runLensScript (body: string) (arg: objnull) : Async<objnull> =
     let driver = VSBrowser.instance.driver
@@ -558,6 +566,53 @@ let describeLensLayout () : Async<string> =
                 return if text = "" then "no lens element in the editor" else text
         with e ->
             return sprintf "no measurement — the layout query raised: %s" e.Message
+    }
+
+/// How the editor painted a lens carrying a title: as a command VSCode can run, or as plain text.
+type LensRendering =
+    /// The lens's decoration holds an `<a id>`: VSCode runs a command when it is clicked.
+    | RenderedAsCommandLink
+    /// The lens's decoration holds the title in a `<span>` and no link at all: nothing to run.
+    | RenderedAsPlainText
+    /// No visible decoration carries the title.
+    | TitleNotRendered
+    /// The query itself did not run, which is no evidence either way.
+    | RenderingUnreadable of reason: string
+
+/// Whether the lens carrying `title` renders as a command or as plain text
+/// (docs/spec/0014-explain-missing-lenses.md, Decision 2).
+///
+/// Reads the DOM rather than the outcome of a click: on a script that locates no block, no lens
+/// could open a viewer whatever command it carried, so "the click did nothing" cannot tell a
+/// plain-text lens from a lens that carries a command. The `<a id>` VSCode paints for a command
+/// id is that tell, and its absence under the decoration that holds the title is what "no
+/// attached command" looks like on screen.
+let tryReadLensRendering (title: string) : Async<LensRendering> =
+    async {
+        try
+            let body =
+                """
+                var hosts = editor.querySelectorAll('[class*="codelens-decoration" i]');
+                for (var i = 0; i < hosts.length; i++) {
+                    var host = hosts[i];
+                    if (getComputedStyle(host).visibility === 'hidden') { continue; }
+                    if (host.textContent.indexOf(arguments[0]) < 0) { continue; }
+                    return host.querySelector('a[id]') ? 'link' : 'plain';
+                }
+                return 'absent';
+                """
+
+            let! reading = runLensScript body (box title)
+
+            if isNull reading then
+                return RenderingUnreadable "no laid-out editor to read"
+            else
+                match string reading with
+                | "link" -> return RenderedAsCommandLink
+                | "plain" -> return RenderedAsPlainText
+                | _ -> return TitleNotRendered
+        with e ->
+            return RenderingUnreadable e.Message
     }
 
 /// The highest line number the editor's gutter renders, for a document whose size read wrong.

@@ -27,6 +27,11 @@ let PostReloadRecoveryDeadlineMs = 60_000
 /// a check that waits on cold start measures the runner, not the product.
 let CompanionReadyDeadlineMs = 120_000
 
+/// How long a claim that the editor paints *no* lens must keep holding before it is believed. An
+/// empty reading taken before the provider has answered is not evidence, and a lens that appears
+/// mid-window fails the check that waited it out.
+let LensAbsenceSettleMs = 3_000.0
+
 /// Green-path budget for the `before` hook through proven-live.
 let SetupBudgetMs = 180_000
 
