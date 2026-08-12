@@ -67,6 +67,16 @@ let noRequestsLensTitle (view: ScriptView) : string option =
     | Script(n, true) when n <= 0 -> Some "⊘ No requests found: this script has a syntax error"
     | _ -> None
 
+/// The parse-failed flag a `blocks` response carries, where `None` is a response that omitted the
+/// property. An omitted property decides `false`, which is Decision 3's compatibility rule: an old
+/// companion that does not send the property must not light the syntax-error lens on each response
+/// (docs/spec/0014-explain-missing-lenses.md, Decision 3).
+///
+/// `Companion.locate` holds the interop lookup that turns the response object into `None` or
+/// `Some`. This function decides the flag from that result alone, so `tests/host.Tests` can
+/// drive the rule without Fable.
+let parseFailedOrDefault (value: bool option) : bool = defaultArg value false
+
 /// A source range in FCS's own numbering: 1-based lines, 0-based columns (ADR-0003). It mirrors
 /// `Companion.BlockLocator.BlockRange` on the wire. The two sides never share an assembly, so
 /// this duplicate shape is deliberate, and neither side reaches across the process boundary.
