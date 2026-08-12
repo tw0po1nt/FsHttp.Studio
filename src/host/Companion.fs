@@ -167,8 +167,7 @@ let private send (handle: Handle) (payloadJson: string) (entry: Pending) =
 
 /// A decoded `blocks` response: the block ranges, and whether the companion's parse failed.
 /// `ParseFailed` mirrors the envelope's `parseFailed` property. An absent property decodes to
-/// `false`, which matches the absent-`refusal` rule
-/// (docs/spec/0014-explain-missing-lenses.md, Decision 3).
+/// `false` through `parseFailedFromWire` (docs/spec/0014-explain-missing-lenses.md, Decision 3).
 ///
 /// The companion has its own `LocateResult`, which holds located blocks and not wire ranges.
 /// This type is the host's side of that wire, so it carries the response name.
@@ -188,15 +187,19 @@ let locate (handle: Handle) (source: string) : Async<LocateResponse> =
             { Resolve =
                 fun json ->
                     let ranges: obj[] = unbox (json?ranges: obj)
+                    // Interop lookup only. `parseFailedFromWire` decides the flag from what this
+                    // found, including the absent case (Decision 3).
                     let parseFailed: obj = json?parseFailed
+
+                    let parseFailedValue =
+                        if isNullish parseFailed then
+                            None
+                        else
+                            Some(unbox<bool> parseFailed)
 
                     resolve
                         { Ranges = ranges |> Array.map toBlockRange |> Array.toList
-                          ParseFailed =
-                            if isNullish parseFailed then
-                                false
-                            else
-                                unbox<bool> parseFailed }
+                          ParseFailed = parseFailedFromWire parseFailedValue }
               Abandon = fun () -> resolve { Ranges = []; ParseFailed = false } }
 
         send handle (JS.JSON.stringify payload) entry)

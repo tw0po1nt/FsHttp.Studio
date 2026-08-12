@@ -326,6 +326,25 @@ let isScriptFileNameTests =
               Expect.isFalse (isScriptFileName "/w/fsx/Library.fs") "a folder named for the extension"
           } ]
 
+/// Decision 3's compatibility rule for an absent `parseFailed` on the `blocks` envelope. The
+/// interop lookup that reads the property stays in `Companion.locate`. This suite drives the
+/// pure decide step only (docs/spec/0014-explain-missing-lenses.md, Seam 3, item 12).
+[<Tests>]
+let parseFailedFromWireTests =
+    testList
+        "parseFailedFromWire"
+        [ test "an absent value decodes to false" {
+              Expect.isFalse (parseFailedFromWire None) "an old companion that omits the property"
+          }
+
+          test "a present false decodes to false" {
+              Expect.isFalse (parseFailedFromWire (Some false)) "a clean source"
+          }
+
+          test "a present true decodes to true" {
+              Expect.isTrue (parseFailedFromWire (Some true)) "a broken source"
+          } ]
+
 /// Decision 5's guard on which `locate` response reaches the status bar. It lives here because the
 /// UI suite cannot drive it: a second visible script does not locate again on demand, so a check
 /// that opened one held whether the guard was there or not.
