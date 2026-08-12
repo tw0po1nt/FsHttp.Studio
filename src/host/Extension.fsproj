@@ -13,6 +13,7 @@
     <Compile Include="Refusals.fs" />
     <Compile Include="Companion.fs" />
     <Compile Include="ResponseViewer.fs" />
+    <Compile Include="StatusBar.fs" />
     <Compile Include="CodeLensProvider.fs" />
     <Compile Include="RunCommand.fs" />
     <Compile Include="Extension.fs" />

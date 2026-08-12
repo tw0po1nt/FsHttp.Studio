@@ -12,7 +12,11 @@ _Avoid_: request (ambiguous with the HTTP request itself), snippet.
 
 **Script**:
 A `.fsx` F# script file. It is the only source surface that v0.1 supports. Blocks in compiled `.fs` files are out of scope.
-_Avoid_: file, document.
+_Avoid_: file, document (an **Active document** is the wider term, for a buffer that may not be a Script).
+
+**Active document**:
+The buffer the user is looking at, which the status bar reports on. It may be a Script, another F# file, or something else entirely, and there may be none at all when a webview holds focus. VSCode's own `TextDocument`, and the one sanctioned use of "document": the status bar has to name a buffer before it knows whether it is a Script, and calling that a Script would beg the question the status bar answers.
+_Avoid_: current file, open file, active script (a Script is only one of the things it can be).
 
 **Setup**:
 The code that a Run evaluates to reach the target block. It starts at the first line of the script, and stops at the end of the target block's own expression. It thus contains the target block, because a Run reaches a block where the user wrote it. It contains no other block, because FsHttp.Studio blanks each other block first. It contains nothing after the target block. FsHttp.Studio evaluates the Setup afresh for each Run.
@@ -121,5 +125,5 @@ The port the test server allocates and never listens on, so a check can drive a 
 _Avoid_: closed port, bad port.
 
 **Budget**:
-The green-path time a phase is allowed: 180 s for Harness setup, 45 s per check, 240 s for the suite. A budget catches drift and is asserted in `afterEach`/`after`, never in a check body. It is not a hang guard — the Mocha timeouts above it are.
+The green-path time a phase is allowed: 180 s for Harness setup, 45 s per check, 300 s for the suite. A budget catches drift and is asserted in `afterEach`/`after`, never in a check body. It is not a hang guard — the Mocha timeouts above it are.
 _Avoid_: timeout, deadline (a deadline is what one `eventually` call waits against).

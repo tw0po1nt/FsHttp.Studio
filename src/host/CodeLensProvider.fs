@@ -142,7 +142,7 @@ let provider: CodeLensProvider =
 
         member _.provideCodeLenses(document, _token) =
             let computation =
-                if not (document.fileName.EndsWith(".fsx")) then
+                if not (isScriptFileName document.fileName) then
                     noLenses ()
                 elif not ready then
                     async { return stoppedLenses document }

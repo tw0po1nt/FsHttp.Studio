@@ -7,56 +7,7 @@ open Vscode
 open Node
 open Protocol
 
-let mutable private statusItem: StatusBarItem option = None
 let mutable private companionHandle: Companion.Handle option = None
-let mutable private companionState: State = Starting
-let mutable private scriptView: ScriptView = NoFSharpDocument
-
-/// Writes the status-bar body, or hides the item when `statusText` has nothing to say
-/// (docs/spec/0014-explain-missing-lenses.md, Decision 6). A no-op until `activate` registers
-/// the item.
-let private setStatusText (text: string option) =
-    match statusItem, text with
-    | Some item, Some body ->
-        item.text <- "FsHttp.Studio: " + body
-        item.show ()
-    | Some item, None -> item.hide ()
-    | None, _ -> ()
-
-let private refreshStatus () =
-    setStatusText (statusText companionState scriptView)
-
-/// The status bar for a companion state. Keeps the last script view, so a Ready transition
-/// reports what the active document holds rather than the retired `ready` word.
-let private setCompanionStatus (state: State) =
-    companionState <- state
-    refreshStatus ()
-
-let private setScriptView (view: ScriptView) =
-    scriptView <- view
-    refreshStatus ()
-
-/// What the status bar should show for a document before any `locate` response arrives.
-let private scriptViewFor (document: TextDocument) : ScriptView =
-    if document.languageId <> "fsharp" then
-        NoFSharpDocument
-    elif not (document.fileName.EndsWith(".fsx")) then
-        NotAScript
-    else
-        ScriptPending
-
-let private onActiveEditorChanged (editor: TextEditor option) =
-    match editor with
-    | None -> setScriptView NoFSharpDocument
-    | Some active -> setScriptView (scriptViewFor active.document)
-
-/// Mirrors a `locate` response onto the status bar only when it belongs to the active editor.
-/// VSCode asks for lenses on every open F# document, so a background tab must not overwrite the
-/// item (docs/spec/0014-explain-missing-lenses.md, Decision 5).
-let private onLocated (document: TextDocument) (view: ScriptView) =
-    match window.activeTextEditor with
-    | Some active when active.document.fileName = document.fileName -> setScriptView view
-    | _ -> ()
 
 [<Literal>]
 let private getSdkLabel = "Get the .NET SDK"
@@ -123,17 +74,17 @@ let private hasSdkAtLeast (requiredMajor: int) (listSdksOutput: string) : bool =
 
 let activate (context: ExtensionContext) =
     let item = window.createStatusBarItem (statusBarAlignmentLeft, 100.0)
-    // Register the item before the first status write, which is a no-op while `statusItem` is
-    // None. Read the active editor before the Starting write so Decision 6 does not hide the
-    // item during activation on an F# document. The write itself shows the item, so no separate
-    // `show` is needed here.
-    statusItem <- Some item
+    // Hand the item over before the first status write, which is a no-op until `StatusBar` holds
+    // it. Read the active editor before the Starting write so Decision 6 does not hide the item
+    // during activation on an F# document. The write itself shows the item, so no separate `show`
+    // is needed here.
+    StatusBar.register item
     context.subscriptions.Add(box item)
 
-    CodeLensProvider.setOnLocated onLocated
-    context.subscriptions.Add(box (window.onDidChangeActiveTextEditor onActiveEditorChanged))
-    onActiveEditorChanged window.activeTextEditor
-    setCompanionStatus Starting
+    CodeLensProvider.setOnLocated StatusBar.onLocated
+    context.subscriptions.Add(box (window.onDidChangeActiveTextEditor StatusBar.onActiveEditorChanged))
+    StatusBar.onActiveEditorChanged window.activeTextEditor
+    StatusBar.setCompanionState Starting
 
     RunCommand.setExtensionUri context.extensionUri
 
@@ -157,7 +108,7 @@ let activate (context: ExtensionContext) =
         |> Option.defaultValue fallbackRequiredMajor
 
     let onState state =
-        setCompanionStatus state
+        StatusBar.setCompanionState state
         CodeLensProvider.setReady (state = Ready)
 
     let startCompanion (dotnetPath: string) =
@@ -181,7 +132,7 @@ let activate (context: ExtensionContext) =
     // user at the download page and the override. When the override is set but did not resolve
     // to an SDK, report that, instead of "none was found".
     let notifyNoSdk () =
-        setCompanionStatus SdkNotFound
+        StatusBar.setCompanionState SdkNotFound
 
         let message =
             match dotnetPathOverride with

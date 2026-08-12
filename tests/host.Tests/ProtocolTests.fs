@@ -303,3 +303,50 @@ let noRequestsLensTitleTests =
               Expect.equal (noRequestsLensTitle NotAScript) None "not a script"
               Expect.equal (noRequestsLensTitle NoFSharpDocument) None "no F# document"
           } ]
+
+/// The one test of what counts as a Script. The CodeLens provider and the status bar both go
+/// through it, so a change here moves both surfaces together.
+[<Tests>]
+let isScriptFileNameTests =
+    testList
+        "isScriptFileName"
+        [ test "an .fsx path is a Script" {
+              Expect.isTrue (isScriptFileName "/w/fixtures/one.fsx") "a script in a folder"
+              Expect.isTrue (isScriptFileName "one.fsx") "a bare file name"
+          }
+
+          test "the compiled F# surfaces are not Scripts" {
+              Expect.isFalse (isScriptFileName "/w/Library.fs") "a module"
+              Expect.isFalse (isScriptFileName "/w/Library.fsi") "a signature"
+              Expect.isFalse (isScriptFileName "/w/notes.md") "not F# at all"
+          }
+
+          test "the extension has to end the name" {
+              Expect.isFalse (isScriptFileName "/w/one.fsx.bak") "a backup beside a script"
+              Expect.isFalse (isScriptFileName "/w/fsx/Library.fs") "a folder named for the extension"
+          } ]
+
+/// Decision 5's guard on which `locate` response reaches the status bar. It lives here because the
+/// UI suite cannot drive it: a second visible script does not locate again on demand, so a check
+/// that opened one held whether the guard was there or not.
+[<Tests>]
+let mirrorsActiveDocumentTests =
+    testList
+        "mirrorsActiveDocument"
+        [ test "a response for the active document is mirrored" {
+              Expect.isTrue (mirrorsActiveDocument (Some "/w/one.fsx") "/w/one.fsx") "the same document"
+          }
+
+          test "a response for another document is dropped" {
+              Expect.isFalse
+                  (mirrorsActiveDocument (Some "/w/one.fsx") "/w/many.fsx")
+                  "a second visible script's own response"
+
+              Expect.isFalse
+                  (mirrorsActiveDocument (Some "/w/a/one.fsx") "/w/b/one.fsx")
+                  "the same file name in two folders is two documents"
+          }
+
+          test "no active text editor drops every response" {
+              Expect.isFalse (mirrorsActiveDocument None "/w/one.fsx") "the viewer holds focus"
+          } ]

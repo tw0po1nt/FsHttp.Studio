@@ -32,6 +32,11 @@ let CompanionReadyDeadlineMs = 120_000
 /// mid-window fails the check that waited it out.
 let LensAbsenceSettleMs = 3_000.0
 
+/// How long a claim that the status bar *stayed* on one text must keep holding before it is
+/// believed. A `locate` for a visible but inactive document that wrongly overwrote the item would
+/// land inside this window, and a single reading taken the moment the text arrived would miss it.
+let StatusStabilitySettleMs = 3_000.0
+
 /// Green-path budget for the `before` hook through proven-live.
 let SetupBudgetMs = 180_000
 
@@ -109,6 +114,12 @@ let private extensionStatusPrefix = "FsHttp.Studio"
 /// Companion lifecycle labels that mean the companion is not Ready yet. A Ready status names the
 /// script view instead (`no requests found`, `2 requests`, …), so setup and post-reload waits
 /// accept any `FsHttp.Studio:` item that is not one of these.
+///
+/// Only `companion stopped` is asserted end to end, by the companion-death check, because it is
+/// the only one of the three the suite can reach on purpose. `starting…` was measured as a window
+/// of under a second on a warm reload — a poll that waited for it read `2 requests` instead — and
+/// `.NET SDK not found` needs a workbench with no SDK on PATH, which is not this run. Those two
+/// rows are pinned as pure values in `ProtocolTests.statusTextTests` instead.
 let private companionNotReadyBodies =
     [ "starting…"; ".NET SDK not found"; "companion stopped" ]
 
