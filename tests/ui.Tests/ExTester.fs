@@ -508,6 +508,15 @@ let previousEditor () : Async<unit> =
         do! workbench.executeCommand "workbench.action.previousEditor" |> Async.AwaitPromise
     }
 
+/// Focuses the fixture column so `window.activeTextEditor` is the script again. The response
+/// viewer steals focus on a Run, which leaves no active text editor and hides the status item
+/// under Decision 6.
+let focusFixtureEditor () : Async<unit> =
+    async {
+        let workbench = Workbench.create ()
+        do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
+    }
+
 /// Finds a CodeLens in the fixture's editor and clicks it in the same attempt. Pair with
 /// `Harness.eventually`: a stale handle between find and click fails the attempt, and the next
 /// poll retries both steps together.

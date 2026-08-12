@@ -123,6 +123,10 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
                 "the stopped companion title on the lens above each of the two blocks"
                 tryStoppedLensAboveEachBlock
 
+        // The viewer holds focus after the hang Run. Decision 6 hides the status item while no
+        // text editor is active, so restore the fixture column before reading companion stopped.
+        do! ExTester.focusFixtureEditor ()
+
         do!
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
