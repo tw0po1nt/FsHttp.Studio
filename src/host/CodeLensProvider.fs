@@ -42,6 +42,11 @@ let private emitter = EventEmitter<unit>()
 let mutable private handle: Companion.Handle option = None
 let mutable private ready = false
 
+/// Called on every successful `locate` response so the status bar can mirror the same count the
+/// lenses already show (docs/spec/0014-explain-missing-lenses.md, Decision 5). `Extension` owns
+/// the item and decides whether the document is still the active editor's document.
+let mutable private onLocated: (TextDocument -> ScriptView -> unit) option = None
+
 /// The ranges the last successful `locate` returned for each script, keyed by the document's own
 /// file name. A stopped companion's lenses stand on this. A locate needs the companion, so the
 /// only positions left once the companion is gone are the ones it already reported.
@@ -60,6 +65,15 @@ let private lastLocated =
 /// Called after `Extension.fs` spawns the companion, so `provideCodeLenses` has a target for
 /// its `locate` requests.
 let setHandle (h: Companion.Handle) = handle <- Some h
+
+/// Called from `Extension.fs` so each `locate` response can refresh the status bar without this
+/// module touching the item.
+let setOnLocated (callback: TextDocument -> ScriptView -> unit) = onLocated <- Some callback
+
+let private reportLocated (document: TextDocument) (view: ScriptView) =
+    match onLocated with
+    | Some callback -> callback document view
+    | None -> ()
 
 /// Called on every companion state transition. It fires `onDidChangeCodeLenses` only on a real
 /// change between ready and not-ready, so VSCode does not re-query on an unrelated status tick.
@@ -151,7 +165,10 @@ let provider: CodeLensProvider =
                             if ready then
                                 lastLocated.[document.fileName] <- ranges
 
-                                match noRequestsLensTitle (Script(ranges.Length, located.ParseFailed)) with
+                                let view = Script(ranges.Length, located.ParseFailed)
+                                reportLocated document view
+
+                                match noRequestsLensTitle view with
                                 | Some title -> return ResizeArray([ plainTextLens title ])
                                 | None -> return ranges |> List.mapi (buildCodeLens document) |> ResizeArray
                             else

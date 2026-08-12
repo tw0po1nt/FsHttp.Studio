@@ -123,6 +123,12 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
                 "the stopped companion title on the lens above each of the two blocks"
                 tryStoppedLensAboveEachBlock
 
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "FsHttp.Studio: companion stopped while an F# document is active"
+                (fun () -> Checks.tryStatusBarText (Checks.statusBarText "companion stopped"))
+
         do! ExTester.reloadWindow ()
 
         do!

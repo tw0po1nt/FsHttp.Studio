@@ -40,10 +40,9 @@ let PerCheckBudgetMs = 45_000
 
 /// Green-path budget for the suite, excluding setup. Deliberately far tighter than the number of
 /// checks times `PerCheckBudgetMs`: no green run comes near the per-check ceiling, and a budget
-/// that summed the ceilings would catch nothing. A green run of eight checks measures around 40 s
-/// locally, so this holds several times over even on a slow runner, and a check added without a
-/// raise here is the intended pressure.
-let SuiteBudgetMs = 240_000
+/// that summed the ceilings would catch nothing. Raised when the document-aware status-bar checks
+/// joined the suite; a green run still sits well under this ceiling on a slow runner.
+let SuiteBudgetMs = 300_000
 
 /// Cross-process contract for `GET /json`. Must match `UiTestServer.Server.jsonProbeBody`. The
 /// key and the value are named separately because a check reading the viewer's pretty-printed DOM
@@ -107,11 +106,12 @@ let companionStoppedText = Refusals.companionStopped.Detail
 
 let private extensionStatusPrefix = "FsHttp.Studio"
 
-/// The status bar text the extension shows once the companion reports `ready`, exactly as
-/// `Extension.setCompanionStatus` composes it. Asserted as rendered — it is the only surface
-/// that publishes the companion's state to a reader. The retired `ready` word is gone; this is
-/// the Ready + `ScriptPending` row of Decision 5.
-let private extensionReadyStatus = "FsHttp.Studio: looking for requests…"
+/// Companion lifecycle labels that mean the companion is not Ready yet. A Ready status names the
+/// script view instead (`no requests found`, `2 requests`, …), so setup and post-reload waits
+/// accept any `FsHttp.Studio:` item that is not one of these.
+let private companionNotReadyBodies =
+    [ "starting…"; ".NET SDK not found"; "companion stopped" ]
+
 let private fixtureTabSuffix = "setup.fsx"
 let private fixtureFolderName = "fixtures"
 let private setupPhaseName = "Harness setup"
@@ -325,7 +325,7 @@ let private tryExtensionActive () =
 
 /// The companion answered its first request, rather than merely having been spawned. This is the
 /// tell `tryCompanionRunning` cannot give: a pid exists the moment `Companion.start` spawns it,
-/// while `ready` is written only once the process is serving. Until then `CodeLensProvider` holds
+/// while Ready is written only once the process is serving. Until then `CodeLensProvider` holds
 /// every lens back, so a check that opens a fixture sees no lens through no fault of the product.
 ///
 /// The companion-death check reuses this after its window reload. The reading comes from the
@@ -333,8 +333,16 @@ let private tryExtensionActive () =
 /// it, and the companion is serving. A reload satisfies those three at three different moments,
 /// and a check that resumes on the first of them sends a workbench command to a page that is still
 /// building one.
+///
+/// Ready no longer has one fixed sentence: the status bar names the active script. Any
+/// `FsHttp.Studio:` body that is not a companion-lifecycle label means Ready has arrived.
 let tryCompanionReady () =
-    anyStatusItemSatisfies (fun text -> text.Contains extensionReadyStatus)
+    anyStatusItemSatisfies (fun text ->
+        if not (text.StartsWith(extensionStatusPrefix + ":")) then
+            false
+        else
+            let body = text.Substring(extensionStatusPrefix.Length + 2)
+            companionNotReadyBodies |> List.contains body |> not)
 
 /// Matches only the companion that this run's VSCode spawned, by anchoring on the extensions
 /// directory the `.vsix` was installed into. A bare `Companion.dll` would also match the

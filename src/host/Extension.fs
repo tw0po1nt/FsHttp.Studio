@@ -9,6 +9,8 @@ open Protocol
 
 let mutable private statusItem: StatusBarItem option = None
 let mutable private companionHandle: Companion.Handle option = None
+let mutable private companionState: State = Starting
+let mutable private scriptView: ScriptView = NoFSharpDocument
 
 /// Writes the status-bar body, or hides the item when `statusText` has nothing to say
 /// (docs/spec/0014-explain-missing-lenses.md, Decision 6). A no-op until `activate` registers
@@ -21,12 +23,40 @@ let private setStatusText (text: string option) =
     | Some item, None -> item.hide ()
     | None, _ -> ()
 
-/// The status bar for a companion state. `ScriptPending` stands in until a later ticket feeds
-/// the active editor's real `ScriptView` through here — this is the extension's only placeholder,
-/// so that ticket has one edit site. Until then the Ready row reads `looking for requests…`
-/// rather than the retired `ready` word, in every document.
+let private refreshStatus () =
+    setStatusText (statusText companionState scriptView)
+
+/// The status bar for a companion state. Keeps the last script view, so a Ready transition
+/// reports what the active document holds rather than the retired `ready` word.
 let private setCompanionStatus (state: State) =
-    setStatusText (statusText state ScriptPending)
+    companionState <- state
+    refreshStatus ()
+
+let private setScriptView (view: ScriptView) =
+    scriptView <- view
+    refreshStatus ()
+
+/// What the status bar should show for a document before any `locate` response arrives.
+let private scriptViewFor (document: TextDocument) : ScriptView =
+    if document.languageId <> "fsharp" then
+        NoFSharpDocument
+    elif not (document.fileName.EndsWith(".fsx")) then
+        NotAScript
+    else
+        ScriptPending
+
+let private onActiveEditorChanged (editor: TextEditor option) =
+    match editor with
+    | None -> setScriptView NoFSharpDocument
+    | Some active -> setScriptView (scriptViewFor active.document)
+
+/// Mirrors a `locate` response onto the status bar only when it belongs to the active editor.
+/// VSCode asks for lenses on every open F# document, so a background tab must not overwrite the
+/// item (docs/spec/0014-explain-missing-lenses.md, Decision 5).
+let private onLocated (document: TextDocument) (view: ScriptView) =
+    match window.activeTextEditor with
+    | Some active when active.document.fileName = document.fileName -> setScriptView view
+    | _ -> ()
 
 [<Literal>]
 let private getSdkLabel = "Get the .NET SDK"
@@ -93,13 +123,17 @@ let private hasSdkAtLeast (requiredMajor: int) (listSdksOutput: string) : bool =
 
 let activate (context: ExtensionContext) =
     let item = window.createStatusBarItem (statusBarAlignmentLeft, 100.0)
-    // Register the item before the first `setCompanionStatus`, which is a no-op while
-    // `statusItem` is None. Otherwise the item shows empty until the companion's first state
-    // arrives, and "starting…" — the one status that says activation happened — is never seen.
-    // The write itself shows the item, so no separate `show` is needed here.
+    // Register the item before the first status write, which is a no-op while `statusItem` is
+    // None. Read the active editor before the Starting write so Decision 6 does not hide the
+    // item during activation on an F# document. The write itself shows the item, so no separate
+    // `show` is needed here.
     statusItem <- Some item
-    setCompanionStatus Starting
     context.subscriptions.Add(box item)
+
+    CodeLensProvider.setOnLocated onLocated
+    context.subscriptions.Add(box (window.onDidChangeActiveTextEditor onActiveEditorChanged))
+    onActiveEditorChanged window.activeTextEditor
+    setCompanionStatus Starting
 
     RunCommand.setExtensionUri context.extensionUri
 

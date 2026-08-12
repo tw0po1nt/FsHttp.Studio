@@ -252,6 +252,42 @@ module StatusBar =
 
     let create () : StatusBar = createInst Ctor
 
+/// What the workbench shows for the FsHttp.Studio status-bar item. Hidden means Decision 6
+/// removed it from view (or no item carries the prefix). The product always writes the
+/// `FsHttp.Studio: ` prefix into the item text.
+type FsHttpStatus =
+    | StatusHidden
+    | StatusText of text: string
+    | StatusUnreadable of reason: string
+
+let private fsHttpStatusPrefix = "FsHttp.Studio:"
+
+/// Reads the FsHttp.Studio status-bar item through ExTester's `StatusBar`. A hidden item does
+/// not appear among `getItems`, which is how Decision 6's hide is observed.
+let tryReadFsHttpStatus () : Async<FsHttpStatus> =
+    async {
+        try
+            let bar = StatusBar.create ()
+            let! items = bar.getItems () |> Async.AwaitPromise
+            let mutable found: string option = None
+
+            for item in items do
+                if found.IsNone then
+                    let! text = item.getText () |> Async.AwaitPromise
+
+                    if text.StartsWith fsHttpStatusPrefix then
+                        let! shown = item.isDisplayed () |> Async.AwaitPromise
+
+                        if shown then
+                            found <- Some text
+
+            match found with
+            | None -> return StatusHidden
+            | Some text -> return StatusText text
+        with e ->
+            return StatusUnreadable e.Message
+    }
+
 module ActivityBar =
     [<Import("ActivityBar", "vscode-extension-tester")>]
     let private Ctor: obj = jsNative
@@ -382,6 +418,17 @@ let tryFixtureColumnHoldsOnly (tabTitle: string) : Async<bool> =
             return false
     }
 
+/// True when the fixture column lists `tabTitle` among its open tabs, whether or not it is alone.
+let tryFixtureColumnShowsTab (tabTitle: string) : Async<bool> =
+    async {
+        try
+            let! group = editorGroup fixtureGroupIndex
+            let! titles = group.getOpenEditorTitles () |> Async.AwaitPromise
+            return titles |> Array.exists (fun t -> t.Contains tabTitle)
+        with _ ->
+            return false
+    }
+
 /// Opens a workspace file in the fixture column, beside whatever that column already holds.
 /// `tryCloseOtherTabsInFixtureColumn` makes it the sole tab afterwards.
 ///
@@ -451,6 +498,14 @@ let tryCloseOtherTabsInFixtureColumn (tabTitle: string) : Async<bool> =
                 return! tryFixtureColumnHoldsOnly tabTitle
         with _ ->
             return false
+    }
+
+/// Switches to the previous editor tab in the focused group. The document-aware status bar
+/// resets to pending on this change, which is what the switch check waits for.
+let previousEditor () : Async<unit> =
+    async {
+        let workbench = Workbench.create ()
+        do! workbench.executeCommand "workbench.action.previousEditor" |> Async.AwaitPromise
     }
 
 /// Finds a CodeLens in the fixture's editor and clicks it in the same attempt. Pair with
