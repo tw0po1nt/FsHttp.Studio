@@ -5,10 +5,6 @@
 
 open FsHttp
 
-http {
-    GET "http://127.0.0.1:9/one"
-}
+http { GET "http://127.0.0.1:9/one" }
 
-http {
-    GET "http://127.0.0.1:9/two"
-}
+http { GET "http://127.0.0.1:9/two" }

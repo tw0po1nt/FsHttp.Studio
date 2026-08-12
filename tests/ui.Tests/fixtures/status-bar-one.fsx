@@ -5,6 +5,4 @@
 
 open FsHttp
 
-http {
-    GET "http://127.0.0.1:9/"
-}
+http { GET "http://127.0.0.1:9/" }
