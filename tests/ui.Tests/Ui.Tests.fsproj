@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <Compile Include="..\..\src\host\Refusals.fs" Link="Refusals.fs" />
+    <Compile Include="..\..\src\host\Protocol.fs" Link="Protocol.fs" />
     <Compile Include="Assert.fs" />
     <Compile Include="Proc.fs" />
     <Compile Include="Timing.fs" />
@@ -22,6 +23,7 @@
     <Compile Include="LoopLensTests.fs" />
     <Compile Include="CrossBlockRefusedRunTests.fs" />
     <Compile Include="CompileErrorTests.fs" />
+    <Compile Include="NoRequestsLensTests.fs" />
     <Compile Include="CompanionDeathTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>

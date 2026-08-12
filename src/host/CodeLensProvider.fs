@@ -1,6 +1,11 @@
 // The `▶ Run request` CodeLens (ADR-0003). It shows one lens for each block that the companion
 // locates in a `.fsx` script, and no lens at all on a `.fs` file.
 //
+// When the companion's parse fails and the locator finds no block, it paints one informational
+// lens at line 1 instead: `⊘ No requests found: this script has a syntax error`
+// (docs/spec/0014-explain-missing-lenses.md, Decisions 1-2). Partial loss and damage below the
+// blocks keep their Run lenses; only total loss with a failed parse takes the line-1 lens.
+//
 // A companion that is gone changes what the lenses say, and does not clear them. Every block the
 // last locate found keeps a lens reading `⊘ Cannot run: the companion stopped`. That is ADR-0003's
 // "no companion, no *runnable* lenses". A lens that still promised a Run would promise what
@@ -92,6 +97,15 @@ let private buildCodeLens (document: TextDocument) (i: int) (r: BlockRange) : Co
     | Some code -> lensAt document i r (Refusals.lensTitle code) explainCommandId
     | None -> lensAt document i r "▶ Run request" commandId
 
+/// One informational lens at line 1. The command id is empty, so VSCode paints the title as plain
+/// text and a click runs nothing (docs/spec/0014-explain-missing-lenses.md, Decision 2).
+let private plainTextLens (title: string) : CodeLens =
+    let range = Range(0.0, 0.0, 0.0, 0.0)
+
+    let commandObj: obj = createObj [ "title" ==> title; "command" ==> "" ]
+
+    CodeLens(range, commandObj)
+
 let private noLenses () : Async<ResizeArray<CodeLens>> = async { return ResizeArray() }
 
 /// The answer for a script while the companion is gone: one stopped lens for each block the last
@@ -136,7 +150,10 @@ let provider: CodeLensProvider =
                             // false here when that happens.
                             if ready then
                                 lastLocated.[document.fileName] <- ranges
-                                return ranges |> List.mapi (buildCodeLens document) |> ResizeArray
+
+                                match noRequestsLensTitle (Script(ranges.Length, located.ParseFailed)) with
+                                | Some title -> return ResizeArray([ plainTextLens title ])
+                                | None -> return ranges |> List.mapi (buildCodeLens document) |> ResizeArray
                             else
                                 return stoppedLenses document
                         }
