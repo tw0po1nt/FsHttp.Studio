@@ -12,3 +12,9 @@ open Fable.Core
 /// back as `undefined` rather than as `Unchecked.defaultof<obj>`.
 [<Emit("$0 == null")>]
 let isNullish (_x: obj) : bool = jsNative
+
+/// A nullish-tolerant `unbox`: an omitted or null property reads back as `None`, and any other
+/// value as `Some`. Every optional property the companion sends decodes through this, so the
+/// absent case is spelled once rather than once per property.
+let tryUnbox<'T> (x: obj) : 'T option =
+    if isNullish x then None else Some(unbox<'T> x)

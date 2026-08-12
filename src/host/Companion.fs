@@ -31,13 +31,7 @@ let private toBlockRange (r: obj) : BlockRange =
       StartCol = unbox<int> (r?startCol: obj)
       EndLine = unbox<int> (r?endLine: obj)
       EndCol = unbox<int> (r?endCol: obj)
-      Refusal =
-        let refusal: obj = r?refusal
-
-        if isNullish refusal then
-            None
-        else
-            Some(unbox<string> refusal) }
+      Refusal = tryUnbox<string> (r?refusal: obj) }
 
 let private toHeaders (h: obj) : (string * string) list =
     let keys: string[] = JsInterop.emitJsExpr h "Object.keys($0)"
@@ -55,8 +49,6 @@ let private toWireRequest (request: obj) : WireRequest =
 let private decodeRunEnvelope (json: obj) : RunEnvelope =
     match unbox<string> (json?tag: obj) with
     | "ok" ->
-        let request: obj = json?request
-
         OkEnvelope(
             { Status = unbox<int> (json?status: obj)
               Reason = unbox<string> (json?reason: obj)
@@ -64,10 +56,7 @@ let private decodeRunEnvelope (json: obj) : RunEnvelope =
               ContentType = unbox<string> (json?contentType: obj)
               BodyBase64 = unbox<string> (json?bodyBase64: obj)
               RequestMs = unbox<float> (json?requestMs: obj) },
-            (if isNullish request then
-                 None
-             else
-                 Some(toWireRequest request))
+            tryUnbox<obj> (json?request: obj) |> Option.map toWireRequest
         )
     | "compileError" ->
         let diagnostics: obj[] = unbox (json?diagnostics: obj)
@@ -82,9 +71,7 @@ let private decodeRunEnvelope (json: obj) : RunEnvelope =
     | "refused" ->
         // The companion omits `name` for every code it produces today, so a missing property
         // decodes to `None` rather than to `undefined` (the same shape as `refusal` above).
-        let name: obj = json?name
-
-        RefusedEnvelope(unbox<string> (json?code: obj), (if isNullish name then None else Some(unbox<string> name)))
+        RefusedEnvelope(unbox<string> (json?code: obj), tryUnbox<string> (json?name: obj))
     | _ -> ProtocolErrorEnvelope(unbox<string> (json?message: obj))
 
 /// Abandons every pending entry along its own path and marks the handle closed
@@ -167,7 +154,7 @@ let private send (handle: Handle) (payloadJson: string) (entry: Pending) =
 
 /// A decoded `blocks` response: the block ranges, and whether the companion's parse failed.
 /// `ParseFailed` mirrors the envelope's `parseFailed` property. An absent property decodes to
-/// `false` through `parseFailedFromWire` (docs/spec/0014-explain-missing-lenses.md, Decision 3).
+/// `false` through `parseFailedOrDefault` (docs/spec/0014-explain-missing-lenses.md, Decision 3).
 ///
 /// The companion has its own `LocateResult`, which holds located blocks and not wire ranges.
 /// This type is the host's side of that wire, so it carries the response name.
@@ -187,20 +174,17 @@ let locate (handle: Handle) (source: string) : Async<LocateResponse> =
             { Resolve =
                 fun json ->
                     let ranges: obj[] = unbox (json?ranges: obj)
-                    // Interop lookup only. `parseFailedFromWire` decides the flag from what this
+                    // Interop lookup only. `parseFailedOrDefault` decides the flag from what this
                     // found, including the absent case (Decision 3).
-                    let parseFailed: obj = json?parseFailed
-
-                    let parseFailedValue =
-                        if isNullish parseFailed then
-                            None
-                        else
-                            Some(unbox<bool> parseFailed)
-
                     resolve
                         { Ranges = ranges |> Array.map toBlockRange |> Array.toList
-                          ParseFailed = parseFailedFromWire parseFailedValue }
-              Abandon = fun () -> resolve { Ranges = []; ParseFailed = false } }
+                          ParseFailed = parseFailedOrDefault (tryUnbox<bool> (json?parseFailed: obj)) }
+              // An abandoned request carries no property at all, which is the same absent case.
+              Abandon =
+                fun () ->
+                    resolve
+                        { Ranges = []
+                          ParseFailed = parseFailedOrDefault None } }
 
         send handle (JS.JSON.stringify payload) entry)
 
