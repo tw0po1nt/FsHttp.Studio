@@ -28,7 +28,7 @@ FsHttp.Studio closes that gap. The request stays pure F#, and the editor renders
 
 Open a `.fsx` script that contains FsHttp requests. A **`▶ Run request` CodeLens** appears above each `http { }` block. Click the CodeLens, and:
 
-- Only *that* block runs. FsHttp.Studio blanks every other block, and then evaluates your script from the top down to the end of that block. It stops there. Nothing after the block runs. This reaches top-level, named, nested, and module-qualified blocks alike. A handful of shapes still can't be reached — a block inside a loop, for instance — and those show a `⊘ Cannot run: …` lens instead of failing silently.
+- Only *that* block runs. FsHttp.Studio blanks every other block, and then evaluates your script from the top down to the end of that block. It stops there. Nothing after the block runs. This reaches top-level, named, nested, and module-qualified blocks alike. Anything that can't be reached shows a `⊘ Cannot run: …` lens instead of failing silently.
 - A **response viewer** panel opens beside your editor. The panel renders the body, and dispatches on the body's `Content-Type`:
   - **images** display inline,
   - **JSON** displays as a collapsible, syntax-highlighted tree,
