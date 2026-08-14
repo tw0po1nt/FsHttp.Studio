@@ -1,11 +1,15 @@
 <Solution>
-  <Project Path="src/companion/Companion.fsproj" />
-  <Project Path="tests/companion.Tests/Companion.Tests.fsproj" />
-  <Project Path="src/renderer/Renderer.fsproj" />
-  <Project Path="tests/renderer.Tests/Renderer.Tests.fsproj" />
-  <Project Path="src/host/Extension.fsproj" />
-  <Project Path="tests/host.Tests/Extension.Tests.fsproj" />
-  <Project Path="src/webview/Webview.fsproj" />
-  <Project Path="tests/ui.Tests/Ui.Tests.fsproj" />
-  <Project Path="tests/ui.Tests/server/UiTestServer.fsproj" />
+  <Folder Name="/src/">
+    <Project Path="src/companion/Companion.fsproj" />
+    <Project Path="src/renderer/Renderer.fsproj" />
+    <Project Path="src/host/Extension.fsproj" />
+    <Project Path="src/webview/Webview.fsproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/companion.Tests/Companion.Tests.fsproj" />
+    <Project Path="tests/renderer.Tests/Renderer.Tests.fsproj" />
+    <Project Path="tests/host.Tests/Extension.Tests.fsproj" />
+    <Project Path="tests/ui.Tests/Ui.Tests.fsproj" />
+    <Project Path="tests/ui.Tests/server/UiTestServer.fsproj" />
+  </Folder>
 </Solution>
