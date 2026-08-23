@@ -1,8 +1,3 @@
-// The Run command that a CodeLens click invokes. It opens or reveals the response viewer, which
-// shows `Running…`. It then runs the block and posts the outcome into the panel. Method and URL
-// for the status line arrive on the run result, so this path does not locate the block again
-// (docs/spec/0012-request-as-sent.md, Decision 11). The latest click wins: a generation counter
-// discards the result of a superseded Run, instead of a race onto the panel.
 module RunCommand
 
 open Fable.Core.JsInterop
@@ -91,8 +86,7 @@ let private resultUpdate (request: RequestData) (timing: Timing) (response: Resp
 let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: int) (myGeneration: int) : Async<unit> =
     async {
         let source = document.getText ()
-        // A `file`-scheme script's `fileName` is the absolute path FSI needs for
-        // `__SOURCE_DIRECTORY__`. Anything else has no real local path, so the Run sends none.
+        // Only a `file`-scheme script has the absolute path FSI needs for `__SOURCE_DIRECTORY__`.
         let scriptFileName = scriptFileNameFor document.uri.scheme document.fileName
 
         let started: float = emitJsExpr (nonNull (box 0)) "Date.now()"
@@ -111,8 +105,6 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
             | RunCompileError diagnostics -> ResponseViewer.post (errorUpdate (formatCompileError diagnostics))
             | RunRuntimeError message -> ResponseViewer.post (errorUpdate (sprintf "Runtime error: %s" message))
             | RunProtocolError message -> ResponseViewer.post (errorUpdate message)
-            // `Refusals` is the one module that owns every shipped refusal sentence
-            // (docs/spec/0003, Decision 2), including which codes its `catalog` does not carry.
             | RunRefused(code, name) ->
                 let refusal = Refusals.forRefused code name
                 ResponseViewer.post (refusedUpdate refusal.Title refusal.Detail)

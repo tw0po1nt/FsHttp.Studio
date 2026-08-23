@@ -1,7 +1,3 @@
-// Hand-rolled interop with the JavaScript language itself, as opposed to Node (`Node.fs`) or
-// the VSCode API (`Vscode.fs`). It holds the shims that are about JS values rather than about
-// any one host API, so the modules that need them share one definition instead of each keeping
-// its own `[<Emit>]` copy.
 module Js
 
 open Fable.Core

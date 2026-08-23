@@ -1,7 +1,3 @@
-// The webview entry point. It listens for the extension host's viewer updates, which are
-// `running`, `result`, `error`, and `refused`. It then mounts the renderer core's output through
-// `Webview.Dom`. For the other updates it shows plain placeholder text, error text, or a refused
-// notice.
 module Webview.Main
 
 open System
@@ -15,10 +11,7 @@ let private root: HTMLElement = document.getElementById "root"
 let private toHeaders (raw: obj) : (string * string) list =
     unbox<(string * string)[]> raw |> Array.toList
 
-// The three `bodyState` names of Decision 10, written once for this end of the viewer-update
-// wire. The host spells the same three in `Protocol`; the two projects cannot share a module,
-// because the extension does not reference the renderer core. Adding a fourth state means an
-// edit here, one in the host, and one in the companion.
+// The host and the companion spell these same three names. No module can be shared across them.
 [<Literal>]
 let private NoneState = "none"
 
@@ -58,9 +51,6 @@ let private toEnvelope (raw: obj) : ResponseEnvelope =
       RequestMs = unbox<float> (raw?requestMs: obj)
       TotalMs = unbox<float> (raw?totalMs: obj) }
 
-// The in-flight Run indicator ticks a `setInterval`. The id lives here, so that any terminal
-// message (`result` or `error`), or a second `running` for the next Run, can stop the interval
-// before it renders.
 let mutable private pendingTimer: float option = None
 
 let private clearPending () =

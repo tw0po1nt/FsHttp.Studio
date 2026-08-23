@@ -1,15 +1,6 @@
-// A small JSON parser for the renderer core, with no dependencies. `System.Text.Json` is not
-// available under Fable, and `JS.JSON` is not available under .NET. But the renderer core must
-// compile to *both*: to JS for the webview, and to .NET for the Seam-B Expecto suite. One
-// hand-rolled recursive-descent parser in plain F# serves both. It also keeps the JSON tree a
-// pure value, which the tests can assert against without a DOM.
 module Renderer.Json
 
-// No StringBuilder. Fable 5.9's bundled fable-library omits the zero-argument
-// `StringBuilder.ToString()` that its own codegen emits, so a StringBuilder here fails to bundle
-// for the webview. A run of the Fable output catches this, and the .NET suite does not. A
-// ResizeArray that accumulates chars avoids the problem and bundles cleanly. See the renderer's
-// build smoke.
+// No StringBuilder: Fable 5.9's fable-library omits the zero-argument `StringBuilder.ToString()`.
 
 /// A parsed JSON value. A number keeps its original source text (`Number`) instead of a float,
 /// so the tree renders exactly what the server sent. There is no `1e3`→`1000` change, and no
@@ -22,8 +13,6 @@ type JsonValue =
     | Array of JsonValue list
     | Object of (string * JsonValue) list
 
-// A minimal cursor over the input. Fable has no `ref`-cell performance concern here. A mutable
-// index local to `parse` keeps the recursion straightforward.
 type private Cursor = { Text: string; mutable Pos: int }
 
 let private peek (c: Cursor) : char option =

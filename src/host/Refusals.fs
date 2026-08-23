@@ -1,8 +1,4 @@
-// The shipped words for a refused block (docs/spec/0003-lens-tells-the-truth.md, Decisions 2 and
-// 10). This is the one file that owns every lens title and every toast/viewer-detail sentence, so
-// a wording change touches no process boundary: the companion ships a code alone
-// (`Companion.BlockLocator.codeToWire`), and this module is where that code becomes a sentence a
-// user reads.
+// Every user-visible sentence for a refused block lives here and nowhere else.
 module Refusals
 
 /// A refusal's shipped words: the short sentence that heads it, and the longer sentence that the

@@ -1,5 +1,3 @@
-// Hand-rolled Node.js interop. It covers only the part that this project uses, which follows
-// SageFs's proven bindings strategy.
 module Node
 
 open Fable.Core
@@ -39,8 +37,7 @@ type IFileSystemModule =
 [<Import("*", "fs")>]
 let fs: IFileSystemModule = jsNative
 
-// path.join is variadic, and Node does not accept a single array argument. This binding
-// therefore spreads the F# array at the JS call site, instead of one positional argument.
+// path.join is variadic. Node refuses a single array argument.
 [<Import("*", "path")>]
 let private pathModule: obj = jsNative
 

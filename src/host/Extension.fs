@@ -74,10 +74,7 @@ let private hasSdkAtLeast (requiredMajor: int) (listSdksOutput: string) : bool =
 
 let activate (context: ExtensionContext) =
     let item = window.createStatusBarItem (statusBarAlignmentLeft, 100.0)
-    // Hand the item over before the first status write, which is a no-op until `StatusBar` holds
-    // it. Read the active editor before the Starting write so Decision 6 does not hide the item
-    // during activation on an F# document. The write itself shows the item, so no separate `show`
-    // is needed here.
+    // `StatusBar` discards a write until it holds the item.
     StatusBar.register item
     context.subscriptions.Add(box item)
 
@@ -99,9 +96,7 @@ let activate (context: ExtensionContext) =
     let companionDll =
         Node.Path.join [| context.extensionPath; "dist"; "companion"; "Companion.dll" |]
 
-    // The SDK floor is the companion's own build target. It comes from the runtimeconfig that
-    // ships beside the DLL, which gives one source of truth. A change to the companion's TFM
-    // therefore moves both the floor and the guidance.
+    // The runtimeconfig beside the DLL is the one source of the SDK floor.
     let requiredMajor =
         Node.Path.join [| context.extensionPath; "dist"; "companion"; "Companion.runtimeconfig.json" |]
         |> companionTargetMajor
@@ -117,20 +112,12 @@ let activate (context: ExtensionContext) =
         RunCommand.setHandle handle
         companionHandle <- Some handle
 
-    // Require an SDK that the user installed, which is the Ionide and C# Dev Kit model. This
-    // replaces the earlier runtime-only acquisition, because FSI's `#r "nuget:"` restore drives
-    // `dotnet msbuild`, and a runtime does not carry msbuild. Resolve the
-    // `fshttpStudio.dotnetPath` override, or else take `"dotnet"` from PATH. Before the spawn,
-    // confirm with `--list-sdks` that it carries an SDK at or above the companion's target major.
+    // FSI's `#r "nuget:"` restore drives `dotnet msbuild`, which a runtime-only install lacks.
     let dotnetPathOverride = configuredDotnetPath ()
     let dotnetPath = dotnetPathOverride |> Option.defaultValue "dotnet"
 
     let requiredSdk = sprintf ".NET %d SDK or newer" requiredMajor
 
-    // First-run guidance when no SDK at or above the floor is reachable. We deliberately own
-    // this "SDK not found" path, which is the trade-off that Option B accepts, and we point the
-    // user at the download page and the override. When the override is set but did not resolve
-    // to an SDK, report that, instead of "none was found".
     let notifyNoSdk () =
         StatusBar.setCompanionState SdkNotFound
 
@@ -152,9 +139,6 @@ let activate (context: ExtensionContext) =
             if unbox<string> chosen = getSdkLabel then
                 commands.executeCommand ("vscode.open", uri.parse dotnetDownloadUrl) |> ignore)
 
-    // Bound the probe. Node kills a stalled `dotnet` when `timeout` expires, and the
-    // killed-child error routes to `notifyNoSdk` like any other failure. A hung host therefore
-    // cannot stall activation.
     childProcess.execFile (
         dotnetPath,
         [| "--list-sdks" |],

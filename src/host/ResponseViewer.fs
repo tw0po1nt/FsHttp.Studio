@@ -1,7 +1,3 @@
-// The response viewer (ADR-0001). It is a single webview panel, reused across Runs, and opened
-// Beside the editor. This module creates and reveals that one panel, and posts messages into
-// it. The webview side (`webview/Main.fs`) turns those messages into rendered DOM, through the
-// renderer core.
 module ResponseViewer
 
 open Fable.Core.JsInterop
@@ -20,13 +16,7 @@ let private nonce () : string =
 
 let private toUriString (u: obj) : string = unbox<string> ((u?toString ()): obj)
 
-// The renderer core commits only to semantic class names, such as `status-2xx`, `json-string`,
-// and `header-row`. By design it leaves the palette to the shell (see Renderer.fs). This *is*
-// that palette. It uses VSCode theme variables (`--vscode-*`), so the panel follows the user's
-// editor theme (light, dark, or high-contrast) for free. Literal fallbacks cover the few token
-// colors that a theme can leave undefined. This stays a plain string literal, and does not go
-// through `sprintf`, so its `%` and `{}` characters need no escape. The nonce attaches where
-// the code assembles the `<style>` tag.
+// Not a `sprintf` format string: the `%` and `{}` characters here carry no escape.
 let private responseStyles =
     """
 body {

@@ -1,17 +1,7 @@
 module Companion.BlockRunner
 
-// Runs one located `http { }` block against a fresh FCS interactive session, which is
-// ADR-0002's mechanism. Each Run gets a fresh session. The Run reaches the block where the user
-// wrote it (docs/spec/0002-reach-a-block-anywhere.md): the Setup interaction evaluates the
-// script from line 1 through the end of the target block's own expression, with every *other*
-// located block's `Blank` span excluded, and the target block itself included and named. A
-// second interaction then invokes the target by that name, applies the response-reading guard,
-// pipes to `Request.send`, and extracts the raw `Response` by reflection over the BCL
-// `HttpContent` type.
-//
-// This module must never reference FsHttp itself. The user's own `#r "nuget: FsHttp, x.y.z"`,
-// evaluated as part of their own setup text, is the only thing that resolves the package, so
-// their version pin always wins.
+// This module must never reference FsHttp. The user's own `#r "nuget:"` resolves the package,
+// so their version pin always wins.
 
 open System
 open System.Diagnostics
@@ -413,11 +403,8 @@ let private buildSetupText
     : string * ColumnShift option * Set<string> =
     let lines = source.Replace("\r\n", "\n").Split('\n')
 
-    // Hazard 1 (Decision 5): a sibling's blank span can contain the target itself -- a block
-    // nested inside another block's own expression shares its outer binding's declaration span.
-    // Blanking that span would delete the target along with the sibling. Containment is the whole
-    // test, and it needs no identity test beside it. Every route's blank span contains its own
-    // block, so this filter already drops the target itself.
+    // A sibling's blank span can contain the target: a nested block shares its outer
+    // binding's declaration span.
     let blankedSiblings =
         blocks |> List.filter (fun b -> not (containsBlock b.Blank target.Block))
 
@@ -426,8 +413,7 @@ let private buildSetupText
     let blankedNames =
         blankedSiblings |> List.collect (fun b -> b.BoundNames) |> Set.ofList
 
-    // Decisions 6 and 7: blank the target's own `private` keywords and its own type annotation,
-    // to spaces, before the R1 insertion below can move any column on the same line.
+    // Must run before the R1 insertion below moves any column on the same line.
     target.PrivateSpans |> List.iter (blankToSpaces lines)
     target.TypeAnnotation |> Option.iter (blankToSpaces lines)
 
@@ -555,10 +541,7 @@ let private blankedNameRefusal
     (blankedNames: Set<string>)
     (errors: FSharpDiagnostic[])
     : string option =
-    // A backtick-quoted binding — ``get pikachu`` — is written with its backticks at both the
-    // definition and the reference, so the diagnostic's range reads them back too, while
-    // `BoundNames` holds the name without them. Strip them before the lookup, and report the
-    // bare name: it is the name the user reads in the refusal sentence, not F# call syntax.
+    // A diagnostic range carries the backticks of ``a quoted name``. `BoundNames` does not.
     let unquote (text: string) =
         if text.Length >= 4 && text.StartsWith "``" && text.EndsWith "``" then
             text.Substring(2, text.Length - 4)
@@ -629,9 +612,6 @@ let private prop (name: string) (t: Type) : Reflection.PropertyInfo =
     | null -> failwithf "reflection: property '%s' not found on %s" name t.FullName
     | p -> p
 
-// The three `bodyState` names of Decision 10, written once. `bodyToWire` and `bodyFromWire`
-// are inverses, so a name spelled separately in each could drift by a letter and the round
-// trip would silently lose a state.
 [<Literal>]
 let private NoneState = "none"
 
@@ -695,11 +675,6 @@ let private extractResponse (requestMs: float) (v: FsiValue) : RunOutcome =
         | :? Net.Http.Headers.HttpResponseHeaders as h -> h
         | _ -> failwith "reflection: 'headers' property was not HttpResponseHeaders"
 
-    // Method, URL, and headers come from the BCL `HttpRequestMessage` on the Response. The
-    // body cannot — `HttpClient` has already disposed the content — so it is looked up from
-    // the capture table by the same message instance (docs/spec/0012-request-as-sent.md,
-    // Decisions 1-2 and 7). A null `requestMessage` is not expected on a successful Run; fail
-    // loudly rather than invent an empty request.
     let requestMessage =
         match getValue "requestMessage" with
         | null -> failwith "reflection: 'requestMessage' was null"
@@ -761,9 +736,6 @@ let private runLocated
         let setupText, shift, blankedNames = buildSetupText source located target
         let combinedSetup = setupText + "\n" + companionAddendum
 
-        // Lines 1 to setupLineCount of `combinedSetup` are native source (the target's own
-        // block among them — Decision 1). Anything the addendum reports past them has no source
-        // position (see `setupDiagnostic`).
         let setupLines = setupText.Split('\n')
         let setupLineCount = setupLines.Length
 
@@ -771,29 +743,12 @@ let private runLocated
         let args = [| "fsi.exe"; "--noninteractive"; "--nologo" |]
         use inReader = new IO.StringReader("")
 
-        // The session is collectible. The companion is long-lived and creates one session per
-        // Run, so the runtime must reclaim each session's own dynamically-compiled user-code
-        // assembly after disposal, instead of an accumulation for the life of the process.
         //
-        // NOTE: `collectible` isolates only the per-session dynamic assembly. It does not
-        // isolate the package assemblies that `#r "nuget:"` resolves, which load into the
-        // process-wide default AssemblyLoadContext and outlive the session. Two in-process Runs
-        // that pin *different* versions of the same package would collide there ("Could not
-        // load type … from assembly …"). `run` prevents that, because it never enters this path
-        // for a conflicting pin. It routes such a Run to a throwaway `--worker` child process
-        // whose ALC ends with it. The target's pins are therefore safe to load in-process here.
+        // `collectible` isolates the per-session dynamic assembly alone. The assemblies that
+        // `#r "nuget:"` resolves load into the process-wide default ALC and outlive the session.
         use session =
             FsiEvaluationSession.Create(fsiConfig, args, inReader, Console.Error, Console.Error, collectible = true)
 
-        // When the extension host supplies the script's absolute path, both evals use FSI's
-        // `scriptFileName` overload so `__SOURCE_DIRECTORY__` and `__SOURCE_FILE__` resolve to
-        // the script's own directory and name. An untitled buffer omits the path and keeps
-        // FSI's default (`input.fsx` under the process working directory).
-        //
-        // The path also re-bases FSI's own relative resolution: a `#load "sibling.fsx"` or a
-        // `#r "lib.dll"` in the Setup then resolves beside the script, rather than beside the
-        // companion. That is the same correctness the two symbols buy, and a saved script needs
-        // it for the same reason.
         let evalInteraction code =
             match scriptFileName with
             | Some path -> session.EvalInteractionNonThrowing(code, path)
@@ -804,11 +759,8 @@ let private runLocated
             | Some path -> session.EvalExpressionNonThrowing(code, path)
             | None -> session.EvalExpressionNonThrowing(code)
 
-        // The bound the invocation's `Config.update` actually applied, in ms, with 0 for "no
-        // bound". It is read after the fact, because `Option.orElse` can keep a timeout the
-        // block set for itself, and that number — not the injected one — is what the timeout
-        // message must name. A session that cannot produce the value falls back to the injected
-        // bound, which is the right answer in every case but the block's own.
+        // `Option.orElse` can keep a timeout the block set for itself, so read the applied
+        // bound after the fact rather than the injected one.
         let readAppliedTimeoutMs () =
             match evalExpression appliedTimeoutBinding with
             | Choice1Of2(Some v), _ ->
@@ -819,26 +771,11 @@ let private runLocated
 
         let setupResult, setupDiags = evalInteraction combinedSetup
 
-        // `Choice1Of2` means only that the Setup threw no exception; it does not mean the
-        // Setup has no errors. FSI can return `Choice1Of2` for a Setup that fails to parse or
-        // type-check, and discard the failure into the diagnostics array instead of the
-        // `Choice`. The array is therefore the only reliable signal, and it is read *before*
-        // the `Choice`, independent of which branch the `Choice` took. A Setup failure also
-        // stops the Run: evaluating the block against a Setup that never took effect only
-        // produces a second, misleading error. See
-        // `docs/spec/0001-report-setup-compile-error.md`, Decisions 1 and 2.
+        // FSI returns `Choice1Of2` for a Setup that fails to parse or type-check, and discards
+        // the failure into the diagnostics array. The array is the only reliable signal.
         //
-        // The target block's own text is now *inside* this interaction (Decision 1), so its
-        // diagnostics arrive here too. `splitDiagnostic` tells a fault in the user's block from
-        // a fault in the Setup around it (Decision 8), by whether the diagnostic's start
-        // position — unshifted back past the R1 insertion, if any — lands inside the block's own
-        // span.
         //
-        // Case 11c (Decision 7 of docs/spec/0003-lens-tells-the-truth.md) runs first, on the raw
-        // Setup errors and in Setup-interaction coordinates: it needs the diagnostic's own range
-        // read back against `setupLines`, which `splitDiagnostic` has already translated away by
-        // the time its own list exists. A match here refuses the whole Run, and the invocation
-        // below never runs.
+        // Must run before `splitDiagnostic`, which translates the range this check needs away.
         let setupErrors = errorDiagnostics setupDiags
 
         match blankedNameRefusal setupLines blankedNames setupErrors with
@@ -853,9 +790,6 @@ let private runLocated
                 match setupResult with
                 | Choice2Of2 ex -> RuntimeError ex.Message
                 | Choice1Of2 _ ->
-                    // Bracket the invocation alone. That is the number the status line shows as
-                    // the request time. Session creation and Setup sit outside it
-                    // (docs/spec/0004-run-path-robustness.md, Decision 7).
                     let sw = Stopwatch.StartNew()
                     let targetResult, targetDiags = evalExpression (invocationText timeoutMs target)
                     sw.Stop()
@@ -863,11 +797,6 @@ let private runLocated
 
                     match targetResult with
                     | Choice2Of2 ex ->
-                        // The invocation is the companion's own generated text, with no user-source
-                        // position of its own, so every diagnostic here gets the Setup treatment,
-                        // anchored at the top of the script (`realLineCount = 0` forces the anchor
-                        // on every line). `targetDiagnostic` is gone: there is no longer a separate
-                        // block interaction to map a native position back from.
                         match
                             errorDiagnostics targetDiags
                             |> Array.map (setupDiagnostic 0 None)
@@ -896,15 +825,6 @@ let runInProcessDirect
     : RunOutcome =
     runLocated source (locateBlocks source).Blocks blockIndex scriptFileName timeoutMs
 
-// ---------------------------------------------------------------------------------------------
-// Multi-version isolation. The assemblies that `#r "nuget:"` resolves load into the
-// process-wide default AssemblyLoadContext, and they outlive each per-Run FSI session. A Run
-// that pins a version of a package collides when an earlier in-process Run already loaded that
-// package at a *different* version. The fix keeps the warm in-process fast path
-// (`runInProcessDirect`). Only when a pin conflicts does it delegate that one Run to a
-// short-lived `--worker` child process, which is a fresh process with a fresh ALC that ends
-// with it. `run` is the router, and everything below serves it.
-// ---------------------------------------------------------------------------------------------
 
 /// Serializes a `RunOutcome` to the same tagged wire shape that the host-facing `run`, `ok`,
 /// `compileError`, and `runtimeError` envelope uses. The `--worker` child emits its outcome
@@ -913,8 +833,6 @@ let runInProcessDirect
 let outcomeToWire (outcome: RunOutcome) : obj =
     match outcome with
     | Ok(request, response) ->
-        // Prefixed: the response carries a `bodyBase64` of its own, and one identifier must
-        // not stand for two different bodies in the one expression below.
         let requestBodyState, requestBodyBase64, requestBodyReason = bodyToWire request.Body
 
         {| tag = "ok"
@@ -1053,9 +971,7 @@ let pinConflicts (loaded: LoadedVersion option) (pin: string option) : bool =
     | Some(Pinned _), None
     | Some Versionless, Some _ -> true
 
-// The package ids resolved into this process's default ALC so far, as id -> what loaded it.
-// Nuget ids are case-insensitive. A lock guards the map. The companion's request loop is serial
-// today, but the state is process-global and cheap to make safe for a future concurrent caller.
+// NuGet ids are case-insensitive.
 let private loadLock = obj ()
 
 let private loadedVersions =
@@ -1104,8 +1020,6 @@ let private routeAndReserve (pins: (string * string option) list) : RunRoute =
         if conflicts then
             Worker
         else
-            // The map records a version-less `#r` as `Versionless`, and does *not* skip it, so
-            // it still takes part in a later Run's conflict detection.
             for pkg, ver in pins do
                 loadedVersions.[pkg] <-
                     match ver with
@@ -1163,8 +1077,7 @@ let runInWorker
         | proc ->
             use proc = proc
 
-            // Best-effort teardown. A worker in the middle of a restore can spawn child
-            // `dotnet` processes, so take the whole tree. Never throw out of a kill, because
+            // A worker mid-restore can spawn child `dotnet` processes. A kill must never throw:
             // the process can be gone already.
             let kill () =
                 try
@@ -1173,10 +1086,6 @@ let runInWorker
                 with _ ->
                     ()
 
-            // One shape, always. `Envelope.getOptionalStringProp` reads the empty string as
-            // "no value", so the absent case needs no second record to construct here.
-            // `timeoutMs` on the payload is the request bound. A missing field reads as 0
-            // through `getIntProp`, which means do not inject.
             let request: obj =
                 {| source = source
                    blockIndex = blockIndex
@@ -1186,12 +1095,7 @@ let runInWorker
             writeFrame proc.StandardInput.BaseStream (JsonSerializer.SerializeToUtf8Bytes request)
             proc.StandardInput.Close()
 
-            // The frame read blocks with no native timeout, so cap it on a worker thread. A
-            // *crashed* child closes stdout without a frame -> None -> a clean runtimeError. A
-            // *hung* child produces nothing at all, so the read never returns. `Wait timeoutMs`
-            // caps that case, and we Kill() on expiry instead of a block here forever. The kill
-            // closes the pipe, so the read task then completes as None and releases its thread.
-            // The child's stderr (FCS and user output) inherits ours, so no drain is necessary.
+            // The frame read has no native timeout, and a hung child never returns one.
             let readFrame = Task.Run(fun () -> tryReadFrame proc.StandardOutput.BaseStream)
 
             if not (readFrame.Wait workerWaitMs) then
@@ -1205,9 +1109,7 @@ let runInWorker
                         wireToOutcome doc.RootElement
                     | None -> RuntimeError "worker: evaluation process produced no response"
 
-                // The frame is in hand, so the child must now exit on its own. Bound that wait
-                // too, because a worker that emitted its frame and then stalled must not block
-                // `WaitForExit`. Kill() the child if it stays past the bound.
+                // A worker that emitted its frame can still stall, so `WaitForExit` needs a bound.
                 if not (proc.WaitForExit workerWaitMs) then
                     kill ()
 

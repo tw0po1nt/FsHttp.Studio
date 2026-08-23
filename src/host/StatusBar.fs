@@ -1,10 +1,3 @@
-// The status-bar item, and the two pieces of state it reports: the companion's lifecycle and
-// what the active document holds (docs/spec/0014-explain-missing-lenses.md, Decisions 5-6).
-//
-// It lives apart from `Extension.fs` because it changes for its own reasons — a new row in
-// `Protocol.statusText`, a new tell about the active document — while activation changes for the
-// SDK probe, the commands, and the provider registration. `Extension.activate` creates the item,
-// hands it here, and wires the two callbacks; nothing else in the extension touches the item.
 module StatusBar
 
 open Vscode
