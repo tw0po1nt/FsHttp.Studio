@@ -378,7 +378,7 @@ envelope, and `refusal` is a property of a range. Both follow #97's rule for an 
 Decision 7 assumes #97's refused lens. Before #97 lands, the count is simply the count of located
 blocks, which is the same number.
 
-### Provenance
+### Sources
 
 The decisions come from earlier planning work on this feature, in a session that read the shipping source and ran a
 probe against FCS.

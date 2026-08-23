@@ -21,6 +21,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - run: ./scripts/check-banned-words.sh
+
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json

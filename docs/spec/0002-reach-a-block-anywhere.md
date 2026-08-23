@@ -562,7 +562,7 @@ statement-level blanking gives a clean *"is not defined"* message.
 - **`private` is a thirteenth position that the matrix does not have**, and it is supported.
 - The twelve cases generalized to 22 positions with **no new rules**.
 
-### Provenance
+### Sources
 
 The decisions come from earlier planning work on this feature. Four tickets supplied them:
 

@@ -513,7 +513,7 @@ versions named at each point.
 - The message the transformer sees is reference-identical to `Response.requestMessage`, on 13.2.0
   and 15.0.3, and the transformer fires exactly once per request.
 
-### Provenance
+### Sources
 
 The feature and its two halves come from an earlier feature-cap ticket, which chose it
 as feature 1 of 3. The status line's blank URL for a computed URL was found there by source

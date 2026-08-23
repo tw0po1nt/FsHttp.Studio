@@ -251,7 +251,7 @@ Setup. A block that needs nothing from the Setup still succeeds. The defect beco
 when the block needs something that the Setup supplies. The defect then looks like a fault in the
 block.
 
-### Provenance
+### Sources
 
 We found this defect during research on #90 §1. The measurements in Decisions 1, 4 and 7, and in
 the correction above, come from four probes. We ran the probes for this spec against the FCS

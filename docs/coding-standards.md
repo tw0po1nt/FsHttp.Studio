@@ -29,7 +29,7 @@ Process-global mutable state under a lock, such as `loadedVersions`, must take t
 
 ## 5. Do not cite issue or PR numbers in source
 
-Source is not the issue tracker. Comments, test names, and identifiers must not carry bare issue or PR numbers, such as `#38`, `issue #16`, or `ticket #17`. The tracker renumbers its items, and the number tells a reader of the code nothing. Provenance belongs in the commit message and the PR, which is where `git blame` sends a reader who wants it. A test name states the behavior under test, not the ticket that asked for it. A comment that rule 6 permits states the constraint itself, and a ticket number is not a constraint.
+Source is not the issue tracker. Comments, test names, and identifiers must not carry bare issue or PR numbers, such as `#38`, `issue #16`, or `ticket #17`. The tracker renumbers its items, and the number tells a reader of the code nothing. The commit message and the pull request hold that history, and `git blame` sends a reader there. A test name states the behavior under test, not the ticket that asked for it. A comment that rule 6 permits states the constraint itself, and a ticket number is not a constraint.
 
 A **`TODO`** is the one exception, because it points at work that is not yet done. A `TODO` carries the **full URL**, never a bare number, so it stays one click away and survives a move of the tracker:
 

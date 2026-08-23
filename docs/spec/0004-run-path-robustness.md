@@ -420,7 +420,7 @@ local `HttpListener`:
 - FsHttp's `Response` record carries no duration field, so there is nothing to read instead of
   bracketing.
 
-### Provenance
+### Sources
 
 The item list, and the rule that these three ride free rather than spending a feature slot, come from
 an earlier feature-cap ticket. The 30 s default, the decision to keep the invocation
