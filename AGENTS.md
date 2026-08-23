@@ -1,5 +1,13 @@
 # FsHttp.Studio
 
+A VSCode extension that runs a single FsHttp request from an F# script and renders its response richly.
+
+## Build and verify
+
+Bootstrap once with `dotnet tool restore && npm ci`.
+
+**Verify every `.fs` change with `dotnet build FsHttp.Studio.slnx`.** Fable alone is laxer than the F# compiler and lets errors through that CI then catches. See `docs/agents/build-and-verify.md` for the full command set.
+
 ## Agent skills
 
 ### Issue tracker
@@ -22,9 +30,17 @@ One context. `CONTEXT.md` and `docs/adr/` are at the repo root. See `docs/agents
 
 F# house rules that go beyond the rules Fantomas and `.editorconfig` enforce. See `docs/coding-standards.md`.
 
+### UI screenshots
+
+A pull request that changes what the user sees must carry a screenshot of the running editor. See `docs/agents/ui-screenshots.md`.
+
+### Release gate
+
+The UI suite is the release gate. What it covers, and the gaps it does not, live in `docs/release-gate.md`.
+
 ### Technical prose
 
-Running the `simplified-technical-english` skill on every piece of prose you write is mandatory, not optional. See `docs/agents/technical-prose.md`.
+Running the `simplified-technical-english` skill on every piece of prose you write is mandatory, not optional. All prose: docs, issues, pull requests, commit messages, and code comments. See `docs/agents/technical-prose.md`.
 
 ## Terminology
 

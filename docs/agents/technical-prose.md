@@ -1,14 +1,19 @@
 # Technical prose: the STE skill is mandatory
 
 An agent must run the `simplified-technical-english` skill on every piece of prose it writes in
-this repo. This rule has no exception. It applies to:
+this repo. This rule has no exception, and **all prose** means all prose:
 
 - Issue titles and bodies
 - Pull request titles and descriptions
 - Comments on an issue or a pull request
 - ADRs (`docs/adr/`)
 - Specs (`docs/spec/`)
+- Agent-facing docs (`docs/agents/`) and every other Markdown file in the repo
 - Commit messages
+- Code comments, including the one-line comments that rule 6 of `docs/coding-standards.md` permits
+
+A short piece of prose is still prose. A one-line code comment and a two-sentence issue body both
+carry the rule.
 
 Run the skill before you create or post the text, not after. A draft that you revise later is a
 draft that a reviewer may already have read.
@@ -22,8 +27,9 @@ as optional.
 ## The hook is a backstop, not the mechanism
 
 A `PreToolUse` hook (`.claude/settings.json`) fires before a `gh issue`/`gh pr` create, edit, or
-comment command, and before a `Write` or `Edit` on `docs/adr/**/*.md` or `docs/spec/**/*.md`. It
-injects a reminder to run the STE skill first. The hook cannot verify that the skill ran, and it
+comment command, and before a `Write` or `Edit` on any Markdown file in the repo. It injects a
+reminder to run the STE skill first. The hook cannot see a code comment inside a `.fs` change, so
+the rule alone governs a source comment. The hook cannot verify that the skill ran, and it
 cannot verify the quality of the text. It only guarantees that the reminder appears at the moment
 the risk is highest: the moment before the text becomes visible to a human reader.
 

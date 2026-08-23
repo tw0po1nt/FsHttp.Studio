@@ -15,13 +15,7 @@ Infer the repo from `git remote -v`. `gh` does this automatically inside a clone
 
 ## Pull requests as a triage surface
 
-**PRs as a request surface: no.** _(Set this to `yes` if this repo treats external PRs as feature requests. `/triage` reads this flag.)_
-
-When this flag is `yes`, PRs use the same labels and states as issues, through the `gh pr` equivalents:
-
-- **Read a PR**: `gh pr view <number> --comments`, and `gh pr diff <number>` for the diff.
-- **List external PRs for triage**: `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments`. Then keep only an `authorAssociation` of `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, or `NONE`. Drop `OWNER`, `MEMBER`, and `COLLABORATOR`.
-- **Comment, label, or close**: `gh pr comment`, `gh pr edit --add-label` or `--remove-label`, and `gh pr close`.
+**PRs as a request surface: no.** `/triage` reads this flag.
 
 GitHub shares one number space across issues and PRs, so a bare `#42` can be either one. Resolve it with `gh pr view 42`, and fall back to `gh issue view 42`.
 
