@@ -35,6 +35,7 @@ docs/**
 .idea/**
 scripts/**
 AGENTS.md
+CLAUDE.md
 CONTEXT.md
 skills-lock.json
 
