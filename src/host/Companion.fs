@@ -1,10 +1,5 @@
-// Spawns the companion process and speaks its request and response protocol. That protocol is
-// the walking skeleton's `hello` and `ready` handshake, plus `locate` and `run` on top of it.
 //
-// The companion's own I/O loop (`Program.fs`) reads one frame, responds, and then reads the
-// next frame. Responses therefore always arrive in the order of their requests. One FIFO queue
-// of pending resolvers, dequeued on every frame that is not `ready`, is enough to pair each
-// response with the request that caused it. No request id needs to cross the wire.
+// The companion answers one frame at a time, so responses arrive in request order.
 module Companion
 
 open Fable.Core
@@ -69,8 +64,7 @@ let private decodeRunEnvelope (json: obj) : RunEnvelope =
         |> CompileErrorEnvelope
     | "runtimeError" -> RuntimeErrorEnvelope(unbox<string> (json?message: obj))
     | "refused" ->
-        // The companion omits `name` for every code it produces today, so a missing property
-        // decodes to `None` rather than to `undefined` (the same shape as `refusal` above).
+        // The companion omits `name` for every code it produces today.
         RefusedEnvelope(unbox<string> (json?code: obj), tryUnbox<string> (json?name: obj))
     | _ -> ProtocolErrorEnvelope(unbox<string> (json?message: obj))
 
@@ -174,8 +168,7 @@ let locate (handle: Handle) (source: string) : Async<LocateResponse> =
             { Resolve =
                 fun json ->
                     let ranges: obj[] = unbox (json?ranges: obj)
-                    // Interop lookup only. `parseFailedOrDefault` decides the flag from what this
-                    // found, including the absent case (Decision 3).
+
                     resolve
                         { Ranges = ranges |> Array.map toBlockRange |> Array.toList
                           ParseFailed = parseFailedOrDefault (tryUnbox<bool> (json?parseFailed: obj)) }
@@ -203,8 +196,7 @@ let run
     (timeoutMs: int)
     : Async<RunResult> =
     Async.FromContinuations(fun (resolve, _reject, _cancel) ->
-        // One shape, always. The companion reads the empty string as "no value", so the absent
-        // case needs no second payload to construct here.
+        // The companion reads the empty string as "no value".
         let payload: obj =
             createObj
                 [ "tag" ==> "run"

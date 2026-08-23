@@ -1,6 +1,3 @@
-// Hand-rolled VSCode API interop. It covers only the parts that this project uses: the status
-// bar that the walking skeleton needed, plus the CodeLens, command, and webview-panel parts
-// that the CodeLens → Run → rendered response flow adds.
 module Vscode
 
 open System
@@ -19,8 +16,6 @@ type ExtensionContext =
 
 type Disposable =
     abstract dispose: unit -> unit
-
-// --- documents / CodeLens ------------------------------------------------------------------
 
 /// vscode.Uri, narrowed to the one part this project reads. `scheme` is `"file"` for a script
 /// that lives on the local filesystem, and something else (`untitled`, `vscode-vfs`, `git`, a
@@ -79,8 +74,6 @@ type ICommands =
 [<Import("commands", "vscode")>]
 let commands: ICommands = jsNative
 
-// --- workspace configuration -----------------------------------------------------------------
-
 /// vscode.WorkspaceConfiguration. `get` reads the `fshttpStudio.dotnetPath` override as a
 /// string. The setting declares a `""` default, so this reads back as a string, and the string
 /// is empty when the user has not set the override. The caller treats a blank string as "not
@@ -96,8 +89,6 @@ type IWorkspace =
 
 [<Import("workspace", "vscode")>]
 let workspace: IWorkspace = jsNative
-
-// --- webview panel ---------------------------------------------------------------------------
 
 type Webview =
     abstract html: string with get, set

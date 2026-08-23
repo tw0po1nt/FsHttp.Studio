@@ -1,16 +1,4 @@
-// A build-time runtime smoke for the renderer core's *JavaScript* output. The Seam-B Expecto
-// suite proves the render logic on .NET. This module proves that the same logic bundles and runs
-// after Fable compiles it to JS, which is a gap that the .NET suite structurally cannot see.
-//
-// It exists because that gap caused a real failure. Fable 5.9's bundled fable-library omits the
-// zero-argument `StringBuilder.ToString()` that its own codegen emits. A StringBuilder in the
-// core therefore failed to bundle for the webview, while every .NET test stayed green.
-//
-// Fable compiles `run`, esbuild bundles it, and CI executes it under node (see ../smoke.mjs). It
-// throws on the first mismatch, which gives a non-zero exit.
-//
-// This module has no top-level side effect. `smoke.mjs` imports `run` and calls it. A reference
-// to this module, or a webview project pulled into a .NET build, therefore never runs the checks.
+// This module must keep no top-level side effect. `smoke.mjs` imports `run` and calls it.
 module Webview.Smoke
 
 open System
@@ -91,9 +79,6 @@ let run () : unit =
          |> List.exists (fun n -> (innerText n).Contains "404")
          && not (List.isEmpty (byClass "response-json" notFound)))
 
-    // One JSON payload exercises decodeText, looksBinary, and the string path together under
-    // Fable. The .NET Expecto suite cannot see a StringBuilder-shaped hole in the JS bundle
-    // (docs/spec/0013-copy-buttons.md, Testing Decisions: The JavaScript runtime smoke).
     let copyJson = """{"a":1,"b":[true,null,"x"]}"""
 
     check

@@ -1,9 +1,3 @@
-// The browser-only half of Seam B. It materializes the renderer core's pure `Node` tree into
-// real DOM. The shell-agnostic core decides and tests the *shape*. This module only walks the
-// tree, creates elements, sets attributes, and appends text. It also owns the one delegated
-// click listener that drives the copy buttons: the payload stays in `copyText`, and this module
-// only writes it to the clipboard and flashes the button label
-// (docs/spec/0013-copy-buttons.md, Decisions 8 and 10).
 module Webview.Dom
 
 open Fable.Core

@@ -1,15 +1,5 @@
 module Companion.BlockLocator
 
-// Finds `http { }` blocks in .fsx source with FCS's untyped-AST parse (ADR-0003, ADR-0004).
-// AST-based location avoids the failure modes of a textual brace-counting scan. It never
-// matches `http { }` text inside a comment or a string, and an unbalanced brace inside a
-// string literal does not affect a range that comes directly from the parse tree. That same
-// brace desynchronizes a brace counter.
-//
-// This module also classifies each block's Route: how a Run would reach it, from the untyped
-// syntax tree alone (docs/spec/0002-reach-a-block-anywhere.md, Decision 2). Classification
-// needs no type-check, no project load, and no NuGet resolution, so it is decidable from a
-// bare parse.
 
 open FSharp.Compiler.CodeAnalysis
 open FSharp.Compiler.Syntax
@@ -264,8 +254,7 @@ let private patternAccess (headPat: SynPat) =
 /// blank of that range alone would leave a bare `:` with nothing after it, which does not parse.
 /// Starting from the head pattern's own end keeps the bound name untouched.
 let private typeAnnotationSpan (headPat: SynPat) (returnInfo: SynBindingReturnInfo option) : range option =
-    // `range` is a struct, so `headPat.Range.End` reads a field of an implicit copy and the
-    // compiler rejects it with FS0052. Bind the range first. Do not inline this.
+    // `range` is a struct. An inline `headPat.Range.End` hits FS0052. Bind it first.
     let headPatRange = headPat.Range
 
     returnInfo
@@ -314,10 +303,7 @@ type private Classification =
 /// The whole routing decision, from the untyped path alone (Decision 2). `path` is
 /// innermost-first, as `ParsedInput.fold` builds it.
 let private classify (blockStart: pos) (path: SyntaxNode list) : Classification =
-    // Consume the ancestors the Setup boundary (Decision 1) will drop. A tuple is deliberately
-    // *not* consumed: for its first element the range coincides with the block, and for its
-    // second it does not, so letting that asymmetry through would route the two halves of
-    // `let a, b = http { }, http { }` differently. One shape gets one verdict.
+    // A tuple must stay unconsumed here, or the two halves of `let a, b = ...` route differently.
     let rec skipLeading p =
         match p with
         | SyntaxNode.SynExpr(SynExpr.Tuple _) :: _ -> p
@@ -326,13 +312,8 @@ let private classify (blockStart: pos) (path: SyntaxNode list) : Classification 
 
     let afterBoundary = skipLeading path
 
-    // Look for an R2 binding through the wrappers R2 alone tolerates. Every other position
-    // classifies from `afterBoundary`, so a parenthesis stays opaque everywhere but here.
     match skipValueWrappers afterBoundary with
     | SyntaxNode.SynBinding(SynBinding(headPat = headPat; accessibility = access; returnInfo = returnInfo)) :: parents ->
-        // Reaching a binding through `skipValueWrappers` is what makes the block the binding's
-        // value. What is left to decide is whether the binding is module-level: an inner `let`
-        // or a member is out of reach from a later FSI interaction.
         let access = if access.IsSome then access else patternAccess headPat
 
         let route =
@@ -341,16 +322,11 @@ let private classify (blockStart: pos) (path: SyntaxNode list) : Classification 
                 match derivedName headPat with
                 | Invocable invocation -> NamedByTheBinding invocation
                 | TakesArguments -> Refused NeedsArguments
-                // A wildcard or a destructuring pattern binds no single name, so there is nothing
-                // to invoke and no value the invocation could name.
                 | NoName -> Refused NoNameToCall
             | SyntaxNode.SynMemberDefn _ :: _
             | SyntaxNode.SynTypeDefn _ :: _ -> Refused ClassMember
             | _ -> Refused InnerBinding
 
-        // Decision 7 blanks the annotation on the R2 route alone, so the route decides whether
-        // the span exists. A refused binding keeps its annotation, because the Setup boundary
-        // never truncates a value that it does not run.
         let typeAnnotation =
             match route with
             | NamedByTheBinding _ -> typeAnnotationSpan headPat returnInfo
@@ -372,11 +348,7 @@ let private classify (blockStart: pos) (path: SyntaxNode list) : Classification 
             | SyntaxNode.SynExpr(SynExpr.While _) :: _ -> Refused LoopBody
             | SyntaxNode.SynExpr(SynExpr.IfThenElse _) :: _ -> Refused IfBranch
 
-            // A `with` case is a `SynMatchClause`, the same node a `match` expression's own
-            // clauses use, so the clause alone cannot tell the two apart. Its *parent* can. This
-            // pair has to precede the bare `SynMatchClause` below, or a handler would answer
-            // "inside a match clause" for code that contains no `match` — the shape-grained title
-            // naming the wrong shape, which is the failure User Story 2 exists to prevent.
+            // This pair must precede the bare `SynMatchClause` below.
             | SyntaxNode.SynMatchClause _ :: SyntaxNode.SynExpr(SynExpr.TryWith _) :: _ -> Refused ExceptionHandler
 
             | SyntaxNode.SynMatchClause _ :: _
@@ -484,8 +456,7 @@ let private contains (outer: BlockRange) (inner: BlockRange) =
 /// specific branch already refused keeps that verdict, even when it also happens to sit inside
 /// another block.
 let private markInsideAnotherRequest (blocks: LocatedBlock list) : LocatedBlock list =
-    // `other` ranges over every located block, this one included, so the identity comparison is
-    // what makes the containment strict: a block always sits within its own range.
+    // A block always sits within its own range, so the identity test is what makes this strict.
     let sitsInsideAnother (block: LocatedBlock) =
         blocks
         |> List.exists (fun other -> not (obj.ReferenceEquals(other, block)) && contains other.Block block.Block)

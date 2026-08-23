@@ -1,8 +1,5 @@
 module Companion.Program
 
-// The companion's entry point and I/O loop. It is the two-process framed-envelope transport,
-// ported from prototype/dotnet-to-js-seam. It wires block location and block evaluation
-// (ADR-0002's FCS session) through RequestHandler.respond.
 
 open System
 open System.Text.Json
@@ -21,7 +18,6 @@ let private openFrameChannel () =
 
     rawStdin, emit
 
-// The long-lived companion. It reads a framed request and responds, until the host closes stdin.
 let private runCompanion () =
     let rawStdin, emit = openFrameChannel ()
 
@@ -38,11 +34,7 @@ let private runCompanion () =
 
     loop ()
 
-// The `--worker` child. It serves exactly one `{ source, blockIndex, scriptFileName?, timeoutMs }`
-// request against this process's own fresh ALC, and then exits with its `#r "nuget:"`
-// assemblies. It bypasses `run`'s conflict routing, because a fresh process holds nothing that
-// can conflict. It evaluates in-process directly, so a worker can never spawn another worker
-// recursively. `timeoutMs` is the request bound; absent or `0` means do not inject.
+// A worker evaluates in-process, so it can never spawn a second worker.
 let private runWorker () =
     let rawStdin, emit = openFrameChannel ()
 

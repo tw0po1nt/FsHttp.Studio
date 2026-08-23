@@ -29,7 +29,7 @@ Process-global mutable state under a lock, such as `loadedVersions`, must take t
 
 ## 5. Do not cite issue or PR numbers in source
 
-Source is not the issue tracker. Comments, test names, and identifiers must not carry bare issue or PR numbers, such as `#38`, `issue #16`, or `ticket #17`. The tracker renumbers its items, and the number tells a reader of the code nothing. State the *reason* that the code exists, not the ticket that asked for it. Write "fresh session per Run", not "issue #7's fresh-session resolution". Provenance belongs in the commit message and the PR, which is where `git blame` sends a reader who wants it.
+Source is not the issue tracker. Comments, test names, and identifiers must not carry bare issue or PR numbers, such as `#38`, `issue #16`, or `ticket #17`. The tracker renumbers its items, and the number tells a reader of the code nothing. The commit message and the pull request hold that history, and `git blame` sends a reader there. A test name states the behavior under test, not the ticket that asked for it. A comment that rule 6 permits states the constraint itself, and a ticket number is not a constraint.
 
 A **`TODO`** is the one exception, because it points at work that is not yet done. A `TODO` carries the **full URL**, never a bare number, so it stays one click away and survives a move of the tracker:
 
@@ -38,6 +38,19 @@ A **`TODO`** is the one exception, because it points at work that is not yet don
 ```
 
 In-repo references are correct and encouraged, such as `ADR-0002`, a file path, or another module. They live and move with the code.
+
+## 6. Comments state what the code cannot
+
+Do not write comments that describe what the code does or justify your implementation choices. If you want to explain a decision you made, say it in your reply to me — never in the source file. The only comments allowed are ones a competent reader could not derive from the code itself: an external constraint, a non-obvious invariant, or a workaround for a bug elsewhere. One line, and state the fact, not the rationale for your approach. When editing existing code, do not add comments that weren't there unless the previous statement applies.
+
+The vendored `simplified-technical-english` skill carries a "Code comments and software text"
+section that says a comment explains why the code exists. **This rule wins.** An agent must not
+edit the vendored skill file. Apply STE to the wording of a comment that this rule permits, and
+ignore the vendored guidance on whether to write the comment at all.
+
+An XML doc comment (`///`) is exempt. It is the documented API surface, it feeds IntelliSense for
+a caller who never opens the file, and it is a different genre from inline commentary. This rule
+governs `//` alone.
 
 ---
 

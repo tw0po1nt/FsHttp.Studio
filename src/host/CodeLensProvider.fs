@@ -1,17 +1,3 @@
-// The `▶ Run request` CodeLens (ADR-0003). It shows one lens for each block that the companion
-// locates in a `.fsx` script, and no lens at all on a `.fs` file.
-//
-// When the companion's parse fails and the locator finds no block, it paints one informational
-// lens at line 1 instead: `⊘ No requests found: this script has a syntax error`
-// (docs/spec/0014-explain-missing-lenses.md, Decisions 1-2). Partial loss and damage below the
-// blocks keep their Run lenses; only total loss with a failed parse takes the line-1 lens.
-//
-// A companion that is gone changes what the lenses say, and does not clear them. Every block the
-// last locate found keeps a lens reading `⊘ Cannot run: the companion stopped`. That is ADR-0003's
-// "no companion, no *runnable* lenses". A lens that still promised a Run would promise what
-// nothing can keep. A lens that vanished would read as a failure to find the block
-// (docs/spec/0003-lens-tells-the-truth.md, user story 4). The status-bar item reports the same
-// state, so neither surface contradicts the other.
 module CodeLensProvider
 
 open Fable.Core
@@ -154,14 +140,8 @@ let provider: CodeLensProvider =
                             let! located = Companion.locate h (document.getText ())
                             let ranges = located.Ranges
 
-                            // Re-read `ready` after the await. A companion that exits with this
-                            // locate in flight abandons it to an empty list
-                            // (docs/spec/0004-run-path-robustness.md, Decision 6), and that empty
-                            // list is not a reading of the script. Storing it would erase the
-                            // ranges the stopped lenses stand on, and returning it would paint
-                            // the vanishing that this provider no longer does. The exit handler
-                            // sets the state before it flushes the queue, so `ready` is already
-                            // false here when that happens.
+                            // A companion that exits mid-locate abandons this call to an empty
+                            // list, which is not a reading of the script.
                             if ready then
                                 lastLocated.[document.fileName] <- ranges
 

@@ -1,0 +1,9 @@
+# One word for each line. A blank line is skipped, and a line that starts with
+# `#` is a note. The check is case-insensitive and matches whole words only.
+# scripts/check-banned-words.sh reads this file. AGENTS.md states the rule.
+
+provenance
+leverage
+utilize
+utilise
+PRD

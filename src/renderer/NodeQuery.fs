@@ -1,9 +1,3 @@
-// Black-box helpers that assert the *shape* of a rendered `Node` tree. They find elements by tag
-// or by class, read attributes, and flatten text. This is the vocabulary that checks claims such
-// as "the JSON path dispatched to a tree", or "the image is an <img> with a data: src", without
-// a reach into the renderer's internals. It lives beside the core, and not in a test project, so
-// both consumers share one copy: the .NET Seam-B Expecto suite, and the Fable JS runtime smoke.
-// Only those two refer to it, so the shipped webview bundle tree-shakes it away.
 module Renderer.NodeQuery
 
 open Renderer.Core

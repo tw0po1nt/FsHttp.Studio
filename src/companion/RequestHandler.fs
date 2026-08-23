@@ -1,7 +1,5 @@
 module Companion.RequestHandler
 
-// Pure request -> response dispatch. It is separate from Program.fs's I/O loop, so a test
-// (Seam A) can drive it directly and does not have to spawn the compiled process.
 
 open System.Text.Json
 open Companion.Envelope
@@ -27,8 +25,7 @@ let private toBlockEntry (block: LocatedBlock) : obj =
     | Some refusal -> {| coords with refusal = refusal |} :> obj
     | None -> coords :> obj
 
-// `BlockRunner.outcomeToWire` serializes the outcome, so the host response here and the
-// `--worker` child's response emit one identical shape and cannot drift apart.
+// This response and the `--worker` child's response must stay one identical shape.
 let private runResponse (source: string) (blockIndex: int) (scriptFileName: string option) (timeoutMs: int) : obj =
     outcomeToWire (run source blockIndex scriptFileName timeoutMs)
 
@@ -52,9 +49,7 @@ let respond (request: JsonDocument) : obj =
         let source = root |> getStringProp "source"
         let blockIndex = root |> getIntProp "blockIndex"
         let scriptFileName = root |> getOptionalStringProp "scriptFileName"
-        // Absent `timeoutMs` reads as 0, which means do not inject a bound. That keeps an older
-        // host talking to a newer companion honest (docs/spec/0004-run-path-robustness.md,
-        // Decision 4).
+        // An absent `timeoutMs` reads as 0, which means inject no bound.
         let timeoutMs = root |> getIntProp "timeoutMs"
         runResponse source blockIndex scriptFileName timeoutMs
     | other ->

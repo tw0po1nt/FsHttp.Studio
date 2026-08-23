@@ -42,12 +42,7 @@ let tryReadFrame (input: Stream) : byte[] option =
         else
             Some payload
 
-// ---------------------------------------------------------------------------------------------
-// Shared `JsonElement` readers for the envelope wire. Both ends of the channel parse the same
-// shapes: the host-facing request loop, and the `--worker` child. The readers therefore live
-// here instead of one copy per module. Two such copies once disagreed on the missing-value
-// default. A missing or JSON-null string reads as "", and a missing int reads as 0.
-// ---------------------------------------------------------------------------------------------
+// A missing or JSON-null string reads as "". A missing int reads as 0.
 
 /// The string value of a JSON element. Returns "" when the element is JSON null.
 let jsonString (e: JsonElement) : string =

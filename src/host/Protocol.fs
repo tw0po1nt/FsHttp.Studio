@@ -1,7 +1,3 @@
-// Pure wire-protocol types and helpers, shared by the companion client (`Companion.fs`) and the
-// CodeLens and Run wiring. This module carries no Fable or VSCode interop, so a plain .NET test
-// suite (`tests/host.Tests`) can drive the string and coordinate logic below directly. The
-// renderer core and the companion already use the same seam isolation.
 module Protocol
 
 /// The companion process's lifecycle, as the status bar and CodeLens gate see it. Lives here
@@ -54,8 +50,7 @@ let statusText (state: State) (view: ScriptView) : string option =
     | Ready, Script(1, false) -> Some "1 request"
     | Ready, Script(n, false) when n > 1 -> Some(sprintf "%d requests" n)
     | Ready, Script(n, true) when n >= 1 -> Some(sprintf "%d requests — a syntax error can hide others" n)
-    // A count at or below zero reads as "none found". `int` admits a negative the wire never
-    // sends; folding it in here keeps `None` meaning only "hide the item" (Decision 6).
+    // The wire never sends a count below zero, but `int` admits one.
     | Ready, Script(_, false) -> Some "no requests found"
     | Ready, Script(_, true) -> Some "no requests found — syntax error"
 
@@ -202,11 +197,7 @@ let private tryFromBase64 (encoded: string) : byte[] option =
     with _ ->
         None
 
-// The three `bodyState` names of Decision 10, written once for the host. `capturedBodyFromWire`
-// reads them off the companion's envelope and `RunCommand` writes the same three onto the viewer
-// update, so a name spelled separately at each end could drift by a letter and a state would be
-// lost between the two. The companion and the webview each spell them once too — neither shares
-// an assembly with this one.
+// The companion and the webview spell these same three names, and share no assembly with this module.
 [<Literal>]
 let NoneState = "none"
 

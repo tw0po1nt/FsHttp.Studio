@@ -1,14 +1,7 @@
 module Companion.RequestCapture
 
-// Captures a request body at send time, before `HttpClient` disposes the content. The body is
-// the one part of the sent request that `Response.requestMessage` cannot yield after the send
-// (docs/spec/0012-request-as-sent.md, Decisions 2 and 4-8). Method, URL, and headers come from
-// `requestMessage` itself; this module owns the body alone.
-//
-// A transformer installed on `Config.httpMessageTransformers` calls `captureRequest` while the
-// content is still alive. The capture is keyed by the same `HttpRequestMessage` instance that
-// later appears on `Response.requestMessage`, so correlation is reference identity rather than
-// "last capture wins".
+// `HttpClient` disposes the content after the send, so `Response.requestMessage` cannot yield
+// the body. The capture is keyed by `HttpRequestMessage` reference identity.
 
 open System
 open System.Net.Http
@@ -95,8 +88,7 @@ let private captureContent (c: HttpContent) : CapturedBody =
     else
         match c.Headers.ContentLength |> Option.ofNullable with
         | None ->
-            // Top-level length is unknown. Do not buffer: the cap check needs a known size
-            // before any read (Decision 6).
+            // The cap check needs a known size before any read.
             NotCaptured unknownLengthReason
         | Some len when len > maxCaptureBytes -> NotCaptured(tooLargeReason len)
         | Some _ ->

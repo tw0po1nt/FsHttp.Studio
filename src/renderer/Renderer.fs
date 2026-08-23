@@ -1,9 +1,3 @@
-// The renderer core (Seam B). It is a presentation-shell-agnostic pure function of a response
-// envelope, and it yields the DOM to show. It produces an immutable `Node` tree, and never
-// touches a real DOM. It therefore compiles to .NET for the Expecto suite, with no VSCode and no
-// browser, and to JS for the webview, where `Dom.mount` materializes the same tree into real
-// elements. The tree stays a value, which is what makes "assert the DOM shape" a black-box test
-// of a pure function.
 module Renderer.Core
 
 open System
@@ -49,8 +43,6 @@ type ResponseEnvelope =
       RequestMs: float
       TotalMs: float }
 
-// --- small Node helpers -------------------------------------------------------------------
-
 let private el tag attrs children = Node.Element(tag, attrs, children)
 
 let private span cls text =
@@ -78,8 +70,6 @@ let private jsonQuote (s: string) : string =
         |> String.concat ""
 
     "\"" + escaped + "\""
-
-// --- formatting ---------------------------------------------------------------------------
 
 /// Bins the status into the CSS class that the shell colors on (`status-2xx` to `status-5xx`).
 /// The core commits to the class, and not to a hard-coded color, so the shell owns the palette.
@@ -126,16 +116,13 @@ let private looksBinary (bytes: byte[]) : bool =
 
         hasNul || controlCount / float bytes.Length > 0.30
 
-// --- Content-Type dispatch ----------------------------------------------------------------
-
 let private renderImage (contentType: string) (bytes: byte[]) : Node =
     let mediaType = normalizeContentType contentType
     let src = sprintf "data:%s;base64,%s" mediaType (toBase64 bytes)
     el "img" [ "class", "response-image"; "src", src; "alt", "response image" ] []
 
 let private renderHtml (bytes: byte[]) : Node =
-    // A sandboxed iframe renders the page as a browser does, and denies the response body every
-    // privilege over the panel. An empty `sandbox` means no scripts and no same-origin access.
+    // An empty `sandbox` denies scripts and same-origin access.
     el "iframe" [ "class", "response-html"; "sandbox", ""; "srcdoc", decodeText bytes ] []
 
 let private renderText (bytes: byte[]) : Node =
@@ -220,10 +207,7 @@ let rec private renderJsonValue (value: Json.JsonValue) : Node =
 let private renderJson (bytes: byte[]) : Node =
     match Json.tryParse (decodeText bytes) with
     | Some value -> el "div" [ "class", "response-json" ] [ renderJsonValue value ]
-    | None ->
-        // An `application/json` Content-Type on a malformed body renders honestly as text, and
-        // does not crash the panel.
-        renderTextOrBinary bytes
+    | None -> renderTextOrBinary bytes
 
 let private isJson (ct: string) =
     ct = "application/json" || ct = "text/json" || ct.EndsWith("+json")
@@ -258,8 +242,6 @@ let renderBody (env: ResponseEnvelope) : Node =
     else
         renderContent env.ContentType env.Body
 
-// --- status line + headers + request ------------------------------------------------------
-
 let private renderStatusLine (env: ResponseEnvelope) : Node =
     el
         "div"
@@ -271,8 +253,6 @@ let private renderStatusLine (env: ResponseEnvelope) : Node =
               [ "class", sprintf "status-code %s" (statusClass env.Status) ]
               [ Node.Text(sprintf "%d %s" env.Status env.Reason) ]
           span "status-time" (sprintf "%d ms" (int (Math.Round env.RequestMs)))
-          // The separator lives inside the total span so the two numbers stay together when the
-          // line wraps (docs/spec/0004-run-path-robustness.md, Decision 7).
           span "status-total" (sprintf "· %d ms total" (int (Math.Round env.TotalMs)))
           span "status-size" (humanSize env.Body.Length) ]
 
@@ -310,8 +290,6 @@ let private renderRequest (request: RequestView) : Node =
         (el "summary" [ "class", "headers-summary" ] [ Node.Text(requestSummary request.Body) ]
          :: headerRows request.Headers
          @ renderRequestBody request)
-
-// --- copy text ----------------------------------------------------------------------------
 
 /// The text a copy button puts on the clipboard for a body. It reads the bytes, and never the
 /// Content-Type: a JSON body copies the raw bytes (not the tree), and a binary body copies the

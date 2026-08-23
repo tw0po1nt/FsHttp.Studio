@@ -1,5 +1,4 @@
-// The extension-host side of the framed envelope transport (ADR-0002). It mirrors the framing
-// in companion/Envelope.fs exactly. This side runs in Node and JS, through Fable.
+// The framing must match companion/Envelope.fs byte for byte.
 module Envelope
 
 open System.Text

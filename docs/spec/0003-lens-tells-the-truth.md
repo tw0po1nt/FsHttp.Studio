@@ -436,7 +436,7 @@ twelve, because two branches merged into `innerBinding` and one new branch appea
 `staleBlockIndex`. Sixteen strings ship. Fourteen are details. Two headings serve the outcome-only
 codes, which have no lens title.
 
-### Provenance
+### Sources
 
 The decisions come from earlier planning work on this feature. The policy, the code-not-prose split, the gate on the
 `run` path, the fourth Run outcome, the FS0039 recognizer, and the fifth refusal family were decided
