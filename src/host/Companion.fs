@@ -9,16 +9,16 @@ open Node
 open Envelope
 open Protocol
 
-[<NoComparison; NoEquality>]
-type private Pending =
-    { Resolve: obj -> unit
-      Abandon: unit -> unit }
+/// One outstanding request, matched to its eventual `data` event or to a companion exit.
+type private IPendingRequest =
+    abstract Resolve: json: obj -> unit
+    abstract Abandon: unit -> unit
 
 [<NoComparison>]
 type Handle =
     private
         { Process: ChildProcess
-          Pending: ResizeArray<Pending>
+          Pending: ResizeArray<IPendingRequest>
           mutable Closed: bool }
 
 let private toBlockRange (r: obj) : BlockRange =
@@ -97,7 +97,7 @@ let start (dotnetPath: string) (companionDllPath: string) (onState: State -> uni
 
     let handle =
         { Process = child
-          Pending = ResizeArray<Pending>()
+          Pending = ResizeArray<IPendingRequest>()
           Closed = false }
 
     let parser =
@@ -109,9 +109,9 @@ let start (dotnetPath: string) (companionDllPath: string) (onState: State -> uni
             | "ready" -> onState Ready
             | _ ->
                 if handle.Pending.Count > 0 then
-                    let { Resolve = resolve }: Pending = handle.Pending.[0]
+                    let entry = handle.Pending.[0]
                     handle.Pending.RemoveAt(0)
-                    resolve json)
+                    entry.Resolve json)
 
     child.stdout.on ("data", fun chunk -> parser.Push(unbox<byte[]> chunk))
 
@@ -139,7 +139,7 @@ let start (dotnetPath: string) (companionDllPath: string) (onState: State -> uni
 
     handle
 
-let private send (handle: Handle) (payloadJson: string) (entry: Pending) =
+let private send (handle: Handle) (payloadJson: string) (entry: IPendingRequest) =
     if handle.Closed then
         entry.Abandon()
     else
@@ -165,16 +165,16 @@ let locate (handle: Handle) (source: string) : Async<LocateResponse> =
         let payload: obj = createObj [ "tag" ==> "locate"; "source" ==> source ]
 
         let entry =
-            { Resolve =
-                fun json ->
+            { new IPendingRequest with
+                member _.Resolve(json) =
                     let ranges: obj[] = unbox (json?ranges: obj)
 
                     resolve
                         { Ranges = ranges |> Array.map toBlockRange |> Array.toList
                           ParseFailed = parseFailedOrDefault (tryUnbox<bool> (json?parseFailed: obj)) }
-              // An abandoned request carries no property at all, which is the same absent case.
-              Abandon =
-                fun () ->
+
+                // An abandoned request carries no property at all, which is the same absent case.
+                member _.Abandon() =
                     resolve
                         { Ranges = []
                           ParseFailed = parseFailedOrDefault None } }
@@ -206,8 +206,12 @@ let run
                   "timeoutMs" ==> timeoutMs ]
 
         let entry =
-            { Resolve = fun json -> resolve (parseRunResult (decodeRunEnvelope json))
-              Abandon = fun () -> resolve (RunProtocolError Refusals.companionStopped.Detail) }
+            { new IPendingRequest with
+                member _.Resolve(json) =
+                    resolve (parseRunResult (decodeRunEnvelope json))
+
+                member _.Abandon() =
+                    resolve (RunProtocolError Refusals.companionStopped.Detail) }
 
         send handle (JS.JSON.stringify payload) entry)
 

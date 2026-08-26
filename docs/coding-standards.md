@@ -52,6 +52,16 @@ An XML doc comment (`///`) is exempt. It is the documented API surface, it feeds
 a caller who never opens the file, and it is a different genre from inline commentary. This rule
 governs `//` alone.
 
+## 7. A record of closures needs strong justification
+
+A record whose fields are function types is a smell. It can hide a cycle between two modules. It can also hide state that a caller cannot see or test without a call to the closure. Consider these alternatives, in this order, before you use one:
+
+1. **Reorder the code to break the cycle.** A closure-record field often exists only to let module A call module B before B is fully defined. Move the shared code earlier, or split it into a third module that both modules open. The closure is then not necessary.
+2. **For a narrow scope, use individual function parameters.** A function that needs a callback takes that callback as a parameter. The dependency stays visible at the call site. A test can supply the callback directly, with no record to construct first.
+3. **To share state across a boundary, use an interface.** An interface names its members. A caller can see what the interface does without a read of a closure body. A test can supply a fake implementation, with no real state to set up.
+
+Use a closure-record field only when none of these three alternatives fits. State the reason in your reply to the user, not in a source comment (rule 6).
+
 ---
 
 *Seeded from a two-axis review. Add a rule only when a real review finding shows that an unwritten convention caused a problem. Keep this file short and concrete, which follows the lazy-documentation philosophy in `docs/agents/domain.md`.*
