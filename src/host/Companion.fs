@@ -207,8 +207,11 @@ let run
 
         let entry =
             { new IPendingRequest with
-                member _.Resolve(json) = resolve (parseRunResult (decodeRunEnvelope json))
-                member _.Abandon() = resolve (RunProtocolError Refusals.companionStopped.Detail) }
+                member _.Resolve(json) =
+                    resolve (parseRunResult (decodeRunEnvelope json))
+
+                member _.Abandon() =
+                    resolve (RunProtocolError Refusals.companionStopped.Detail) }
 
         send handle (JS.JSON.stringify payload) entry)
 
