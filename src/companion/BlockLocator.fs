@@ -12,14 +12,12 @@ type BlockRange =
       EndLine: int
       EndCol: int }
 
-/// Why a position reaches neither route, one code per shape that `classify` recognizes. This is
-/// the shape-grained vocabulary of docs/spec/0003-lens-tells-the-truth.md, Decision 2: the wire
-/// and the host both borrow these twelve names unchanged, so a change here is a change to the
-/// shipped vocabulary. Each code's own doc names the family (F1 to F5) that the reach spec groups
-/// it under; the family itself stays internal to these comments, and only the code crosses the
-/// boundary. The reach spec's F4 is not here: it is a Run outcome, not a classify verdict
-/// (position 11c: the untyped tree cannot know that a Run blanked away the name a block depends
-/// on).
+/// Why a position reaches neither route: one code per shape `classify` recognizes. These twelve
+/// names are the shipped vocabulary (docs/spec/0003, Decision 2) — the wire and the host borrow
+/// them unchanged. Each code's doc names its family (F1 to F5) from the reach spec; the family
+/// stays internal, only the code crosses the boundary. F4 is absent: it is a Run outcome, not a
+/// classify verdict (position 11c — the untyped tree cannot see that a Run blanked away a name a
+/// block depends on).
 type RefusalCode =
     /// F1. A `for`, `for .. in`, or `while` loop body.
     | LoopBody
@@ -33,9 +31,8 @@ type RefusalCode =
     | NeedsArguments
     /// F2. A class member: it needs an instance we would have to invent.
     | ClassMember
-    /// F3. A binding that is not module-scoped: a binding under neither a module `let` nor a
-    /// member, or an inner `let`/`use`. Both shapes mean the same thing to a reader, so they
-    /// share this one code.
+    /// F3. A binding that is not module-scoped: neither under a module `let` nor a member, or an
+    /// inner `let`/`use`. Both shapes mean the same thing to a reader, so they share one code.
     | InnerBinding
     /// F3. A binding whose value is a lambda, not the block.
     | LambdaValue
@@ -43,24 +40,20 @@ type RefusalCode =
     | NoNameToCall
     /// F5. A tuple binding: it binds several values, so its value is not the block.
     | TupleBinding
-    /// F5. A block nested inside another located block's own expression. Derived by range
-    /// containment over `locateBlocks`'s full output, not by a syntax-tree branch
-    /// (docs/spec/0003, Decision 3), and applied only where this code's catch-all would
-    /// otherwise fire.
+    /// F5. A block nested inside another located block's expression. Found by range containment
+    /// over `locateBlocks`'s full output, not a syntax-tree branch (docs/spec/0003, Decision 3),
+    /// and used only where the catch-all would otherwise fire.
     | InsideAnotherRequest
-    /// F5. The catch-all: an expression shape that `classify` has not enumerated. Also the code
-    /// that an unrecognized wire string degrades to at the host.
+    /// F5. The catch-all for a shape `classify` has not enumerated, and what an unrecognized wire
+    /// string degrades to at the host.
     | Unaddressable
 
-/// One plain sentence per code, safe to show a user. The code is the whole verdict, so the
-/// sentence is derived from it and never stored beside it: two shapes that share a code — the two
-/// `InnerBinding` branches — would otherwise drift into two different sentences for one verdict.
-/// No sentence interpolates an FCS type name (Decision 11). These are the *companion's* words, and
-/// not the shipped ones: Decision 2 of docs/spec/0003-lens-tells-the-truth.md gives every lens
-/// title and toast to the host, keyed by the code alone, and `Refusals.forCode` holds the
-/// sentences a user actually reads. Nothing on the wire carries these, so they are the
-/// companion's own diagnostics: they use the glossary's **block** throughout, and the exhaustive
-/// match keeps one sentence per code as the codes change.
+/// One plain sentence per code, safe to show a user. Derived from the code alone, never stored
+/// beside it — two shapes that share a code (the two `InnerBinding` branches) would otherwise
+/// drift into different sentences for one verdict. No sentence names an FCS type (Decision 11).
+/// These are the companion's own diagnostics, not the shipped ones: the host keys its lens titles
+/// and toasts on the code alone (docs/spec/0003, Decision 2), and `Refusals.forCode` holds what a
+/// user actually reads. They use the glossary's **block** throughout.
 let reasonFor (code: RefusalCode) =
     match code with
     | LoopBody -> "a loop body describes many requests"
@@ -76,9 +69,9 @@ let reasonFor (code: RefusalCode) =
     | InsideAnotherRequest -> "the block sits inside another block's own expression"
     | Unaddressable -> "the block sits in a position that a Run cannot reach"
 
-/// The wire spelling of a refusal code: camelCase, matching the shipped vocabulary
-/// (docs/spec/0003-lens-tells-the-truth.md, Decision 2). The host maps this string to a lens
-/// title and a toast; an unrecognized string degrades to the `unaddressable` title.
+/// The wire spelling of a refusal code: camelCase, the shipped vocabulary (docs/spec/0003,
+/// Decision 2). The host maps this string to a lens title and a toast; an unrecognized string
+/// degrades to `unaddressable`.
 let codeToWire (code: RefusalCode) : string =
     match code with
     | LoopBody -> "loopBody"
@@ -118,17 +111,12 @@ let refusalOf (route: Route) : string option =
     | NamedByTheRun
     | NamedByTheBinding _ -> None
 
-/// A located block's own CE range, the route a Run takes to reach it, the span to blank when
-/// it is *not* the target, its enclosing-module qualifier, and its `private` keyword spans.
 /// Keep the name `LocatedBlock`: it is the glossary's word (docs/spec/0002, Decision 3).
 type LocatedBlock =
     {
         Block: BlockRange
         Route: Route
-        /// The span to blank when this block is a *sibling* of the target. A module-level
-        /// binding blanks its whole declaration (keeps the value-leakage guard). A member or
-        /// inner binding blanks its right side only, because a blanked `member _.Get() = …`
-        /// leaves a type with no members, and that does not parse.
+        /// The span to blank when this block is a *sibling* of the target. See `blankSpan`.
         Blank: BlockRange
         /// The enclosing module chain, outermost first: the invocation's qualifier. It covers the
         /// nested `module M =` declarations and the file's own `module M` header, if it has one.
@@ -143,12 +131,7 @@ type LocatedBlock =
         /// arguments), so blanking it keeps the bound name.
         TypeAnnotation: BlockRange option
         /// Every module-scoped name that blanking this block's `Blank` span takes away, spelled
-        /// as the source writes it, minus any backticks. Empty unless `Blank` covers a whole
-        /// module-level `let` declaration: a member's or an inner binding's blank keeps its own
-        /// head pattern, so it removes no name. This is what a *consumer* of this block loses
-        /// when the Run blanks it (case 11c), so it follows the head pattern and not the
-        /// `Route`: a binding that no route reaches — `let getUser id = …`, refused as
-        /// `NeedsArguments` — still binds a name, and blanking it still takes that name away.
+        /// as the source writes it, minus any backticks. See `blankedNames`.
         BoundNames: string list
     }
 
@@ -260,10 +243,9 @@ let private typeAnnotationSpan (headPat: SynPat) (returnInfo: SynBindingReturnIn
     returnInfo
     |> Option.map (fun (SynBindingReturnInfo(range = r)) -> Range.mkRange r.FileName headPatRange.End r.End)
 
-/// What a binding's head pattern offers an invocation. This is a *head-pattern* verdict, and not
-/// a refusal: `classify` is the one that turns `TakesArguments` into the `NeedsArguments` code and
-/// `NoName` into `NoNameToCall`. The names differ on purpose, so a read of either type says which
-/// one it is.
+/// What a binding's head pattern offers an invocation. This is a *head-pattern* verdict, not a
+/// refusal: `classify` turns `TakesArguments` into the `NeedsArguments` code and `NoName` into
+/// `NoNameToCall`.
 type private NameResult =
     | Invocable of string
     | TakesArguments
