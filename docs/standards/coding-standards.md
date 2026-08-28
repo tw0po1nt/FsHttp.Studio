@@ -41,12 +41,11 @@ In-repo references are correct and encouraged, such as `ADR-0002`, a file path, 
 
 ## 6. Comments state what the code cannot
 
-Do not write comments that describe what the code does or justify your implementation choices. If you want to explain a decision you made, say it in your reply to me — never in the source file. The only comments allowed are ones a competent reader could not derive from the code itself: an external constraint, a non-obvious invariant, or a workaround for a bug elsewhere. One line, and state the fact, not the rationale for your approach. When editing existing code, do not add comments that weren't there unless the previous statement applies.
+Write a comment only for what a competent reader cannot derive from the code itself: an external constraint, a non-obvious invariant, or a workaround for a defect elsewhere. Keep it to one line, and state the fact. Explain a decision you made in your reply to the user, where the commit message and the pull request keep it.
 
-The vendored `simplified-technical-english` skill carries a "Code comments and software text"
-section that says a comment explains why the code exists. **This rule wins.** An agent must not
-edit the vendored skill file. Apply STE to the wording of a comment that this rule permits, and
-ignore the vendored guidance on whether to write the comment at all.
+That list is the whole permission. A comment that describes what the code does, or that argues for your implementation choice, falls outside it, and so does a new comment on existing code.
+
+This rule is an overlay on the vendored `simplified-technical-english` skill, whose "Code comments and software text" section says that a comment explains why the code exists. Apply STE to the wording of a comment that this rule permits, and take the question of whether to write the comment from here.
 
 This rule also governs `///` XML doc comments, not only `//` comments. A doc comment that
 restates the signature, such as `/// Gets the name` above `member Name`, adds no information. It

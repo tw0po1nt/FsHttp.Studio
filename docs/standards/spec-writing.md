@@ -30,9 +30,8 @@ of the full spec.
 
 ## What this does not change
 
-- `to-spec` itself is a vendored skill (`mattpocock/skills`, tracked in `skills-lock.json`). An
-  agent must not edit it to perform these steps internally. This doc is the project's own overlay,
-  applied as the step that follows the skill's own output.
+- This document is an overlay on the vendored `to-spec` skill. The three steps above follow the
+  skill's own output, rather than change it.
 - The `ready-for-agent` triage label, and every other issue-tracker convention in
   `docs/agents/issue-tracker.md`, stay as they are.
 - A spec that a skill has already published as a full-text `Spec:` issue, before this rule

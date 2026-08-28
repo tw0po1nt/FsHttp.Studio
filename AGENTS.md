@@ -27,8 +27,13 @@ inside a rule that forbids it, put the word in backticks. To ban another word, a
 file.
 
 **Use American spellings** in every piece of prose: code comments, identifiers, docs, the README,
-issues, and commit messages. Files under `.agents/` are vendored, and they keep their authors'
-spelling.
+issues, and commit messages.
+
+**A vendored skill is never edited.** `.agents/` holds skills that other authors wrote, and
+`skills-lock.json` tracks them. They keep their authors' prose and spelling. Where this repo needs
+different behavior, a document of its own **overlays** the skill, and the overlay wins. Where a
+hook fires before a risky command, that hook is a **backstop**: it states the rule at the moment of
+risk, and it cannot check that you obeyed. The rule is still the requirement.
 
 ## Read before you act
 
@@ -54,7 +59,7 @@ spelling.
 
 **"spec", never `PRD`.** The document that `/to-spec` produces is a spec. `.banned-words` holds the
 other word, so CI fails on it. Some vendored skill files still carry the old wording, and this rule
-wins over them.
+overlays them.
 
 **Triage labels.** The five triage roles, where each label string is equal to its role name:
 

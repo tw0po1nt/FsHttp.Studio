@@ -33,7 +33,5 @@ the rule alone governs a source comment. The hook cannot verify that the skill r
 cannot verify the quality of the text. It only guarantees that the reminder appears at the moment
 the risk is highest: the moment before the text becomes visible to a human reader.
 
-The rule above is still the requirement. The hook exists because `simplified-technical-english` is
-a vendored skill (source: `TheAngryByrd/simplified-technical-english-skill`, tracked in
-`skills-lock.json`). An agent must not edit the vendored skill file to strengthen it. This doc,
-and the hook, are the project's own enforcement layer on top of it.
+The rule above is still the requirement. This document is an overlay on the vendored
+`simplified-technical-english` skill, and the hook is its backstop.
