@@ -44,13 +44,13 @@ let tryReadFrame (input: Stream) : byte[] option =
 
 // A missing or JSON-null string reads as "". A missing int reads as 0.
 
-/// The string value of a JSON element. Returns "" when the element is JSON null.
+/// Returns "" when the element is JSON null.
 let jsonString (e: JsonElement) : string =
     match e.GetString() with
     | null -> ""
     | s -> s
 
-/// Reads a string property by name. Returns "" when the property is absent or JSON null.
+/// Returns "" when the property is absent or JSON null.
 let getStringProp (name: string) (root: JsonElement) : string =
     match root.TryGetProperty name with
     | true, v -> jsonString v
@@ -63,7 +63,7 @@ let getOptionalStringProp (name: string) (root: JsonElement) : string option =
     | "" -> None
     | s -> Some s
 
-/// Reads an int property by name. Returns 0 when the property is absent.
+/// Returns 0 when the property is absent.
 let getIntProp (name: string) (root: JsonElement) : int =
     match root.TryGetProperty name with
     | true, v -> v.GetInt32()

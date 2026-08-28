@@ -53,8 +53,6 @@ type TestServer(routes: Map<string, HttpListenerContext -> unit>) =
     interface IDisposable with
         member _.Dispose() = listener.Close()
 
-/// Writes `bytes` as the response body, with the given content type and status. It also writes
-/// any extra headers.
 let bytesHandler
     (status: int)
     (contentType: string)
@@ -68,7 +66,6 @@ let bytesHandler
     ctx.Response.OutputStream.Write(bytes, 0, bytes.Length)
     ctx.Response.OutputStream.Close()
 
-/// Writes `text` as a `text/plain` response body, with the given status.
 let textHandler (status: int) (text: string) (ctx: HttpListenerContext) =
     bytesHandler status "text/plain" [] (Text.Encoding.UTF8.GetBytes text) ctx
 

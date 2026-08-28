@@ -48,9 +48,11 @@ section that says a comment explains why the code exists. **This rule wins.** An
 edit the vendored skill file. Apply STE to the wording of a comment that this rule permits, and
 ignore the vendored guidance on whether to write the comment at all.
 
-An XML doc comment (`///`) is exempt. It is the documented API surface, it feeds IntelliSense for
-a caller who never opens the file, and it is a different genre from inline commentary. This rule
-governs `//` alone.
+This rule also governs `///` XML doc comments, not only `//` comments. A doc comment that
+restates the signature, such as `/// Gets the name` above `member Name`, adds no information. It
+reads like restated code. A reader must read past it for nothing. Write a `///` comment only when
+it states something the signature does not. That includes a parameter's unit or valid range, a
+non-obvious exception, or a constraint on how to use the member.
 
 ## 7. A record of closures needs strong justification
 

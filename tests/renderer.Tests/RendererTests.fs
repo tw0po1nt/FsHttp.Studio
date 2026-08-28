@@ -12,7 +12,7 @@ open Renderer.NodeQuery
 
 let private utf8 (s: string) = Encoding.UTF8.GetBytes s
 
-/// A canned request view with no body. Each test can override the fields.
+/// Each test can override the fields.
 let private requestWithNoBody (httpMethod: string) (url: string) =
     { Method = httpMethod
       Url = url
@@ -20,7 +20,7 @@ let private requestWithNoBody (httpMethod: string) (url: string) =
       ContentType = ""
       Body = NoBody }
 
-/// A canned envelope with a sensible request context. Each test can override the fields.
+/// Each test can override the fields.
 let private envelope contentType (body: byte[]) =
     { Request = requestWithNoBody "GET" "https://example.com/thing"
       Status = 200

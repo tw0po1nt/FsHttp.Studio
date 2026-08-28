@@ -11,13 +11,10 @@ open Fable.Core.JsInterop
 /// inventing a second workbench deadline.
 let LensAppearanceDeadlineMs = 45_000
 
-/// Default wait for the response viewer to repaint after a Run.
 let ViewerUpdateDeadlineMs = 30_000
 
-/// Default wait for a toast notification.
 let ToastDeadlineMs = 15_000
 
-/// Default wait for the editor to recover after a reload.
 let PostReloadRecoveryDeadlineMs = 60_000
 
 /// Wait for the companion to report `ready`, paid once in setup. It is the longest wait the

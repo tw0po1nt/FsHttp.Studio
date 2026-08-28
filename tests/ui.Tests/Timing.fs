@@ -2,7 +2,6 @@
 // vocabulary and the table rendering have one home, and the harness only records observations.
 module Timing
 
-/// One row of the timing table: a named phase, the time it took, and the budget it had.
 type PhaseTiming =
     { Name: string
       ElapsedMs: float
@@ -12,8 +11,6 @@ let private budgetSeconds (timing: PhaseTiming) = int (timing.BudgetMs / 1000.0)
 
 let overBudget (timing: PhaseTiming) = timing.ElapsedMs > timing.BudgetMs
 
-/// Names the phase, its budget, and the observed elapsed time, so a drifting run says which of
-/// the three it was without a reader having to consult the table.
 let budgetFailure (timing: PhaseTiming) =
     sprintf "%s exceeded the %i s budget (observed %.0f ms)" timing.Name (budgetSeconds timing) timing.ElapsedMs
 
