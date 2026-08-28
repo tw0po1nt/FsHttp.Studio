@@ -19,7 +19,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/banned-words-check.sh"
+          },
+          {
+            "type": "command",
             "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/ste-reminder-docs.sh"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/fsharp-standards-reminder.sh"
           }
         ]
       }

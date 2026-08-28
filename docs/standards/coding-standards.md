@@ -63,6 +63,13 @@ A record whose fields are function types is a smell. It can hide a cycle between
 
 Use a closure-record field only when none of these three alternatives fits. State the reason in your reply to the user, not in a source comment (rule 6).
 
+## The hook is a backstop, not the mechanism
+
+A `PreToolUse` hook (`.claude/settings.json`) fires before a `Write` or an `Edit` on a `.fs` or
+`.fsx` file. It names the rules above at the moment an agent is about to write F#. The hook cannot
+read the pending code, and it cannot judge a comment. It also cannot see a file that a Bash command
+writes. The rules above are still the requirement.
+
 ---
 
 *Seeded from a two-axis review. Add a rule only when a real review finding shows that an unwritten convention caused a problem. Keep this file short and concrete, which follows the lazy-documentation philosophy in `docs/agents/domain.md`.*

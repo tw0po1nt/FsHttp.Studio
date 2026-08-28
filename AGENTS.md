@@ -22,9 +22,9 @@ that you cannot state in glossary terms is a signal: either the glossary is miss
 language is wrong. Resolve that instead of reaching for a synonym.
 
 **Keep your prose clear of the words in `.banned-words`.** The file at the repo root lists them, and
-`scripts/check-banned-words.sh` runs in CI and fails the build on a hit. To name a banned word
-inside a rule that forbids it, put the word in backticks. To ban another word, add one line to the
-file.
+`scripts/check-banned-words.sh` runs in CI and fails the build on a hit. A backstop hook refuses a
+`Write` or an `Edit` that carries one. To name a banned word inside a rule that forbids it, put the
+word in backticks. To ban another word, add one line to the file.
 
 **Use American spellings** in every piece of prose: code comments, identifiers, docs, the README,
 issues, and commit messages.

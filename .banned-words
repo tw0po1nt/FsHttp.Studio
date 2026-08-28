@@ -2,8 +2,18 @@
 # `#` is a note. The check is case-insensitive and matches whole words only.
 # scripts/check-banned-words.sh reads this file. AGENTS.md states the rule.
 
+# Slop. Write what the thing is.
 provenance
 leverage
 utilize
 utilise
+
+# Terminology. AGENTS.md states the word this repo uses instead.
 PRD
+
+# British spellings. This repo writes American English.
+colour
+behaviour
+serialise
+honoured
+cancelled
