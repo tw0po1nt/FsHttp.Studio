@@ -10,7 +10,7 @@ this repo. This rule has no exception, and **all prose** means all prose:
 - Specs (`docs/spec/`)
 - Agent-facing docs (`docs/agents/`) and every other Markdown file in the repo
 - Commit messages
-- Code comments, including the one-line comments that rule 6 of `docs/coding-standards.md` permits
+- Code comments, including the one-line comments that rule 6 of `docs/standards/coding-standards.md` permits
 
 A short piece of prose is still prose. A one-line code comment and a two-sentence issue body both
 carry the rule.

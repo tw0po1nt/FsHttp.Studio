@@ -13,7 +13,7 @@ for a change to an existing surface, so a reviewer sees the state before and aft
 
 Commit the image to `docs/screenshots/` on this branch, and link its raw URL here. Pin that URL to
 a commit, and never to a branch name, because a branch that someone prunes later breaks the link.
-`docs/agents/ui-screenshots.md` gives the capture steps.
+`docs/standards/ui-screenshots.md` gives the capture steps.
 
 Delete this section when the diff paints nothing, and say so in the summary.
 -->

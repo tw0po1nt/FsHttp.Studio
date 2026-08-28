@@ -6,7 +6,7 @@ A VSCode extension that runs a single FsHttp request from an F# script and rende
 
 Bootstrap once with `dotnet tool restore && npm ci`.
 
-**Verify every `.fs` change with `dotnet build FsHttp.Studio.slnx`.** Fable alone is laxer than the F# compiler and lets errors through that CI then catches. See `docs/agents/build-and-verify.md` for the full command set.
+**Verify every `.fs` change with `dotnet build FsHttp.Studio.slnx`.** Fable alone is laxer than the F# compiler and lets errors through that CI then catches. See `docs/standards/build-and-verify.md` for the full command set.
 
 ## Agent skills
 
@@ -16,11 +16,19 @@ Issues live as GitHub issues on `tw0po1nt/FsHttp.Studio`. Manage them with the `
 
 ### Spec writing
 
-A spec's full text lives in `docs/spec/`, not in the issue body. See `docs/agents/spec-writing.md`.
+A spec's full text lives in `docs/spec/`, not in the issue body. See `docs/standards/spec-writing.md`.
 
 ### Triage labels
 
-The five canonical triage roles. Each label string is equal to its role name. See `docs/agents/triage-labels.md`.
+The five triage roles. Each label string is equal to its role name.
+
+- `needs-triage` — a maintainer must evaluate this issue
+- `needs-info` — the reporter must supply more information
+- `ready-for-agent` — fully specified, ready for an AFK agent
+- `ready-for-human` — a person must implement this
+- `wontfix` — this will not be fixed
+
+When a skill names a role, use the label string of the same name.
 
 ### Domain docs
 
@@ -28,19 +36,19 @@ One context. `CONTEXT.md` and `docs/adr/` are at the repo root. See `docs/agents
 
 ### Coding standards
 
-F# house rules that go beyond the rules Fantomas and `.editorconfig` enforce. See `docs/coding-standards.md`.
+F# house rules that go beyond the rules Fantomas and `.editorconfig` enforce. See `docs/standards/coding-standards.md`.
 
 ### UI screenshots
 
-A pull request that changes what the user sees must carry a screenshot of the running editor. See `docs/agents/ui-screenshots.md`.
+A pull request that changes what the user sees must carry a screenshot of the running editor. See `docs/standards/ui-screenshots.md`.
 
 ### Release gate
 
-The UI suite is the release gate. What it covers, and the gaps it does not, live in `docs/release-gate.md`.
+The UI suite is the release gate. What it covers, and the gaps it does not, live in `docs/standards/release-gate.md`.
 
 ### Technical prose
 
-Running the `simplified-technical-english` skill on every piece of prose you write is mandatory, not optional. All prose: docs, issues, pull requests, commit messages, and code comments. See `docs/agents/technical-prose.md`.
+Running the `simplified-technical-english` skill on every piece of prose you write is mandatory, not optional. All prose: docs, issues, pull requests, commit messages, and code comments. See `docs/standards/technical-prose.md`.
 
 ## Terminology
 
