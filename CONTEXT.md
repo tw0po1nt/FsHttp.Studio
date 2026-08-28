@@ -101,7 +101,7 @@ _Avoid_: dev build, PR build (the ref does not have to belong to a pull request)
 ### UI test suite
 
 **Check**:
-One test in the UI suite, driving a real VSCode through ExTester. A check names a user-visible outcome rather than a unit of code.
+One test in the UI suite, driving a real VSCode through ExTester. A check names a user-visible outcome rather than a unit of code. The word is scoped to the suite, in the way that Harness setup is scoped against bare "Setup": a CI step and a GitHub status check are not Checks, and "check" keeps its ordinary meaning there.
 _Avoid_: test, case, scenario, spec (a spec is the written ticket that asks for the check).
 
 **Harness**:
