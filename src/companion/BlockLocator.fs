@@ -12,12 +12,9 @@ type BlockRange =
       EndLine: int
       EndCol: int }
 
-/// Why a position reaches neither route: one code per shape `classify` recognizes. These twelve
-/// names are the shipped vocabulary (docs/spec/0003, Decision 2) — the wire and the host borrow
-/// them unchanged. Each code's doc names its family (F1 to F5) from the reach spec; the family
-/// stays internal, only the code crosses the boundary. F4 is absent: it is a Run outcome, not a
-/// classify verdict (position 11c — the untyped tree cannot see that a Run blanked away a name a
-/// block depends on).
+/// One code per shape `classify` recognizes. The wire and the host borrow these twelve names
+/// unchanged, and the F1 to F5 family labels stay internal.
+/// F4 has no code here, because it is a Run outcome that the untyped tree cannot see.
 type RefusalCode =
     /// F1. A `for`, `for .. in`, or `while` loop body.
     | LoopBody
@@ -41,19 +38,16 @@ type RefusalCode =
     /// F5. A tuple binding: it binds several values, so its value is not the block.
     | TupleBinding
     /// F5. A block nested inside another located block's expression. Found by range containment
-    /// over `locateBlocks`'s full output, not a syntax-tree branch (docs/spec/0003, Decision 3),
-    /// and used only where the catch-all would otherwise fire.
+    /// over `locateBlocks`'s full output, and used only where the catch-all would otherwise fire.
     | InsideAnotherRequest
     /// F5. The catch-all for a shape `classify` has not enumerated, and what an unrecognized wire
     /// string degrades to at the host.
     | Unaddressable
 
-/// One plain sentence per code, safe to show a user. Derived from the code alone, never stored
-/// beside it — two shapes that share a code (the two `InnerBinding` branches) would otherwise
-/// drift into different sentences for one verdict. No sentence names an FCS type (Decision 11).
-/// These are the companion's own diagnostics, not the shipped ones: the host keys its lens titles
-/// and toasts on the code alone (docs/spec/0003, Decision 2), and `Refusals.forCode` holds what a
-/// user actually reads. They use the glossary's **block** throughout.
+/// Derived from the code alone, so two shapes that share a code cannot drift into two sentences
+/// for one verdict. No sentence names an FCS type, and every sentence uses the glossary's block.
+/// The host keys its lens titles and toasts on the code, and `Refusals.forCode` holds what a user
+/// reads.
 let reasonFor (code: RefusalCode) =
     match code with
     | LoopBody -> "a loop body describes many requests"
@@ -69,9 +63,8 @@ let reasonFor (code: RefusalCode) =
     | InsideAnotherRequest -> "the block sits inside another block's own expression"
     | Unaddressable -> "the block sits in a position that a Run cannot reach"
 
-/// The wire spelling of a refusal code: camelCase, the shipped vocabulary (docs/spec/0003,
-/// Decision 2). The host maps this string to a lens title and a toast; an unrecognized string
-/// degrades to `unaddressable`.
+/// The wire spelling of a refusal code, in camelCase. The host maps this string to a lens title
+/// and a toast, and an unrecognized string degrades to `unaddressable`.
 let codeToWire (code: RefusalCode) : string =
     match code with
     | LoopBody -> "loopBody"
@@ -104,14 +97,14 @@ type Route =
 
 /// The `locate` response's `refusal` property for a block's route: `None` for either route a Run
 /// reaches, `Some` of the code's wire spelling for a refusal. A supported block's wire entry
-/// omits the property entirely (Decision 4); this is what decides which entries do.
+/// omits the property entirely, and this is what decides which entries do.
 let refusalOf (route: Route) : string option =
     match route with
     | Refused code -> Some(codeToWire code)
     | NamedByTheRun
     | NamedByTheBinding _ -> None
 
-/// Keep the name `LocatedBlock`: it is the glossary's word (docs/spec/0002, Decision 3).
+/// Keep the name `LocatedBlock`, because it is the glossary's word.
 type LocatedBlock =
     {
         Block: BlockRange
@@ -125,8 +118,8 @@ type LocatedBlock =
         /// each enclosing module's. Empty when nothing on the path is `private`.
         PrivateSpans: BlockRange list
         /// The R2 target's own type annotation, colon included, when the binding has one.
-        /// `None` on every other route: the truncation in Decision 1 can drop a trailing pipe,
-        /// leaving an annotation that describes the untruncated value, and Decision 7 blanks it
+        /// `None` on every other route. The Setup truncation can drop a trailing pipe, leaving
+        /// an annotation that describes the untruncated value, so the blanking step removes it
         /// on the target's own binding only. The span starts after the head pattern (and any
         /// arguments), so blanking it keeps the bound name.
         TypeAnnotation: BlockRange option
@@ -136,7 +129,7 @@ type LocatedBlock =
     }
 
 /// Synthetic filename given to FCS's parser. Only the `.fsx` extension matters, because it
-/// selects script-mode parsing (ADR-0004). The source never exists on disk under this name.
+/// selects script-mode parsing. The source never exists on disk under this name.
 [<Literal>]
 let private syntheticFileName = "block-locator-input.fsx"
 
@@ -157,7 +150,7 @@ let private samePos (a: pos) (b: pos) = a.Line = b.Line && a.Column = b.Column
 
 /// True when `node` is a leading ancestor of the block: an expression whose own range starts
 /// exactly where the block starts, so the block is its leading part and not one argument among
-/// others. The Setup boundary (Decision 1) truncates at the block's own end, which drops such an
+/// others. The Setup boundary truncates at the block's own end, which drops such an
 /// ancestor's trailing suffix intact — `http { } |> Request.send`'s pipe App starts at the
 /// block, so truncation drops `|> Request.send` with no routing branch needed for case 12.
 let private leadingAt (blockStart: pos) (node: SyntaxNode) =
@@ -168,7 +161,7 @@ let private leadingAt (blockStart: pos) (node: SyntaxNode) =
     | _ -> false
 
 /// R2's transparency is narrower than `leadingAt`: only a type annotation or parens may sit
-/// between a binding and the block for the binding's *value* to be the block (Decision 2).
+/// between a binding and the block for the binding's *value* to be the block.
 /// Returns the remaining path once every such wrapper is consumed. A parenthesis starts at its
 /// own `(`, before the block, so `leadingAt` never reaches one — this is the only thing that
 /// does. It stays narrow on purpose: R1 inserts `let <name> = ` at the block's own start, and a
@@ -216,7 +209,7 @@ let private accessRange (a: SynAccess option) =
 /// Every `private` keyword on the target's own path that would put the invocation out of
 /// reach: its own binding's, and each enclosing module's. Each invocation is a separate FSI
 /// interaction, so a `private` binding — or a binding inside a `private` module — is not
-/// accessible from it (Decision 6). `internal` needs no treatment: an `internal` binding is
+/// accessible from it. `internal` needs no treatment, because an `internal` binding is
 /// accessible from a later interaction, so it is deliberately not matched here.
 let private privateSpansOn (ownBinding: SynAccess option) (path: SyntaxNode list) =
     accessRange ownBinding
@@ -224,7 +217,7 @@ let private privateSpansOn (ownBinding: SynAccess option) (path: SyntaxNode list
 
 /// `private` can sit on the binding *or* on its head pattern — `let private x = …` puts it on
 /// `SynPat.Named`, not on `SynBinding.accessibility` — so a read of the binding alone misses it
-/// silently (Decision 6's first trap).
+/// silently.
 let private patternAccess (headPat: SynPat) =
     match headPat with
     | SynPat.Named(accessibility = a)
@@ -232,7 +225,7 @@ let private patternAccess (headPat: SynPat) =
     | _ -> None
 
 /// The R2 target's own type annotation span, colon included: from the end of the head pattern
-/// (and its arguments, if any) to the end of the type (Decision 7). Measured directly: FCS's own
+/// (and its arguments, if any) to the end of the type. Measured directly, because FCS's own
 /// `SynBindingReturnInfo.Range` covers only the type name (`Response`, not `: Response`), so a
 /// blank of that range alone would leave a bare `:` with nothing after it, which does not parse.
 /// Starting from the head pattern's own end keeps the bound name untouched.
@@ -278,11 +271,11 @@ type private Classification =
         /// The binding's own `SynAccess` when the block routes through a binding, for
         /// `privateSpansOn` to read.
         Access: SynAccess option
-        /// The R2 target's own type annotation span (Decision 7). `None` on every other route.
+        /// The R2 target's own type annotation span. `None` on every other route.
         TypeAnnotation: range option
     }
 
-/// The whole routing decision, from the untyped path alone (Decision 2). `path` is
+/// The whole routing decision, from the untyped path alone. `path` is
 /// innermost-first, as `ParsedInput.fold` builds it.
 let private classify (blockStart: pos) (path: SyntaxNode list) : Classification =
     // A tuple must stay unconsumed here, or the two halves of `let a, b = ...` route differently.
@@ -346,7 +339,7 @@ let private classify (blockStart: pos) (path: SyntaxNode list) : Classification 
           Access = None
           TypeAnnotation = None }
 
-/// The smallest enclosing statement that can hold an expression (Decision 5). A module-level
+/// The smallest enclosing statement that can hold an expression. A module-level
 /// binding blanks its whole declaration, which keeps the value-leakage protection: the binding
 /// disappears, and a consumer fails with a clean "not defined" instead of leaking a value. A
 /// member or inner binding blanks its right side only, because erasing `member _.Get() = …`
@@ -416,8 +409,8 @@ let private toBlockRange (r: range) : BlockRange =
       EndCol = r.EndColumn }
 
 /// True when `inner` sits within `outer`: at or after `outer`'s start, and at or before its end.
-/// The bounds are inclusive, so a range contains *itself*. Decision 3 wants strict containment;
-/// the call site is what excludes the block's own range, because that is where the two ranges
+/// The bounds are inclusive, so a range contains *itself*. The call site excludes the block's own
+/// range, because that is where the two ranges
 /// being compared are known to belong to two different blocks.
 let private contains (outer: BlockRange) (inner: BlockRange) =
     let startsAtOrBefore =
@@ -430,13 +423,10 @@ let private contains (outer: BlockRange) (inner: BlockRange) =
 
     startsAtOrBefore && endsAtOrAfter
 
-/// Decision 3 of docs/spec/0003-lens-tells-the-truth.md: a target block whose range sits
-/// strictly inside another located block's range gets `insideAnotherRequest`, in place of the
-/// catch-all `unaddressable`. This needs every block that `locateBlocks` found, so it runs as a
-/// second pass over `findLocatedBlocks`'s full output, after the fold that classifies each block
-/// in isolation. Applied only where `classify` produced the catch-all: a block that a more
-/// specific branch already refused keeps that verdict, even when it also happens to sit inside
-/// another block.
+/// A target block whose range sits strictly inside another located block's range gets
+/// `insideAnotherRequest` in place of the catch-all `unaddressable`.
+/// Runs as a second pass, because it needs every block that `locateBlocks` found. A block that a
+/// more specific branch already refused keeps that verdict.
 let private markInsideAnotherRequest (blocks: LocatedBlock list) : LocatedBlock list =
     // A block always sits within its own range, so the identity test is what makes this strict.
     let sitsInsideAnother (block: LocatedBlock) =
@@ -482,10 +472,8 @@ let private parse (source: string) =
     checker.ParseFile(syntheticFileName, SourceText.ofString source, parsingOptions)
     |> Async.RunSynchronously
 
-/// The blocks a locate found, and whether FCS's untyped parse reported errors. `ParseFailed`
-/// comes from `ParseHadErrors`, not from a severity filter over `Diagnostics`
-/// (docs/spec/0014-explain-missing-lenses.md, Decision 4). The host's `blocks` envelope carries
-/// this as `parseFailed`.
+/// `ParseFailed` comes from `ParseHadErrors` rather than from a severity filter over
+/// `Diagnostics`. The host's `blocks` envelope carries it as `parseFailed`.
 type LocateResult =
     { Blocks: LocatedBlock list
       ParseFailed: bool }

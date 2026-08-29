@@ -6,8 +6,7 @@ module Refusals
 /// (`lensTitle`), and the response viewer's notice shows the sentence alone.
 type Refusal = { Title: string; Detail: string }
 
-/// One row per `classify` verdict (docs/spec/0003, Decision 2's table). `unaddressable` is both a
-/// code of its own and the fallback that an unrecognized code degrades to.
+/// `unaddressable` is both a code of its own and the fallback for an unrecognized code.
 let private catalog: (string * Refusal) list =
     [ "loopBody",
       { Title = "Cannot run: inside a loop"
@@ -73,39 +72,25 @@ let private table = catalog |> Map.ofList
 
 let private fallback = table.["unaddressable"]
 
-/// The heading and toast/detail text for a wire refusal code. An unrecognized code degrades to
-/// `unaddressable` (docs/spec/0003, Decision 2) and never throws.
+/// An unrecognized code degrades to `unaddressable` and never throws.
 let forCode (code: string) : Refusal =
     table |> Map.tryFind code |> Option.defaultValue fallback
 
-/// The glyph that marks a refusal lens (docs/spec/0003, Decision 8). It belongs to the lens, and
-/// not to the sentence, so no other caller has to take it back off.
+/// Belongs to the lens rather than to the sentence, so no caller has to strip it back off.
 let private glyph = "⊘ "
 
 /// The CodeLens title for a wire refusal code: the refusal's sentence behind the refusal glyph.
 let lensTitle (code: string) : string = glyph + (forCode code).Title
 
-/// The words for a companion that is gone (ADR-0003). This is not a wire code. `classify` runs in
-/// the companion, so the process that would produce the code is the process that stopped. The
-/// shape is a refusal all the same — a block that cannot run, a reason, and the action that
-/// corrects it — so it lives here with the others rather than in a second home.
-///
-/// `Detail` is the one shipped sentence for a stopped companion. The lens's toast shows it, and a
-/// pending Run abandons to it (docs/spec/0004-run-path-robustness.md, Decision 6). Those two
-/// surfaces therefore cannot drift apart. "Reload" is the accurate instruction, because nothing
-/// restarts the companion today.
+/// Carries no wire code, because `classify` runs in the companion that stopped.
+/// The lens toast and an abandoning Run both show `Detail`, so those two surfaces cannot drift.
 let companionStopped: Refusal =
     { Title = "Cannot run: the companion stopped"
       Detail = "The FsHttp.Studio companion stopped. Reload the window to start it again." }
 
-/// The CodeLens title a block carries while the companion is gone (ADR-0003). It takes the same
-/// glyph as every other refusal, because it makes the same claim: this block cannot run now, and
-/// a click explains why.
 let companionStoppedLensTitle: string = glyph + companionStopped.Title
 
-/// The `unboundBlockValue` words (docs/spec/0003, Decision 10). This is a Run outcome only:
-/// `classify` never produces it, so it has no lens and no row in `catalog`, and it needs the
-/// blanked name to say which value went missing.
+/// A Run outcome only. `classify` never produces it, so it has no lens and no `catalog` row.
 let private unboundBlockValue (name: string) : Refusal =
     { Title = "Cannot run: depends on another request"
       Detail =
@@ -121,10 +106,8 @@ let private staleBlockIndex: Refusal =
       Detail =
         "This request moved or was removed after you started the Run. FsHttp.Studio cannot find it at the position the lens recorded. To run this request, run it again from its lens." }
 
-/// The words for a `RunRefused` outcome: the response viewer's `refused` heading and body, and the
-/// toast's sentence (docs/spec/0003, Decision 6). This is the one place that knows
-/// the outcome-only codes `catalog` does not carry, so heading and body can never come from two
-/// different refusals.
+/// The one place that knows the outcome-only codes `catalog` omits, so a heading and a body can
+/// never come from two different refusals.
 let forRefused (code: string) (name: string option) : Refusal =
     match code, name with
     | "unboundBlockValue", Some blockedName -> unboundBlockValue blockedName

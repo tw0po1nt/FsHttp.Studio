@@ -3,8 +3,7 @@ module Companion.Envelope
 open System.IO
 open System.Text.Json
 
-/// A 4-byte big-endian length prefix, then the JSON payload. The wire is framed, not
-/// line-delimited, so a very large base64 body has no line or size ceiling (ADR-0002).
+/// Framing rather than line delimiting, so a large base64 body has no line or size ceiling.
 let writeFrame (out: Stream) (payload: byte[]) =
     let len = payload.Length
     let prefix = [| byte (len >>> 24); byte (len >>> 16); byte (len >>> 8); byte len |]

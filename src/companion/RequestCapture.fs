@@ -24,7 +24,7 @@ let streamedBodyReason =
     "streamed body — not captured, so that the upload is unchanged"
 
 /// Shown when the top-level `Content-Length` is absent on a content that is not streamed. The
-/// cap of Decision 6 needs a known size before any read, so an unknown size is a refusal to
+/// size cap needs a known size before any read, so an unknown size is a refusal to
 /// read. It is a separate sentence from `streamedBodyReason`, because the user must not read
 /// "streamed body" about a body that is not streamed.
 [<Literal>]
@@ -76,7 +76,7 @@ let private store (m: HttpRequestMessage) (body: CapturedBody) = capturedBodies.
 
 /// Looks up the body stored for `m`. `None` is a miss: no entry was stored for this instance.
 /// A miss does not throw. Callers decide the state it degrades to from the content, since only
-/// a request with no content can honestly report "no body" (Decisions 7-8).
+/// a request with no content can honestly report "no body".
 let tryGetCapturedBody (m: HttpRequestMessage) : CapturedBody option =
     match capturedBodies.TryGetValue m with
     | true, body -> Some body

@@ -25,8 +25,7 @@ let private refusedUpdate (title: string) (detail: string) : obj =
 let private defaultRequestTimeoutMs = 30000
 
 /// Reads `fshttpStudio.requestTimeoutMs` for this Run. A change to the setting applies on the
-/// next click with no window reload. `0` means do not inject a bound
-/// (docs/spec/0004-run-path-robustness.md, Decision 1).
+/// next click with no window reload. `0` means do not inject a bound.
 let private configuredRequestTimeoutMs () : int =
     let n = (workspace.getConfiguration "fshttpStudio").getNumber "requestTimeoutMs"
     let finite: bool = emitJsExpr n "Number.isFinite($0)"
@@ -36,10 +35,8 @@ let private configuredRequestTimeoutMs () : int =
     else
         defaultRequestTimeoutMs
 
-/// The two numbers the status line shows. They are both durations in milliseconds, so a bare
-/// pair of floats side by side in a parameter list can be transposed with no compiler help.
-/// `RequestMs` is the companion's invocation bracket, and `TotalMs` is this module's bracket
-/// around `Companion.run` (docs/spec/0004-run-path-robustness.md, Decision 7).
+/// Two millisecond durations. A bare float pair in a parameter list can be transposed with no
+/// compiler help.
 type private Timing = { RequestMs: float; TotalMs: float }
 
 /// Headers as the viewer update carries them: an array of two-element `[name; value]` arrays.
@@ -48,7 +45,7 @@ type private Timing = { RequestMs: float; TotalMs: float }
 let private headersToWire (headers: (string * string) list) : string[][] =
     headers |> List.map (fun (name, value) -> [| name; value |]) |> List.toArray
 
-/// The three-state body fields the webview's `toEnvelope` reads. Mirrors Decision 10's
+/// The three-state body fields the webview's `toEnvelope` reads. Mirrors the
 /// `bodyState` / `bodyBase64` / `bodyReason` triple on the companion wire, and spells the state
 /// names through `Protocol`, which is where this end of the host names them once.
 let private requestBodyFields (body: CapturedBody) : string * string * string =
@@ -137,10 +134,7 @@ let register () : Disposable =
                 runOne h document blockIndex myGeneration |> Async.StartImmediate)
     )
 
-/// Registers the command that a `⊘ Cannot run: …` CodeLens invokes (docs/spec/0003, Decision 8).
-/// It reads the block's own refusal code and shows a warning toast with the matching text. It
-/// touches neither the response viewer nor the generation counter: no Run was ever going to
-/// start.
+/// Touches neither the response viewer nor the generation counter, because no Run starts.
 let registerExplain () : Disposable =
     commands.registerCommand (
         CodeLensProvider.explainCommandId,
@@ -163,10 +157,7 @@ let registerExplain () : Disposable =
                 |> Async.StartImmediate)
     )
 
-/// Registers the command that a `⊘ Cannot run: the companion stopped` CodeLens invokes
-/// (ADR-0003). It reads nothing and asks nothing: the companion that a locate would go to is the
-/// process that stopped, and the lens already knows the only thing left to say. It takes the
-/// lens arguments and ignores them, because every lens passes the pair.
+/// Takes the lens arguments and ignores them, because every lens passes the pair.
 let registerExplainCompanionStopped () : Disposable =
     commands.registerCommand (
         CodeLensProvider.explainStoppedCommandId,

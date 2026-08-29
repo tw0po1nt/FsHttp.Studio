@@ -68,16 +68,10 @@ let private decodeRunEnvelope (json: obj) : RunEnvelope =
         RefusedEnvelope(unbox<string> (json?code: obj), tryUnbox<string> (json?name: obj))
     | _ -> ProtocolErrorEnvelope(unbox<string> (json?message: obj))
 
-/// Abandons every pending entry along its own path and marks the handle closed
-/// (docs/spec/0004-run-path-robustness.md, Decision 6), so a `send` that arrives afterwards
-/// abandons immediately instead of enqueueing onto a queue that nothing will flush again.
-/// Called from both the `exit` and the `error` handler, because a spawn failure such as
-/// `ENOENT` reaches `error` and leaves the same queue behind. A second call drains an empty
-/// queue, so the two handlers may both fire.
-///
-/// The queue is drained and the handle is closed *before* any `Abandon` runs. That order is
-/// load-bearing: an abandon path that re-enters `send` then abandons in turn, rather than
-/// enqueueing onto the queue this call is already flushing.
+/// Both the `exit` and the `error` handler call this, because a spawn failure such as `ENOENT`
+/// reaches `error` and leaves the same queue behind.
+/// Drain the queue and close the handle before any `Abandon` runs, so a re-entrant `send`
+/// abandons rather than enqueueing onto the queue this call is already flushing.
 let private flushPending (handle: Handle) =
     let entries = handle.Pending.ToArray()
     handle.Pending.Clear()
@@ -147,19 +141,14 @@ let private send (handle: Handle) (payloadJson: string) (entry: IPendingRequest)
         handle.Process.stdin.write (encodeFrame (encodeUtf8 payloadJson)) |> ignore
 
 /// A decoded `blocks` response: the block ranges, and whether the companion's parse failed.
-/// `ParseFailed` mirrors the envelope's `parseFailed` property. An absent property decodes to
-/// `false` through `parseFailedOrDefault` (docs/spec/0014-explain-missing-lenses.md, Decision 3).
-///
-/// The companion has its own `LocateResult`, which holds located blocks and not wire ranges.
-/// This type is the host's side of that wire, so it carries the response name.
+/// An absent `parseFailed` property decodes to `false`.
 type LocateResponse =
     { Ranges: BlockRange list
       ParseFailed: bool }
 
 /// Sends a `locate` request over the framed envelope. It resolves with the block ranges and the
-/// parse-failed flag after the companion's `blocks` response arrives, or with an empty list and
-/// `ParseFailed = false` if the companion is gone (docs/spec/0004-run-path-robustness.md,
-/// Decision 6) — the honest degraded state, since there is nothing left to locate blocks in.
+/// parse-failed flag after the companion's `blocks` response arrives. A companion that is gone
+/// resolves with an empty list and `ParseFailed = false`.
 let locate (handle: Handle) (source: string) : Async<LocateResponse> =
     Async.FromContinuations(fun (resolve, _reject, _cancel) ->
         let payload: obj = createObj [ "tag" ==> "locate"; "source" ==> source ]
@@ -186,8 +175,7 @@ let locate (handle: Handle) (source: string) : Async<LocateResponse> =
 /// the script's own absolute path when it is saved on disk, so FSI can set
 /// `__SOURCE_DIRECTORY__`. It is `None` for a script with no such path, which keeps FSI's
 /// default. `timeoutMs` is the request bound from `fshttpStudio.requestTimeoutMs`. `0` means
-/// do not inject a bound. Abandons to `RunProtocolError` if the companion is gone
-/// (docs/spec/0004-run-path-robustness.md, Decision 6).
+/// do not inject a bound. Abandons to `RunProtocolError` if the companion is gone.
 let run
     (handle: Handle)
     (source: string)

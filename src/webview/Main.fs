@@ -21,12 +21,8 @@ let private CapturedState = "captured"
 [<Literal>]
 let private NotCapturedState = "notCaptured"
 
-/// Maps the viewer update's three-state body triple onto `CapturedBody`. An unknown state throws
-/// rather than decaying: `NotCaptured` carries a reason that is shown to the user, and Decision 8
-/// reserves that slot for the written reasons the capture produces. A wire term rendered there
-/// would read as an explanation of the request. `handle` turns the throw into the viewer's error
-/// text, which is where a defect on our own wire belongs
-/// (docs/spec/0012-request-as-sent.md, Decision 8; Seam 3, test 15 makes the host's parse agree).
+/// Throws on an unknown state. `NotCaptured` carries a reason the user reads, so a wire term must
+/// never reach that slot.
 let private toCapturedBody (raw: obj) : CapturedBody =
     match unbox<string> (raw?bodyState: obj) with
     | NoneState -> NoBody
@@ -88,10 +84,7 @@ let private showRunning () =
 
     pendingTimer <- Some(window.setInterval (tick, 1000))
 
-/// Replaces the panel contents with a Refused Run notice: a heading and a body paragraph
-/// (docs/spec/0003, Decision 6). This is a notice, not an error, so `responseStyles` gives it the
-/// editor foreground for the heading and `--vscode-descriptionForeground` for the body, and no
-/// color that reads as a failure.
+/// A Refused Run is a notice, so no color here may read as a failure.
 let private showRefused (title: string) (detail: string) =
     clearPending ()
     root.innerHTML <- ""

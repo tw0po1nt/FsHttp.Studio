@@ -6,12 +6,8 @@ open Companion.Envelope
 open Companion.BlockLocator
 open Companion.BlockRunner
 
-/// A block's wire entry in the `locate` response. A refused block's entry carries its refusal
-/// code; a supported block's entry omits the `refusal` property entirely, so the two branches
-/// return two differently-shaped anonymous records and the entry is typed `obj`
-/// (docs/spec/0003-lens-tells-the-truth.md, Decision 4). The coordinates are written once, and
-/// the refused branch copies-and-extends them, so a later coordinate field cannot reach one
-/// branch and miss the other.
+/// Typed `obj` because a refused entry carries `refusal` and a supported entry omits the property,
+/// which makes the two branches differently-shaped anonymous records.
 let private toBlockEntry (block: LocatedBlock) : obj =
     let r = block.Block
 

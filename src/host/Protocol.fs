@@ -9,8 +9,7 @@ type State =
     | SdkNotFound
     | Stopped
 
-/// What the active editor holds, as the status bar and the no-requests lens see it
-/// (docs/spec/0014-explain-missing-lenses.md, Decision 5).
+/// What the active editor holds, as the status bar and the no-requests lens see it.
 type ScriptView =
     | NoFSharpDocument
     | NotAScript // .fs or .fsi
@@ -24,21 +23,15 @@ type ScriptView =
 /// other did not.
 let isScriptFileName (fileName: string) = fileName.EndsWith ".fsx"
 
-/// True when a `locate` response should be mirrored onto the status bar, which is when it belongs
-/// to the document the user is looking at. `activeFileName` is `None` for a workbench with no
-/// active text editor at all.
-///
-/// VSCode asks for lenses on every visible F# document, so a response for a second visible editor
-/// arrives while the first is still active, and mirroring it would report a count against a script
-/// the user is not reading (docs/spec/0014-explain-missing-lenses.md, Decision 5). Pure, and
-/// separate from the interop that reads the active editor, because that is what makes the rule
-/// assertable — the workbench cannot be made to produce the losing response on demand.
+/// `activeFileName` is `None` when the workbench has no active text editor.
+/// VSCode asks for lenses on every visible F# document, so a response can arrive for a script the
+/// user is not reading.
 let mirrorsActiveDocument (activeFileName: string option) (locatedFileName: string) =
     activeFileName = Some locatedFileName
 
 /// The status-bar text for a companion state and a script view, or `None` to hide the item.
 /// Companion states other than `Ready` outrank the script view. `NoFSharpDocument` hides the
-/// item whatever the companion state is (docs/spec/0014-explain-missing-lenses.md, Decisions 5-6).
+/// item whatever the companion state is.
 let statusText (state: State) (view: ScriptView) : string option =
     match state, view with
     | _, NoFSharpDocument -> None
@@ -55,49 +48,40 @@ let statusText (state: State) (view: ScriptView) : string option =
     | Ready, Script(_, true) -> Some "no requests found — syntax error"
 
 /// The CodeLens title for a script that failed to parse and holds no block. `Some` only for
-/// `Script(0, true)` (docs/spec/0014-explain-missing-lenses.md, Decision 2). A count at or below
+/// `Script(0, true)`. A count at or below
 /// zero reads as zero, as it does in `statusText` above.
 let noRequestsLensTitle (view: ScriptView) : string option =
     match view with
     | Script(n, true) when n <= 0 -> Some "⊘ No requests found: this script has a syntax error"
     | _ -> None
 
-/// The parse-failed flag a `blocks` response carries, where `None` is a response that omitted the
-/// property. An omitted property decides `false`, which is Decision 3's compatibility rule: an old
-/// companion that does not send the property must not light the syntax-error lens on each response
-/// (docs/spec/0014-explain-missing-lenses.md, Decision 3).
-///
-/// `Companion.locate` holds the interop lookup that turns the response object into `None` or
-/// `Some`. This function decides the flag from that result alone, so `tests/host.Tests` can
-/// drive the rule without Fable.
+/// An omitted property decides `false`, so an old companion that never sends it cannot light the
+/// syntax-error lens on each response.
 let parseFailedOrDefault (value: bool option) : bool = defaultArg value false
 
-/// A source range in FCS's own numbering: 1-based lines, 0-based columns (ADR-0003). It mirrors
-/// `Companion.BlockLocator.BlockRange` on the wire. The two sides never share an assembly, so
-/// this duplicate shape is deliberate, and neither side reaches across the process boundary.
+/// FCS numbering: 1-based lines, 0-based columns. It duplicates
+/// `Companion.BlockLocator.BlockRange` on purpose, because the two sides never share an assembly.
 type BlockRange =
     {
         StartLine: int
         StartCol: int
         EndLine: int
         EndCol: int
-        /// The block's refusal code from `classify`, spelled as Decision 2 spells it, or `None`
-        /// for a block a Run can reach. An entry that omits the property decodes to `None`
-        /// (docs/spec/0003-lens-tells-the-truth.md, Decision 4). Not yet acted on.
+        /// The block's refusal code from `classify`, or `None` for a block a Run can reach. An
+        /// entry that omits the property decodes to `None`. Not yet acted on.
         Refusal: string option
     }
 
 type Diagnostic = { Message: string; Range: BlockRange }
 
-/// A request body as the viewer must see it. Blank must not mean "no body", "captured bytes",
-/// and "we chose not to read it" at once (docs/spec/0012-request-as-sent.md, Decision 8).
+/// Blank must not mean "no body", "captured bytes", and "we chose not to read it" at once.
 type CapturedBody =
     | NoBody
     | Captured of bytes: byte[]
     | NotCaptured of reason: string
 
 /// The request that was actually sent, as the companion put it on the `ok` envelope. Mirrors
-/// `BlockRunner.RequestData` (docs/spec/0012-request-as-sent.md, Decisions 9-10).
+/// `BlockRunner.RequestData`.
 type RequestData =
     { Method: string
       Url: string
@@ -106,7 +90,7 @@ type RequestData =
 
 /// The response half of a successful Run. Mirrors `BlockRunner.ResponseData`, which exists so
 /// that neither side carries a ten-field tuple whose positional call sites are a defect waiting
-/// to happen (docs/spec/0012-request-as-sent.md, Decision 9).
+/// to happen.
 type ResponseData =
     { Status: int
       Reason: string
@@ -116,8 +100,7 @@ type ResponseData =
       RequestMs: float }
 
 /// The wire's three-state body triple, exactly as the `request` object spells it. The three
-/// fields only ever travel together, and only `capturedBodyFromWire` below reads them
-/// (docs/spec/0012-request-as-sent.md, Decision 10).
+/// fields only ever travel together, and only `capturedBodyFromWire` below reads them.
 type WireBody =
     { State: string
       Base64: string
@@ -133,7 +116,7 @@ type WireRequest =
 
 /// A `run` response after the JS side has read its properties, named for the glossary's
 /// **Envelope** rather than for `Envelope.fs`'s length-prefixed transport frame. The pure parse
-/// below maps this shape onto `RunResult`, so Seam 3 can drive it without Fable interop.
+/// below maps this shape onto `RunResult`, so a test can drive it without Fable interop.
 ///
 /// On `OkEnvelope`, a `request` of `None` means the property was absent, which is a protocol
 /// error rather than a crash.
@@ -167,20 +150,13 @@ type RunResult =
 let scriptFileNameFor (scheme: string) (fileName: string) : string option =
     if scheme = "file" then Some fileName else None
 
-/// Converts an FCS-native 1-based line to vscode's 0-based line (ADR-0003's coordinate
-/// convention). The columns already agree, so only the line needs an adjustment.
+/// Converts an FCS-native 1-based line to vscode's 0-based line. The columns already agree.
 let toVscodeLine (fcsLine: int) : int = fcsLine - 1
 
-/// Formats a Run's compile diagnostics into the response viewer's plain text. Each message
-/// carries its `(line,col)` source position as a prefix, so a reader can locate it.
-///
-/// The companion's `BlockRange` is a 1-based line and a 0-based column (ADR-0003). This
-/// function shifts the column to 1-based, so the printed position matches vscode's own Ln/Col
-/// status-bar readout, which is where the user looks for it.
-///
-/// This text is deliberately *not* an editor diagnostic. The response viewer owns the report of
-/// why a Run failed. Our per-block isolation can also flag source that is not wrong in the
-/// whole file, so an editor squiggle would mislead the user. Ionide owns the editor.
+/// Shifts the column to 1-based, so the printed `(line,col)` prefix matches vscode's Ln/Col
+/// readout.
+/// Never an editor diagnostic, because per-block isolation can flag source that is correct in the
+/// whole file.
 let formatCompileError (diagnostics: Diagnostic list) : string =
     let formatOne (d: Diagnostic) =
         sprintf "(%d,%d) %s" d.Range.StartLine (d.Range.StartCol + 1) d.Message
@@ -207,11 +183,8 @@ let CapturedState = "captured"
 [<Literal>]
 let NotCapturedState = "notCaptured"
 
-/// Maps the wire's three-state body triple onto `CapturedBody`
-/// (docs/spec/0012-request-as-sent.md, Decision 10). An unknown state is a protocol error: both
-/// ends of this wire are ours, so a bad value is a defect. Undecodable bytes are the same kind of
-/// defect, and are reported rather than decayed to `NoBody`, which would tell the reader no body
-/// was sent when one was.
+/// An unknown state is a protocol error, because both ends of this wire are ours. Undecodable
+/// bytes are reported rather than decayed to `NoBody`, which would claim no body was sent.
 let private capturedBodyFromWire (body: WireBody) : Result<CapturedBody, string> =
     match body.State with
     | NoneState -> Ok NoBody
@@ -232,17 +205,10 @@ let private requestFromWire (request: WireRequest) : Result<RequestData, string>
           Headers = request.Headers
           Body = body })
 
-/// The Content-Type the Request section dispatches a request body on. It is read back out of the
-/// request headers the companion already collected, rather than carried as a fourth field on the
-/// wire: `RequestData` has no `ContentType` (Decision 9), and one derived here cannot disagree
+/// Read back out of the request headers rather than carried on the wire, so it cannot disagree
 /// with the header row the same section renders.
-///
-/// The lookup is case-insensitive, because a header name on the wire is whatever the server or
-/// FsHttp wrote. A request with no Content-Type — a `GET`, most often — yields `""`, which the
-/// renderer's dispatch already treats as an unknown type.
-///
-/// Lives here rather than in `RunCommand`, which is Fable and VSCode interop with no suite of its
-/// own (docs/spec/0012-request-as-sent.md, Seam 3).
+/// The lookup is case-insensitive, because a header name is whatever the server or FsHttp wrote.
+/// A request with no Content-Type yields `""`, which the renderer treats as an unknown type.
 let requestContentType (headers: (string * string) list) : string =
     headers
     |> List.tryFind (fun (name, _) -> name.Equals("Content-Type", System.StringComparison.OrdinalIgnoreCase))
@@ -250,8 +216,8 @@ let requestContentType (headers: (string * string) list) : string =
     |> Option.defaultValue ""
 
 /// Turns a decoded `run` response into a `RunResult`. An `ok` envelope with no `request` object,
-/// with an unknown `bodyState`, or with an undecodable captured body, is a `RunProtocolError` and
-/// not a crash (docs/spec/0012-request-as-sent.md, Seam 3).
+/// with an unknown `bodyState`, or with an undecodable captured body, becomes a
+/// `RunProtocolError` rather than a crash.
 let parseRunResult (envelope: RunEnvelope) : RunResult =
     match envelope with
     | CompileErrorEnvelope diagnostics -> RunCompileError diagnostics
