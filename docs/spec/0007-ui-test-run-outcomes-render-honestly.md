@@ -15,9 +15,9 @@ is not a GitHub issue, so this spec restates every decision it depends on rather
 wrong and easy to believe are covered:
 
 - A block that requests a resource answering **404**. The viewer must render the body and the status
-  code, and **report no failure** — an HTTP error response is a *successful* Run in this product's
+  code, and **report no failure**, because an HTTP error response is a *successful* Run in this product's
   vocabulary, because the server answered.
-- A block pointed at a **port nothing listens on**. The viewer must render the error as plain text —
+- A block pointed at a **port nothing listens on**. The viewer must render the error as plain text,
   a runtime error, which produced no response at all.
 
 These two renders were first bucketed as *covered elsewhere*, on the grounds that
@@ -29,13 +29,13 @@ status is 404. It does not prove that a real 404 travels the whole wire. That wi
 through the companion, across the envelope boundary, through the extension host, over
 `postMessage`, and into a live webview. At the end of it, the 404 must render as a *response* and
 not as a *failure*. The same holds for the connection-refused render. That is exactly the distinction the suite's fidelity floor was written to
-make: response viewer content in the webview DOM, not a viewer-update object.
+make: response viewer content in the webview DOM rather than a viewer-update object.
 
 Two further facts make the old bucket wrong rather than merely debatable:
 
 1. **The mechanism was already built and had gone dead.** The test server carries a 404 route and a
    bind-then-close dead port, and the sidecar carries the dead port as one of its two fields. Before
-   this check, no fixture read either one — a contract with no reader.
+   this check, no fixture read either one, which left a contract with no reader.
 2. **Neither render is hard to automate.** Both run inside the already-warm ExTester session with the
    viewer already open. Two Runs are the whole cost. A cheap, automatable step does not belong in a
    dropped or delegated bucket.
@@ -113,8 +113,8 @@ One new checked-in fixture under the suite's `fixtures/` directory, owned by thi
 
 | Block | Requests | Expected outcome |
 |---|---|---|
-| First | `GET {baseUrl}/notfound` | HTTP error response — 404, body rendered, no failure |
-| Second | `GET {deadUrl}/` | Runtime error — plain error text, no response |
+| First | `GET {baseUrl}/notfound` | HTTP error response: 404, body rendered, no failure |
+| Second | `GET {deadUrl}/` | Runtime error: plain error text, no response |
 
 This is the only fixture that reads `deadUrl`. Its existence is what makes that sidecar field
 load-bearing rather than decorative.
@@ -122,7 +122,7 @@ load-bearing rather than decorative.
 **This depends on #144.** Without it, `__SOURCE_DIRECTORY__` does not resolve to the fixture's own
 directory and the sidecar read fails.
 
-### `/notfound` is a named route, not the catch-all
+### `/notfound` is a named route rather than the catch-all
 
 The test server's route table (fixed by spec 1) names `/notfound` explicitly and answers it with a
 body distinguishable from `/json`'s. The catch-all also answers 404, and it would satisfy a naive
@@ -140,7 +140,7 @@ In order, every wait through `eventually`:
 2. Click the first block's lens, find-and-click inside one retry.
 3. Assert in the webview DOM that the viewer renders: the status code `404`, the status line's URL
    ending in `/notfound`, and the `/notfound` body's distinctive content.
-4. Assert, inside that same settled state, that the viewer reports **no failure** — see below for what
+4. Assert, inside that same settled state, that the viewer reports **no failure**. The text below states what
    that means precisely.
 5. Click the second block's lens, find-and-click inside one retry.
 6. Assert in the webview DOM that the viewer renders plain error text naming a runtime error, and that
@@ -159,12 +159,12 @@ write the same viewer, so a single tell is not enough.
 
 A 404 in this product is a **successful Run with an HTTP error response**. The viewer renders it exactly as it renders a 200. That is a status line whose status-code span
 carries the 4xx status band, a headers section, and the body rendered by content type. The
-difference from a 200 is a class and a number, not a different shape of render.
+difference from a 200 is a class and a number rather than a different shape of render.
 
 So step 4 asserts all three of:
 
-- The response render is present — status line plus body region.
-- The body is rendered by its content type, not as a plain-text error dump.
+- The response render is present, holding a status line plus a body region.
+- The body is rendered by its content type rather than as a plain-text error dump.
 - No runtime-error text is present.
 
 That triple is what a person means by "renders the body and the status code, and reports no failure."
@@ -183,7 +183,7 @@ failure must.
 
 The check inherits an open fixture, an open viewer, and a warm companion from the core path check. It
 leaves the viewer showing the runtime error. No check that follows depends on the viewer's content, only
-on its being open — and spec 4 closes it deliberately.
+on its being open, and spec 4 closes it deliberately.
 
 ### Waits and budgets
 
@@ -201,21 +201,21 @@ entry does not survive.
 ## Testing Decisions
 
 **What makes a good test here.** The fidelity floor, unchanged. Response viewer content in the
-webview DOM, not a viewer-update object. A real click on a real lens. This check exists *because*
+webview DOM rather than a viewer-update object. A real click on a real lens. This check exists *because*
 the unit-level versions of these assertions already pass, and prove less than they appear to.
 
 **Seam.** No new seam. The packaged `.vsix` driven through ExTester. **No test-only seam is added to the shipping extension.**
 
 **Modules under test.** The 404 path and the runtime-error path, end to end. That means the
 companion's Run outcome, the envelope, the host's mapping from outcome to viewer update, the
-webview's handler, and the renderer core — as one thing.
+webview's handler, and the renderer core, as one thing.
 
 **Prior art in this repository:**
 
-- `tests/renderer.Tests/` — asserts the 404 render from a handed-in record. This check is the
+- `tests/renderer.Tests/`: asserts the 404 render from a handed-in record. This check is the
 end-to-end escalation of that assertion. Both stay.
-- `tests/companion.Tests/` — pins the companion's Run outcomes, including runtime errors.
-- Spec 2's core path check — the viewer-reading vocabulary this check reuses verbatim.
+- `tests/companion.Tests/`: pins the companion's Run outcomes, including runtime errors.
+- Spec 2's core path check: the viewer-reading vocabulary this check reuses verbatim.
 
 **Negative verification.** Run the check twice against deliberately wrong expectations. Once with
 the 404 assertion expecting a 200, and once with the dead-port assertion expecting a status line.

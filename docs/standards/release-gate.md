@@ -47,8 +47,7 @@ two runs in three therefore reports a green job. Each budget is asserted after t
 to catch that kind of drift. The retry is a workflow-level construct that cannot see why the suite
 failed. It cannot tell a stuck runner from a check that is genuinely going bad. This is a known and
 accepted gap. Without the retry, the environment dependencies ExTester carries would make unrelated
-pull requests fail. A re-run attempt count above 1 is a signal of possible drift, and not an expected
-condition.
+pull requests fail. A re-run attempt count above 1 is a signal of possible drift rather than an expected condition.
 
 **Linux only.**
 A defect that appears only in `dotnet` discovery or in companion-process handling on macOS or

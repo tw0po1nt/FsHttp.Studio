@@ -65,7 +65,7 @@ let notFoundBody = "ui-test-server:notfound"
 
 /// Cross-process contract for `POST /echo`. Must match `UiTestServer.Server.echoAckBody`. The
 /// acknowledgement is what the *response* body carries, and it repeats none of what was posted.
-/// Named in parts, and never reassembled into the whole body: the server owns that one line, and
+/// Named in parts, which this file never reassembles into the whole body: the server owns that one line, and
 /// a copy of it here would assert equality against a literal the server is free to re-space.
 let echoAckKey = "echoed"
 
@@ -193,7 +193,7 @@ let private observationOf (result: Poll) =
     | DoesNotHold -> None
 
 /// The one polling loop. `eventually` is the plain-condition face of it, so a check chooses between
-/// reporting and not reporting, and not between two waits.
+/// reporting and not reporting, rather than between two waits.
 ///
 /// A timeout quotes the result of the *last* poll before the deadline. It does not read the
 /// workbench again after the deadline: a fresh read would report a state the wait never failed on,

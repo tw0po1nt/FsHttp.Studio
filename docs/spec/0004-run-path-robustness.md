@@ -32,7 +32,7 @@ request took about 5 ms.
 
 **Bound the request at 30 seconds**, injected by the companion into the block's own configuration at
 invocation time, never overriding a bound the user set. A request that passes the bound ends the Run
-with a written message that names the bound and the setting, and not with `A task was canceled.`
+with a written message that names the bound and the setting, in place of `A task was canceled.`
 
 **Flush the pending queue when the companion exits**, and refuse to enqueue anything after it has.
 Each abandoned Run resolves rather than hanging, and its message tells the user the companion
@@ -96,14 +96,14 @@ The `package.json` contribution sits beside `fshttpStudio.dotnetPath`:
 
 ### 2. Inject the bound, never override
 
-Apply it as an `Option.orElse`, not an assignment:
+Apply it as an `Option.orElse` rather than an assignment:
 
 ```fsharp
 { c with timeout = c.timeout |> Option.orElse (Some (TimeSpan.FromMilliseconds timeoutMs)) }
 ```
 
 FsHttp's `Config.timeout` is `TimeSpan option` and defaults to `None`, so `orElse` reads exactly as
-"a default, not an override". A block that carries `config_timeoutInSeconds`, and a script that calls
+"a default rather than an override". A block that carries `config_timeoutInSeconds`, and a script that calls
 `GlobalConfig.set` with a timeout of its own, both keep what they chose. This was measured: with a
 user timeout of 10 s and an injected 3 s, the request ran for 10 s.
 
@@ -111,7 +111,7 @@ This is the one place in the companion's injected configuration where the user w
 response-reading guard (`bufferResponseContent`, `httpCompletionOption`) overrides deliberately,
 because a Run cannot read a consumed stream. A timeout carries no such requirement.
 
-### 3. The bound rides the invocation's `Config.update`, not the `GlobalConfig.set` preamble
+### 3. The bound rides the invocation's `Config.update` rather than the `GlobalConfig.set` preamble
 
 **This corrects the ticket that raised this work.** It asked for the timeout in the `GlobalConfig.set`
 preamble at `BlockRunner.fs:55`. After the reach mechanism (#96) that preamble no longer configures
@@ -125,8 +125,8 @@ What the bound covers, measured against a local server:
 | | |
 |---|---|
 | Connection, request, response headers | **covered** |
-| The response body download | **covered** — we force `ResponseContentRead`, so the body read is part of the send. A 6 s dribbling body ended at a 2 s bound. |
-| `#r "nuget:"` restore | **not covered** — it runs during the Setup evaluation, before the invocation. Measured at 516 ms with a warm package cache. |
+| The response body download | **covered**. We force `ResponseContentRead`, so the body read is part of the send. A 6 s dribbling body ended at a 2 s bound. |
+| `#r "nuget:"` restore | **not covered**. It runs during the Setup evaluation, before the invocation. Measured at 516 ms with a warm package cache. |
 | A user's own infinite loop | **not covered**, knowingly. Refer to Out of Scope. |
 
 The restore is the anchor the ticket asked us to justify the number against, and it turns out not to
@@ -177,13 +177,13 @@ produced no response, because the user's code or the host failed", and it lists 
 as an example. A timeout is the same kind of thing. This spec adds no fifth outcome beside the fourth
 that #97 introduced, and no `CONTEXT.md` edit.
 
-One case belongs to the user, not to us: if the user set their own timeout, the bound that fired was
+One case belongs to the user rather than to us: if the user set their own timeout, the bound that fired was
 theirs. The message is the same, because the number in it is the applied bound, and pointing at our
 setting is still the correct advice for someone who wants to wait longer.
 
 ### 6. Flush the pending queue, and close it
 
-The naive fix — resolve every queued resolver with a `runtimeError` object — breaks `locate`. The
+The naive fix, which resolves every queued resolver with a `runtimeError` object, breaks `locate`. The
 FIFO holds untyped `obj -> unit` resolvers, and `locate`'s resolver does `unbox (json?ranges)`. Hand
 it an error object and it throws inside a continuation that nobody catches.
 
@@ -198,7 +198,7 @@ type private Pending =
 - `locate` abandons to an **empty list**. The companion is gone, so there are no blocks to read. It
   must not throw, because `runOne` awaits it before it ever sends the Run.
 
-  > **Update (2026-08-10):** this list is an abandon, and not a reading of the script, so
+  > **Update (2026-08-10):** this list is an abandon rather than a reading of the script, so
   > `CodeLensProvider` must not treat it as one. The lenses no longer disappear when the companion
   > stops. They keep the ranges of the last successful locate and state the stopped companion
   > (ADR-0003). The provider therefore re-reads its ready state after each `locate` returns, and
@@ -206,7 +206,7 @@ type private Pending =
   > it as "no block at this index".
 - `run` abandons to `RunProtocolError` with the message below.
 
-Flush on **both** terminal paths — the `exit` handler and the `error` handler — through one function,
+Flush on **both** terminal paths, the `exit` handler and the `error` handler, through one function,
 because a spawn that fails with `ENOENT` leaves the same queue behind.
 
 After the flush, mark the handle closed and **abandon immediately on `send`** rather than enqueueing.
@@ -224,8 +224,8 @@ Reload is the accurate instruction: nothing restarts the companion today. Refer 
 
 ### 7. Honest timing: the companion measures the invocation, the host keeps the total
 
-The companion brackets the invocation — the single `EvalExpressionNonThrowing` that sends the
-request — and puts the result on the `ok` envelope as `requestMs`. The host keeps its existing
+The companion brackets the invocation, which is the single `EvalExpressionNonThrowing` that sends
+the request, and puts the result on the `ok` envelope as `requestMs`. The host keeps its existing
 `Date.now()` bracket around `Companion.run` and renames it to what it is.
 
 Wire and types, in order:
@@ -238,9 +238,9 @@ Wire and types, in order:
 | `RunCommand.resultMessage` | `requestMs` beside the existing number |
 | `Renderer.ResponseEnvelope` | `ElapsedMs` becomes `TotalMs`; add `RequestMs` |
 
-`ElapsedMs` must be **renamed**, not joined by a second field. The name is what let it pass for a
-request time; leaving it in place beside `RequestMs` invites the next reader to make the same
-mistake. `requestMs` names the HTTP request and not the Block, so it does not collide with the
+`ElapsedMs` must be **renamed** rather than joined by a second field. The name is what let it pass
+for a request time, and leaving it in place beside `RequestMs` invites the next reader to make the
+same mistake. `requestMs` names the HTTP request rather than the Block, so it does not collide with the
 glossary's `_Avoid_` list for **Block**.
 
 Only `Ok` carries a duration. A compile error and a runtime error render no status line.
@@ -275,10 +275,10 @@ improvement.
 
 We ship the bracket and record the limit here, rather than timing inside the evaluated code. Timing
 inside would mean returning a tuple of the duration and the `Response` from the invocation, and
-reflecting over the tuple — which is precisely the shape #96 Decision 10 finished simplifying. The
+reflecting over the tuple, which is precisely the shape the reach mechanism finished simplifying. The
 accuracy bought does not pay for re-complicating the seam that the reach mechanism just cleaned.
 
-The `total` number is deliberately kept, and not replaced. It is the only place a user or a
+The `total` number is deliberately kept rather than replaced. It is the only place a user or a
 maintainer ever sees the session-creation cost, which the benchmarking research put at about 65% of a
 warm Run. That measurement is the evidence the session-model work will argue from, and a request-only
 status line would throw it away.

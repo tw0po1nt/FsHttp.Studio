@@ -17,7 +17,7 @@ That is slow, it is unrepeatable, and it does not scale past one maintainer. Wor
 check that observes the surfaces a user actually touches. The three existing suites
 (`companion.Tests`, `host.Tests`, `renderer.Tests`) and `npm run smoke` test provider return values,
 envelopes, and viewer-update objects. None of them sees CodeLens text in a workbench, a warning
-toast, or the response viewer's rendered DOM. So the walk cannot simply be deleted — something has
+toast, or the response viewer's rendered DOM. So the walk cannot simply be deleted. Something has
 to observe the same channels a person does.
 
 Six automated checks will do that. No one of them can be written first, because all six need the
@@ -45,7 +45,7 @@ After this spec lands:
   Linux, driving the same VSCode version CI drives.
 - A CI job runs the suite on every pull request that touches the relevant surfaces, on `main`, and
   on release.
-- The suite contains exactly one test — the **setup self-check** — which asserts that the harness
+- The suite contains exactly one test, the **setup self-check**, which asserts that the harness
   reached a proven-live workbench and that the timing table printed. It touches no product surface.
 - A weekly workflow opens a pull request when the pinned VSCode version falls behind stable.
 - `docs/release-gate.md` exists and states, honestly, what the suite does and does not cover.
@@ -144,19 +144,19 @@ A new suite directory, `tests/ui.Tests/`, matching the three sibling suites:
 
 - A Fable test project at the suite root, targeting `netstandard2.0`, referencing `Fable.Core`,
   `Fable.Mocha`, and the repository's pinned `FSharp.Core`.
-- A `server/` subdirectory holding a `net10.0` executable project — the test HTTP server.
+- A `server/` subdirectory holding a `net10.0` executable project: the test HTTP server.
 - A `fixtures/` directory. Fixture `.fsx` scripts are checked in; the generated `sidecar.json`
   beside them is gitignored.
 
 **Both projects are added to `FsHttp.Studio.slnx`.** The solution already carries Fable-only
-projects, so `dotnet build FsHttp.Studio.slnx` — the repository's real compiler gate — then covers
+projects, so `dotnet build FsHttp.Studio.slnx`, the repository's real compiler gate, then covers
 the suite and the server. Neither was type-checked by the repository build during prototyping.
 
 One `.fsproj` per directory, so pointing Fable at the suite root is unambiguous.
 
 ### Harness composition
 
-The harness is a module of the suite, not a per-check concern. It owns:
+The harness is a module of the suite rather than a per-check concern. It owns:
 
 - ExTester bindings (roughly 45 members over about nine page objects).
 - The assertion module, the `eventually` and `eventuallyObserved` combinators, and the named
@@ -178,7 +178,7 @@ written.
 Two constraints, both found the hard way in prototyping, both non-obvious:
 
 - **The module must not be named `Expect`.** `open Fable.Mocha` shadows it, and the shim silently
-  becomes dead code — which is what happened in prototyping, undetected, across two prototypes.
+  becomes dead code, which is what happened in prototyping, undetected, across two prototypes.
   Name it `Assert`.
 - **`NODE_OPTIONS=--enable-source-maps` must be set.** ExTester builds Mocha in-process, so
   `.mocharc.js`'s `node-option` is ignored. Without the flag, a bundle offset is printed instead of
@@ -189,11 +189,11 @@ Both are required for source maps to reach `.fs` lines. Either one missing defea
 ### Build and run
 
 Fable compiles the suite to a third output target, and esbuild bundles it to a **single CJS
-file** — the same shape `smoke.mjs` and `esbuild.mjs` already establish, with `format: "cjs"` and
+file**, the same shape `smoke.mjs` and `esbuild.mjs` already establish, with `format: "cjs"` and
 `external: ["vscode"]`. CJS is forced: Fable's `import … from "vscode"` only resolves through
 esbuild's `external`, and every Mocha-driven harness loads files synchronously.
 
-Mocha runs in **`ui: 'bdd'`**. This is one config word and it is mandatory — Fable.Mocha calls the
+Mocha runs in **`ui: 'bdd'`**. This is one config word and it is mandatory, because Fable.Mocha calls the
 global `describe`/`it`, and under the `tdd` default the suite dies with `describe is not defined`.
 ExTester needs no change here, since Mocha's own default is `bdd`.
 
@@ -217,7 +217,7 @@ Four sharp edges `run.sh` must handle, all found in prototyping:
 project, no extract.
 
 The earlier decision said "shares the handlers in `TestServer.fs` (or an extract of them)", and
-rejected a Node rewrite for duplication. That argument was aimed at a *second language* — second
+rejected a Node rewrite for duplication. That argument was aimed at a *second language*: second
 runtime, second dependency set, drift in what a status code means. A second .NET file is a different
 animal, and the two route surfaces do not overlap:
 
@@ -229,7 +229,7 @@ animal, and the two route surfaces do not overlap:
 Common code is roughly 25 lines. A shared library over two different concurrency models is the shape
 most likely to be wrong on day one.
 
-**Route table — this is a cross-process contract, and nothing compiles it:**
+**Route table. This is a cross-process contract, and nothing compiles it:**
 
 | Route | Behavior |
 |---|---|
@@ -240,17 +240,17 @@ most likely to be wrong on day one.
 | `GET /status` | 200 `{"slowSeen":N,"slowWaiting":M}` |
 | anything else | 404 |
 
-`/notfound` is a **named route**, not the catch-all. A later check needs a 404 body distinguishable
+`/notfound` is a **named route** rather than the catch-all. A later check needs a 404 body distinguishable
 from `/json`, and the catch-all satisfied that only by accident. Naming it frees the catch-all to
-mean "the fixture has a typo" — a different failure, which a check must not read as a pass.
+mean "the fixture has a typo", a different failure, which a check must not read as a pass.
 
 `/status` is the **arrival tell**. It is what separates killing the companion during a Run in flight
 from killing it before the request ever left.
 
-**Thread-pool dispatch per request is mandatory, not stylistic.** Prototyping measured the failure
+**Thread-pool dispatch per request is mandatory.** Prototyping measured the failure
 mode: without it, the kill lands before the request leaves and the release deadlocks behind the hang.
 
-**The release mechanism is a generation counter, not a latch.** The prototype used a sticky
+**The release mechanism is a generation counter rather than a latch.** The prototype used a sticky
 `ManualResetEventSlim`: once set, never reset, so every later `/slow` returned at once. A check
 whose hang silently does not hang is a bad failure. `/slow` reads the generation on arrival and
 waits until it advances; `/release` increments it. About eight lines more than a latch.
@@ -270,20 +270,20 @@ The server writes a sidecar file beside the fixtures at startup:
 Both ports are ephemeral loopback. The dead port is obtained by bind-then-close.
 
 Each fixture reads the sidecar with `Path.Combine(__SOURCE_DIRECTORY__, …)`. The editor opens the
-real repository fixture, not a generated copy. A file is used rather than an environment variable
+real repository fixture rather than a generated copy. A file is used rather than an environment variable
 because the companion is a child of the extension host and environment inheritance through Electron
 is easy to get wrong.
 
 **This depends on #144** (`__SOURCE_DIRECTORY__` resolving to the script's own directory). The
 harness spec itself does not read the sidecar from a fixture, so **this spec is not blocked by
-#144** — but three later specs are.
+#144**, and three later specs are.
 
 ### Setup, and what "live" means
 
-Setup is the Mocha `before` hook. It ends at a **proven-live** workbench, not a visible one. All
+Setup is the Mocha `before` hook. It ends at a **proven-live** workbench rather than a visible one. All
 four tells must hold:
 
-1. `waitForWorkbench` returned — which on its own is *not* a readiness tell.
+1. `waitForWorkbench` returned, which on its own is *not* a readiness tell.
 2. The test server answers its healthcheck and the sidecar parses.
 3. The fixture folder is open and the extension activated.
 4. A companion process exists.
@@ -296,7 +296,7 @@ Setup **fails fast, before any Run**, when the sidecar is missing, does not pars
 healthcheck, or when the dead port answers. The message names the cause. The sidecar is deleted
 before the server starts, so a stale file cannot be mistaken for a live one.
 
-**The harness owns the dead-port probe**, not the server. The server allocates the port and reports
+**The harness owns the dead-port probe** rather than the server. The server allocates the port and reports
 it. The server does not self-police. One gate with one error vocabulary means "dead port was live" reads in
 the same voice as "sidecar is stale".
 
@@ -306,7 +306,7 @@ the same voice as "sidecar is stale".
 through it. No second polling combinator. No `driver.wait` for product state from a check.
 
 *Amended after spec 0006.* The harness also supplies `eventuallyObserved`. A poll returns the state
-it read, and not a bare `bool`, so a timeout names the state that the last poll read. An exact-count
+it read rather than a bare `bool`, so a timeout names the state that the last poll read. An exact-count
 assertion needs this, because too few lenses and too many lenses produce the same timeout.
 `eventuallyObserved` is not a second combinator. It contains the one polling loop, and `eventually`
 calls `eventuallyObserved`. A check that has nothing to report continues to use `eventually`.
@@ -324,8 +324,8 @@ A check can pass a shorter override. A longer deadline needs a named constant an
 No magic number in a check body.
 
 **Fixed `sleep` is banned in check bodies. There is no escape hatch.** The poll interval inside
-`eventually` is retry spacing, not a sleep. ExTester's own timeouts (`waitForWorkbench`,
-`switchToFrame`) remain allowed in harness setup — they are not product assertions.
+`eventually` is retry spacing rather than a sleep. ExTester's own timeouts (`waitForWorkbench`,
+`switchToFrame`) remain allowed in harness setup, because they are not product assertions.
 
 **Positive tell before every absence assertion.** Before a check asserts something is missing, it
 must first observe a positive tell that the prior step finished. Absence at a fixed time is not
@@ -338,7 +338,7 @@ warm session. The true cause was a missing retry.
 
 Budgets are **green-path**, all of them. A budget measures what a passing run costs. A deadline is a
 ceiling on a single wait and only fully elapses on a run that is already failing. They measure
-different runs — so the 60-second post-reload deadline does not need to fit inside the 45-second
+different runs, so the 60-second post-reload deadline does not need to fit inside the 45-second
 per-check budget, and no reconciliation is needed.
 
 | Budget | Span | Value |
@@ -348,15 +348,15 @@ per-check budget, and no reconciliation is needed.
 | Per-check | First action to last assertion, flat across all checks | 45 s |
 | Suite | First check's first action to last check's last assertion, setup excluded | 240 s |
 
-A run that is **slow but passing** busts its budget and reddens. That is the intent — it is the only
+A run that is **slow but passing** busts its budget and reddens. That is the intent, and it is the only
 signal that the suite is drifting toward the job timeout.
 
 Where the numbers come from:
 
-- **45 s** is 2.2× the observed worst case (20.1 s) of the dearest check. Flat, not per-check: six
+- **45 s** is 2.2× the observed worst case (20.1 s) of the dearest check. Flat rather than per-check: six
   bespoke numbers would mean five invented ones, and invented numbers get read as measurements. It
-  is a backstop against a hung check, not a drift detector.
-- **180 s** is roughly an order of magnitude over the inferred value. It is a **hang-catcher, not a
+  is a backstop against a hung check rather than a drift detector.
+- **180 s** is roughly an order of magnitude over the inferred value. It is a **hang-catcher rather than a
   measurement**: setup is the noisiest step in the job, and a tight threshold there would be the
   flakiest assertion in the suite while protecting nothing. **The implementation session records the
   observed setup time on the first green run and can tighten it. A tighter value is not necessary to
@@ -369,7 +369,7 @@ Setup measures the `before` hook and nothing earlier. `npm install`, `dotnet pub
 esbuild, `get-vscode`, `get-chromedriver`, and `install-vsix` all finish before the suite process
 exists. They are bounded by the job timeout and nothing else.
 
-**Enforcement — two mechanisms that never share a number:**
+**Enforcement, through two mechanisms that never share a number:**
 
 | Mechanism | Value | Fires when |
 |---|---|---|
@@ -381,13 +381,13 @@ exists. They are bounded by the job timeout and nothing else.
 
 Budget asserts live in the harness `afterEach` / `after` hooks, never in a check body, so no check
 can forget one or invent its own. The Mocha timeouts sit above every budget and above the largest
-deadline. A slow-but-passing run therefore dies on a budget assert with a legible message, not on a
+deadline. A slow-but-passing run therefore dies on a budget assert with a legible message rather than on a
 timeout with an illegible one. A budget message names the check, the budget, the observed elapsed
 time, and the word *budget*.
 
 **Stated so it is not hidden: when a check truly hangs, the Mocha timeout fires first and the budget
 assert never runs.** Hang and drift are different failures with different messages. That is the
-design, not a gap.
+design rather than a gap.
 
 ### The VSCode pin
 
@@ -402,7 +402,7 @@ current when the harness lands. A number chosen now would be stale before a read
   in `get-vscode`, `get-chromedriver`, and `run-tests` alike. CLI flags win over it, so existing
   plumbing is untouched and **`run.sh` passes no `-c`**. Local and CI therefore drive identical
   VSCode by construction.
-- The config file lives in the **suite directory, not the repository root** — `find-up` from an
+- The config file lives in the **suite directory rather than the repository root**. `find-up` from an
   unrelated `cwd` would otherwise pick up a root config.
 - **ChromeDriver is not pinned separately.** ExTester derives the driver version from the resolved
   VSCode version.
@@ -410,7 +410,7 @@ current when the harness lands. A number chosen now would be stale before a read
   CI only. A local run would float while CI pinned, so the local reproduction of a red CI test could
   differ from the run that went red.
 
-A float was rejected outright — the gate's job is to be a reproducible record, and a float means an
+A float was rejected outright, because the gate's job is to be a reproducible record, and a float means an
 upstream release changes the gate on a day nobody touched the repository.
 
 ### CI
@@ -432,7 +432,7 @@ Three CI-specific requirements:
   discovering the green was never falsifiable. Every budget assert and every check in this spec
   depends on a red suite reddening the job.
 - **Cache VSCode and ChromeDriver binaries** under key `${{ runner.os }}-extest-<pin>`, reading the
-  pin out of the config file. **Binaries only — never the storage settings directory**, because
+  pin out of the config file. **Binaries only, excluding the storage settings directory**, because
   `run.sh` deliberately removes it and a cached VSCode profile would carry state between runs. The
   pin being the cache key is the safety property: a different pin is a different key and misses, so
   a stale cache cannot serve the wrong VSCode.
@@ -441,7 +441,7 @@ Failure screenshots and logs upload as artifacts on failure. ExTester's runner a
 `afterEach` that screenshots every non-passing test.
 
 **The test server is built by its own CI step**, publishing to a path under `out/`, and `run.sh`
-calls the same script locally. The `before` hook does **not** build — it spawns the published
+calls the same script locally. The `before` hook does **not** build. It spawns the published
 executable and waits for it to report. Only the spawn counts against the 180-second setup budget.
 
 A missing binary fails setup at once with a message naming the build command. Setup never builds
@@ -449,7 +449,7 @@ silently. Accepted cost: someone who edits the server and bypasses `run.sh` gets
 `run.sh` always rebuilds, and an incremental publish is cheap.
 
 **Publish output goes under `out/`, never `dist/`.** `.vscodeignore` excludes `out/**` outright but
-*ships* `dist/` minus named files — so publishing the test server to `dist/` would package a test
+*ships* `dist/` minus named files, so publishing the test server to `dist/` would package a test
 binary into the released `.vsix`.
 
 ### The weekly pin-update pull request
@@ -460,11 +460,11 @@ pin's useful life is about three months. A pin nobody bumps is not a risk but a 
 A weekly workflow resolves the latest stable VSCode. If it differs from the pin, it pushes a branch
 with the pin updated and opens a pull request. **That pull request's ordinary CI is the suite run
 against the new version**. A green run means that merging the pull request is the whole update. A
-red run leaves a titled, reproducible artifact with logs and screenshots, not a stale failure email.
+red run leaves a titled, reproducible artifact with logs and screenshots rather than a stale failure email.
 
 - Weekly rather than monthly: a weekly no-op is free, and a patch release that breaks ChromeDriver
   should not wait three weeks to surface.
-- Use `gh pr create` with the built-in `GITHUB_TOKEN`. **No third-party action** — the repository
+- Use `gh pr create` with the built-in `GITHUB_TOKEN`. **No third-party action**, because the repository
   just finished a supply-chain hardening pass and this adds no new SHA-pinned dependency. Scope
   `contents: write` and `pull-requests: write` to that one workflow.
 - This shape was chosen over a red scheduled run for two reasons. A detector alone leaves the update
@@ -477,14 +477,14 @@ to the product.
 
 ### `docs/release-gate.md`
 
-Created by this spec. It states what the suite covers and — the point of the document — what it does
+Created by this spec. It states what the suite covers and, which is the point of the document, what it does
 not. It carries the two paragraphs and the one prerequisite below **verbatim**. That text has
 already had a Simplified Technical English pass. Do not paraphrase it.
 
 > **The suite tests one VSCode version.**
 > The UI suite drives the VSCode version that `extester.config.json` pins, and it runs on Linux
 > only. `package.json` states `"engines": { "vscode": "^1.66.0" }`. The suite does not test that
-> minimum version, because ExTester cannot drive it. No other check tests it either — the repository
+> minimum version, because ExTester cannot drive it. No other check tests it either. The repository
 > has no `@types/vscode` dependency, so no tool checks the declared minimum. A release can ship a
 > defect that occurs only on a VSCode version older than the pin. The manual check that this suite
 > replaced had the same gap.
@@ -495,12 +495,12 @@ already had a Simplified Technical English pass. Do not paraphrase it.
 > request is the gate run for the new version. If a pin is outside the ExTester support window,
 > ExTester can fail to download the matching ChromeDriver, and the gate then fails.
 
-The trailing requirement belongs in the document's prerequisites list, not as trailing prose:
+The trailing requirement belongs in the document's prerequisites list rather than in trailing prose:
 
 > Before you publish a release, merge or close each open pin-update pull request.
 
 The document must also record the remaining honest gaps, which the later specs will add to:
-**Linux only** — a defect that appears only in `dotnet` discovery or companion process handling on
+**Linux only.** A defect that appears only in `dotnet` discovery or companion process handling on
 macOS or Windows ships uncaught. That is a known and accepted cost.
 
 ### Recorded softness
@@ -508,27 +508,27 @@ macOS or Windows ships uncaught. That is a known and accepted cost.
 Three weaknesses, written down rather than hidden. None blocks the work.
 
 1. **Nothing compile-checks that the two test servers agree.** The route table above is the only
-   contract. The prototypes already drifted — two prototype servers returned different `/json`
+   contract. The prototypes already drifted: two prototype servers returned different `/json`
    bodies.
 2. **The ×3 job retry launders exactly what the budgets are for.** A check that drifts to 50 s busts
    its budget on attempt 1, comes in at 43 s on attempt 2, and the job is green. Making budget
-   failures non-retryable is not worth the plumbing — the retry is a workflow-level construct that
-   cannot see why the suite failed. Mitigation is **visibility, not a gate**: the suite prints its
-   timing table — setup, each check, the suite total, each against its budget — to the GitHub Actions
+   failures non-retryable is not worth the plumbing, because the retry is a workflow-level construct that
+   cannot see why the suite failed. Mitigation is **visibility rather than a gate**: the suite prints its
+   timing table, holding setup, each check, and the suite total against its budget, to the GitHub Actions
    job summary on **every** run, green or red. This relies on someone looking, which is weaker than
    a gate.
-3. **The redesign trigger is a policy, not a mechanism.** If the suite produces two or more final
+3. **The redesign trigger is a policy rather than a mechanism.** If the suite produces two or more final
    failures in ten consecutive runs, the design is reconsidered. Note that "drop the reload step
-   first" is *not* the opening move — the reload was measured and is the cheap part.
+   first" is *not* the opening move, because the reload was measured and is the cheap part.
 
 ## Testing Decisions
 
 **What makes a good test here.** A check earns its place only when it observes the same channel a
 person would. That fidelity floor is fixed and this spec does not relax it:
 
-- CodeLens text in the workbench, not `executeCodeLensProvider` alone.
-- Toast text in the notification UI, not a `showWarningMessage` call site.
-- Response viewer content in the webview DOM, not a `postMessage` payload.
+- CodeLens text in the workbench rather than `executeCodeLensProvider` alone.
+- Toast text in the notification UI rather than a `showWarningMessage` call site.
+- Response viewer content in the webview DOM rather than a `postMessage` payload.
 - Real clicks, edits, and reloads.
 
 Provider return values, envelopes, and viewer-update objects stay in `host.Tests`,
@@ -536,12 +536,12 @@ Provider return values, envelopes, and viewer-update objects stay in `host.Tests
 walk.
 
 **Seams.** One new seam: the packaged `.vsix` driven through ExTester. **No test-only seams in the
-shipping extension** — no probe command, no test hook. If a future need genuinely requires `vscode`
-API access from outside the host, it is a separate test-hook extension, not a change to
+shipping extension**: no probe command, no test hook. If a future need genuinely requires `vscode`
+API access from outside the host, it is a separate test-hook extension rather than a change to
 FsHttp.Studio.
 
 **What this spec tests.** One test: the **setup self-check**. It asserts that the `before` hook
-reached a proven-live workbench — all four tells — and that the timing table printed to the job
+reached a proven-live workbench, on all four tells, and that the timing table printed to the job
 summary. It touches no product surface.
 
 This exists so spec 1 can land and be verified independently of spec 2. It also exercises the budget
@@ -550,16 +550,16 @@ unambiguous. If the self-check is green and a product check is red, the harness 
 
 **Negative verification is required before this is called done.** Prototyping produced ten green
 runs under a shell shape that could not report red. The implementation session must demonstrate at
-least one deliberately failing run that reddens the job — this is the acceptance criterion for the
+least one deliberately failing run that reddens the job. This is the acceptance criterion for the
 `shell: bash` requirement, and it cannot be satisfied by inspection.
 
 **Prior art in this repository:**
 
-- `smoke.mjs` — the existing pattern of a JS-side guard that runs Fable output for real.
-- `tests/companion.Tests/TestServer.fs` — an in-process HTTP server for an existing suite; the
+- `smoke.mjs`: the existing pattern of a JS-side guard that runs Fable output for real.
+- `tests/companion.Tests/TestServer.fs`: an in-process HTTP server for an existing suite. The
   vocabulary the new server mirrors, deliberately without sharing code.
-- `esbuild.mjs` — the `format: "cjs"` + `external: ["vscode"]` bundling shape the suite reuses.
-- `tests/companion.Tests/` generally — the Expecto-shaped assertion style the suite's F# should
+- `esbuild.mjs`: the `format: "cjs"` + `external: ["vscode"]` bundling shape the suite reuses.
+- `tests/companion.Tests/` generally: the Expecto-shaped assertion style the suite's F# should
   read like.
 
 ## Out of Scope
@@ -575,7 +575,7 @@ least one deliberately failing run that reddens the job — this is the acceptan
 - **Testing the `engines.vscode` floor.** ExTester cannot drive 1.66. A matrix over the oldest
   supported version would double the suite's cost against every budget. It would prove roughly three
   months of history against a floor that claims years, and the gap survives it intact. Whether
-  `^1.66.0` is still a floor the project means is a product question, not part of this work.
+  `^1.66.0` is still a floor the project means is a product question, outside this work.
 - **Extracting a shared test server project.** Decided against. See Implementation Decisions.
 - **Moving `companion.Tests` to the HTTP hang route.** It keeps its in-process form.
 - **Replacing the existing suites.** `companion.Tests`, `host.Tests`, `renderer.Tests`, and
@@ -597,7 +597,7 @@ least one deliberately failing run that reddens the job — this is the acceptan
 5. Compile Error names its source.
 6. Companion death is visible and recoverable.
 
-**Dependency on #144.** This spec is **not** blocked — the harness does not read the sidecar from a
+**Dependency on #144.** This spec is **not** blocked, because the harness does not read the sidecar from a
 fixture. Three later specs are blocked: the core path, Run outcomes, and companion death.
 
 **Prototype evidence.** Two throwaway prototypes established this shape on `ubuntu-latest` and on
@@ -612,12 +612,11 @@ Apple Silicon. The measured numbers:
 | Death to recovered Run | ~10.4 s median |
 | Post-reload worst case | 12.9 s, against a 60 s deadline |
 
-The prototypes live outside the repository. Do not lift them wholesale —
-several of their shapes are explicitly corrected above.
+The prototypes live outside the repository. Do not lift them wholesale, because several of their shapes are explicitly corrected above.
 
 **One open ergonomics question, deliberately unresolved.** Whether a *failing* Linux CI test is
 cheap to reproduce on macOS is not fully answered. The pin removes ChromeDriver drift between a
 laptop and the runner by construction, but the display and the AppArmor-only Linux failure mode
-remain. This is not a blocker. It is a known rough edge to revisit when the suite has real failures
+remain. This is a known rough edge to revisit when the suite has real failures
 to reproduce.
 

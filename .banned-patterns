@@ -69,6 +69,7 @@
 # docs/standards/technical-prose.md states both rules.
 # ---------------------------------------------------------------------------
 , not	Assert the fact directly. Delete the negated half.
+, and (not|never) 	Assert the fact directly. Delete the negated half.
 \bnot [^.,;]{1,40}(, but |but rather )	Assert the fact directly. Delete the negated half.
 \bnot (just|merely|simply|only)	Assert the fact directly. Delete the negated half.
 (is|are|was|were) not [^.]{1,40}\. (it|they) (is|are|was|were)	Assert the fact directly. Delete the negated half.

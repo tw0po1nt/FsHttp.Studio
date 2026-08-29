@@ -36,8 +36,10 @@ alone.
 | `This is not just a reminder, it is enforcement.` | `This is enforcement.` |
 | `Bundle with esbuild, not webpack.` | `Bundle with esbuild.` |
 
-The banned forms are `X, not Y`, `not X but Y`, `not X but rather Y`, `not just`, `not merely`,
-`not simply`, `not only`, and the same contrast split across two sentences.
+The banned forms are `X, not Y`, `X, and not Y`, `X, and never Y`, `not X but Y`,
+`not X but rather Y`, `not just`, `not merely`, `not simply`, `not only`, and the same contrast
+split across two sentences. A conjunction in front of the denial changes nothing, so
+`a convention, and not a lint` is the same construct as `a convention, not a lint`.
 
 `rather than` and `instead of` stay legal, because each half of the comparison carries information:
 
@@ -65,9 +67,8 @@ re-parse, and a page of them reads as one long aside.
 
 ## The pattern list holds both rules
 
-`.banned-patterns` at the repo root holds the antithesis forms and the em dash. Both patterns are
-inactive while the existing text still carries them. The rules above bind from now, and the sweep
-that rewrites the existing text turns the patterns on.
+`.banned-patterns` at the repo root holds the antithesis forms and the em dash. Both run in CI, and
+the `PreToolUse` hook refuses a `Write` or an `Edit` that carries either one.
 
 ## Why this rule is strict
 

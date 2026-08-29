@@ -342,8 +342,8 @@ let By: ByStatic = jsNative
 let waitForWorkbench (browser: VSBrowser) (timeoutMs: float) : JS.Promise<unit> =
     emitJsExpr (browser, timeoutMs) "$0.waitForWorkbench($1)"
 
-/// Asks VSCode to open a file. Returns when ExTester has asked, and never waits for the editor
-/// to finish rendering it, so pair it with a later wait on the tab or the buffer.
+/// Asks VSCode to open a file. Returns when ExTester has asked, before the editor has finished
+/// rendering it, so pair it with a later wait on the tab or the buffer.
 let private openResource (browser: VSBrowser) (path: string) : JS.Promise<unit> =
     emitJsExpr (browser, path) "$0.openResources($1)"
 
@@ -525,7 +525,7 @@ let focusFixtureEditor () : Async<unit> =
 /// It reads the DOM rather than building an ExTester `TextEditor`. That constructor waits for the
 /// editor to become visible, and the wait was observed to expire after about 5 s per poll while
 /// the page held one editor at 852x691, `display=block`, `visibility=visible`, `opacity=1`, and
-/// uncovered. The wait, and not the workbench, was wrong. A read that costs 5 s also exhausted a
+/// uncovered. The wait was wrong, and the workbench was fine. A read that costs 5 s also exhausted a
 /// 45 s deadline in about 9 polls, which hid how often it was failing.
 ///
 /// Ordered by the anchor's own top edge rather than by DOM order: the lens for the second block
@@ -1036,8 +1036,7 @@ let tryFixtureBufferLacks (fragment: string) : Async<bool> =
 
 /// Focuses the fixture column and reverts its active file from disk through the workbench's own
 /// revert-file command. Pair with `Harness.eventually` on `tryFixtureBufferLacks`. The command
-/// returns when VSCode has been asked to revert, and never waits for the tab to be clean. Does
-/// not save.
+/// returns when VSCode has been asked to revert, before the tab is clean. Does not save.
 let tryRevertFixtureFile () : Async<bool> =
     async {
         try
@@ -1050,8 +1049,8 @@ let tryRevertFixtureFile () : Async<bool> =
             return false
     }
 
-/// Asks VSCode to reload the window. Returns when ExTester has asked, and never waits for the
-/// reload to finish. The companion-death check waits on a fresh companion process for that.
+/// Asks VSCode to reload the window. Returns when ExTester has asked, before the reload has
+/// finished. The companion-death check waits on a fresh companion process for that.
 /// Pre-reload
 /// element handles go stale; every later lookup must be fresh.
 let reloadWindow () : Async<unit> =
@@ -1316,7 +1315,7 @@ let private readCopyClickScript =
 
 /// How long one click waits inside the frame for the clipboard promise to settle and the label to
 /// flash. Deliberately not a check-tunable deadline, on the same terms as `frameSwitchTimeoutMs`:
-/// it bounds one in-frame interaction, and not a product surface a check waits on.
+/// it bounds one in-frame interaction rather than a product surface a check waits on.
 let private copySettleTimeoutMs = 3_000.
 
 /// The gap between two reads of the settling label. Well under the 1200 ms the flash lasts, so a

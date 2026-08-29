@@ -1,4 +1,4 @@
-# Report the compile error of the Setup, not an error in the block
+# Report the compile error of the Setup at its own location
 
 Spec for #94.
 
@@ -81,7 +81,7 @@ Setup failure and not as a fault on that line.
 Give the text of the compiler without changes. Do not rewrite a compiler diagnostic. Do not
 shorten a compiler diagnostic.
 
-Apply this wording to each Setup compile error, and not only to a diagnostic that the companion
+Apply this wording to every Setup compile error, including a diagnostic that the companion
 moved.
 
 ### 4. Scope: the evaluation of the Setup only.
@@ -214,7 +214,7 @@ run must state a reason. The user reads that reason only when the Run reaches it
 Setup error names the incorrect fault before the Run reaches the reason. The user then reads that
 `http` is not defined and does not see the refusal reason.
 
-This change is therefore a prerequisite of the refusal spec, and not an equal item beside it.
+This change is therefore a prerequisite of the refusal spec rather than an equal item beside it.
 Make this change first, in its own pull request. It depends on no other item on the map. It also
 makes the subsequent changes clear. When the Setup reports the truth, a failure during the reach
 mechanism work belongs to the reach mechanism.

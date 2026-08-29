@@ -7,7 +7,7 @@ let mutable private panel: WebviewPanel option = None
 
 /// A fresh nonce for each HTML build, so the CSP's `script-src 'nonce-…'` allows only the one
 /// script tag that this module writes. It comes from `crypto.getRandomValues`, which is a
-/// CSPRNG, and not from `Math.random()`, so the token is genuinely unguessable. It is 16 random
+/// CSPRNG rather than from `Math.random()`, so the token is genuinely unguessable. It is 16 random
 /// bytes, rendered as 32 hex characters.
 let private nonce () : string =
     emitJsExpr

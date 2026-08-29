@@ -261,7 +261,7 @@ let annotated: FsHttp.Domain.HeaderContext = http { GET "https://example.com/typ
           }
 
           // A head pattern that binds no single name gives the invocation nothing to call.
-          test "a wildcard binding is refused, and not as an out-of-module position" {
+          test "a wildcard binding is refused rather than treated as an out-of-module position" {
               let source =
                   """
 let _ = http { GET "https://example.com/wildcard" }

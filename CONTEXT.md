@@ -59,7 +59,7 @@ The F# call that a Run emits to reach its target block once the setup is loaded,
 _Avoid_: call, dispatch.
 
 **Captured body**:
-The request body that the companion read at send time, while the content was still alive. A captured body has three states: no body, the captured bytes, and a written reason that the companion did not read the body. The companion never reads a streamed body, and never reads a body above the size cap, because a read must not change what goes on the wire. The response viewer shows the reason in place of the body.
+The request body that the companion read at send time, while the content was still alive. A captured body has three states: no body, the captured bytes, and a written reason that the companion did not read the body. The companion reads neither a streamed body nor a body above the size cap, because a read must not change what goes on the wire. The response viewer shows the reason in place of the body.
 _Avoid_: request payload, buffered body, recorded body.
 
 **Refusal code**:

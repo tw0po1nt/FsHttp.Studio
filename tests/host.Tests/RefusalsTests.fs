@@ -65,7 +65,7 @@ let forCodeTests =
 let lensTitleTests =
     testList
         "Refusals.lensTitle"
-        [ test "every lens title carries the refusal glyph, and not the run triangle" {
+        [ test "every lens title carries the refusal glyph rather than the run triangle" {
               wireCodes
               |> List.iter (fun code ->
                   Expect.stringStarts (lensTitle code) "⊘ " (sprintf "%s must not promise a Run it cannot honor" code))
@@ -131,7 +131,7 @@ let forRefusedTests =
               Expect.notEqual r.Title (forCode "unaddressable").Title "a bound-value refusal is not a position refusal"
           }
 
-          test "unboundBlockValue without a name degrades whole, and not half" {
+          test "unboundBlockValue without a name degrades whole rather than half" {
               let r = forRefused "unboundBlockValue" None
 
               Expect.equal

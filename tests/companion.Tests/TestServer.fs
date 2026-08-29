@@ -101,7 +101,7 @@ let hangingHandler (release: Threading.ManualResetEventSlim) (ctx: HttpListenerC
 /// Writes the response headers at once, then waits `delayMs` before it writes the body. That
 /// shape drives the "body download is inside the bound" case: with `ResponseContentRead`, the
 /// send covers the body read, so a bound shorter than `delayMs` must end the Run as a
-/// RuntimeError, and not as a truncated Ok.
+/// RuntimeError rather than as a truncated Ok.
 let bodyAfterHeadersHandler (delayMs: int) (body: string) (ctx: HttpListenerContext) =
     ctx.Response.StatusCode <- 200
     ctx.Response.ContentType <- "text/plain"

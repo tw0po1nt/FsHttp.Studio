@@ -171,7 +171,7 @@ let tests =
           test "without the user's own #r, FsHttp resolves to nothing, because there is no companion-forced fallback" {
               // There is no `#r "nuget: FsHttp"` at all. If the companion supplied one itself,
               // `open FsHttp` here would still succeed. It does not succeed, which proves that
-              // the pin the "ok" tests use comes from the source text, and not from a fallback
+              // the pin the "ok" tests use comes from the source text rather than from a fallback
               // that the companion injected.
               let source = "open FsHttp\n\nhttp {\n    GET \"https://example.com\"\n}\n"
               let sourceLineCount = source.Split('\n').Length
@@ -292,7 +292,7 @@ let tests =
               // `internal` needs no blanking: an `internal` binding is accessible from a later
               // FSI interaction. This test records that measurement -- it must pass with
               // `PrivateSpans` staying empty for this shape (already asserted in
-              // PositionMatrixTests), and not because of any blanking here.
+              // PositionMatrixTests) rather than because of any blanking here.
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
 
@@ -1000,7 +1000,7 @@ let tests =
 
           test "the in-process path resolves __SOURCE_DIRECTORY__ from a known scriptFileName" {
               // A Run that reads a file beside the script must resolve against the script's own
-              // directory, and not against the companion's working directory. Drive
+              // directory rather than against the companion's working directory. Drive
               // `runInProcessDirect` rather than `run`: `run` routes on process-global pin state, so it
               // could land in the worker and prove nothing about the warm path.
               expectResolvesBesideScript "inprocess" runDirectUnbounded
@@ -1487,7 +1487,7 @@ let capturedBodyForTests =
           } ]
 
 // The pure routing decision that `run` keys off. These tests drive it directly against an
-// explicit loaded state, and not against the process-global map. Every quadrant is therefore a
+// explicit loaded state rather than against the process-global map. Every quadrant is therefore a
 // fast, deterministic unit. This includes the quadrants that the sequenced integration tests
 // cannot isolate, because earlier tests fill that map first.
 [<Tests>]

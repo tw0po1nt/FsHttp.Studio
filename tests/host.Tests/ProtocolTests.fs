@@ -266,7 +266,7 @@ let statusTextTests =
               Expect.equal (statusText Ready (Script(2, false))) (Some "2 requests") "plural"
           }
 
-          test "a count below zero reads as none found, and never hides the item" {
+          test "a count below zero reads as none found rather than hiding the item" {
               // `int` admits a negative the wire never sends. `None` has one meaning, which is to
               // hide the item, so a malformed count must not blank the status bar.
               Expect.equal (statusText Ready (Script(-1, false))) (Some "no requests found") "clean, below zero"

@@ -70,6 +70,6 @@ arrives only after the branch is green arrives too late.
   `ref: v0.2.0-beta.3` reproduces that Beta. The prune therefore removes a built artifact, and not
   the means to make one.
 - `main` has no by-hand verification between Betas. A Manual check that finds a regression looks at
-  a batch of merged changes. The repair is a new commit, and not a change to an open pull request.
+  a batch of merged changes. The repair is a new commit rather than a change to an open pull request.
 - The tripwire in `release.yml` proves that a Beta was **built**, and it cannot prove that anybody
   walked the checklist. No workflow can prove that.

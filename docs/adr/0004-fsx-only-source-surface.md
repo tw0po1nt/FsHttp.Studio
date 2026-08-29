@@ -1,6 +1,6 @@
 # v0.1 supports .fsx scripts only, with no Run affordance on .fs
 
-Both block detection and block execution target `.fsx` scripts only. A block in a compiled `.fs` file shows no Run request CodeLens. This is deliberate, and not a bug.
+Both block detection and block execution target `.fsx` scripts only. A block in a compiled `.fs` file shows no Run request CodeLens. This is deliberate.
 
 A self-contained script *is* the FSI input, so both evaluation paths get it for free. A block in a `.fs` file instead draws its `#r` references, `open`s, and bindings from the compiled project context. A fresh FSI session does not have that context. Support for `.fs` files means we must rebuild that context from the project's NuGet graph. That is a project-load subsystem, and it is out of proportion to a proof-of-concept.
 

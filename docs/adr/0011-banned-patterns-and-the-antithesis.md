@@ -19,7 +19,8 @@ than a word, and the old whole-word matcher could never see either one.
 then denies its opposite: `a backstop, not the mechanism`. The denial adds no information. It sets a
 rhythm that a reader meets in every paragraph, and the rhythm tires that reader. The banned forms
 are `X, not Y`, `not X but Y`, `not just`, `not merely`, `not simply`, `not only`, and the same
-contrast split across two sentences.
+contrast split across two sentences. The sweep added `X, and not Y` and `X, and never Y`, because a
+conjunction in front of the denial leaves the construct intact. That form appeared 82 times.
 
 `rather than` and `instead of` stay legal. Each half of those comparisons carries information,
 because the sentence names two real options and picks one.
@@ -66,14 +67,18 @@ judgment call, and no script can make one.
 A `Stop` hook that reads the assistant's reply and forces a redraft was rejected. It fires after the
 reader has already seen the text, and it taxes every turn of a session.
 
+## The sweep
+
+The antithesis and em dash patterns shipped inactive, because an active pattern failed CI against
+520 hits that no one had rewritten. The sweep rewrote every hit and turned the patterns on. It also
+found a second citation style that the merged rule 5 does not name in its list: a bare `Decision 7`,
+`Seam 1`, or `user story 11`. Rule 5 leads with the principle that a comment cites nothing that
+sends the reader off the page, so both styles are gone from `src/` and `tests/`.
+
 ## Accepted costs
 
-The antithesis and em dash patterns ship inactive. An active pattern fails CI against 520 hits that
-no one has rewritten. The rules bind from now, and the sweep that rewrites the existing text turns
-the patterns on.
-
 The sweep also rewrites shipped product copy. `BlockLocator.classify` returns
-`the binding's value is a lambda, not the block`, which a user reads in a CodeLens toast. Spec 0003
+`the binding's value is a lambda rather than the block`, which a user reads in a CodeLens toast. Spec 0003
 pins it in a table, and the UI suite asserts it. That spec table is amended in the same commit as
 the string, so the record and the code agree.
 
@@ -81,5 +86,6 @@ The check now reads F# string literals as well as `//` comment lines, because a 
 prose that a user reads. A test fixture string that carries banned text is a new source of a CI
 failure.
 
-The 48 citing comments in `tests/` land with the sweep rather than here. The sweep already edits
-those files for the assertions that pin product copy.
+Six more shipped strings lose an em dash to a colon: the two capture reasons, the two status-bar
+rows that report a syntax error, the binary-body note, and the lambda-value refusal. The specs that
+pin them are amended in the same commit.

@@ -944,7 +944,7 @@ type private RunRoute =
 /// A future concurrent caller could load a conflicting version in that gap.
 /// The request loop is serial today, and the lock keeps it correct when that changes.
 ///
-/// The reservation happens *before* the evaluation runs, and never after a successful load.
+/// The reservation happens *before* the evaluation runs rather than after a successful load.
 /// This is deliberate. The map is a conservative over-approximation of what the shared ALC can hold.
 /// A Run that reaches the in-process path can resolve its `#r "nuget:"` into that ALC, and the
 /// resolved assembly then outlives the session even when the evaluation compile-errors or

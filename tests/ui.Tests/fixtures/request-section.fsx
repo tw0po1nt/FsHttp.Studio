@@ -5,7 +5,7 @@
 //
 // The body and the header must match `Harness.postedBody`, `Harness.postedHeaderName`, and
 // `Harness.postedHeaderValue` exactly. `baseUrl` comes from the sidecar the test server writes
-// beside this file, and never from a hardcoded port.
+// beside this file rather than from a hardcoded port.
 
 #r "nuget: FsHttp"
 

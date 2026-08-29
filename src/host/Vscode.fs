@@ -44,7 +44,7 @@ type TextEditor =
 type Range(_startLine: float, _startCharacter: float, _endLine: float, _endCharacter: float) = class end
 
 /// vscode.CodeLens. It is opaque once built, because the provider only constructs and returns
-/// these, and never inspects them again.
+/// these, and inspects none of them again.
 [<Import("CodeLens", "vscode")>]
 type CodeLens(_range: Range, _command: obj) = class end
 

@@ -6,7 +6,7 @@ Spec 5 of 7 for the UI test suite that retires `docs/manual-check.md`. This one 
 Decisions come from a wayfinder map held locally (`.local/wayfinder/ui-tests/`, gitignored). The map
 is not a GitHub issue, so this spec restates every decision it depends on rather than linking to one.
 
-**Blocked by** #146 (the harness and its setup) and spec 2 (the core path). **Not blocked by #144** —
+**Blocked by** #146 (the harness and its setup) and spec 2 (the core path). **Not blocked by #144.**
 this check's fixture never leaves the machine and reads no sidecar.
 
 ## Problem Statement
@@ -23,7 +23,7 @@ A block that depends on a value another block binds is **not** refused by its po
 evaluates the setup. The binding the target block needs then has no value, and the companion
 answers with a Refused Run that names it.
 
-That makes this a **viewer** assertion, not a toast assertion — and it makes step 8 the interesting one.
+That makes this a **viewer** assertion rather than a toast assertion, and it makes step 8 the interesting one.
 The product's position is deliberate and written down. The response viewer owns the report of why a
 Run failed, and FsHttp.Studio contributes **no editor diagnostic**. Its per-block isolation can
 flag source that is not wrong in the whole file. A squiggle would tell the user their script is broken when
@@ -32,7 +32,7 @@ it is not. Nothing enforces that position today.
 What is untested is therefore threefold:
 
 - That a Refused Run reaches the response viewer at all, over the same wire a response takes.
-- That it renders as a **notice** — a reason and a workaround — and not as an error.
+- That it renders as a **notice**, holding a reason and a workaround, rather than as an error.
 - That the editor stays clean.
 
 `host.Tests` can assert the mapping from refusal code to shipped words. `companion.Tests` can assert
@@ -97,7 +97,7 @@ green run as stronger evidence than it is.
 One new checked-in fixture under the suite's `fixtures/` directory, owned by this check alone, holding
 **two blocks**:
 
-- The first binds a value to a name — the shape a user writes when one request's result feeds another.
+- The first binds a value to a name, which is the shape a user writes when one request's result feeds another.
 - The second uses that name and is otherwise a perfectly reachable, module-level block.
 
 **The fixture reads no sidecar and needs no live server.** FsHttp.Studio blanks every block other
@@ -122,7 +122,7 @@ asserts the rendered heading and body against them, with the fixture's binding n
 
 In order, every wait through `eventually`:
 
-1. Open the fixture. Assert that **both** blocks render a `▶ Run request` lens — neither is refused by
+1. Open the fixture. Assert that **both** blocks render a `▶ Run request` lens, so neither is refused by
    position (lens-appearance deadline).
 2. Click the **second** block's lens, find-and-click inside one retry.
 3. Assert in the webview DOM that the viewer renders a Refused Run: the heading and the body paragraph
@@ -130,7 +130,7 @@ In order, every wait through `eventually`:
    the positive tell.**
 4. Assert, inside that same settled state, that the render is a **notice**: no status line, no headers
    section, no runtime-error text.
-5. With the tell in hand, assert that the script carries **no fault markers** — no problem entries
+5. With the tell in hand, assert that the script carries **no fault markers**, meaning no problem entries
    attributed to the fixture.
 
 Step 1's assertion does real work. It pins the boundary between this check and the loop-lens check.
@@ -156,7 +156,7 @@ must not redden this check. A refusal dressed as an error must.
 
 ### The no-fault assertion, and its recorded softness
 
-Step 5 asserts that no diagnostics are attributed to the fixture — through the workbench's Problems
+Step 5 asserts that no diagnostics are attributed to the fixture, through the workbench's Problems
 view, filtered to the fixture.
 
 **Recorded softness, stated so a green run is not over-read.** In the suite's VSCode, only
@@ -179,7 +179,7 @@ check. That is a high price to sharpen one assertion.
 
 ### Session state
 
-The check inherits a session in which the response viewer is closed — spec 4 closes it and leaves it
+The check inherits a session in which the response viewer is closed, because spec 4 closes it and leaves it
 closed. Its own first Run reopens it. It leaves the viewer open, showing the refusal.
 
 ### Waits and budgets
@@ -191,8 +191,8 @@ flat per-check budget, and prints the result to the timing table.
 ## Testing Decisions
 
 **What makes a good test here.** The fidelity floor, unchanged. Response viewer content in the
-webview DOM, not a viewer-update object. CodeLens text in the workbench. A real click. This check
-adds the editor's own state — the Problems view — to that list. Step 8 is an assertion about the
+webview DOM rather than a viewer-update object. CodeLens text in the workbench. A real click. This
+check adds the editor's own state, the Problems view, to that list. Step 8 is an assertion about the
 editor, and there is nowhere else to make it.
 
 **Seam.** No new seam. The packaged `.vsix` driven through ExTester. **No test-only seam is added to the shipping extension.** In particular, no diagnostic-collection
@@ -204,11 +204,11 @@ And, by their absence, the editor's diagnostics.
 
 **Prior art in this repository:**
 
-- `tests/host.Tests/` — pure assertions on refusal words, which this check escalates.
-- `tests/companion.Tests/` — pins the companion's blanking behavior and its refusal outcomes.
-- `docs/spec/0003-lens-tells-the-truth.md`, Decisions 6 and 10 — the shipped behavior this check
+- `tests/host.Tests/`: pure assertions on refusal words, which this check escalates.
+- `tests/companion.Tests/`: pins the companion's blanking behavior and its refusal outcomes.
+- `docs/spec/0003-lens-tells-the-truth.md`, Decisions 6 and 10: the shipped behavior this check
   verifies in a workbench.
-- Spec 2's core path check — the viewer-reading vocabulary this check reuses.
+- Spec 2's core path check: the viewer-reading vocabulary this check reuses.
 
 **Negative verification.** Run the check once expecting a status line in the refusal render.
 Confirm CI goes red with a named `.fs` line. That proves the notice assertion can tell a refusal

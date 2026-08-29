@@ -70,7 +70,7 @@ let private jsonQuote (s: string) : string =
     "\"" + escaped + "\""
 
 /// Bins the status into the CSS class that the shell colors on (`status-2xx` to `status-5xx`).
-/// The core commits to the class, and not to a hard-coded color, so the shell owns the palette.
+/// The core commits to the class rather than to a hard-coded color, so the shell owns the palette.
 let statusClass (status: int) : string =
     if status >= 200 && status < 300 then "status-2xx"
     elif status >= 300 && status < 400 then "status-3xx"
@@ -169,7 +169,7 @@ let private renderBinary (bytes: byte[]) : Node =
 
 /// The fallback for text, XML, and unknown types. It gives readable monospace when the bytes
 /// decode as text, and the size-and-hex view otherwise. A binary body that does not decode
-/// lands here, and never throws.
+/// lands here, and the render always succeeds.
 let private renderTextOrBinary (bytes: byte[]) : Node =
     if looksBinary bytes then
         renderBinary bytes
