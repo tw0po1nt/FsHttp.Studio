@@ -21,10 +21,17 @@ comment, a log string, an envelope tag, a test name, an issue title, and a commi
 that you cannot state in glossary terms is a signal: either the glossary is missing it, or your
 language is wrong. Resolve that instead of reaching for a synonym.
 
-**Keep your prose clear of the words in `.banned-words`.** The file at the repo root lists them, and
-`scripts/check-banned-words.sh` runs in CI and fails the build on a hit. A backstop hook refuses a
-`Write` or an `Edit` that carries one. To name a banned word inside a rule that forbids it, put the
-word in backticks. To ban another word, add one line to the file.
+**Keep your prose clear of the patterns in `.banned-patterns`.** The file at the repo root holds
+one pattern for each line, with the message that a hit reports, and
+`scripts/check-banned-patterns.sh` runs in CI and fails the build on a hit. A backstop hook refuses
+a `Write` or an `Edit` that carries one. To name banned text inside a rule that forbids it, put that
+text in backticks. To ban more text, add one line to the file.
+
+**Assert a fact directly.** Do not state a fact by denying its opposite. "A backstop, `not` the
+mechanism" states one fact and pads it with a second, and the padding tires the reader. Write the
+fact alone. Do not write an em dash. Use a comma, a colon, or a period. Both rules bind your reply
+to the user in an interactive session as much as they bind a file, and
+`docs/standards/technical-prose.md` holds the forms and the rewrites.
 
 **Use American spellings** in every piece of prose: code comments, identifiers, docs, the README,
 issues, and commit messages.
@@ -57,7 +64,7 @@ risk, and it cannot check that you obeyed. The rule is still the requirement.
 
 ## Terminology
 
-**"spec", never `PRD`.** The document that `/to-spec` produces is a spec. `.banned-words` holds the
+**"spec", never `PRD`.** The document that `/to-spec` produces is a spec. `.banned-patterns` holds the
 other word, so CI fails on it. Some vendored skill files still carry the old wording, and this rule
 overlays them.
 

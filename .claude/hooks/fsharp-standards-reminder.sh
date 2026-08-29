@@ -19,6 +19,6 @@ esac
 jq -n '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
-    additionalContext: "Reminder (docs/standards/coding-standards.md): this is F# source, so the house rules apply. Rule 1: name a domain concept with the term CONTEXT.md defines. Rule 5: cite no bare issue or PR number. Rule 6: write a comment, // or ///, only for what a reader cannot derive from the code. Rule 7: a record of closures needs strong justification. Read the file for rules 2 to 4 when you touch the envelope wire, a child process, or process-global state. Verify the change with: dotnet build FsHttp.Studio.slnx"
+    additionalContext: "Reminder (docs/standards/coding-standards.md): this is F# source, so the house rules apply. Rule 1: name a domain concept with the term CONTEXT.md defines. Rule 5: write a comment, // or ///, only for what a reader cannot derive from the code, and cite nothing off the page: no spec path, no ADR number, no URL, no issue or PR number. Rule 6: a record of closures needs strong justification. Read the file for rules 2 to 4 when you touch the envelope wire, a child process, or process-global state. Verify the change with: dotnet build FsHttp.Studio.slnx"
   }
 }'

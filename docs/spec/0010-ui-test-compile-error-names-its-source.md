@@ -226,7 +226,7 @@ This check is the only one that can dirty the working tree, and the failure mode
 - **Asserting the compiler's exact sentence.** The message's presence, yes. Its wording, no. Those
   words belong to the F# compiler.
 - **Editor diagnostics.** FsHttp.Studio deliberately contributes none. Spec 5 asserts that position.
-- **Navigating to the reported location.** The viewer reports a position as text. Making that position
+- **Jumping to the reported location.** The viewer reports a position as text. Making that position
   clickable is a product question, not a step of the manual walk.
 - **Saving the fixture, or writing a second fixture file.** Explicitly rejected.
 - **Changing the harness.** No new deadline, no new route, no CI change.

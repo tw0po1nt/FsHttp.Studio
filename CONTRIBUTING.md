@@ -41,8 +41,9 @@ This repository writes its prose in Simplified Technical English, which
 `docs/standards/technical-prose.md` describes. The rule covers docs, issue text, pull request text,
 commit messages, and code comments.
 
-`.banned-words` lists the words that no prose here uses, and
-`scripts/check-banned-words.sh` fails CI on a hit. Use American spellings, such as `color` and
+`.banned-patterns` lists the text that no prose here uses, and
+`scripts/check-banned-patterns.sh` fails CI on a hit. Assert a fact directly, and do not write an em
+dash. Use American spellings, such as `color` and
 `serialize`. Files under `.agents/` are vendored, and they keep their authors' spelling.
 
 ## Issues
