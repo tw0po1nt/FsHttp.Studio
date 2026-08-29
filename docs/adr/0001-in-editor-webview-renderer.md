@@ -1,4 +1,4 @@
-# In-editor webview renderer, not a browser-file printer
+# In-editor webview renderer
 
 FsHttp.Studio is an F#/Fable extension. It renders responses in a VSCode webview panel inside the editor.
 

@@ -16,7 +16,7 @@ The workaround is a manual selection with the mouse, and the panel defeats it in
    and the layout whitespace. The result does not parse.
 2. **The header rows are a CSS grid.** `.header-row` (`ResponseViewer.fs:127`) is a two-column
    grid. A selection over it produces the name and the value separated by the newlines that the
-   grid layout puts there, and not by a colon.
+   grid layout puts there rather than by a colon.
 3. **A large body is a scroll.** A user must drag through a scrolling region to select a body that
    the panel already holds complete in memory.
 
@@ -30,7 +30,7 @@ it to another person.
 its section. A click puts the section's content on the clipboard, and the button reports the
 result in its own label.
 
-The payload comes from **one pure function in the renderer core**, and not from the rendered DOM.
+The payload comes from **one pure function in the renderer core** rather than from the rendered DOM.
 This is what makes the JSON case correct: the copy never reads the tree, so it cannot copy the
 tree's disclosure markers.
 
@@ -70,7 +70,7 @@ Add to `Renderer.Core`:
 let copyText (env: ResponseEnvelope) (key: string) : string option
 ```
 
-The renderer emits a button that carries the **key**, and not the payload:
+The renderer emits a button that carries the **key** rather than the payload:
 
 ```fsharp
 el "button" [ "class", "copy-button"; "type", "button"; "data-copy", "response-body" ]
@@ -143,13 +143,13 @@ This matters because **both sections are collapsed by default**. `renderHeaders`
 Request section collapsed by default. A button placed inside either one is invisible until the user
 opens the section.
 
-`.response-body` (`Renderer.fs:263`) is not a `<details>`, but it sets `overflow: auto`
+`.response-body` (`Renderer.fs:263`) is a plain element that sets `overflow: auto`
 (`ResponseViewer.fs:144`). A positioned child of it scrolls away with the content. It therefore
 needs the same shell, and the shell does not scroll.
 
 All three sections use one shell, one CSS rule set, and one placement rule.
 
-### 3. The response body payload reads the bytes, and never the Content-Type
+### 3. The response body payload reads the bytes rather than the Content-Type
 
 ```fsharp
 let private bodyCopyText (bytes: byte[]) : string =
@@ -166,7 +166,7 @@ gives the correct answer on all five render paths without one:
 
 | Render path | Bytes | Copied text |
 | --- | --- | --- |
-| JSON tree | text | **The raw body bytes**, and not the tree |
+| JSON tree | text | **The raw body bytes** rather than the tree |
 | Sandboxed iframe | text | The page source |
 | `image/svg+xml` | text | The SVG source |
 | `image/png` | binary | The hex dump |
@@ -221,7 +221,7 @@ Accept-Encoding: gzip, deflate
 ```
 
 The method and the URL come from `env.Request`, which is where #99 put them. The button therefore
-copies the **record**, and not the rendered region. The status line draws the method and the URL,
+copies the **record** rather than the rendered region. The status line draws the method and the URL,
 and the Request section draws the headers and the body, but there is one request, and one paste
 that describes it.
 
@@ -274,7 +274,7 @@ let private copyButton (env: ResponseEnvelope) (key: string) : Node list =
     | None -> []
 ```
 
-The button exists when there is something to copy, and not otherwise. Only one case produces
+The button exists when, and only when, there is something to copy. Only one case produces
 `None`: a response body of zero bytes, such as a `204 No Content`.
 
 The other two are always `Some`. The response headers always carry at least the status line, and
@@ -356,7 +356,7 @@ let renderInto (parent: HTMLElement) (env: ResponseEnvelope) : unit =
 `parent.innerHTML <- ""` replaces the children, and the listener is on `parent`, so the listener
 survives each render. One listener therefore serves every Run.
 
-`Dom.fs` states that its mount glue goes to the manual smoke, and not to an automated suite. The
+`Dom.fs` states that its mount glue goes to the manual smoke rather than to an automated suite. The
 listener follows that rule. The payload that the listener sends is in the Seam-B suite, because
 Decision 1 put it in a pure function.
 
@@ -432,13 +432,13 @@ and never hover-only, so a touch user and a keyboard user both reach it.
 The payload is a pure function of a canned envelope, so each rule below is one assertion in
 `tests/renderer.Tests/RendererTests.fs`.
 
-1. **A JSON body copies the raw bytes, and not the tree.** `copyText env "response-body"` for an
+1. **A JSON body copies the raw bytes rather than the tree.** `copyText env "response-body"` for an
    `application/json` body equals the body decoded as UTF-8. The result parses. It contains no
    `▸` and no `Object(`. This is the first named trap.
 2. **A binary body copies the dump as shown.** `copyText env "response-body"` for a body of more
    than 256 bytes with NUL bytes equals the rendered `hexDump`, and ends with the
    `… (N more bytes)` line. This is the second named trap.
-3. An `image/svg+xml` body copies the SVG source, and not a hex dump.
+3. An `image/svg+xml` body copies the SVG source rather than a hex dump.
 4. A `text/html` body copies the page source.
 5. A response body of zero bytes yields `None`, and the rendered tree contains no
    `[data-copy="response-body"]` button.

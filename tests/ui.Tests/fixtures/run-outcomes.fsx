@@ -1,6 +1,6 @@
 // Fixture for the Run-outcomes check. Two blocks: a named 404 on the live server, then a
 // connection-refused Run against the sidecar's dead port. Both URLs come from the sidecar the
-// test server writes beside this file — never a hardcoded port. This is the only fixture that
+// test server writes beside this file rather than from a hardcoded port. This is the only fixture that
 // reads `deadUrl`.
 
 #r "nuget: FsHttp"

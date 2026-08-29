@@ -1,4 +1,4 @@
-# The request as sent — a truthful status line and a Request section in the viewer
+# The request as sent: a truthful status line and a Request section in the viewer
 
 Spec for v0.2 feature 1 of 3: the response viewer shows the request that was actually sent, and
 the status line stops guessing at it.
@@ -33,8 +33,8 @@ are frequently wrong, on a path where `Companion.run` is about to locate the sam
 
 **The request the user sees is the request FsHttp actually built.** Its method, URL, and headers are
 read off the `Response` record's `requestMessage`, which is a BCL `HttpRequestMessage` and therefore
-inside what ADR-0002 commits to. Its body is captured at send time, because the body — and only the
-body — is gone by the time the response arrives.
+inside what ADR-0002 commits to. Its body is captured at send time, because the body, and only the
+body, is gone by the time the response arrives.
 
 The viewer gains a collapsible **Request** section above the response headers, showing the request
 headers and the request body. The status line's method and URL come from the same place, so the
@@ -54,7 +54,7 @@ deleted. The Run path gets shorter and more truthful at the same time.
 4. As a script author, I want to see the request headers that went out, so that I can confirm an
    auth or content-type header was really set.
 5. As a script author, I want the request headers to include the ones the HTTP stack added on my
-   behalf, so that what I read is what was sent and not only what I wrote.
+   behalf, so that what I read is what was sent rather than what I wrote.
 6. As a script author posting a large file, I want the Run to behave exactly as it does today, so
    that a viewer feature does not change how my upload is sent.
 7. As a script author posting a large file, I want to be told the body was not captured rather than
@@ -71,7 +71,7 @@ deleted. The Run path gets shorter and more truthful at the same time.
 `extractResponse` (`BlockRunner.fs:176`) already reflects over the `Response` record through the
 `prop` helper. It gains one more read.
 
-Measured across every FsHttp version in the cache — 13.2.0, 13.3.0, 14.5.0, 14.5.1, 15.0.1, 15.0.3 —
+Measured across every FsHttp version in the cache, 13.2.0, 13.3.0, 14.5.0, 14.5.1, 15.0.1, and 15.0.3,
 the `Response` record carries `requestMessage : System.Net.Http.HttpRequestMessage` in every one, at
 the same name. `HttpRequestMessage` is a BCL type, so this is the same class of read that ADR-0002
 already blesses for `content` and `headers`.
@@ -103,8 +103,8 @@ content read = <THROW ObjectDisposedException: Cannot access a disposed object.
                 Object name: 'System.Net.Http.StringContent'.>
 ```
 
-The same throw for `ByteArrayContent` and `FormUrlEncodedContent`. The content **headers** survive —
-`Content-Type` and `Content-Length` read back fine — but the bytes are gone.
+The same throw for `ByteArrayContent` and `FormUrlEncodedContent`. The content **headers** survive,
+because `Content-Type` and `Content-Length` read back fine, and the bytes are gone.
 
 ### 3. FsHttp's own `request` domain record is not the way out
 
@@ -130,7 +130,7 @@ bump with no compiler to catch it.
 field is present, identically named, and identically typed on 13.2.0 and 15.0.3 (measured), and its
 type is BCL on both sides of the arrow. A transformer runs while the body is still alive.
 
-It is installed at the **invocation-time `Config.update`** that #96 introduces — the same call site
+It is installed at the **invocation-time `Config.update`** that #96 introduces, which is the same call site
 that carries the response-reading guard and, after #98, the request timeout. No new seam:
 
 ```fsharp
@@ -149,7 +149,7 @@ loaded assemblies, and the invocation prepends that binding. The lookup is total
 nothing, or that throws, binds `id` instead. A Run must not fail because the capture could not be
 found, so the cost of a failed lookup is the body display alone.
 
-### 5. The capture never forces a streaming body into memory, and never touches a nested part
+### 5. The capture leaves a streaming body and every nested part untouched
 
 This is the rule, and both halves of it were found by measurement.
 
@@ -188,13 +188,13 @@ Measured on a one-text-part multipart, by what the server received:
 
 In a second arrangement the same read failed the send outright:
 `HttpRequestException: Unable to write content to request stream; content would exceed
-Content-Length.` — the top-level length had been computed before the parts grew.
+Content-Length.` The top-level length had been computed before the parts grew.
 
 So: **type tests only inside a multipart.** Top-level content headers are safe and are read
 normally.
 
 **Verification.** The rule above was run against eight body shapes on 13.2.0, 14.5.1 and 15.0.3,
-with each request sent twice — once with no capture at all, once with the capture — and the server's
+with each request sent twice, once with no capture at all and once with the capture, and the server's
 received byte count compared. All three versions, all eight shapes: **send unchanged**.
 
 | shape | captured? |
@@ -204,9 +204,9 @@ received byte count compared. All three versions, all eight shapes: **send uncha
 | `binary` | captured |
 | `formUrlEncoded` | captured |
 | `multipart` with a text part | captured |
-| `multipart` with a **file** part | not captured — streamed |
-| `body file` | not captured — streamed |
-| `body stream` | not captured — streamed |
+| `multipart` with a **file** part | not captured, because it is streamed |
+| `body file` | not captured, because it is streamed |
+| `body stream` | not captured, because it is streamed |
 
 ### 6. A one-megabyte cap, checked before any read
 
@@ -219,7 +219,7 @@ Cap the capture at **1 MB (1_048_576 bytes)**, decided from the top-level
 length is absent is not captured either, and it carries its own reason in Decision 8: a body that is
 not streamed must never tell the user that it was streamed.
 
-This is a constant, not a setting. v0.2 already adds one setting in #98, and nobody has yet asked to
+This is a constant rather than a setting. v0.2 already adds one setting in #98, and nobody has yet asked to
 see a request body larger than a megabyte.
 
 ### 7. Correlate the captured body by reference identity
@@ -235,15 +235,15 @@ the `requestMessage` it already holds. Exact, and the weak table cannot leak.
 
 A lookup that misses yields the "not captured" state of Decision 8 rather than an error. The method,
 URL, and headers do not depend on the capture at all, so a miss degrades to a Request section that
-shows no body — never to a broken status line.
+shows no body, rather than to a broken status line.
 
-The content of the `requestMessage` decides which blank state a miss degrades to, not the miss
+The content of the `requestMessage` decides which blank state a miss degrades to, rather than the miss
 itself. A message with no content sent no body, so "no body" is true of it. A message with content
 did send a body, so a miss there is the "not captured" state, and it carries the fifth reason of
 Decision 8. A Request section that shows "no body" for a POST states something false about a real
 body.
 
-### 8. The body is a three-state value, not a string
+### 8. The body is a three-state value rather than a string
 
 Blank must not be able to mean three different things. "No body was sent", "a body was sent and here
 it is", and "a body was sent and we chose not to read it" are distinct, and the viewer says which.
@@ -303,8 +303,8 @@ This is a mechanical change to `extractResponse`, `outcomeToWire`, and `wireToOu
 
 ### 10. The wire shape
 
-The `ok` envelope gains a `request` object. Both channels that carry it — `RequestHandler`'s
-response to the host, and the `--worker` child's frame — go through `outcomeToWire` and
+The `ok` envelope gains a `request` object. Both channels that carry it, `RequestHandler`'s
+response to the host and the `--worker` child's frame, go through `outcomeToWire` and
 `wireToOutcome`, so neither can drift.
 
 ```json
@@ -372,7 +372,7 @@ type ResponseEnvelope =
 `renderStatusLine` reads `env.Request.Method` and `env.Request.Url`. The rest of it is unchanged.
 
 **The Request section** is a `<details>` element that mirrors `renderHeaders`, placed **between the
-status line and the response headers**, and **collapsed by default** — the response is what the user
+status line and the response headers**, and **collapsed by default**, because the response is what the user
 came for. Its summary reads `Request` when there is no body, and `Request (2.1 KB)` when there is
 one.
 
@@ -382,7 +382,7 @@ and then the body.
 **The request body renders as JSON, text, or hex only.** Factor the existing content dispatch into
 `renderContent (contentType: string) (body: byte[])`, which `renderBody` then calls, and have the
 request body call it with the **image and HTML branches excluded**. A request body is data that was
-sent, not a document to preview, and this keeps the sandboxed-iframe surface exactly where it is
+sent rather than a document to preview, and this keeps the sandboxed-iframe surface exactly where it is
 today.
 
 For `NoBody` the body area is omitted entirely. For `NotCaptured reason` it renders the reason in the
@@ -403,15 +403,15 @@ directly with hand-built `HttpRequestMessage` values, and separately run real se
    a `MultipartFormDataContent` of text parts.
 2. `isStreamed` returns true for `StreamContent`, and for a `MultipartFormDataContent` containing a
    `StreamContent` part.
-3. **The send is unchanged by the capture.** For each of the eight shapes in Decision 5, send twice —
-   once plain, once with the capture installed — and assert the server received identical bytes.
+3. **The send is unchanged by the capture.** For each of the eight shapes in Decision 5, send twice,
+   once plain and once with the capture installed, and assert the server received identical bytes.
    This is the regression test for the nested-part hazard, and it must fail if anybody makes the
    capture read a part's headers.
 4. A body at the cap is captured; a body over the cap yields `NotCaptured`, and the server still
    receives it in full.
 5. The correlation returns the right body when a block sends two requests with different bodies.
 6. `requestMessage` yields the absolute URL with percent-escapes intact for a computed URL with a
-   query string — the defect this spec exists to fix.
+   query string, which is the defect this spec exists to fix.
 
 ### Seam 2: the renderer
 
@@ -438,7 +438,7 @@ The renderer is pure, so these are canned-envelope assertions in the existing su
 ### Seam 4: the UI suite, against the running editor
 
 `RunCommand.runOne` is Fable and VSCode interop. The suite therefore claims the deletion of the
-`locate` call against the running product, and not by hand.
+`locate` call against the running product rather than by hand.
 
 17. The core-path check reads the response viewer's status line, and asserts the absolute URL that
     each block sent: scheme, host, port, and path. Both blocks of its fixture compute their URL, as
@@ -480,7 +480,7 @@ This spec is written against the code **after #96 and #98**.
 
 #98's FIFO-flush decision justifies `locate` abandoning to an empty list with "it must not throw
 because `runOne` awaits it before it sends". Decision 11 **deletes that await**. The abandon path is
-still needed — `CodeLensProvider` remains a caller — so #98's decision stands unchanged, but its
+still needed, because `CodeLensProvider` remains a caller, so #98's decision stands unchanged, but its
 stated reason no longer applies. Post this as a comment on #98 so whoever implements it is not
 confused by a justification that has moved.
 
@@ -517,6 +517,6 @@ versions named at each point.
 
 The feature and its two halves come from an earlier feature-cap ticket, which chose it
 as feature 1 of 3. The status line's blank URL for a computed URL was found there by source
-inspection. Everything in Decisions 2 through 8 — the dead premise, the capture seam, the streaming
-rule, the multipart hazard, the cap, and the correlation — was decided and measured while writing
+inspection. Everything in Decisions 2 through 8, covering the dead premise, the capture seam, the streaming
+rule, the multipart hazard, the cap, and the correlation, was decided and measured while writing
 this spec.

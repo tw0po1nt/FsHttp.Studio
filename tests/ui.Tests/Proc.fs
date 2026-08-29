@@ -34,7 +34,7 @@ let fileExists (_path: string) : bool = jsNative
 [<Emit("require('node:fs').appendFileSync($0, $1)")>]
 let appendFile (_path: string) (_text: string) : unit = jsNative
 
-/// Every pid whose command line matches `pattern`. Empty when nothing matches — `pgrep`
+/// Every pid whose command line matches `pattern`. Empty when nothing matches, because `pgrep`
 /// exits 1 in that case, which `sh` swallows.
 let pidsMatching (pattern: string) : int[] =
     (run (sprintf "pgrep -f '%s'" pattern)).Split('\n')
@@ -43,8 +43,8 @@ let pidsMatching (pattern: string) : int[] =
         | true, pid -> Some pid
         | _ -> None)
 
-/// SIGKILL, not SIGTERM: the companion-death check is about the process vanishing, not about a
-/// clean exit the runtime could still report on.
+/// SIGKILL rather than SIGTERM: the companion-death check is about the process vanishing rather
+/// than about a clean exit the runtime could still report on.
 let kill (pid: int) : unit =
     run (sprintf "kill -9 %d" pid) |> ignore
 
@@ -68,7 +68,7 @@ let curlConnectionRefused (url: string) : bool =
     code = "" || code = "000"
 
 /// Where this run's test server wrote its sidecar, as `run.sh` exports it. `None` when the
-/// variable is unset — the name of the variable lives here alone, and each caller words its own
+/// variable is unset. The name of the variable lives here alone, and each caller words its own
 /// failure around what it needed the path for.
 let sidecarPath () : string option =
     match env "UI_TEST_SIDECAR" "" with

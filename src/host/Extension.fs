@@ -63,7 +63,7 @@ let private companionTargetMajor (runtimeConfigPath: string) : int option =
 
 /// True when `dotnet --list-sdks` reports at least one SDK with a major version ≥
 /// `requiredMajor`. That is the floor the companion needs for FSI's `#r "nuget:"` restore, and
-/// it needs an SDK, not only a runtime. The companion rolls forward onto any newer major
+/// that restore needs a full SDK. The companion rolls forward onto any newer major
 /// version, so a match at the floor or above is genuinely runnable.
 let private hasSdkAtLeast (requiredMajor: int) (listSdksOutput: string) : bool =
     listSdksOutput.Split('\n')

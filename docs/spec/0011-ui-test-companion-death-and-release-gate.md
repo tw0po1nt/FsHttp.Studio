@@ -27,7 +27,7 @@ that spins on `Running…` forever, with no explanation, is the worst failure th
 
 **The gate.** Today `release.yml` refuses a version that has no Beta pre-release. ADR-0008 makes an
 operator's comment on that pre-release the record that the walk happened. The workflow's own comment
-admits what it is: *"A tripwire, and not a proof. It shows that a Beta was built, and it cannot show
+admits what it is: *"A tripwire rather than a proof. It shows that a Beta was built, and it cannot show
 that an operator walked `docs/manual-check.md`."*
 
 So the release gate is a person's memory, checked by a tag's existence. Once the six checks exist,
@@ -123,7 +123,7 @@ deleted, so that the instruction does not vanish with its file.
 34. As a maintainer, I want `docs/manual-check.md` deleted only when all six checks are green, so that
     the walk is never removed while its replacement is partial.
 
-## Implementation Decisions — the check
+## Implementation Decisions: the check
 
 ### The fixture
 
@@ -140,15 +140,15 @@ holds **two blocks**, and reads `baseUrl` from the sidecar beside it:
 ### What the check does
 
 Prototyping drove this exact sequence: ten CI jobs, cold and warm, twenty suite runs, all green.
-The steps below are what it established, and not a design sketch.
+The steps below are what it established rather than a design sketch.
 
 1. Click the first block's lens, find-and-click inside one retry. Assert the viewer shows `Running…`.
 2. **Wait for the server to report the request as arrived**, through its status endpoint's waiting
    count. This is the step without which the whole check is a lie.
 3. Kill **every** companion process, and confirm each is gone.
 4. Assert the viewer leaves `Running…` and renders the shipped stopped message (viewer-update deadline).
-5. Reload the window. Wait for a **fresh companion process** — one that is neither absent nor one of the
-   killed ones — within the post-reload deadline. Then reopen the fixture.
+5. Reload the window. Wait for a **fresh companion process**, one that is neither absent nor one of the
+   killed ones, within the post-reload deadline. Then reopen the fixture.
 6. Click the second block's lens, find-and-click inside one retry. Assert the viewer renders `200` and
    the probe body.
 7. In teardown, release the hang.
@@ -160,7 +160,7 @@ kill timed to the click, or to the appearance of `Running…`, lands during that
 then never sees a request at all. The check would assert that a death is visible when the companion
 died *before* the Run. That is a different property, and a much easier one.
 
-The test server therefore exposes an **arrival tell** — a status endpoint reporting how many requests
+The test server therefore exposes an **arrival tell**: a status endpoint reporting how many requests
 are waiting on the hang route. The check kills only after that count rises. This is the difference
 between the check the manual walk describes and a check that looks like it.
 
@@ -173,11 +173,11 @@ killed.** Killing one leaves a survivor that can answer, and the check becomes f
 red.
 The check asserts that every matched process is gone before it proceeds.
 
-### The reload's tell is a fresh companion, not a workbench
+### The reload's tell is a fresh companion rather than a workbench
 
 Prototyping's sharpest finding about the reload is this: **the workbench-ready wait is not a reload
 tell**. It returns while the pre-reload DOM is still up. Every pre-reload element handle goes
-stale. Every *fresh* lookup then works — the workbench, the lens, the webview frame — but only once
+stale. Every *fresh* lookup then works, covering the workbench, the lens, and the webview frame, but only once
 the reload has happened.
 
 The tell that the reload happened is **a companion process that is neither absent nor one of the
@@ -194,7 +194,7 @@ only check that exercises it, and two of the three requirements were found the h
 - **Per-request thread-pool dispatch.** A single-threaded listener deadlocks the release behind the
   hang, and the job dies at its timeout with nothing legible in it.
 
-And the release mechanism is a **generation counter, not a latch**. A sticky latch, once set, is
+And the release mechanism is a **generation counter rather than a latch**. A sticky latch, once set, is
 never reset. Every later request to the hang route then returns immediately. A check whose hang
 silently does not hang is a bad failure, because it passes for the wrong reason. The route reads
 the generation on arrival, and waits for it to advance.
@@ -246,7 +246,7 @@ message's instruction works. The check fits the harness's flat per-check budget 
 This check runs last. It kills the companion and reloads the window, so it leaves the session in a state
 no other check should try to inherit. It restores nothing beyond releasing the hang.
 
-## Implementation Decisions — the switchover
+## Implementation Decisions: the switchover
 
 Do this half **only when specs 2 through 6 are landed and green**. Removing the walk while its
 replacement is partial would leave the project with neither.
@@ -256,7 +256,7 @@ replacement is partial would leave the project with neither.
 - **Remove** the step that requires a `v<version>-beta.*` tag. A tag's existence never showed that
   anyone walked anything.
 - **Run the UI suite inside the release workflow**, with the same budgets and job retries as everywhere
-  else. Do not gate on a previously-green CI check for the same SHA — the release path runs its own.
+  else. Do not gate on a previously-green CI check for the same SHA, because the release path runs its own.
 - **Refuse the draft Release when the suite is red.**
 - **Keep the `force` input**, redefined: it skips the UI suite for an emergency release. It must log
   loudly and unmistakably when used, so the record shows a release that skipped its gate.
@@ -268,8 +268,8 @@ Actions run from the draft Release body, for a releaser reading the Release rath
 
 ### `docs/release-gate.md`
 
-Created in spec 1. Completed here. It states what the suite proves, the budgets, and — the point of the
-document — what it does not cover. Sweep the gap list before writing:
+Created in spec 1. Completed here. It states what the suite proves, the budgets, and, which is the point of the
+document, what it does not cover. Sweep the gap list before writing:
 
 - **Keep** the VSCode-pin entry, verbatim as spec 1 supplies it, and the pin-update pull request
   prerequisite.
@@ -323,16 +323,16 @@ and the extension's activation after a window reload.
 
 **Prior art in this repository:**
 
-- `docs/spec/0004-run-path-robustness.md`, Decision 6 — the shipped behavior this check verifies. Its
+- `docs/spec/0004-run-path-robustness.md`, Decision 6: the shipped behavior this check verifies. Its
   own text records that the surface was verified by hand.
-- `tests/host.Tests/` — where the send-on-a-closed-handle assertion belongs, now that the second click
+- `tests/host.Tests/`: where the send-on-a-closed-handle assertion belongs, now that the second click
   is dropped.
-- Spec 2's core path check — the viewer-reading vocabulary the recovery assertion reuses verbatim.
+- Spec 2's core path check: the viewer-reading vocabulary the recovery assertion reuses verbatim.
 
 **Negative verification.** Two runs, both required:
 
 1. Assert an obviously wrong stopped message and confirm CI goes red with a named `.fs` line.
-2. Remove the arrival wait and confirm the check becomes unreliable — this is the one design decision in
+2. Remove the arrival wait and confirm the check becomes unreliable. This is the one design decision in
    the suite whose necessity is invisible from the code.
 
 **Before the switchover half is called done**, the suite must run green end to end on a pull
@@ -353,9 +353,9 @@ product question is #145.
 a runtime that fails to start. One kill path proves the abandonment logic.
 - **Registry publishing.** `vsce` and `ovsx` publishing stays as it is and is not part of this gate.
 - **Deleting `beta.yml`.** The Beta survives as distribution.
-- **Editing ADR-0008 in place.** Superseded, not rewritten.
+- **Editing ADR-0008 in place.** Superseded rather than rewritten.
 - **macOS and Windows.** Linux only, by decision. A defect that appears only in runtime discovery or
-  companion process handling on those platforms ships uncaught — the accepted trade for retiring the
+  companion process handling on those platforms ships uncaught, which is the accepted trade for retiring the
   walk.
 
 ## Further Notes

@@ -1,6 +1,6 @@
 # Run blocks in an FCS-hosted companion, marshal responses as a framed envelope
 
-A single `http { }` block is F# code, not data, so it needs an F# evaluator. We host FSharp.Compiler.Service's interactive session in a long-lived .NET companion process. The companion returns each response to the extension host as a tagged, framed JSON envelope across the process boundary.
+A single `http { }` block is F# code rather than data, so it needs an F# evaluator. We host FSharp.Compiler.Service's interactive session in a long-lived .NET companion process. The companion returns each response to the extension host as a tagged, framed JSON envelope across the process boundary.
 
 ## Considered Options
 

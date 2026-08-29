@@ -6,7 +6,7 @@
 // read the response viewer share the DOM read, and the companion-death check owns the window
 // reload. Every editor-facing binding is scoped to an editor group, because the viewer takes
 // focus when it opens and an unscoped page object would resolve the wrong column's tab. Each
-// binding reads a channel a person reads — the workbench UI or the webview DOM — and adds no
+// binding reads a channel a person reads, the workbench UI or the webview DOM, and adds no
 // seam to the shipping extension.
 module ExTester
 
@@ -84,7 +84,7 @@ type Workbench =
 type ProblemsView =
     abstract setFilter: pattern: string -> JS.Promise<unit>
     /// The visible rows, as ExTester's `Marker` page objects. Typed as opaque because the only
-    /// assertion made on them is how many there are — a row's own text is never read.
+    /// assertion made on them is how many there are. A row's own text is never read.
     abstract getAllVisibleMarkers: markerType: string -> JS.Promise<obj[]>
 
 type BottomBarPanel =
@@ -97,10 +97,10 @@ type ByStatic =
 /// One copy button as the viewer paints it.
 ///
 /// `Displayed` is the laid-out box from `getBoundingClientRect`. It claims the button is present
-/// and has a size — nothing more. It is *not* a witness for Decision 2's defect: the spec
-/// measured a button inside a closed `<details>` still reporting a 29x23 box with
-/// `visibility: visible`, "so no measurement in code detects the defect. Only a screenshot shows
-/// it". The screenshot on the PR is that evidence; this field is the weaker claim beside it.
+/// and has a size, and nothing more. It is *not* a witness for the closed-`<details>` defect: a
+/// button inside a closed `<details>` still reports a 29x23 box with `visibility: visible`, so
+/// no measurement in code detects that defect. Only a screenshot shows it, and this field is the
+/// weaker claim beside one.
 type CopyButtonReading =
     { Key: string
       Label: string
@@ -140,7 +140,7 @@ type ResponseViewerDom =
         HeadersText: string
         /// Rendered text of the collapsible Request section. A `<details>` reports only its
         /// summary while collapsed, so this carries the headers and body only once the section
-        /// has been expanded — which is exactly the user's own path to them.
+        /// has been expanded, which is exactly the user's own path to them.
         RequestText: string
         /// Text of the Request section's summary: `Request`, or `Request (2.1 KB)` with a
         /// captured body. Empty when no Request section rendered.
@@ -176,7 +176,7 @@ module private Viewer =
     let urlSelector = ".status-url"
     // Both body reads are scoped to `.response-body`. The Request section renders a captured
     // request body through the same `renderContent` dispatch, and therefore the same
-    // `.response-json` and `.response-text` classes — and it sits *above* the response body in
+    // `.response-json` and `.response-text` classes, and it sits *above* the response body in
     // the DOM, so an unscoped read reaches the request's body first. It reads as empty while the
     // section is collapsed, which is a read of the wrong region that looks like a viewer that has
     // not painted yet.
@@ -219,15 +219,15 @@ let private focusFixtureGroupCommand =
 let private viewerGroupIndex = 1
 
 /// Wait for the viewer's iframe to become the active frame. Deliberately not a check-tunable
-/// deadline: it bounds one Selenium frame switch inside this binding, not a product surface a
-/// check waits on. Product waits use the harness's named deadlines through `Harness.eventually`.
+/// deadline: it bounds one Selenium frame switch inside this binding rather than a product
+/// surface a check waits on. Product waits use the harness's named deadlines through `Harness.eventually`.
 let private frameSwitchTimeoutMs = 5_000.
 
 let private createInst (ctor: obj) : 'T = emitJsExpr ctor "new $0()"
 
 /// Builds a page object scoped to one editor group. ExTester's editor constructors default to the
-/// whole `EditorView`, which resolves the *focused* column's active tab — and the viewer takes
-/// focus when it opens, so an unscoped editor would resolve the webview's tab.
+/// whole `EditorView`, which resolves the *focused* column's active tab. The viewer takes focus
+/// when it opens, so an unscoped editor would resolve the webview's tab.
 let private createInstInGroup (ctor: obj) (group: EditorGroup) : 'T = emitJsExpr (ctor, group) "new $0($1)"
 
 module VSBrowser =
@@ -252,8 +252,8 @@ module StatusBar =
 
     let create () : StatusBar = createInst Ctor
 
-/// What the workbench shows for the FsHttp.Studio status-bar item. Hidden means Decision 6
-/// removed it from view (or no item carries the prefix). The product always writes the
+/// What the workbench shows for the FsHttp.Studio status-bar item. Hidden means the product
+/// removed it from view, or that no item carries the prefix. The product always writes the
 /// `FsHttp.Studio: ` prefix into the item text.
 type FsHttpStatus =
     | StatusHidden
@@ -263,7 +263,7 @@ type FsHttpStatus =
 let private fsHttpStatusPrefix = "FsHttp.Studio:"
 
 /// Reads the FsHttp.Studio status-bar item through ExTester's `StatusBar`. A hidden item does
-/// not appear among `getItems`, which is how Decision 6's hide is observed.
+/// not appear among `getItems`, which is how the hide is observed.
 let tryReadFsHttpStatus () : Async<FsHttpStatus> =
     async {
         try
@@ -342,7 +342,7 @@ let By: ByStatic = jsNative
 let waitForWorkbench (browser: VSBrowser) (timeoutMs: float) : JS.Promise<unit> =
     emitJsExpr (browser, timeoutMs) "$0.waitForWorkbench($1)"
 
-/// Asks VSCode to open a file. Returns when ExTester has asked, not when the editor has finished
+/// Asks VSCode to open a file. Returns when ExTester has asked, before the editor has finished
 /// rendering it, so pair it with a later wait on the tab or the buffer.
 let private openResource (browser: VSBrowser) (path: string) : JS.Promise<unit> =
     emitJsExpr (browser, path) "$0.openResources($1)"
@@ -355,8 +355,8 @@ let private editorGroup (index: int) : Async<EditorGroup> =
     view.getEditorGroup index |> Async.AwaitPromise
 
 /// Reads one property off the first element matching `selector`, or `""` when the element is
-/// absent. Absence is a normal poll result — the viewer renders progressively — so it reads as an
-/// empty string rather than an exception a check would have to catch.
+/// absent. Absence is a normal poll result, because the viewer renders progressively, so it
+/// reads as an empty string rather than an exception a check would have to catch.
 let private tryElementProperty
     (view: WebView)
     (selector: string)
@@ -397,7 +397,7 @@ let private holdsOnly (tabTitle: string) (titles: string[]) =
 /// caller would poll.
 type FixtureOpen =
     /// VSCode was asked to open the file. The tab may not have rendered yet, and the column can
-    /// still hold other tabs — `tryCloseOtherTabsInFixtureColumn` settles both.
+    /// still hold other tabs. `tryCloseOtherTabsInFixtureColumn` settles both.
     | FixtureOpenRequested
     /// The open raised, so the column's state is unknown. Not safe to retry: a second open of a
     /// file the column already holds concatenates the buffer into itself.
@@ -433,7 +433,7 @@ let tryFixtureColumnShowsTab (tabTitle: string) : Async<bool> =
 /// `tryCloseOtherTabsInFixtureColumn` makes it the sole tab afterwards.
 ///
 /// **Reach `FixtureOpenRequested` exactly once per fixture.** Opening a file the column already
-/// holds concatenates the buffer into itself, and a doubled buffer renders doubled lenses — which
+/// holds concatenates the buffer into itself, and a doubled buffer renders doubled lenses, which
 /// reads as a provider that over-detects rather than as a driver that opened twice.
 /// `Checks.openFixtureAsSoleTab` composes the open and the waits, and is what a check should call.
 /// It also measures the size of the document, because VSCode from 1.123.0 loads every file of a
@@ -471,7 +471,7 @@ let openFixtureInColumn (path: string) : Async<FixtureOpen> =
 /// Safe to poll, which is the point: closing the other tabs is idempotent, and it cannot empty the
 /// column, so the response viewer can never slide into the fixture column's index. A column
 /// holding one tab keeps exactly one `.editor-instance` laid out, which is what a CodeLens read
-/// needs — an inactive tab leaves a second editor in the page carrying no lens.
+/// needs. An inactive tab leaves a second editor in the page carrying no lens.
 ///
 /// Waits for the fixture tab to appear before it closes anything. The Explorer's click makes the
 /// file it opens the column's active tab, so closing the others while that tab is still on its way
@@ -509,8 +509,7 @@ let previousEditor () : Async<unit> =
     }
 
 /// Focuses the fixture column so `window.activeTextEditor` is the script again. The response
-/// viewer steals focus on a Run, which leaves no active text editor and hides the status item
-/// under Decision 6.
+/// viewer steals focus on a Run, which leaves no active text editor and hides the status item.
 let focusFixtureEditor () : Async<unit> =
     async {
         let workbench = Workbench.create ()
@@ -526,11 +525,12 @@ let focusFixtureEditor () : Async<unit> =
 /// It reads the DOM rather than building an ExTester `TextEditor`. That constructor waits for the
 /// editor to become visible, and the wait was observed to expire after about 5 s per poll while
 /// the page held one editor at 852x691, `display=block`, `visibility=visible`, `opacity=1`, and
-/// uncovered. The wait, and not the workbench, was wrong. A read that costs 5 s also exhausted a
+/// uncovered. The wait was wrong, and the workbench was fine. A read that costs 5 s also exhausted a
 /// 45 s deadline in about 9 polls, which hid how often it was failing.
 ///
-/// Ordered by the anchor's own top edge, not by DOM order: the lens for the second block must be
-/// index 1, and VSCode paints lenses in view zones whose DOM order carries no such promise.
+/// Ordered by the anchor's own top edge rather than by DOM order: the lens for the second block
+/// must be index 1, and VSCode paints lenses in view zones whose DOM order carries no such
+/// promise.
 ///
 /// Picks the first *laid-out* `.editor-instance` rather than the first one in the DOM. A column
 /// holding more than one tab keeps the inactive editors in the page at zero size, and the DOM
@@ -545,8 +545,7 @@ let focusFixtureEditor () : Async<unit> =
 ///
 /// The one plain-text lens this suite reads, taken from the product rather than retyped:
 /// `Ui.Tests.fsproj` links `Protocol.fs`, so the harvest below and every check that names the
-/// title move together with the shipped words (docs/spec/0014-explain-missing-lenses.md,
-/// Decision 2). `None` would mean the product paints no lens for `Script(0, true)` at all, which
+/// title move together with the shipped words. `None` would mean the product paints no lens for `Script(0, true)` at all, which
 /// no reading here could assert around, so the suite fails on the spot rather than harvesting
 /// against a placeholder.
 let noRequestsLensTitle =
@@ -555,7 +554,7 @@ let noRequestsLensTitle =
     | None -> Assert.fail "Protocol.noRequestsLensTitle paints no lens for Script(0, true)"
 
 /// A lens with a command id is an `<a id>`. A lens with a title and an empty command id is a
-/// `<span>` (docs/spec/0014-explain-missing-lenses.md, Decision 2). Command lenses keep the
+/// `<span>`. Command lenses keep the
 /// existing `a[id]` walk. Plain-text collection takes only the no-requests title: a wider span
 /// harvest pulled in non-command nodes that stole Run-lens clicks on the core path.
 let private lensAnchorsPrologue =
@@ -629,7 +628,7 @@ let describeLensLayout () : Async<string> =
                 let text = string reading
                 return if text = "" then "no lens element in the editor" else text
         with e ->
-            return sprintf "no measurement — the layout query raised: %s" e.Message
+            return sprintf "no measurement: the layout query raised: %s" e.Message
     }
 
 /// How the editor painted a lens carrying a title: as a command VSCode can run, or as plain text.
@@ -643,8 +642,7 @@ type LensRendering =
     /// The query itself did not run, which is no evidence either way.
     | RenderingUnreadable of reason: string
 
-/// Whether the lens carrying `title` renders as a command or as plain text
-/// (docs/spec/0014-explain-missing-lenses.md, Decision 2).
+/// Whether the lens carrying `title` renders as a command or as plain text.
 ///
 /// Reads the DOM rather than the outcome of a click: on a script that locates no block, no lens
 /// could open a viewer whatever command it carried, so "the click did nothing" cannot tell a
@@ -707,7 +705,7 @@ let describeGutterExtent () : Async<string> =
             else
                 return string reading
         with e ->
-            return sprintf "no measurement — the gutter query raised: %s" e.Message
+            return sprintf "no measurement: the gutter query raised: %s" e.Message
     }
 
 /// Selects one lens anchor with `selectBody` and clicks it through the driver.
@@ -826,17 +824,17 @@ let tryReadCodeLensTitles () : Async<LensRead> =
 
             if isNull read then
                 let! editors = describeEditorInstances ()
-                return LensReadFailed(sprintf "no laid-out editor in the page — %s" editors)
+                return LensReadFailed(sprintf "no laid-out editor in the page: %s" editors)
             else
                 return LensTitles(unbox<string[]> read)
         with e ->
             let! editors = describeEditorInstances ()
-            return LensReadFailed(sprintf "%s — page shows %s" e.Message editors)
+            return LensReadFailed(sprintf "%s, page shows %s" e.Message editors)
     }
 
 /// True when a second editor group is open beside the first *and* holds the response viewer's
-/// tab — the tell that the viewer opened in a column beside the editor, rather than in the same
-/// column, not at all, or with something else split beside the fixture.
+/// tab. That is the tell that the viewer opened in a column beside the editor, rather than in
+/// the same column, nowhere at all, or with something else split beside the fixture.
 let tryViewerBesideEditor () : Async<bool> =
     async {
         try
@@ -892,8 +890,8 @@ let private tryFindWarningNotification (message: string) : Async<Notification op
             return found
     }
 
-/// True when a standalone warning toast shows exactly `message`. Reads the notification UI, not a
-/// `showWarningMessage` call site.
+/// True when a standalone warning toast shows exactly `message`. Reads the notification UI
+/// rather than a `showWarningMessage` call site.
 let tryWarningNotification (message: string) : Async<bool> =
     async {
         try
@@ -921,7 +919,7 @@ let tryDismissWarningNotification (message: string) : Async<bool> =
 
 /// Opens the Problems view, filters it to `fixtureFileName`, and returns true when no visible
 /// markers remain for that filter. Pair with `Harness.eventually` after a positive tell that the
-/// Run settled — absence alone is not meaningful.
+/// Run settled, because absence alone carries no meaning.
 ///
 /// Recorded softness, so a green run is not over-read: only FsHttp.Studio is installed in the
 /// suite's VSCode. No F# language service is present, so nothing else contributes diagnostics to
@@ -931,7 +929,7 @@ let tryDismissWarningNotification (message: string) : Async<bool> =
 /// the viewer assertion, which reads a channel with no such weakness.
 ///
 /// Opens the bottom panel as a side effect. A caller that wants the panel closed again must close
-/// it — see `tryCloseBottomPanel`.
+/// it with `tryCloseBottomPanel`.
 let tryNoProblemsForFixture (fixtureFileName: string) : Async<bool> =
     async {
         try
@@ -968,7 +966,7 @@ let private fixtureEditor () : Async<TextEditor> =
         return TextEditor.createInGroup group
     }
 
-/// An editor tab's dirty flag and full buffer text — the pair every buffer claim below reads, and
+/// An editor tab's dirty flag and full buffer text: the pair every buffer claim below reads, and
 /// the pair `trySetFixtureLine` reads twice.
 let private bufferState (editor: TextEditor) : Async<bool * string> =
     async {
@@ -991,8 +989,8 @@ let private tryFixtureBuffer (holds: bool -> string -> bool) : Async<bool> =
 
 /// Replaces one 1-based line in the fixture editor with `text`. Idempotent when the buffer already
 /// holds `text` on that path: a poll that finds the broken text present and the tab dirty returns
-/// without rewriting. Pair with `Harness.eventually` — the tell is dirty plus the broken fragment,
-/// not the paste itself.
+/// without rewriting. Pair with `Harness.eventually`. The tell is dirty plus the broken
+/// fragment, rather than the paste itself.
 ///
 /// Does not save. The fixture on disk is never written.
 let trySetFixtureLine (line: int) (text: string) : Async<bool> =
@@ -1037,8 +1035,8 @@ let tryFixtureBufferLacks (fragment: string) : Async<bool> =
     tryFixtureBuffer (fun dirty text -> (not dirty) && not (text.Contains fragment))
 
 /// Focuses the fixture column and reverts its active file from disk through the workbench's own
-/// revert-file command. Pair with `Harness.eventually` on `tryFixtureBufferLacks` — the command
-/// returns when VSCode has been asked to revert, not when the tab is clean. Does not save.
+/// revert-file command. Pair with `Harness.eventually` on `tryFixtureBufferLacks`. The command
+/// returns when VSCode has been asked to revert, before the tab is clean. Does not save.
 let tryRevertFixtureFile () : Async<bool> =
     async {
         try
@@ -1051,8 +1049,9 @@ let tryRevertFixtureFile () : Async<bool> =
             return false
     }
 
-/// Asks VSCode to reload the window. Returns when ExTester has asked, not when the reload has
-/// finished — the companion-death check waits on a fresh companion process for that. Pre-reload
+/// Asks VSCode to reload the window. Returns when ExTester has asked, before the reload has
+/// finished. The companion-death check waits on a fresh companion process for that.
+/// Pre-reload
 /// element handles go stale; every later lookup must be fresh.
 let reloadWindow () : Async<unit> =
     async {
@@ -1168,7 +1167,7 @@ let tryReadResponseViewer () : Async<ResponseViewerDom option> =
                 let! refusalTitle = tryElementText view Viewer.refusalTitleSelector
                 let! refusalDetail = tryElementText view Viewer.refusalDetailSelector
 
-                // Cleared before the switch, not after: a `switchBack` that throws must not send
+                // Cleared before the switch rather than after: a `switchBack` that throws must not send
                 // the handler below into a second one.
                 switched <- false
                 do! view.switchBack () |> Async.AwaitPromise
@@ -1245,11 +1244,11 @@ type CopyClickReading =
         /// The text `navigator.clipboard.writeText` was handed, whether or not the write then
         /// resolved. `None` when the witness recorded no call at all.
         ///
-        /// This is the write's argument, and not a read back off the system clipboard: headless
+        /// This is the write's argument rather than a read back off the system clipboard: headless
         /// Linux here has no clipboard tool to read one with. It proves what the extension put
-        /// on the clipboard, not what a paste elsewhere would produce.
+        /// on the clipboard rather than what a paste elsewhere would produce.
         WrittenText: string option
-        /// Whether that write resolved. False on the refused path Decision 8 reports as
+        /// Whether that write resolved. False on the refused path the viewer reports as
         /// `Copy failed`.
         Granted: bool
         RequestOpen: bool
@@ -1258,8 +1257,8 @@ type CopyClickReading =
 
 /// Whether the witness lets the real `navigator.clipboard.writeText` run, or makes it reject.
 ///
-/// `Refused` is the only way a check reaches Decision 8's failure path: the platform this suite
-/// runs on grants the write, and the spec is explicit that "the failure path is not decoration".
+/// `Refused` is the only way a check reaches the copy-failure path: the platform this suite runs
+/// on grants the write.
 type ClipboardGrant =
     | Granted
     | Refused
@@ -1267,7 +1266,7 @@ type ClipboardGrant =
 /// Installs a witness over `navigator.clipboard.writeText` in the viewer frame, and sets whether
 /// the next write is granted. The real write still runs when granted; either way the text handed
 /// in is stored with the outcome. Headless Linux in this suite has no clipboard tool, and a
-/// resolved write is what Decision 11 measured VSCode granting.
+/// resolved write is what VSCode grants there.
 let private installClipboardWitnessScript =
     """
     var refuses = arguments[0];
@@ -1316,7 +1315,7 @@ let private readCopyClickScript =
 
 /// How long one click waits inside the frame for the clipboard promise to settle and the label to
 /// flash. Deliberately not a check-tunable deadline, on the same terms as `frameSwitchTimeoutMs`:
-/// it bounds one in-frame interaction, and not a product surface a check waits on.
+/// it bounds one in-frame interaction rather than a product surface a check waits on.
 let private copySettleTimeoutMs = 3_000.
 
 /// The gap between two reads of the settling label. Well under the 1200 ms the flash lasts, so a

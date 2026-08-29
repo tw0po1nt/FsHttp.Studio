@@ -6,7 +6,7 @@ Spec 6 of 7 for the UI test suite that retires `docs/manual-check.md`. This one 
 Decisions come from a wayfinder map held locally (`.local/wayfinder/ui-tests/`, gitignored). The map
 is not a GitHub issue, so this spec restates every decision it depends on rather than linking to one.
 
-**Blocked by** #146 (the harness and its setup) and spec 2 (the core path). **Not blocked by #144** —
+**Blocked by** #146 (the harness and its setup) and spec 2 (the core path). **Not blocked by #144.**
 this check's fixture never leaves the machine and reads no sidecar.
 
 ## Problem Statement
@@ -21,19 +21,19 @@ this check's fixture never leaves the machine and reads no sidecar.
 That is the manual proof of `docs/spec/0001-report-setup-compile-error.md`. When the Setup above a
 block does not compile, the Run must report **the Setup's own fault, at its own source location**.
 Not a misleading complaint about `http` at the block. The point of that spec was that the message
-was not absent. It was *wrong*, and a wrong location sends the user to the wrong line.
+was *wrong*, and a wrong location sends the user to the wrong line.
 
 What no existing suite observes:
 
 - That a compile error reaches the response viewer at all, over the wire a response takes.
 - That the rendered text carries a **source position** the user can act on.
 - That the position matches **the line the user actually broke**.
-- That the Run reads the **unsaved editor buffer**, not the file on disk — because a user who types a
+- That the Run reads the **unsaved editor buffer** rather than the file on disk, because a user who types a
   type error and clicks Run has not saved.
 
 `companion.Tests` pins the compile-error outcome and its diagnostics. `host.Tests` pins the formatting
 of a diagnostic list into viewer text. Neither can type into an editor, and neither observes a webview.
-The gap is the last few inches. Buffer to companion, diagnostic to text, text to rendered pixel —
+The gap is the last few inches. Buffer to companion, diagnostic to text, text to rendered pixel,
 with a line number that has to survive all of it.
 
 ## Solution
@@ -63,9 +63,9 @@ After this spec lands, steps 3–5 of *Run outcomes* are automated.
 6. As a maintainer, I want the render asserted to carry no status line, so that a compile error is never
    dressed as a response.
 7. As a maintainer, I want the error's own message text present, so that the user is told what is wrong
-   and not only where.
+   as well as where.
 8. As a maintainer, I want the Run to be driven from the **unsaved buffer**, so that the path a real
-   user takes — type, then click, without saving — is the path under test.
+   user takes, which is type, then click, without saving, is the path under test.
 9. As a maintainer, I want the fixture on disk left untouched, so that a run of the suite never dirties
    the working tree or the repository.
 10. As a check author, I want the buffer restored before the check ends, so that the checks after it do
@@ -109,9 +109,8 @@ maintain. A comment in the fixture marks the line the check breaks, and names it
 
 ### The buffer is mutated, and the file is not
 
-The check edits the **open editor buffer** and never saves. That is not merely convenient. It is
-the behavior under test. A user who introduces a type error and clicks Run has not saved. The
-extension sends the document's current text, not the file's contents. Driving the check from a
+The check edits the **open editor buffer** and never saves. That is the behavior under test. A user who introduces a type error and clicks Run has not saved. The
+extension sends the document's current text rather than the file's contents. Driving the check from a
 saved file would skip the path a user takes.
 
 Consequences, all deliberate:
@@ -123,9 +122,9 @@ Consequences, all deliberate:
 - The check must **not** trigger a save at any point, including through any command that saves as a side
   effect.
 
-### Restoration is part of the check, not cleanup
+### Restoration is part of the check rather than cleanup
 
-The buffer is restored through the workbench's own revert-file command — not by a keystroke-driven undo,
+The buffer is restored through the workbench's own revert-file command rather than by a keystroke-driven undo,
 whose behavior depends on how many edits were coalesced.
 
 Two requirements:
@@ -143,18 +142,18 @@ In order, every wait through `eventually`:
 
 1. Open the fixture. Assert the block renders a `▶ Run request` lens (lens-appearance deadline).
 2. Edit the buffer: introduce a type error at the fixture's marked line, above the block. Assert the
-   edit applied — the document is dirty and the text is present. **This is the tell that licenses
+   edit applied: the document is dirty and the text is present. **This is the tell that licenses
    everything after it.**
 3. Click the block's lens, find-and-click inside one retry.
 4. Assert in the webview DOM that the viewer reports a compile error (viewer-update deadline), and that
    the render carries **no status line and no headers section**.
-5. Assert the rendered text carries the **position of the broken line** — the line number the check
-   itself chose, with its column — and the compiler's own message.
+5. Assert the rendered text carries the **position of the broken line**, which is the line number the check
+   itself chose, with its column, and the compiler's own message.
 6. Revert the buffer. Assert the document is clean and the broken text is gone.
 
 ### The line-number assertion is exact, and a mismatch is a finding
 
-Step 5 asserts the **exact line** the check broke. Not "some position", not "a position within a range".
+Step 5 asserts the **exact line** the check broke. No looser claim of "some position" or "a position within a range" holds here.
 
 The coordinate path is where this could go wrong, so the assertion is deliberately sharp. The
 companion reports positions in the compiler's own numbering: 1-based lines, 0-based columns. The
@@ -174,7 +173,7 @@ construct whose message includes inferred type names or suggestions, which vary 
 versions.
 
 The check asserts the message's presence and the position's exactness. It does not assert the
-compiler's full sentence word for word. Those words belong to the F# compiler, not to this product.
+compiler's full sentence word for word. Those words belong to the F# compiler rather than to this product.
 Pinning them would make an F# upgrade look like a product regression.
 
 ### Session state
@@ -191,12 +190,12 @@ flat per-check budget, and prints the result to the timing table.
 ## Testing Decisions
 
 **What makes a good test here.** The fidelity floor, unchanged. Response viewer content in the
-webview DOM, not a viewer-update object. A real click on a real lens. This check adds one channel:
+webview DOM rather than a viewer-update object. A real click on a real lens. This check adds one channel:
 **a real edit in a real editor**. Steps 3 and 5 of the manual walk are edits, and there is no
 honest way to automate them without making one.
 
 **Seam.** No new seam. The packaged `.vsix` driven through ExTester. **No test-only seam is added to
-the shipping extension.** The edit goes through the editor, not through a command the product ships
+the shipping extension.** The edit goes through the editor rather than through a command the product ships
 for the test's benefit.
 
 **Modules under test.** Four things as one, with the coordinate conversion running through the
@@ -206,11 +205,11 @@ render.
 
 **Prior art in this repository:**
 
-- `docs/spec/0001-report-setup-compile-error.md` — the spec this check verifies in a workbench. Its
+- `docs/spec/0001-report-setup-compile-error.md`: the spec this check verifies in a workbench. Its
   Implementation Decision 3 explains why the wording names the Setup.
-- `tests/companion.Tests/` — pins the compile-error outcome and diagnostics.
-- `tests/host.Tests/` — pins the formatting of diagnostics into viewer text, including the column shift.
-- Spec 2's core path check — the viewer-reading vocabulary this check reuses.
+- `tests/companion.Tests/`: pins the compile-error outcome and diagnostics.
+- `tests/host.Tests/`: pins the formatting of diagnostics into viewer text, including the column shift.
+- Spec 2's core path check: the viewer-reading vocabulary this check reuses.
 
 **Negative verification.** Run the check once asserting a line number one off from the broken line.
 Confirm CI goes red with a named `.fs` line. This check's whole value is an exact number, so
@@ -227,7 +226,7 @@ This check is the only one that can dirty the working tree, and the failure mode
   words belong to the F# compiler.
 - **Editor diagnostics.** FsHttp.Studio deliberately contributes none. Spec 5 asserts that position.
 - **Jumping to the reported location.** The viewer reports a position as text. Making that position
-  clickable is a product question, not a step of the manual walk.
+  clickable is a product question rather than a step of the manual walk.
 - **Saving the fixture, or writing a second fixture file.** Explicitly rejected.
 - **Changing the harness.** No new deadline, no new route, no CI change.
 - **Changing `release.yml` or deleting `docs/manual-check.md`.** Those land with spec 7.
@@ -243,7 +242,7 @@ that ordering safe.
 and 6–7 belong to spec 3.
 
 **The property that is easy to lose sight of.** Three of this check's assertions are about *not
-being something else*. Not a runtime error, not a response, not the wrong line. The compile-error
+being something else*: no runtime error, no response, and no wrong line. The compile-error
 path's historical defect was never an absent message. It was a **wrong** one. A check that only
 asserts "an error appeared" would have passed against the bug that `docs/spec/0001` was written to
 fix.

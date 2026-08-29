@@ -176,7 +176,7 @@ let tests =
                       )
                   )
 
-              // Compare the serialized ranges, not just their count: a shifted range is exactly
+              // Compare the serialized ranges rather than their count: a shifted range is exactly
               // the drift this guard exists to catch, and a length check would miss it.
               Expect.equal
                   (withPath.GetProperty("ranges").GetRawText())
@@ -184,8 +184,7 @@ let tests =
                   "locate ranges must not depend on scriptFileName"
           }
 
-          // docs/spec/0014-explain-missing-lenses.md, Seam 2: the blocks envelope carries
-          // parseFailed beside the ranges.
+          // The blocks envelope carries parseFailed beside the ranges.
           test "locate request on a clean source carries parseFailed false" {
               let request =
                   JsonSerializer.Serialize(

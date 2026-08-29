@@ -228,9 +228,9 @@ let private blankRange (fill: int -> string) (lines: string[]) (r: BlockRange) =
 let private blankSpan (lines: string[]) (r: BlockRange) =
     blankRange (fun width -> "()" + String(' ', max 0 (width - 2))) lines r
 
-/// Blanks a span to pure spaces, with no `()` placeholder: the two uses below remove a keyword or
-/// an annotation, not an expression's value, and the surrounding syntax stays valid with nothing
-/// in its place.
+/// Blanks a span to pure spaces, with no `()` placeholder: the two uses below remove a keyword
+/// or an annotation rather than an expression's value, and the surrounding syntax stays valid
+/// with nothing in its place.
 let private blankToSpaces (lines: string[]) (r: BlockRange) =
     blankRange (fun width -> String(' ', width)) lines r
 
@@ -264,7 +264,7 @@ let private reservedTargetName = "__fsHttpStudio_target"
 let private r1InsertText = sprintf "let ``%s`` = " reservedTargetName
 
 /// The invocation's own name, unqualified: what the R1 route inserted, or what the R2 route's
-/// binding already offers. A `Refused` route never reaches this — `run`'s gate returns before
+/// binding already offers. A `Refused` route never reaches this, because `run`'s gate returns before
 /// `runInProcessDirect` is ever called for a refused target.
 let private baseInvocation (route: Route) : string =
     match route with
@@ -277,12 +277,13 @@ let private baseInvocation (route: Route) : string =
 let private unitArgSuffix = " ()"
 
 /// Prefixes the invocation's own name with the enclosing-module qualifier (outermost first),
-/// and leaves a trailing arity suffix after the qualified name, not before it:
-/// `Outer.getSnorlax ()`, not `Outer.getSnorlax()`.
+/// and leaves a trailing arity suffix after the qualified name, so it emits
+/// `Outer.getSnorlax ()`.
 ///
-/// The split is on the `" ()"` *suffix*, and not on the first space. A binding's own name can
-/// itself hold a space — `BlockLocator` spells ``let ``get pikachu`` = …``'s name back with its
-/// backticks — and splitting such a name at its first space would emit `Outer.``get pikachu```
+/// The split is on the `" ()"` *suffix* rather than on the first space. A binding's own name can
+/// itself hold a space, because `BlockLocator` spells ``let ``get pikachu`` = …``'s name back
+/// with its backticks, and splitting such a name at its first space would emit
+/// `Outer.``get pikachu```
 /// as two juxtaposed terms, which reads as a function application and does not compile.
 let private qualifyInvocation (qualifier: string list) (invocation: string) : string =
     let name, arity =
@@ -294,7 +295,7 @@ let private qualifyInvocation (qualifier: string list) (invocation: string) : st
     ((qualifier @ [ name ]) |> String.concat ".") + arity
 
 /// What the R1 insertion does to one line's columns. The R2 route names nothing and
-/// inserts no text, so it carries no shift at all — every `ColumnShift option` below is `None`
+/// inserts no text, so it carries no shift at all. Every `ColumnShift option` below is `None`
 /// there, and every translation is the identity.
 type private ColumnShift =
     {
@@ -338,7 +339,7 @@ let private unshiftPos (shift: ColumnShift option) (line: int, col: int) =
 
 /// True when a *Setup-coordinate* position falls inside the R1 inserted text itself, which is
 /// the companion's own generated `let <name> = `. Such a position has no user-source counterpart,
-/// and `unshiftPos` clamps it to the insertion point — which is also the block's own start
+/// and `unshiftPos` clamps it to the insertion point, which is also the block's own start
 /// column, so it would otherwise pass `withinBlock` and be misreported as the user's fault.
 /// The companion's own generated text belongs on the Setup side of the split, so this test runs
 /// on the *raw* position, before the clamp erases the distinction.
@@ -448,7 +449,7 @@ let private withinBlock (block: BlockRange) (line: int, col: int) =
 /// setup blanked. A diagnostic inside those lines is already native and needs no translation.
 ///
 /// A diagnostic past those lines comes from the appended `companionAddendum`, or from the
-/// invocation interaction (`realLineCount = 0` there — see `runInProcessDirect`), and has no
+/// invocation interaction, where `realLineCount = 0`, and has no
 /// source counterpart. One example is a failed `open FsHttp`, because the user's script carries
 /// no resolvable `#r`. Anchor such a diagnostic at the top of the script, where the missing
 /// reference belongs. A phantom line past the end would fail to highlight in the UI.
@@ -481,7 +482,7 @@ let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d:
 /// unrelated error (the user's own typo, or an FS0039 naming something no sibling bound) means
 /// the missing binding is not the whole story, and the whole thing is a compile error instead.
 ///
-/// Reads `setupLines`, not `combinedSetup`'s own text, because a diagnostic's position here is
+/// Reads `setupLines` rather than `combinedSetup`'s own text, because a diagnostic's position here is
 /// still in Setup-interaction coordinates and `setupLines` is exactly that interaction's text
 /// (the companion addendum carries no user name to unbind, so it never contributes a match).
 ///
@@ -536,8 +537,8 @@ let private blockDiagnostic (shift: ColumnShift option) (d: FSharpDiagnostic) : 
 /// (unshifted) start position lands inside the target's own block span.
 ///
 /// A diagnostic that starts inside the R1 inserted text is the one exception, and it takes the
-/// Setup treatment. The fault there is in the companion's own generated `let <name> = `, not in
-/// anything the user wrote. A user binding of the reserved name in the same scope reports its
+/// Setup treatment. The fault there is in the companion's own generated `let <name> = `, and
+/// never in anything the user wrote. A user binding of the reserved name in the same scope reports its
 /// duplicate definition exactly there.
 /// The test runs before `unshiftPos`, because the clamp moves such a position onto the block's
 /// own start column and it would otherwise read as the user's fault.
@@ -594,8 +595,8 @@ let private bodyToWire (body: CapturedBody) : string * string * string =
     | Captured bytes -> CapturedState, Convert.ToBase64String bytes, ""
     | NotCaptured reason -> NotCapturedState, "", reason
 
-/// The inverse of `bodyToWire`. An unrecognized state is a defect on our own wire — both ends
-/// are this module — so it throws rather than decaying to `NoBody`, which would tell the user
+/// The inverse of `bodyToWire`. An unrecognized state is a defect on our own wire, because both
+/// ends are this module, so it throws rather than decaying to `NoBody`, which would tell the user
 /// no body was sent when one was.
 let private bodyFromWire (bodyState: string) (bodyBase64: string) (bodyReason: string) : CapturedBody =
     match bodyState with
@@ -939,13 +940,12 @@ type private RunRoute =
 
 /// Routes one Run's `pins`. On the in-process path it also reserves them in the load map. The
 /// conflict *check* and the reservation *act* run under a single `lock loadLock`, so the two
-/// are one atomic step. The lock is taken once for each logical operation, not once for each
-/// access. A check in one lock scope, followed by a mark in another scope, leaves a TOCTOU gap.
+/// are one atomic step. The lock is taken once for each logical operation. A check in one lock scope, followed by a mark in another scope, leaves a TOCTOU gap.
 /// A future concurrent caller could load a conflicting version in that gap.
 /// The request loop is serial today, and the lock keeps it correct when that changes.
 ///
-/// The reservation happens *before* the evaluation runs, not after a successful load, and this
-/// is deliberate. The map is a conservative over-approximation of what the shared ALC can hold.
+/// The reservation happens *before* the evaluation runs rather than after a successful load.
+/// This is deliberate. The map is a conservative over-approximation of what the shared ALC can hold.
 /// A Run that reaches the in-process path can resolve its `#r "nuget:"` into that ALC, and the
 /// resolved assembly then outlives the session even when the evaluation compile-errors or
 /// throws. An over-mark of a Run that never loaded only over-routes a *later* Run to a safe,
@@ -998,8 +998,8 @@ let workerTimeoutMs = 120_000
 /// a worker that produces the frame and then stalls before it exits. The Run then maps to a
 /// `RuntimeError`, instead of a block of the caller forever. A user block that loops forever, or
 /// a request that never answers, both cause the first case. `use proc = proc` disposes the
-/// handle but does not unblock a wait. The bound and the kill, not the disposal, are what
-/// guarantee that the Run always terminates.
+/// handle but does not unblock a wait. The bound and the kill are what guarantee that the Run
+/// always terminates.
 let runInWorker
     (workerWaitMs: int)
     (source: string)
@@ -1073,7 +1073,7 @@ let runInWorker
 /// An out-of-range `blockIndex` has no target route. `runLocated` refuses it as a stale lens.
 ///
 /// The gate has to locate the blocks to decide, so the in-process path takes that same list on
-/// to `runLocated`. A Run parses the source once in this process, not once per stage. The
+/// to `runLocated`. A Run parses the source once in this process. The
 /// `--worker` path cannot share it: the child is a separate process, and it locates its own.
 ///
 /// Past the gate, `run` routes on one further condition: whether the target's `#r "nuget:"` pins

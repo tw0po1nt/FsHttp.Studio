@@ -35,9 +35,9 @@ then invokes the block by name and sends it.
 
 The Run gets the name in one of two ways:
 
-- **R1** — the block is a bare expression statement. The Run inserts `let <name> = ` immediately
+- **R1**: the block is a bare expression statement. The Run inserts `let <name> = ` immediately
   before the block, on the same line, and then invokes `<name>`.
-- **R2** — the block is the value of a module-level binding. The Run invokes the binding's own
+- **R2**: the block is the value of a module-level binding. The Run invokes the binding's own
   name.
 
 A position that neither route reaches is **refused**. The Run does not attempt it, and does not
@@ -109,11 +109,11 @@ binding, so `let a = http { } |> Request.send |> ignore` binds the block itself.
 Classify the target from the untyped syntax tree path. Do not type-check. Do not load a project.
 Do not resolve NuGet packages.
 
-**R1 — a bare expression statement, at any module depth.** Insert `let <name> = ` at the block's
+**R1, a bare expression statement, at any module depth.** Insert `let <name> = ` at the block's
 own start column, on the block's own line. Invoke the name, qualified by the enclosing nested
 modules, outermost first.
 
-**R2 — the value of a module-level binding, at unit arity.** Invoke the binding's derived name.
+**R2, the value of a module-level binding, at unit arity.** Invoke the binding's derived name.
 `let pikachu = …` invokes `pikachu`. `let getSnorlax () = …` invokes `getSnorlax ()`. The binding's
 value must be the block after the truncation in Decision 1. Only a type annotation or parentheses
 can be between the binding and the block.
@@ -161,7 +161,7 @@ The reference implementation is `RunPlan.fs` in the prototype. Refer to Further 
 
 ### 4. Blank every other block, whether or not it sends
 
-Blank the whole statement of each **other** block, and not only the blocks that send. Blanking does
+Blank the whole statement of every **other** block, including the blocks that send nothing. Blanking does
 two jobs:
 
 - **Isolation.** One Run sends one request.
@@ -177,12 +177,12 @@ original width. Each line and each untouched column keeps its position.
 
 ### 5. The two blanking hazards
 
-**Hazard 1 — a sibling whose span contains the target.** `let a, b = http { }, http { }` gives both
+**Hazard 1, a sibling whose span contains the target.** `let a, b = http { }, http { }` gives both
 blocks one statement span. Today's filter compares block ranges, so a Run on `b` blanks the
 statement that holds `b`, and deletes the block that the user clicked. **Never blank a span that
 contains the target.** A sibling that stays intact is safe, because it does not send.
 
-**Hazard 2 — the blank span is too large.** Today the span is the nearest `SynModule` declaration.
+**Hazard 2, the blank span is too large.** Today the span is the nearest `SynModule` declaration.
 For a block in a class member, that declaration is the **whole type definition**. A Run on a
 different block then deletes the type. The code above the target that names that type stops
 compiling.
@@ -208,7 +208,7 @@ module. Blanking to spaces keeps each line and each column, so no offset arithme
 Two traps:
 
 - **`private` is not always on the binding.** For `let private x = …` it is on the head pattern
-  (`SynPat.Named`), and not on `SynBinding.accessibility`. Read both. A read of the binding alone
+  (`SynPat.Named`) rather than on `SynBinding.accessibility`. Read both. A read of the binding alone
   misses it silently.
 - **Locate the keyword. Do not assume its position.** An attributed binding's statement range starts
   at its attribute line.
@@ -276,7 +276,7 @@ That finding is correct and this mechanism does not need it. Do not add `#line` 
 
 **No new dependency.** Do not add Fantomas. FSI takes a string, so each design prints the rewrite to
 text, and both routes are in-place edits that keep each line. Fantomas would add a second F# parser
-of about 2.4 MB for uniform implementation, and not for more coverage.
+of about 2.4 MB for uniform implementation rather than for more coverage.
 
 ### 10. Apply the response-reading guard at invocation time
 
@@ -458,7 +458,7 @@ Drive `BlockRunner.run` with `.fsx` source and a block index, which is the seam 
    a block in a nested module, a `let`-bound block, and a `()`-callable function's block. Assert
    `Ok`, and assert that the server counted one request.
 2. **Case 12 sends one request.** The script pipes the block to `Request.send`. Assert the count is
-   1, and not 2. This is the isolation guard that the boundary must not lose.
+   1 rather than 2. This is the isolation guard that the boundary must not lose.
 3. **Nothing after the block runs.** A module holds a block, and then a raw `HttpClient` call to a
    second path in the same module, below the block. Run the block. Assert that the second path was
    not requested. This is the test for the boundary in Decision 1.

@@ -19,7 +19,7 @@ GitHub pre-release at `v<version>-beta.<n>` with the `.vsix` attached. An operat
 `docs/manual-check.md`, and records the result on the pre-release. `release.yml`
 refuses a version that has no Beta, and a `force` input releases a change that needs no walk.
 
-## The Beta version is synthesized, not committed
+## The Beta version is synthesized
 
 `package.json` holds the **target release version** for the whole cycle. `beta.yml` counts the
 existing `v<version>-beta.*` tags, adds one, and stamps `npm version --no-git-tag-version` into the
@@ -70,6 +70,6 @@ arrives only after the branch is green arrives too late.
   `ref: v0.2.0-beta.3` reproduces that Beta. The prune therefore removes a built artifact, and not
   the means to make one.
 - `main` has no by-hand verification between Betas. A Manual check that finds a regression looks at
-  a batch of merged changes. The repair is a new commit, and not a change to an open pull request.
+  a batch of merged changes. The repair is a new commit rather than a change to an open pull request.
 - The tripwire in `release.yml` proves that a Beta was **built**, and it cannot prove that anybody
   walked the checklist. No workflow can prove that.

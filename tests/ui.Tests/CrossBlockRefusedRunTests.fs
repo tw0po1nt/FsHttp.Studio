@@ -1,7 +1,7 @@
 // Cross-block Refused Run: a reachable second block that depends on a value the first binds
 // renders ordinary Run lenses, then a Run of the second block paints a Refused Run notice in the
-// viewer and leaves the Problems view empty for the fixture. Spec 0009, as one check. The shipped
-// words come from `Refusals.forRefused` with the fixture's binding name — this check does not
+// viewer and leaves the Problems view empty for the fixture, as one check. The shipped
+// words come from `Refusals.forRefused` with the fixture's binding name, so this check does not
 // restate them.
 module CrossBlockRefusedRunTests
 

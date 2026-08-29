@@ -6,7 +6,7 @@ Spec 4 of 7 for the UI test suite that retires `docs/manual-check.md`. This one 
 Decisions come from a wayfinder map held locally (`.local/wayfinder/ui-tests/`, gitignored). The map
 is not a GitHub issue, so this spec restates every decision it depends on rather than linking to one.
 
-**Blocked by** #146 (the harness and its setup) and spec 2 (the core path). **Not blocked by #144** —
+**Blocked by** #146 (the harness and its setup) and spec 2 (the core path). **Not blocked by #144.**
 this check's fixture never leaves the machine and reads no sidecar.
 
 ## Problem Statement
@@ -53,11 +53,11 @@ After this spec lands, steps 1–5 of *The lens tells the truth* are automated.
 4. As a maintainer, I want the check to assert that the refused block offers **no** `▶ Run request`
    lens, so that a provider that offers both cannot ship.
 5. As a maintainer, I want a real click on the refusal lens, so that the lens's command wiring is
-   verified and not just its title.
+   verified, beyond its title.
 6. As a maintainer, I want the resulting notification asserted in the notification UI, so that a toast
    that never renders fails the build.
 7. As a maintainer, I want the toast asserted to be a **warning**, so that a refusal that degrades to an
-   information toast — or escalates to an error — is caught.
+   information toast, or escalates to an error, is caught.
 8. As a maintainer, I want the toast's text asserted to state the reason, so that a user learns why the
    Run was refused.
 9. As a maintainer, I want the toast's text asserted to state the workaround, so that a user learns what
@@ -89,7 +89,7 @@ product's own string and not a copy.
 ### The fixture
 
 One new checked-in fixture under the suite's `fixtures/` directory, owned by this check alone. It holds
-a block inside a `for` loop — the `loopBody` refusal shape — and nothing else that a Run could reach.
+a block inside a `for` loop, which is the `loopBody` refusal shape, and nothing else that a Run could reach.
 
 **The fixture reads no sidecar and needs no live server.** A refused block is never evaluated: no
 request is sent, and no code runs. Its URL is therefore an inert literal on loopback. A regression that *does* start a Run then fails
@@ -110,7 +110,7 @@ spec that copies a user-facing sentence becomes a second owner of it, and the tw
 - The rendered lens title is the glyph followed by that row's title.
 - The toast's text is that row's detail.
 
-Each assertion on rendered text compares **exactly those strings**. Not a paraphrase, and not a
+Each assertion on rendered text compares **exactly those strings**. No paraphrase, and no
 keyword.
 
 ### The response viewer must be closed first
@@ -138,8 +138,8 @@ rendered yet". It also makes this check depend on what the previous check left b
 In order, every wait through `eventually`:
 
 1. Close the response viewer if it is open. Assert it is gone.
-2. Open the fixture. Assert that the block inside the loop renders the **refusal lens** — the glyph plus
-   the shipped `loopBody` title — within the lens-appearance deadline.
+2. Open the fixture. Assert that the block inside the loop renders the **refusal lens**, holding the glyph plus
+   the shipped `loopBody` title, within the lens-appearance deadline.
 3. Assert that the same block offers no `▶ Run request` lens.
 4. Click the refusal lens, find-and-click inside one retry.
 5. Assert that a **warning** notification appears whose text is the shipped `loopBody` detail, within the
@@ -156,7 +156,7 @@ proof that the provider has run on this block.
 
 ### The notification's level
 
-The check asserts the notification's **type is warning**, not merely that some notification exists.
+The check asserts the notification's **type is warning**, beyond the presence of some notification.
 The product calls `window.showWarningMessage`, and the level is part of what the user reads. A
 refusal is not an error, because nothing is wrong with the user's script. It is not an
 informational aside either. ExTester's notification page object exposes the type, so the assertion
@@ -181,14 +181,14 @@ network.
 
 **What makes a good test here.** The fidelity floor, unchanged:
 
-- CodeLens text in the workbench, not `executeCodeLensProvider`.
-- Toast text in the notification UI, not a `showWarningMessage` call site.
+- CodeLens text in the workbench rather than `executeCodeLensProvider`.
+- Toast text in the notification UI rather than a `showWarningMessage` call site.
 - A real click, on a real lens.
 
 The refusal catalog's own unit coverage stays in `host.Tests` and is not duplicated here. This check
 proves the *rendering and wiring* of what that catalog holds, for one refusal code.
 
-**One code, not twelve.** The check drives the `loopBody` refusal only. The catalog holds twelve
+**One code rather than twelve.** The check drives the `loopBody` refusal only. The catalog holds twelve
 codes. Enumerating them through a driven UI would prove one mapping twelve times, at twelve times
 the cost. The mapping from code to words is already unit-tested. What is untested is that *a*
 refusal renders, and that *a* click toasts. One code establishes both.
@@ -202,11 +202,11 @@ non-involvement.
 
 **Prior art in this repository:**
 
-- `tests/host.Tests/` — the pure assertions on refusal codes and their words, which this check escalates
+- `tests/host.Tests/`: the pure assertions on refusal codes and their words, which this check escalates
   rather than replaces.
-- `docs/spec/0003-lens-tells-the-truth.md` — the spec that shipped this behavior. Its Decisions 2,
+- `docs/spec/0003-lens-tells-the-truth.md`: the spec that shipped this behavior. Its Decisions 2,
 8, and 10 are what this check verifies in a workbench.
-- Spec 2's core path check — the lens-reading vocabulary this check reuses.
+- Spec 2's core path check: the lens-reading vocabulary this check reuses.
 
 **Negative verification.** Run the check once against a fixture whose block is *not* in a loop.
 Confirm it goes red on the lens-title assertion, with a named `.fs` line. That also proves the
@@ -216,9 +216,9 @@ check reads a rendered title rather than a constant.
 
 - **The other refusal codes.** Eleven more exist. Their words are unit-tested, and their rendering
 path is identical to `loopBody`'s.
-- **Cross-block Refused Run.** *The lens tells the truth* steps 6–8 are a Run *outcome*, not a lens
-  refusal — the second block's lens reads `▶ Run request` and the refusal arrives after the Run starts.
-  That is spec 5, and it asserts in the viewer, not in a toast.
+- **Cross-block Refused Run.** *The lens tells the truth* steps 6–8 are a Run *outcome* rather than a lens
+  refusal: the second block's lens reads `▶ Run request` and the refusal arrives after the Run starts.
+  That is spec 5, and it asserts in the viewer rather than in a toast.
 - **The stale-lens refusal.** `staleBlockIndex` is a Run outcome with no lens of its own.
 - **Asserting the toast's buttons or actions.** The refusal toast carries no action today.
 - **Changing the harness.** No new deadline, no new route, no CI change.
@@ -227,7 +227,7 @@ path is identical to `loopBody`'s.
 
 ## Further Notes
 
-**Why this lands third.** It is the cheapest check in the suite — no Run, no FSI, no network. It is
+**Why this lands third.** It is the cheapest check in the suite: no Run, no FSI, no network. It is
 also the first check that closes the response viewer. Landing it after the two viewer checks means
 that step is written against a session that genuinely has a viewer open. That is the condition it
 exists to handle.

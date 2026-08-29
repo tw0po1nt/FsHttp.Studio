@@ -1,6 +1,6 @@
-// The Request section, against the running editor. Spec 0012's Seam 4 claims the host's Fable and
+// The Request section, against the running editor. This check claims the host's Fable and
 // VSCode interop by product rather than by hand, and this is the half of it that the status-line
-// URL cannot reach: the request *body* and *headers* travel a different path from method and URL —
+// URL cannot reach: the request *body* and *headers* travel a different path from method and URL,
 // captured in the companion, carried through three `bodyState` fields on two wires, decoded in the
 // webview, and rendered into a section the user has to open.
 //
@@ -14,8 +14,8 @@ module RequestSectionTests
 
 open Fable.Mocha
 
-/// The section as the user first meets it: present, collapsed, and — because the fixture sent a
-/// body — labelled with that body's size. `<details>` reports only its summary while collapsed,
+/// The section as the user first meets it: present, collapsed, and labelled with the body's
+/// size, because the fixture sent a body. `<details>` reports only its summary while collapsed,
 /// so the absence of the posted text here is a second reading of the same fact as `RequestOpen`.
 let private tryRequestCollapsedWithSize () =
     Checks.viewerSatisfies (fun dom ->

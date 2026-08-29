@@ -1,7 +1,6 @@
-// The twelve-case run-behavior corpus that docs/spec/0002-reach-a-block-anywhere.md draws its
-// positions 1 to 12 from, verbatim in structure, with every URL pointed at a counting server and
-// the `#r` pinned so a run is reproducible. Block order in this file IS the index order that
-// `locateBlocks` reports, and PositionMatrixTests asserts against those indices.
+// The twelve-case run-behavior corpus that positions 1 to 12 come from, verbatim in structure,
+// with every URL pointed at a counting server and the `#r` pinned so a run is reproducible.
+// Block order in this file IS the index order that `locateBlocks` reports.
 
 #r "nuget: FsHttp, 15.0.3"
 

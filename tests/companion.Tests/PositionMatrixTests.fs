@@ -1,14 +1,8 @@
 module Companion.Tests.PositionMatrixTests
 
-// Seam 1 of docs/spec/0002-reach-a-block-anywhere.md: the position matrix, with no FSI and no
-// server. Drives `BlockLocator.locateBlocks` against the two corpora the spec names —
-// `fixtures/matrix.fsx` (SchlenkR's 12 cases) and `fixtures/extra.fsx` (the shapes the matrix
-// does not have) — and asserts each block's `Route` against the spec's position table. This is
-// a parse and a fold, so it needs no FSI session and no counting server.
-//
-// The fixtures are the spec's own corpora, copied in verbatim (docs/spec, Further Notes: "Copy
-// them into the test project before you start"). The spec's position table is the authority for
-// what each index below asserts.
+// The position matrix, with no FSI and no server. Drives `BlockLocator.locateBlocks` against
+// two corpora, `fixtures/matrix.fsx` and `fixtures/extra.fsx`, and asserts each block's `Route`.
+// This is a parse and a fold, so it needs no FSI session and no counting server.
 
 open System.IO
 open Expecto
@@ -66,8 +60,8 @@ let private textOf (source: string) (r: BlockRange) =
           yield lines.[r.EndLine - 1].Substring(0, r.EndCol) ]
         |> String.concat "\n"
 
-/// Asserts the source text of block `index`'s type annotation span, colon included. The text is
-/// what Decision 7 asks for, and the range alone does not show it: a span that swallowed the
+/// Asserts the source text of block `index`'s type annotation span, colon included. The range
+/// alone does not show the text: a span that swallowed the
 /// bound name, or that dropped the colon and left it behind, both hold a plausible-looking range.
 let private assertTypeAnnotation
     (source: string)
@@ -113,10 +107,7 @@ let tests =
               let assertRoute = assertRoute blocks
               assertRoute 0 "#13 let private x = http { }" (isNamedByTheBinding "secret")
 
-              assertRoute
-                  1
-                  "internal binding (Further Notes measurement, not a numbered position)"
-                  (isNamedByTheBinding "semiSecret")
+              assertRoute 1 "internal binding, an unnumbered position" (isNamedByTheBinding "semiSecret")
 
               assertRoute 2 "#14 module private, bare block" isNamedByTheRun
               assertRoute 3 "#15 nested modules, Outer.Inner.deep" (isNamedByTheBinding "deep")
@@ -140,34 +131,25 @@ let tests =
 
               assertRoute 16 "#24 block inside another block's expression" (isRefused InsideAnotherRequest)
 
-              assertRoute
-                  17
-                  "wildcard binding gives no name to invoke (0003, not a numbered reach-spec position)"
-                  (isRefused NoNameToCall)
+              assertRoute 17 "wildcard binding gives no name to invoke, an unnumbered position" (isRefused NoNameToCall)
 
-              assertRoute
-                  18
-                  "bare outer block holding a nested bare block (0003, not a numbered reach-spec position)"
-                  isNamedByTheRun
+              assertRoute 18 "bare outer block holding a nested bare block, an unnumbered position" isNamedByTheRun
 
               assertRoute
                   19
-                  "bare block nested inside another bare block's expression (0003, not a numbered reach-spec position)"
+                  "bare block nested inside another bare block's expression, an unnumbered position"
                   (isRefused InsideAnotherRequest)
 
               // The catch-all's own row. A list expression is a shape no branch enumerates, and
-              // nothing contains this block, so Decision 3's containment test leaves it alone.
-              assertRoute
-                  20
-                  "block inside a list expression (0003, not a numbered reach-spec position)"
-                  (isRefused Unaddressable)
+              // nothing contains this block, so the containment test leaves it alone.
+              assertRoute 20 "block inside a list expression, an unnumbered position" (isRefused Unaddressable)
 
-              assertRoute 21 "sweeper block (structural, not a numbered position)" isNamedByTheRun
-              assertRoute 22 "module Tail bare block (boundary probe, not a numbered position)" isNamedByTheRun
+              assertRoute 21 "sweeper block, an unnumbered structural position" isNamedByTheRun
+              assertRoute 22 "module Tail bare block, an unnumbered boundary probe" isNamedByTheRun
           }
 
-          // Positions 13 to 15 are the rows that exist to exercise `Qualifier` and
-          // `PrivateSpans`, so the route alone does not cover what the spec asks of them.
+          // Positions 13 to 15 are the rows that exercise `Qualifier` and `PrivateSpans`, so the
+          // route alone does not cover them.
           test "extra.fsx: the qualifier and the private spans match the enclosing module chain" {
               let blocks = blocksOf (fixture "extra.fsx")
 
@@ -190,8 +172,8 @@ let tests =
               assertQualifier 22 "module Tail bare block" [ "Tail" ]
           }
 
-          // Decision 7 asks for two things the route cannot show: the span covers the colon, and
-          // it exists on the R2 route alone. Position 16 is the row that carries an annotation.
+          // Two things the route cannot show: the span covers the colon, and it exists on the R2
+          // route alone. Position 16 is the row that carries an annotation.
           test "extra.fsx: the type annotation span covers the colon and the type, on R2 alone" {
               let source = fixture "extra.fsx"
               let blocks = blocksOf source

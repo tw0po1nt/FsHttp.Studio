@@ -46,7 +46,7 @@ let private catalog: (string * Refusal) list =
       "lambdaValue",
       { Title = "Cannot run: this binding holds a function"
         Detail =
-          "This binding holds a function, and not a request. FsHttp.Studio sends the request only when your code calls the function. To run this request, bind it directly to a name." }
+          "This binding holds a function rather than a request. FsHttp.Studio sends the request only when your code calls the function. To run this request, bind it directly to a name." }
 
       "noNameToCall",
       { Title = "Cannot run: this binding has no name"

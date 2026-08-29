@@ -28,6 +28,6 @@ A version-less `#r "nuget: FsHttp"` resolves *some* latest version into the proc
 - **Two explicit pins conflict exactly when they name different versions.** This is the original case.
 - **Every *mixed* pair conflicts, and routes to a worker.** A version-less load and then an explicit pin, *and* an explicit pin and then a version-less load, both go to a fresh child. We cannot name the version that the version-less side resolved, so we cannot prove that it equals the pinned version. An assumption that the two are equal is what let a version-less load poison the in-process ALC of a later or earlier pinned Run.
 
-This rule is deliberately conservative. A mixed pair whose version-less side *does* resolve to the pinned version still routes to a worker. That costs one cold Run, and never a collision, which is the correct error to make.
+This rule is deliberately conservative. A mixed pair whose version-less side *does* resolve to the pinned version still routes to a worker. That costs one cold Run rather than a collision, which is the correct error to make.
 
 The symmetry closes the collision class in both directions. The rule gives up one property: a version-less Run no longer stays in-process when the same package already carries an explicit pin. The common cases stay correct and warm. Those cases are all version-less pins, or the same explicit pin every time.

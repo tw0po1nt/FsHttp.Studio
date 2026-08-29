@@ -1,15 +1,12 @@
 module Companion.Tests.BlockLocatorTests
 
-// Seam A. It drives the companion's block location as a black box: feed .fsx source, then
-// assert the ranges. This matches the acceptance criteria on the ticket directly.
-// `BlockLocatorTests` drives `BlockLocator.locateBlocks` itself. `RequestHandlerTests` drives
-// the envelope dispatch (`RequestHandler.respond`) that sits on top of it.
+// Drives the companion's block location as a black box: feed .fsx source, then assert the
+// ranges. This file drives `BlockLocator.locateBlocks` itself.
 
 open Expecto
 open Companion.BlockLocator
 
-/// Asserts *what* a range covers, and not only its coordinates. That is the property that the
-/// acceptance criteria care about.
+/// Asserts *what* a range covers, beyond its coordinates.
 let private slice = sliceRange
 
 /// Every block in `source`, in source order. Most tests here assert over the blocks alone, so
@@ -202,7 +199,7 @@ http {
               Expect.stringEnds blankText "|> Request.send" "blank span extends through the trailing pipe"
           }
 
-          test "locateBlocks blanks only a class member's right side, not the whole type" {
+          test "locateBlocks blanks a class member's right side rather than the whole type" {
               let source =
                   """
 type Api() =
@@ -215,14 +212,19 @@ type Api() =
               let blocks = blocksOf source
               Expect.hasLength blocks 1 "one block expected"
               let blankText = slice source blocks.[0].Blank
-              Expect.stringStarts blankText "http {" "member blank span is the right side only, not the member head"
+
+              Expect.stringStarts
+                  blankText
+                  "http {"
+                  "member blank span is the right side alone rather than the member head"
+
               Expect.isFalse (blankText.Contains "member _.Get") "blank span does not reach the member head"
               Expect.isFalse (blankText.Contains "type Api") "blank span does not reach the type header"
           }
 
-          // Decision 2: "Only a type annotation or parentheses can be between the binding and the
-          // block." Parens start at their own `(`, before the block, so the boundary rule that
-          // consumes an ancestor starting at the block never reaches one.
+          // Only a type annotation or parentheses can sit between the binding and the block. Parens
+          // start at their own `(`, before the block, so the boundary rule that consumes an
+          // ancestor starting at the block never reaches one.
           test "a parenthesized binding value still routes R2" {
               let source =
                   """
@@ -259,7 +261,7 @@ let annotated: FsHttp.Domain.HeaderContext = http { GET "https://example.com/typ
           }
 
           // A head pattern that binds no single name gives the invocation nothing to call.
-          test "a wildcard binding is refused, and not as an out-of-module position" {
+          test "a wildcard binding is refused rather than treated as an out-of-module position" {
               let source =
                   """
 let _ = http { GET "https://example.com/wildcard" }
@@ -275,8 +277,8 @@ let _ = http { GET "https://example.com/wildcard" }
               | other -> failtestf "expected a refusal, got %A" other
           }
 
-          // Decision 2 qualifies by "the enclosing nested modules", and Decision 6 blanks
-          // `private` on "each enclosing module". A file's own `module M` header is one of both:
+          // The invocation is qualified by the enclosing nested modules, and `private` is blanked on
+          // each enclosing module. A file's own `module M` header is one of both:
           // it puts `M.` in front of the invocation and can carry the same `private`.
           test "a file-header module contributes its name and its private keyword" {
               let source =
@@ -325,9 +327,8 @@ let named = http { GET "https://example.com/named-run" }
                   | _ -> ())
           }
 
-          // docs/spec/0003-lens-tells-the-truth.md, Decision 3: `insideAnotherRequest` comes
-          // from range containment over `locateBlocks`'s full output, not from a syntax-tree
-          // branch. The inner block here reaches classify's catch-all on its own -- there is no
+          // `insideAnotherRequest` comes from range containment over `locateBlocks`'s full output
+          // rather than from a syntax-tree branch. The inner block here reaches classify's catch-all on its own -- there is no
           // `SynBinding`, no loop, no branch, no match, no lambda on its path -- so containment
           // is the only thing that can tell it apart from `unaddressable`.
           test "a block nested inside another block's expression is insideAnotherRequest" {
@@ -349,8 +350,8 @@ http {
               | other -> failtestf "expected InsideAnotherRequest, got %A" other
           }
 
-          // The title is shape-grained (docs/spec/0003, Decision 2), so a try and a match must
-          // not answer with each other's shape. FCS gives both a `SynMatchClause`, and the
+          // The title is shape-grained, so a try and a match must not answer with each other's
+          // shape. FCS gives both a `SynMatchClause`, and the
           // handler's parent is the only thing that separates them.
           test "a try/with handler is an exceptionHandler, and a match clause is a matchClause" {
               let source =
@@ -377,9 +378,8 @@ let matched =
               Expect.equal (routeOf 3) (Refused MatchClause) "a real match clause stays a match clause"
           }
 
-          // Decision 11 asks that a refusal's sentence never interpolate an FCS type name. One
-          // code was the only one under that guard while the sentences lived at their twelve
-          // construction sites; `reasonFor` makes it one table, so the guard covers all twelve.
+          // A refusal's sentence never interpolates an FCS type name. `reasonFor` holds all twelve
+          // sentences in one table, so one guard covers all twelve.
           test "every refusal code has a plain reason that names no FCS type" {
               let codes =
                   [ LoopBody
@@ -402,8 +402,8 @@ let matched =
                   Expect.isFalse (reason.Contains "Syn") (sprintf "%A must not name an FCS type" code))
           }
 
-          // docs/spec/0014-explain-missing-lenses.md, Seam 1: ParseFailed comes from
-          // ParseHadErrors, and recovery keeps or drops blocks by where the damage sits.
+          // ParseFailed comes from ParseHadErrors, and recovery keeps or drops blocks by where the
+          // damage sits.
           test "a clean script with blocks reports ParseFailed = false" {
               let source =
                   """

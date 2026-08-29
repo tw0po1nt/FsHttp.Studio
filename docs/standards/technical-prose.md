@@ -19,7 +19,7 @@ reads, so it carries the rule with the same force as a file that lands in the re
 A short piece of prose is still prose. A one-line code comment and a two-sentence issue body both
 carry the rule.
 
-Run the skill before you create or post the text, not after. A draft that you revise later is a
+Run the skill before you create or post the text. A draft that you revise later is a
 draft that a reviewer may already have read.
 
 ## Assert a fact directly
@@ -36,8 +36,10 @@ alone.
 | `This is not just a reminder, it is enforcement.` | `This is enforcement.` |
 | `Bundle with esbuild, not webpack.` | `Bundle with esbuild.` |
 
-The banned forms are `X, not Y`, `not X but Y`, `not X but rather Y`, `not just`, `not merely`,
-`not simply`, `not only`, and the same contrast split across two sentences.
+The banned forms are `X, not Y`, `X, and not Y`, `X, and never Y`, `not X but Y`,
+`not X but rather Y`, `not just`, `not merely`, `not simply`, `not only`, and the same contrast
+split across two sentences. A conjunction in front of the denial changes nothing, so
+`a convention, and not a lint` is the same construct as `a convention, not a lint`.
 
 `rather than` and `instead of` stay legal, because each half of the comparison carries information:
 
@@ -65,9 +67,8 @@ re-parse, and a page of them reads as one long aside.
 
 ## The pattern list holds both rules
 
-`.banned-patterns` at the repo root holds the antithesis forms and the em dash. Both patterns are
-inactive while the existing text still carries them. The rules above bind from now, and the sweep
-that rewrites the existing text turns the patterns on.
+`.banned-patterns` at the repo root holds the antithesis forms and the em dash. Both run in CI, and
+the `PreToolUse` hook refuses a `Write` or an `Edit` that carries either one.
 
 ## Why this rule is strict
 
@@ -75,7 +76,7 @@ The skill exists in this repo already, and agents skip it most of the time. A so
 not change that. This rule states the requirement without a qualifier, so an agent cannot read it
 as optional.
 
-## The hook is a backstop, not the mechanism
+## The hook is a backstop
 
 A `PreToolUse` hook (`.claude/settings.json`) fires before a `gh issue`/`gh pr` create, edit, or
 comment command, and before a `Write` or `Edit` on any Markdown file in the repo. It injects a

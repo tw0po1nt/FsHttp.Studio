@@ -40,9 +40,9 @@ and, where the position has one, the workaround. No Run starts, no response view
 companion round trip is spent to say no.
 
 The title is **shape-grained**. There are twelve of them, one for each verdict that `classify`
-produces, and not one for each refusal family. The families stay internal.
+produces, rather than one for each refusal family. The families stay internal.
 
-**The companion is the gate, not the lens.** The `run` path classifies before it evaluates and
+**The companion is the gate.** The `run` path classifies before it evaluates and
 refuses on the same codes. The lens is a cheap early surface of the rule, and it is not the
 enforcement. This closes the stale-lens path and the palette path.
 
@@ -141,10 +141,10 @@ the shape that the user wrote.
 The glyph is `⊘`, and it replaces `▶`. The two are distinct at a glance, and the title never starts
 with the run triangle that it cannot honor.
 
-**The shipping strings say "request", and not "block".** Block is the glossary's word, and this spec
+**The shipping strings say "request" rather than "block".** Block is the glossary's word, and this spec
 uses it. The user-facing word is the one that `▶ Run request` already uses.
 
-### 3. `insideAnotherRequest` comes from range containment, not from the syntax tree
+### 3. `insideAnotherRequest` comes from range containment rather than from the syntax tree
 
 The reach spec's position table gives verdict F5 to "a block inside another block's expression". The
 prototype has no branch for it. It falls into the catch-all, whose text interpolates an FCS type name
@@ -171,7 +171,7 @@ re-derives both at Run time from the same source.
 ```
 
 `Protocol.BlockRange` gains `Refusal: string option`. `Companion.toBlockRange` must read an absent
-property as `None`, and not `unbox` it. Each other field keeps its unconditional read.
+property as `None` rather than `unbox` it. Each other field keeps its unconditional read.
 
 **`run`.** A fourth response tag joins `ok`, `compileError`, and `runtimeError`:
 
@@ -191,7 +191,7 @@ and `wireToOutcome` both carry it, so the `--worker` channel and the host channe
 The reach spec puts `classify` in `BlockLocator`, so `run` can ask for the verdict without building
 any text. **Refuse in `BlockRunner.run`, before `routeAndReserve`.**
 
-This is not only a tidiness point. `routeAndReserve` marks each of the Run's pins in `loadedVersions`
+This is more than a tidiness point. `routeAndReserve` marks each of the Run's pins in `loadedVersions`
 **up front**, before any evaluation, and its own comment states why: an over-mark is the safe error,
 and it costs a later Run a cold worker. A refusal that passes through it therefore over-marks pins
 that no session ever loaded, and slows a later Run for nothing. Refusing first also spends no
@@ -222,7 +222,7 @@ Add a `refused` message tag to the host-to-webview protocol, beside `running`, `
 timer like each other terminal message. `title` is the lens title without the glyph, in sentence
 form. `detail` is the same text that the toast shows.
 
-Style it as a notice, and not as an error: use `--vscode-descriptionForeground` for the body and the
+Style it as a notice rather than as an error: use `--vscode-descriptionForeground` for the body and the
 editor foreground for the heading, in the existing `responseStyles`. Add no color that reads as a
 failure.
 
@@ -239,8 +239,8 @@ exactly which names it removed. Collect them while blanking. Then:
 - An error diagnostic with `ErrorNumber` 39 that names anything else is a **compile error**. That one
   is the user's own typo.
 
-Match on `ErrorNumber`, and not on the message text, which is localized. Extract the name from the
-diagnostic's own range against the Setup text, and not by a parse of the message.
+Match on `ErrorNumber` rather than on the message text, which is localized. Extract the name from
+the diagnostic's own range against the Setup text rather than by a parse of the message.
 
 **Precedence.** Apply this test to the Setup interaction's error diagnostics before the compile-error
 path builds its list. When the diagnostics hold both a blanked-name FS0039 and an unrelated error,
@@ -294,7 +294,7 @@ them, beside the `▶ Run request` title.
 | `needsArguments` | FsHttp.Studio cannot run a request in a function that takes arguments, because it has no values to supply. To run this request, move it to a binding that takes no arguments. |
 | `classMember` | FsHttp.Studio cannot run a request in a class member, because it has no instance of the class. To run this request, move it to a module-level binding. |
 | `innerBinding` | FsHttp.Studio cannot run a request in a local binding. A local binding is not in scope after the script runs. To run this request, move it to a module-level binding. |
-| `lambdaValue` | This binding holds a function, and not a request. FsHttp.Studio sends the request only when your code calls the function. To run this request, bind it directly to a name. |
+| `lambdaValue` | This binding holds a function rather than a request. FsHttp.Studio sends the request only when your code calls the function. To run this request, bind it directly to a name. |
 | `noNameToCall` | The pattern of this binding gives FsHttp.Studio no name to call. To run this request, bind it to a simple name. |
 | `tupleBinding` | This binding binds two or more values, so its value is not the request alone. To run this request, give it its own let binding. |
 | `insideAnotherRequest` | This request is inside another request. FsHttp.Studio can run the outer request only. To run this request, move it to its own binding. |

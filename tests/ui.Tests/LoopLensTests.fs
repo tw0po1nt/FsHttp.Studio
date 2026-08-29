@@ -1,6 +1,6 @@
 // Loop lens refuses with toast: a block inside a `for` loop renders the refusal lens, a click
 // raises the warning toast with the shipped `loopBody` detail, and no response viewer opens.
-// Spec 0008, as one check. The shipped words come from `Refusals` — the host catalog — so this
+// One check. The shipped words come from `Refusals`, the host catalog, so this
 // check does not restate them.
 module LoopLensTests
 

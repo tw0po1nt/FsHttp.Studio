@@ -1,6 +1,6 @@
 // Fixture for the companion-death check. Two blocks: `/slow` hangs until the suite hits
 // `/release`, and the companion dies under that Run; `/json` is the recovery Run after the
-// window reloads. `baseUrl` comes from the sidecar the test server writes beside this file —
+// window reloads. `baseUrl` comes from the sidecar the test server writes beside this file,
 // never a hardcoded port.
 
 #r "nuget: FsHttp"

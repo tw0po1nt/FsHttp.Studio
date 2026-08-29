@@ -135,7 +135,7 @@ let run (baseUrl: string) =
         do! settle ()
 
         if slow2.IsCompleted then
-            failwith "second /slow must block until its own /release (generation counter, not a latch)"
+            failwith "second /slow must block until its own /release, because the gate is a generation counter"
 
         let! _ = get "/release"
         let! codeSlow2, _, _ = slow2

@@ -101,9 +101,9 @@ let private showRefused (title: string) (detail: string) =
     root.appendChild container |> ignore
 
 /// Renders a result update, or the reason it could not be decoded. `toEnvelope` reads a wire both
-/// ends of which are ours, so a value it rejects is a defect and not a response — showing it as
-/// error text keeps the panel from going silently blank, and keeps a wire term out of the request
-/// view's own reason slot.
+/// ends of which are ours, so a value it rejects is a defect rather than a response. Showing it
+/// as error text keeps the panel from going silently blank, and keeps a wire term out of the
+/// request view's own reason slot.
 let private showResult (envelope: obj) =
     try
         Dom.renderInto root (toEnvelope envelope)

@@ -1,6 +1,6 @@
 // Compile Error names its source: the check breaks a known line above a reachable block, runs
 // the block from the unsaved buffer, and asserts the viewer reports a compile error at that
-// line's position. Spec 0010, as one check. The fixture on disk is never written; the buffer is
+// line's position, as one check. The fixture on disk is never written, and the buffer is
 // restored through the workbench's revert-file command even when the body fails partway.
 module CompileErrorTests
 
@@ -19,7 +19,7 @@ let private brokenColumn = 19
 let private brokenText = "let probe : int = \"not an int\""
 /// Distinctive fragment of the broken line, for dirty/clean buffer tells.
 let private brokenFragment = "\"not an int\""
-/// Stable substring of the F# compiler's type-mismatch diagnostic. Not the full sentence — those
+/// Stable substring of the F# compiler's type-mismatch diagnostic, rather than the full sentence: those
 /// words belong to the compiler, and pinning them would make an F# upgrade look like a product
 /// regression.
 let private compilerMessageFragment = "expected to have type"
@@ -77,7 +77,7 @@ let private compileErrorNamesItsSource =
                         "a Run request lens above the block"
                         (fun () -> Checks.tryOnlyLensTitle blockCount Checks.lensTitle)
 
-                // Armed before the edit is attempted, not after it is confirmed. A paste that lands
+                // Armed before the edit is attempted rather than after it is confirmed. A paste that lands
                 // but never confirms within the deadline is exactly the failure the restore exists
                 // for, and arming afterwards would skip it.
                 needsRevert.Value <- true

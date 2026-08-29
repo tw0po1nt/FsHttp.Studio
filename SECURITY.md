@@ -28,7 +28,7 @@ credit you in the advisory. Tell us if you prefer to stay anonymous.
 ## Scope notes
 
 FsHttp.Studio evaluates the F# script you open, and runs the HTTP requests in
-that script. This execution is the intended behavior, not a vulnerability.
+that script. This execution is the intended behavior.
 
 Report problems at these boundaries:
 

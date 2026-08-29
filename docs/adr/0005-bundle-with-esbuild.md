@@ -1,4 +1,4 @@
-# Bundle with esbuild, not webpack
+# Bundle with esbuild
 
 v0.1 bundles both the extension host and the webview script with esbuild.
 

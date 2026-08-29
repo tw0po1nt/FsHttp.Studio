@@ -43,17 +43,17 @@ let private scriptViewFor (document: TextDocument) : ScriptView =
     else
         ScriptPending
 
-/// Follows the active document. `None` is a workbench with no active text editor at all — the
-/// response viewer holds focus, say — which hides the item on the same terms as a non-F#
-/// document.
+/// Follows the active document. `None` is a workbench with no active text editor at all, such
+/// as one where the response viewer holds focus. That hides the item on the same terms as a
+/// non-F# document.
 let onActiveEditorChanged (editor: TextEditor option) =
     match editor with
     | None -> setScriptView NoFSharpDocument
     | Some active -> setScriptView (scriptViewFor active.document)
 
 /// Mirrors a `locate` response onto the status bar when `Protocol.mirrorsActiveDocument` says it
-/// belongs to the active document. This function is the interop half — reading the active editor
-/// — and the rule it applies is pinned in `tests/host.Tests`.
+/// belongs to the active document. This function is the interop half, and it reads the active
+/// editor.
 let onLocated (document: TextDocument) (view: ScriptView) =
     let activeFileName =
         window.activeTextEditor |> Option.map (fun editor -> editor.document.fileName)

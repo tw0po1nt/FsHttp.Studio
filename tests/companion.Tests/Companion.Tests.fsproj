@@ -3,8 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
-    <!-- Match the companion's assembly identity (ADR-0002's toolchain pin) so the two
-         projects agree on one FSharp.Core. -->
+    <!-- Match the companion's assembly identity so the two projects agree on one FSharp.Core. -->
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   </PropertyGroup>
 
@@ -18,9 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The spec's own position-matrix corpora (docs/spec/0002-reach-a-block-anywhere.md, Seam
-         1). `PositionMatrixTests` reads these from the source tree via `__SOURCE_DIRECTORY__`,
-         so they need no copy-to-output. -->
+    <!-- The position-matrix corpora. `PositionMatrixTests` reads these from the source tree via
+         `__SOURCE_DIRECTORY__`, so they need no copy-to-output. -->
     <None Include="fixtures\matrix.fsx" />
     <None Include="fixtures\extra.fsx" />
   </ItemGroup>

@@ -55,15 +55,15 @@ The tagged message that the companion and the extension host exchange across the
 _Avoid_: message, payload, packet.
 
 **Invocation**:
-The F# call that a Run emits to reach its target block once the setup is loaded, qualified by the block's enclosing modules: `getSnorlax ()`, `Outer.Inner.deep`. An invocation is one step inside a Run, not a synonym for it. This is the one sanctioned use of "invoke", because the Run's own _Avoid_ list reserves that word against naming the whole cycle.
+The F# call that a Run emits to reach its target block once the setup is loaded, qualified by the block's enclosing modules: `getSnorlax ()`, `Outer.Inner.deep`. An invocation is one step inside a Run. This is the one sanctioned use of "invoke", because the Run's own _Avoid_ list reserves that word against naming the whole cycle.
 _Avoid_: call, dispatch.
 
 **Captured body**:
-The request body that the companion read at send time, while the content was still alive. A captured body has three states: no body, the captured bytes, and a written reason that the companion did not read the body. The companion never reads a streamed body, and never reads a body above the size cap, because a read must not change what goes on the wire. The response viewer shows the reason in place of the body.
+The request body that the companion read at send time, while the content was still alive. A captured body has three states: no body, the captured bytes, and a written reason that the companion did not read the body. The companion reads neither a streamed body nor a body above the size cap, because a read must not change what goes on the wire. The response viewer shows the reason in place of the body.
 _Avoid_: request payload, buffered body, recorded body.
 
 **Refusal code**:
-The companion's verdict that neither route reaches a block, named by the block's *shape*: `loopBody`, `innerBinding`, `insideAnotherRequest`, and nine more. `BlockLocator.classify` decides it from the untyped syntax tree, and the code is all that crosses the wire — the host owns every user-facing title and toast, keyed by the code. A code is a position's shape, and not a diagnostic about the user's script: nothing is wrong with a block in a loop.
+The companion's verdict that neither route reaches a block, named by the block's *shape*: `loopBody`, `innerBinding`, `insideAnotherRequest`, and nine more. `BlockLocator.classify` decides it from the untyped syntax tree, and the code is all that crosses the wire. The host owns every user-facing title and toast, keyed by the code. A code is a position's shape: nothing is wrong with a block in a loop.
 _Avoid_: refusal reason, error code, refusal family (the families that group the codes stay internal to the companion).
 
 **Parse failure**:
@@ -113,7 +113,7 @@ The Mocha `before` hook, from the first ExTester call through proven-live. Alway
 _Avoid_: setup (bare), init, bootstrap.
 
 **Proven-live**:
-The state that Harness setup must reach before any check runs: the workbench answered, the test server passed its healthcheck and its sidecar parsed, the fixture folder is open with the extension active, and a companion exists. A workbench that merely rendered is *visible*, not proven-live.
+The state that Harness setup must reach before any check runs: the workbench answered, the test server passed its healthcheck and its sidecar parsed, the fixture folder is open with the extension active, and a companion exists. A workbench that merely rendered has reached *visible*, which is one state below proven-live.
 _Avoid_: ready, warm, healthy.
 
 **Sidecar**:
@@ -121,9 +121,9 @@ The JSON file the test HTTP server writes to report the port it allocated and th
 _Avoid_: manifest, handshake file, lockfile.
 
 **Dead port**:
-The port the test server allocates and never listens on, so a check can drive a refused connection. The harness, not the server, probes it, which keeps one error vocabulary for "the sidecar is stale".
+The port the test server allocates and never listens on, so a check can drive a refused connection. The harness owns the probe, which keeps one error vocabulary for "the sidecar is stale".
 _Avoid_: closed port, bad port.
 
 **Budget**:
-The green-path time a phase is allowed: 180 s for Harness setup, 45 s per check, 300 s for the suite. A budget catches drift and is asserted in `afterEach`/`after`, never in a check body. It is not a hang guard — the Mocha timeouts above it are.
+The green-path time a phase is allowed: 180 s for Harness setup, 45 s per check, 300 s for the suite. A budget catches drift and is asserted in `afterEach`/`after`, never in a check body. The Mocha timeouts above it are the hang guard.
 _Avoid_: timeout, deadline (a deadline is what one `eventually` call waits against).

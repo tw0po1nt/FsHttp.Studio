@@ -43,7 +43,7 @@ Three facts come from this table:
 
 ### The status bar reports the wrong thing
 
-`Extension.fs:105-108` creates one status bar item, calls `show()` once, and never hides it. Its text
+`Extension.fs:105-108` creates one status bar item, calls `show()` once, and leaves it visible. Its text
 is a function of companion state alone, so it reads `FsHttp.Studio: ready` in a TypeScript file, and
 it reads the same in an `.fsx` script where FsHttp.Studio found nothing.
 
@@ -157,7 +157,7 @@ type LocateResult =
 
 `RequestHandler`'s `locate` arm reads both fields and writes both properties.
 
-Use `ParseHadErrors`, and not a filter over `Diagnostics`. The probe found no parse-level warning in
+Use `ParseHadErrors` rather than a filter over `Diagnostics`. The probe found no parse-level warning in
 26 cases, so the two agree on each measured case, and the flag needs no severity rule.
 
 ### 5. The status bar: aware of the active document, fed by the lens response
@@ -166,17 +166,18 @@ The item's text becomes a function of two inputs: companion state, and a view of
 
 | Companion | Document | Parse | Blocks | Text |
 |---|---|---|---|---|
-| any | not F# | — | — | *the item is hidden* |
-| `Starting` | F# | — | — | `starting…` |
-| `SdkNotFound` | F# | — | — | `.NET SDK not found` |
-| `Stopped` | F# | — | — | `companion stopped` |
-| `Ready` | F#, not `.fsx` | — | — | `not an .fsx script` |
-| `Ready` | `.fsx`, no response yet | — | — | `looking for requests…` |
+| any | other than F# | any | any | *the item is hidden* |
+| `Starting` | F# | any | any | `starting…` |
+| `SdkNotFound` | F# | any | any | `.NET SDK not found` |
+| `Stopped` | F# | any | any | `companion stopped` |
+| `Ready` | F# other than `.fsx` | any | any | `not an .fsx script` |
+| `Ready` | `.fsx`, no response yet | any | any | `looking for requests…` |
 | `Ready` | `.fsx` | clean | 1 | `1 request` |
 | `Ready` | `.fsx` | clean | N > 1 | `N requests` |
 | `Ready` | `.fsx` | clean | 0 | `no requests found` |
-| `Ready` | `.fsx` | failed | 0 | `no requests found — syntax error` |
-| `Ready` | `.fsx` | failed | N ≥ 1 | `N requests — a syntax error can hide others` |
+| `Ready` | `.fsx` | failed | 0 | `no requests found: syntax error` |
+| `Ready` | `.fsx` | failed | 1 | `1 request: a syntax error can hide others` |
+| `Ready` | `.fsx` | failed | N > 1 | `N requests: a syntax error can hide others` |
 
 `Extension.setStatusText` supplies the `FsHttp.Studio: ` prefix, which is unchanged.
 
@@ -197,8 +198,8 @@ The word `ready` leaves the user interface. Each `Ready` row states what FsHttp.
 is a stronger statement than the state of a process that the user did not start.
 
 `looking for requests…` holds from the activation of a `.fsx` document until its first `blocks`
-response. `Extension` resets to this state when the active document changes, and never after an
-edit, so an edit updates the count in place.
+response. `Extension` resets to this state when the active document changes. An edit updates the count in
+place instead.
 
 ### 6. Visibility: F# documents only
 
@@ -277,8 +278,9 @@ Register the listener's `Disposable` in `context.subscriptions`, as each other s
 | `1 request` | Status bar |
 | `{n} requests` | Status bar |
 | `no requests found` | Status bar |
-| `no requests found — syntax error` | Status bar |
-| `{n} requests — a syntax error can hide others` | Status bar |
+| `no requests found: syntax error` | Status bar |
+| `1 request: a syntax error can hide others` | Status bar |
+| `{n} requests: a syntax error can hide others` | Status bar |
 
 Rules that these strings hold, and that a later edit must hold:
 
@@ -344,7 +346,7 @@ each string.
   case reported the line after the damage.
 - **An in-editor signal on each script with no block.** Ruled out by the deciding ticket. Most `.fsx`
   files that a user opens are not FsHttp scripts, and a lens on each of them is worse than silence.
-  The trigger holds to *failure to parse*, and never to *absence of blocks*.
+  The trigger holds to *failure to parse* rather than to *absence of blocks*.
 - **A separate message for a builder with a name other than `http`.** Telling `myHttp { }` apart from
   a script with no computation expression needs an AST branch that matches each builder name. That
   case reports `no requests found`, which is true.

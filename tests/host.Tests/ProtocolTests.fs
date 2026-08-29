@@ -46,7 +46,7 @@ let scriptFileNameForTests =
 let toVscodeLineTests =
     testList
         "toVscodeLine"
-        [ test "subtracts one, matching ADR-0003's FCS(1-based) -> vscode(0-based) convention" {
+        [ test "subtracts one, matching the FCS(1-based) -> vscode(0-based) convention" {
               Expect.equal (toVscodeLine 1) 0 "FCS line 1 is vscode line 0"
               Expect.equal (toVscodeLine 5) 4 "FCS line 5 is vscode line 4"
           } ]
@@ -149,21 +149,21 @@ let parseRunResultTests =
           }
 
           test "reads request with bodyState notCaptured" {
-              let reason = "streamed body — not captured, so that the upload is unchanged"
+              let reason = "streamed body: not captured, so that the upload is unchanged"
 
               match parseRunResult (okEnvelopeWithBody (notCapturedOnWire reason)) with
               | RunOk(request, _) -> Expect.equal request.Body (NotCaptured reason) "notCaptured keeps its reason"
               | other -> failtestf "expected RunOk, got %A" other
           }
 
-          test "an ok envelope missing request is a RunProtocolError, not a crash" {
+          test "an ok envelope missing request is a RunProtocolError rather than a crash" {
               match parseRunResult (OkEnvelope(okResponse, None)) with
               | RunProtocolError message ->
                   Expect.stringContains message "request" "the message names the missing object"
               | other -> failtestf "expected RunProtocolError, got %A" other
           }
 
-          test "an unknown bodyState is a RunProtocolError, not a crash" {
+          test "an unknown bodyState is a RunProtocolError rather than a crash" {
               let body = { noBodyOnWire with State = "sometime" }
 
               match parseRunResult (okEnvelopeWithBody body) with
@@ -171,7 +171,7 @@ let parseRunResultTests =
               | other -> failtestf "expected RunProtocolError, got %A" other
           }
 
-          test "a captured body that is not valid base64 is a RunProtocolError, not a crash" {
+          test "a captured body that is not valid base64 is a RunProtocolError rather than a crash" {
               match parseRunResult (okEnvelopeWithBody (capturedOnWire "not base64 at all!")) with
               | RunProtocolError message -> Expect.stringContains message "base64" "the message names the bad encoding"
               | other -> failtestf "expected RunProtocolError, got %A" other
@@ -210,8 +210,7 @@ let requestContentTypeTests =
               Expect.equal (requestContentType headers) "application/json" "the first wins, and the read is total"
           } ]
 
-/// Decision 5's status-bar table and Decision 6's visibility rule, driven as pure values
-/// (docs/spec/0014-explain-missing-lenses.md, Seam 3).
+/// The status-bar table and the visibility rule, driven as pure values.
 [<Tests>]
 let statusTextTests =
     testList
@@ -239,7 +238,7 @@ let statusTextTests =
               Expect.equal (statusText Stopped scriptWithRequests) (Some "companion stopped") "Stopped outranks"
           }
 
-          test "maps each Ready row of Decision 5 to its text" {
+          test "maps each Ready row to its text" {
               Expect.equal (statusText Ready NotAScript) (Some "not an .fsx script") "Ready + not .fsx"
 
               Expect.equal
@@ -253,28 +252,43 @@ let statusTextTests =
 
               Expect.equal
                   (statusText Ready (Script(0, true)))
-                  (Some "no requests found — syntax error")
+                  (Some "no requests found: syntax error")
                   "Ready + failed + 0"
 
               Expect.equal
+                  (statusText Ready (Script(1, true)))
+                  (Some "1 request: a syntax error can hide others")
+                  "Ready + failed + 1"
+
+              Expect.equal
                   (statusText Ready (Script(3, true)))
-                  (Some "3 requests — a syntax error can hide others")
-                  "Ready + failed + N >= 1"
+                  (Some "3 requests: a syntax error can hide others")
+                  "Ready + failed + N > 1"
           }
 
           test "one request is singular, and two are plural" {
               Expect.equal (statusText Ready (Script(1, false))) (Some "1 request") "singular"
               Expect.equal (statusText Ready (Script(2, false))) (Some "2 requests") "plural"
+
+              Expect.equal
+                  (statusText Ready (Script(1, true)))
+                  (Some "1 request: a syntax error can hide others")
+                  "singular on a failed parse"
+
+              Expect.equal
+                  (statusText Ready (Script(2, true)))
+                  (Some "2 requests: a syntax error can hide others")
+                  "plural on a failed parse"
           }
 
-          test "a count below zero reads as none found, and never hides the item" {
-              // `int` admits a negative the wire never sends. Decision 6 gives `None` one meaning
-              // — hide the item — so a malformed count must not blank the status bar.
+          test "a count below zero reads as none found rather than hiding the item" {
+              // `int` admits a negative the wire never sends. `None` has one meaning, which is to
+              // hide the item, so a malformed count must not blank the status bar.
               Expect.equal (statusText Ready (Script(-1, false))) (Some "no requests found") "clean, below zero"
 
               Expect.equal
                   (statusText Ready (Script(-1, true)))
-                  (Some "no requests found — syntax error")
+                  (Some "no requests found: syntax error")
                   "failed parse, below zero"
           } ]
 
@@ -326,9 +340,9 @@ let isScriptFileNameTests =
               Expect.isFalse (isScriptFileName "/w/fsx/Library.fs") "a folder named for the extension"
           } ]
 
-/// Decision 3's compatibility rule for an absent `parseFailed` on the `blocks` envelope. The
-/// interop lookup that reads the property stays in `Companion.locate`. This suite drives the
-/// pure decide step only (docs/spec/0014-explain-missing-lenses.md, Seam 3, item 12).
+/// The compatibility rule for an absent `parseFailed` on the `blocks` envelope. The interop
+/// lookup that reads the property stays in `Companion.locate`, and this suite drives the pure
+/// decide step alone.
 [<Tests>]
 let parseFailedOrDefaultTests =
     testList
@@ -343,7 +357,7 @@ let parseFailedOrDefaultTests =
 
           test "a present true decodes to true" { Expect.isTrue (parseFailedOrDefault (Some true)) "a broken source" } ]
 
-/// Decision 5's guard on which `locate` response reaches the status bar. It lives here because the
+/// The guard on which `locate` response reaches the status bar. It lives here because the
 /// UI suite cannot drive it: a second visible script does not locate again on demand, so a check
 /// that opened one held whether the guard was there or not.
 [<Tests>]

@@ -66,14 +66,11 @@
 # ---------------------------------------------------------------------------
 # The antithesis and the em dash
 #
-# docs/standards/technical-prose.md states both rules, and both bind from now.
-# The patterns stay inactive until the sweep removes the existing hits, because
-# an active pattern here fails CI against text that no one has rewritten yet.
-# Uncomment each line in the sweep.
-#
-# , not 	Assert the fact directly. Delete the negated half.
-# \bnot [^.,;]{1,40}(, but |but rather ) 	Assert the fact directly. Delete the negated half.
-# \bnot (just|merely|simply|only) 	Assert the fact directly. Delete the negated half.
-# (is|are|was|were) not [^.]{1,40}\. (it|they) (is|are|was|were) 	Assert the fact directly. Delete the negated half.
-# em dash 	Use a comma, a colon, or a period.
+# docs/standards/technical-prose.md states both rules.
 # ---------------------------------------------------------------------------
+, not	Assert the fact directly. Delete the negated half.
+, and (not|never) 	Assert the fact directly. Delete the negated half.
+\bnot [^.,;]{1,40}(, but |but rather )	Assert the fact directly. Delete the negated half.
+\bnot (just|merely|simply|only)	Assert the fact directly. Delete the negated half.
+(is|are|was|were) not [^.]{1,40}\. (it|they) (is|are|was|were)	Assert the fact directly. Delete the negated half.
+—	Use a comma, a colon, or a period.

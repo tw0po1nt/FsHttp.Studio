@@ -81,8 +81,8 @@ let private flushPending (handle: Handle) =
 /// `dotnetPath` is the SDK-bearing `dotnet` host that activation resolved (see Extension.fs).
 /// It is the `fshttpStudio.dotnetPath` override when the user sets that override. Otherwise it
 /// is `"dotnet"` from PATH, after `--list-sdks` confirms an SDK at or above the companion's
-/// target major version. The companion needs a full SDK, not only a runtime, because FSI's
-/// `#r "nuget:"` restore needs one.
+/// target major version. The companion needs a full SDK, because FSI's `#r "nuget:"` restore
+/// needs one.
 let start (dotnetPath: string) (companionDllPath: string) (onState: State -> unit) : Handle =
     onState Starting
 

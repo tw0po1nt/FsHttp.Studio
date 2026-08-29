@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-`docs/manual-check.md` opens with the section a person walks first and trusts most — **The core
+`docs/manual-check.md` opens with the section a person walks first and trusts most: **The core
 path**. It has seven numbered steps. The lens appears above each block. A click opens the response
 viewer beside the editor. The viewer shows `Running…` in flight, then the body and the status code.
 A click on a second block renders the second response and not the first.
@@ -12,7 +12,7 @@ Nothing automated observes any of it. `host.Tests` asserts what `CodeLensProvide
 draws when a test hands it a viewer-update record. `npm run smoke` proves the bundle loads under
 node. Every one of them stops short of a workbench.
 
-So the product's most load-bearing property — *a user clicks a lens and sees a response* — is
+So the product's most load-bearing property, *a user clicks a lens and sees a response*, is
 verified only by a person. Only against a Beta, and only when someone remembers to walk it. A
 regression anywhere along that wire ships green through four suites: the lens's command arguments,
 the viewer panel's creation, the `postMessage` shape, the webview's message handler, or the
@@ -29,10 +29,10 @@ One check in the UI suite, named **the core path**, over one checked-in fixture 
 The check clicks the Run request CodeLens on a block. It watches the response viewer open beside
 the editor and render the response. It then clicks a second block's lens, and watches the viewer
 replace the first response with the second. Every assertion reads the workbench or the webview DOM
-— the same channels a person reads.
+The check reads the same channels a person reads.
 
 After this spec lands, steps 1 through 7 of the manual check's core-path section are covered by
-something that runs on every relevant pull request. The file itself is not deleted here. It is deleted with spec 7, when all six checks exist.
+something that runs on every relevant pull request. The file itself is deleted with spec 7, when all six checks exist.
 
 ## User Stories
 
@@ -92,7 +92,7 @@ the host, into a live webview, so that the four existing suites gain an end-to-e
 ### The fixture
 
 One checked-in fixture under the suite's `fixtures/` directory, owned by this check alone. Fixture
-content is never shared between checks — the rule is one fixture per Automated check.
+content is never shared between checks. The rule is one fixture per Automated check.
 
 It holds **two blocks**, both of which a Run can reach (neither is refused), and both of which request
 the local test server. It reads the sidecar beside itself:
@@ -115,7 +115,7 @@ spec adds no route and changes no route.
 | First | `GET {baseUrl}/json` | 200, the stable probe body |
 | Second | `GET {baseUrl}/status` | 200, `{"slowSeen":N,"slowWaiting":M}` |
 
-The manual check's step 7 reads: *the viewer renders the second response, and not the first*. That
+The manual check's step 7 reads: *the viewer renders the second response in place of the first*. That
 needs two responses a DOM assertion can tell apart. Two calls to `/json` render identical bodies,
 so the assertion would pass against a viewer that never updated. `/status` is therefore the second
 200, rather than a second call to `/json`.
@@ -136,7 +136,7 @@ In order, with every wait through `eventually`:
 1. Open the fixture. Assert that a `▶ Run request` lens is rendered above **each** of the two blocks
    (lens-appearance deadline).
 2. Click the first block's lens, find-and-click inside one retry.
-3. Assert the response viewer opened beside the editor — a second editor group holding the viewer.
+3. Assert the response viewer opened beside the editor, in a second editor group holding the viewer.
 4. Assert `Running…` is rendered in the viewer (see the softness note below).
 5. Assert, in the webview DOM, that the viewer renders the status code `200`, the first block's URL in
    the status line, and the probe body (viewer-update deadline).
@@ -144,7 +144,7 @@ In order, with every wait through `eventually`:
 7. Assert, in the webview DOM, that the viewer renders `/status`'s URL and the `slowSeen` key, and
    that the first block's distinctive body key is gone.
 
-Step 7 is the stale-render assertion. It contains an absence — the first body is gone — so it obeys
+Step 7 is the stale-render assertion. It contains an absence, because the first body is gone, so it obeys
 the positive-tell rule. The check asserts that absence only inside the same `eventually` that first
 proves the second response arrived. Absence at a fixed time means nothing.
 
@@ -154,14 +154,14 @@ Step 4 is the one assertion in this check that races the product rather than wai
 is a transient state, and a check that looks for a transient state can lose.
 
 The check asserts it anyway, and it is expected to hold. The **first** Run in a session pays for a
-`#r "nuget:"` restore and a cold FSI session. Prototyping measured that first Run in seconds, not
+`#r "nuget:"` restore and a cold FSI session. Prototyping measured that first Run in seconds rather than
 milliseconds. The assertion is therefore ordered deliberately: `Running…` is asserted on the **first**
 Run of the check, never the second.
 
 **Recorded softness.** If this assertion flakes in practice, the correct response is to drop it from
-this check, not to add a retry or a sleep. The companion-death check (spec 7) asserts `Running…`
+this check rather than to add a retry or a sleep. The companion-death check (spec 7) asserts `Running…`
 against the hang-until-release route, where the in-flight window is controlled by the suite and the
-assertion is deterministic. The core path's copy is a convenience, not the only coverage.
+assertion is deterministic. The core path's copy is a convenience rather than the only coverage.
 
 ### DOM the check reads
 
@@ -180,7 +180,7 @@ redden this check. A wrong status code must.
 
 The check leaves the fixture open and the response viewer open, showing the second response. That is
 the state the next check (spec 3, Run outcomes) expects to inherit and replace. Any check that needs
-the viewer *closed* closes it itself — that is spec 4's problem, not this one's.
+the viewer *closed* closes it itself, which is spec 4's problem rather than this one's.
 
 ### Waits and budgets
 
@@ -194,23 +194,23 @@ table on every run.
 **What makes a good test here.** The fidelity floor is fixed by the map and this spec does not relax
 it. A check earns its place only when it observes the channel a person observes:
 
-- CodeLens text in the workbench, not `executeCodeLensProvider`.
-- Response viewer content in the webview DOM, not a viewer-update object.
+- CodeLens text in the workbench rather than `executeCodeLensProvider`.
+- Response viewer content in the webview DOM rather than a viewer-update object.
 - A real click, on a real lens, in a real editor.
 
 **Seam.** No new seam. The one seam is the packaged `.vsix` driven through ExTester, established by
-spec 1. **No test-only seam is added to the shipping extension** — no probe command, no test hook, no
-exported handle. If this check cannot see something, the answer is a better DOM assertion, not a hook.
+spec 1. **No test-only seam is added to the shipping extension**: no probe command, no test hook, no
+exported handle. If this check cannot see something, the answer is a better DOM assertion rather than a hook.
 
 **Module under test.** The product, end to end: `CodeLensProvider`, `RunCommand`, `Companion`,
-`ResponseViewer`, the webview entry point, and the renderer core — as one thing, through one `.vsix`.
+`ResponseViewer`, the webview entry point, and the renderer core, as one thing, through one `.vsix`.
 
 **Prior art in this repository:**
 
-- `tests/renderer.Tests/` — the assertions this check *escalates*. Those pin what the renderer
+- `tests/renderer.Tests/`: the assertions this check *escalates*. Those pin what the renderer
 draws from a handed-in record. This check pins that a real response reaches it.
-- `tests/companion.Tests/` — the F# assertion style the check's source should read like.
-- Spec 1's harness self-check — the shape of a check in this suite: hooks, `eventually`, `Assert`.
+- `tests/companion.Tests/`: the F# assertion style the check's source should read like.
+- Spec 1's harness self-check: the shape of a check in this suite, holding hooks, `eventually`, and `Assert`.
 
 **Negative verification is required before this is called done.** Run the check once with a
 deliberately wrong expected body. Confirm that CI goes red and that the failure names the `.fs`
@@ -222,7 +222,7 @@ inherit that.
 - **Every other product check.** 404 and dead-port renders (spec 3), the loop lens and its toast (spec
   4), cross-block Refused Run (spec 5), Compile Error (spec 6), companion death (spec 7).
 - **Changing the harness.** No new route, no new deadline, no new budget, no change to `run.sh` or the
-  CI job. If this check needs one, that is a finding to raise, not a change to make quietly.
+  CI job. If this check needs one, that is a finding to raise rather than a change to make quietly.
 - **Deleting `docs/manual-check.md` or changing `release.yml`.** Those land with spec 7, when all six
   checks exist. A gate that is green while covering one section of six would be worse than the walk.
 - **Asserting the elapsed-time and response-size fields of the status line.** They are real, and they
@@ -243,7 +243,8 @@ establishes: how to reach the webview frame, how to read the status line, and wh
 looks like.
 
 **What the manual check said, for the record.** This check replaces steps 1–7 of *The core path*.
-Steps 4–6 of *Prepare* — install the `.vsix`, reload, open a `.fsx` — are covered by the harness's
-setup, by construction. Steps 1–3 of *Prepare* — cut a Beta, open the pre-release, download the `.vsix` — were dropped as
+Steps 4–6 of *Prepare*, which install the `.vsix`, reload, and open a `.fsx`, are covered by the
+harness's setup, by construction. Steps 1–3 of *Prepare*, which cut a Beta, open the pre-release,
+and download the `.vsix`, were dropped as
 release ceremony. The accepted risk is that a broken Beta workflow can still ship while packaging
 and install stay green.

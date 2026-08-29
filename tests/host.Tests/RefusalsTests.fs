@@ -1,7 +1,7 @@
 module Extension.Tests.RefusalsTests
 
-// Seam 3 of docs/spec/0003-lens-tells-the-truth.md: drives the host's map from a wire refusal
-// code to its shipped words, with no VSCode and no companion process.
+// Drives the host's map from a wire refusal code to its shipped words, with no VSCode and no
+// companion process.
 
 open Expecto
 open Refusals
@@ -65,7 +65,7 @@ let forCodeTests =
 let lensTitleTests =
     testList
         "Refusals.lensTitle"
-        [ test "every lens title carries the refusal glyph, and not the run triangle" {
+        [ test "every lens title carries the refusal glyph rather than the run triangle" {
               wireCodes
               |> List.iter (fun code ->
                   Expect.stringStarts (lensTitle code) "⊘ " (sprintf "%s must not promise a Run it cannot honor" code))
@@ -86,7 +86,7 @@ let companionStoppedTests =
               Expect.equal
                   companionStopped.Detail
                   "The FsHttp.Studio companion stopped. Reload the window to start it again."
-                  "a pending run abandons to exactly this text, and the lens's toast shows it (docs/spec/0004-run-path-robustness.md, Decision 6)"
+                  "a pending run abandons to exactly this text, and the lens's toast shows it"
           }
 
           test "its heading is the sentence alone, and its lens title carries the refusal glyph" {
@@ -131,7 +131,7 @@ let forRefusedTests =
               Expect.notEqual r.Title (forCode "unaddressable").Title "a bound-value refusal is not a position refusal"
           }
 
-          test "unboundBlockValue without a name degrades whole, and not half" {
+          test "unboundBlockValue without a name degrades whole rather than half" {
               let r = forRefused "unboundBlockValue" None
 
               Expect.equal

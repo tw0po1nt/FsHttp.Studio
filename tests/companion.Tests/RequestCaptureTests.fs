@@ -1,9 +1,7 @@
 module Companion.Tests.RequestCaptureTests
 
-// Seam 1 of docs/spec/0012-request-as-sent.md (tests 1-5): the body-capture rule. Drives
-// `captureRequest` with hand-built `HttpRequestMessage` values, and sends through `TestServer`
-// to prove the capture never changes what the server receives. Test 6 (AbsoluteUri percent-
-// escapes) lives in `BlockRunnerTests`, because it needs a full Run through `extractResponse`.
+// The body-capture rule. Drives `captureRequest` with hand-built `HttpRequestMessage` values,
+// and sends through `TestServer` to prove the capture never changes what the server receives.
 
 open System
 open System.Collections.Generic
@@ -46,7 +44,7 @@ let private formContent (pairs: (string * string) list) =
     new FormUrlEncodedContent(pairs |> List.map KeyValuePair)
 
 /// Sends `makeMsg url` to that URL. When `withCapture` is set, runs `captureRequest` on the
-/// message first — the same transform `httpMessageTransformers` applies at send time.
+/// message first, which is the same transform `httpMessageTransformers` applies at send time.
 let private sendOnce (withCapture: bool) (url: string) (makeMsg: string -> HttpRequestMessage) =
     use client = new HttpClient()
     use msg = makeMsg url

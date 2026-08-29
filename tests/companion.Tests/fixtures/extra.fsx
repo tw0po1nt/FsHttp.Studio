@@ -1,7 +1,6 @@
-// The shapes the twelve-case corpus does not have, plus both blanking hazards from Decision 5 of
-// docs/spec/0002-reach-a-block-anywhere.md, and an explicit probe for the Decision 1 truncation
-// boundary. Every block carries the verdict the spec's position table assigns it, so this file
-// can be read against the decision directly.
+// The shapes the twelve-case corpus does not have, plus both blanking hazards, and an explicit
+// probe for the truncation boundary. Every block carries the verdict its position table row
+// assigns it.
 //
 // Order matters: the last two blocks exist to be run *after* every hazard above them, so their
 // Setup has to blank all of it and still compile.
@@ -17,8 +16,8 @@ let private secret = http { GET "http://127.0.0.1:8391/api/v2/secret" }
 
 
 // internal binding -- deliberately NOT blanked, because `accessRange` matches `private` only.
-// Decision 6 measured `internal` as accessible from a later interaction, so it needs no
-// treatment. This block is the guard on that measurement.
+// An `internal` binding is accessible from a later interaction, so it needs no treatment.
+// This block is the guard on that measurement.
 let internal semiSecret = http { GET "http://127.0.0.1:8391/api/v2/semi-secret" }
 
 
@@ -36,14 +35,14 @@ module Outer =
 // [16] attributed binding -- the declaration range includes the attribute line. It carries a
 // `private` keyword and a type annotation as well, so a span read that anchored on the attribute
 // line instead of the `let` would come back empty here, and nothing else in this file would say
-// so. The annotation is also the one Decision 7 blanks: the truncation drops the trailing pipe.
+// so. The annotation is also the one the Run blanks: the truncation drops the trailing pipe.
 [<Obsolete("prototype")>]
 let private attributed: Response =
     http { GET "http://127.0.0.1:8391/api/v2/attributed" } |> Request.send
 
 
-// [22] class member -- F2, needs an instance. Also Decision 5's second hazard: blanking this as a
-// *sibling* must not erase the whole type definition.
+// [22] class member -- F2, needs an instance. Also the second blanking hazard: blanking this as
+// a *sibling* must not erase the whole type definition.
 type Api() =
     member _.Get() =
         http { GET "http://127.0.0.1:8391/api/v2/member" }
@@ -54,11 +53,11 @@ let multi (a: string) (b: int) =
     http { GET $"http://127.0.0.1:8391/api/v2/{a}/{b}" }
 
 
-// [20] lambda-valued binding -- F3, the binding's value is the lambda, not the block
+// [20] lambda-valued binding -- F3, the binding's value is the lambda rather than the block
 let lambdaValued = fun () -> http { GET "http://127.0.0.1:8391/api/v2/lambda" }
 
 
-// [21] inner let -- F3, not module-scoped
+// [21] inner let -- F3, an inner scope rather than module scope
 let innerLet () =
     let x = http { GET "http://127.0.0.1:8391/api/v2/inner" }
 
@@ -80,15 +79,15 @@ let tried =
         http { GET "http://127.0.0.1:8391/api/v2/caught" }
 
 
-// [23] tuple binding -- F5. Both blocks share one declaration range, which is Decision 5's first
-// hazard: running either must not blank the span that contains it.
+// [23] tuple binding -- F5. Both blocks share one declaration range, which is the first
+// blanking hazard: running either must not blank the span that contains it.
 let tupleA, tupleB =
     http { GET "http://127.0.0.1:8391/api/v2/tuple-a" }, http { GET "http://127.0.0.1:8391/api/v2/tuple-b" }
 
 
 // [24] a block nested inside another block's expression -- F5. The inner one's blank span is the
 // OUTER binding's declaration, which *contains* the target, so blanking it would erase the very
-// block being run. This is Decision 5's first hazard in the only shape where it is live: one
+// block being run. This is the first blanking hazard in the only shape where it is live: one
 // block runnable and one span containing the other.
 let nested =
     http {
@@ -97,24 +96,23 @@ let nested =
     }
 
 
-// A wildcard binding -- F3, noNameToCall (docs/spec/0003, Decision 2). The pattern gives the
+// A wildcard binding -- F3, noNameToCall. The pattern gives the
 // invocation no single name, which the twelve-case table has no room for under the shapes above.
 let _ = http { GET "http://127.0.0.1:8391/api/v2/wildcard" }
 
 
 // A bare block holding another bare block in its own expression -- F5, insideAnotherRequest,
-// derived by range containment rather than by a syntax-tree branch (docs/spec/0003, Decision 3).
-// Case 24 above exercises the same code through an R2 outer binding; this one exercises it
-// through an R1 outer block instead.
+// derived by range containment rather than by a syntax-tree branch. Case 24 above exercises the
+// same code through an R2 outer binding, and this one exercises it through an R1 outer block.
 http {
     GET "http://127.0.0.1:8391/api/v2/outer-bare"
     header "X-Inner" (string (sprintf "%A" (http { GET "http://127.0.0.1:8391/api/v2/inner-bare" })).Length)
 }
 
 
-// A block inside a list expression -- F5, unaddressable (docs/spec/0003, Decision 2). No branch
-// of `classify` enumerates a list, and no other block contains this one, so it is the catch-all in
-// the one shape that reaches it without also reaching Decision 3's containment test. It is the
+// A block inside a list expression -- F5, unaddressable. No branch of `classify` enumerates a
+// list, and no other block contains this one, so it is the catch-all in the one shape that
+// reaches it without also reaching the containment test. It is the
 // code an unrecognized wire string degrades to at the host, so it is the one worth pinning.
 let listed = [ http { GET "http://127.0.0.1:8391/api/v2/listed" } ]
 
@@ -126,7 +124,7 @@ http { GET "http://127.0.0.1:8391/api/v2/sweeper" }
 // A bare block inside a module, with a non-Block side effect after it but still inside the
 // module. This is the exact shape that ruled out the "truncate at the enclosing top-level
 // statement" boundary: a module is one statement, so that boundary would run the side effect.
-// Truncating at the block's own expression end must drop it, per Decision 1. A request to
+// Truncating at the block's own expression end must drop it. A request to
 // /SIDE-EFFECT means that boundary is wrong.
 module Tail =
     http { GET "http://127.0.0.1:8391/api/v2/tail" }

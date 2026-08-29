@@ -56,7 +56,7 @@ let getStringProp (name: string) (root: JsonElement) : string =
     | false, _ -> ""
 
 /// Reads an optional string property by name. Returns `None` when the property is absent,
-/// JSON null, or the empty string — the three shapes that mean "no value" on this wire.
+/// JSON null, or the empty string. Those are the three shapes that mean "no value" on this wire.
 let getOptionalStringProp (name: string) (root: JsonElement) : string option =
     match getStringProp name root with
     | "" -> None
@@ -70,7 +70,7 @@ let getIntProp (name: string) (root: JsonElement) : int =
 
 /// Reads a float property by name. Returns 0.0 when the property is absent, which matches
 /// `getIntProp`'s missing-value default. A duration is the only float on this wire, and an
-/// absent one means "not measured", not "the frame is broken".
+/// absent one means "not measured" rather than "the frame is broken".
 let getFloatProp (name: string) (root: JsonElement) : float =
     match root.TryGetProperty name with
     | true, v -> v.GetDouble()
