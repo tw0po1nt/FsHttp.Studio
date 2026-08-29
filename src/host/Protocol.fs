@@ -42,7 +42,8 @@ let statusText (state: State) (view: ScriptView) : string option =
     | Ready, ScriptPending -> Some "looking for requests…"
     | Ready, Script(1, false) -> Some "1 request"
     | Ready, Script(n, false) when n > 1 -> Some(sprintf "%d requests" n)
-    | Ready, Script(n, true) when n >= 1 -> Some(sprintf "%d requests: a syntax error can hide others" n)
+    | Ready, Script(1, true) -> Some "1 request: a syntax error can hide others"
+    | Ready, Script(n, true) when n > 1 -> Some(sprintf "%d requests: a syntax error can hide others" n)
     // The wire never sends a count below zero, but `int` admits one.
     | Ready, Script(_, false) -> Some "no requests found"
     | Ready, Script(_, true) -> Some "no requests found: syntax error"

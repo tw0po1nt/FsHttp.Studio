@@ -23,7 +23,7 @@ let private syntaxEmptyStatus =
     Checks.statusBarText "no requests found: syntax error"
 
 let private syntaxPartialStatus =
-    Checks.statusBarText "1 requests: a syntax error can hide others"
+    Checks.statusBarText "1 request: a syntax error can hide others"
 
 let private waitForStatus (expected: string) (subject: string) =
     Harness.eventuallyObserved Harness.LensAppearanceDeadlineMs subject (fun () -> Checks.tryStatusBarText expected)

@@ -256,14 +256,29 @@ let statusTextTests =
                   "Ready + failed + 0"
 
               Expect.equal
+                  (statusText Ready (Script(1, true)))
+                  (Some "1 request: a syntax error can hide others")
+                  "Ready + failed + 1"
+
+              Expect.equal
                   (statusText Ready (Script(3, true)))
                   (Some "3 requests: a syntax error can hide others")
-                  "Ready + failed + N >= 1"
+                  "Ready + failed + N > 1"
           }
 
           test "one request is singular, and two are plural" {
               Expect.equal (statusText Ready (Script(1, false))) (Some "1 request") "singular"
               Expect.equal (statusText Ready (Script(2, false))) (Some "2 requests") "plural"
+
+              Expect.equal
+                  (statusText Ready (Script(1, true)))
+                  (Some "1 request: a syntax error can hide others")
+                  "singular on a failed parse"
+
+              Expect.equal
+                  (statusText Ready (Script(2, true)))
+                  (Some "2 requests: a syntax error can hide others")
+                  "plural on a failed parse"
           }
 
           test "a count below zero reads as none found rather than hiding the item" {

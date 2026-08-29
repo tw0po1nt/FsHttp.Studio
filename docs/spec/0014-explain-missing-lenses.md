@@ -176,7 +176,8 @@ The item's text becomes a function of two inputs: companion state, and a view of
 | `Ready` | `.fsx` | clean | N > 1 | `N requests` |
 | `Ready` | `.fsx` | clean | 0 | `no requests found` |
 | `Ready` | `.fsx` | failed | 0 | `no requests found: syntax error` |
-| `Ready` | `.fsx` | failed | N ≥ 1 | `N requests: a syntax error can hide others` |
+| `Ready` | `.fsx` | failed | 1 | `1 request: a syntax error can hide others` |
+| `Ready` | `.fsx` | failed | N > 1 | `N requests: a syntax error can hide others` |
 
 `Extension.setStatusText` supplies the `FsHttp.Studio: ` prefix, which is unchanged.
 
@@ -278,6 +279,7 @@ Register the listener's `Disposable` in `context.subscriptions`, as each other s
 | `{n} requests` | Status bar |
 | `no requests found` | Status bar |
 | `no requests found: syntax error` | Status bar |
+| `1 request: a syntax error can hide others` | Status bar |
 | `{n} requests: a syntax error can hide others` | Status bar |
 
 Rules that these strings hold, and that a later edit must hold:
