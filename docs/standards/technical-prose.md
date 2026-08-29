@@ -19,7 +19,7 @@ reads, so it carries the rule with the same force as a file that lands in the re
 A short piece of prose is still prose. A one-line code comment and a two-sentence issue body both
 carry the rule.
 
-Run the skill before you create or post the text, not after. A draft that you revise later is a
+Run the skill before you create or post the text. A draft that you revise later is a
 draft that a reviewer may already have read.
 
 ## Assert a fact directly
@@ -75,7 +75,7 @@ The skill exists in this repo already, and agents skip it most of the time. A so
 not change that. This rule states the requirement without a qualifier, so an agent cannot read it
 as optional.
 
-## The hook is a backstop, not the mechanism
+## The hook is a backstop
 
 A `PreToolUse` hook (`.claude/settings.json`) fires before a `gh issue`/`gh pr` create, edit, or
 comment command, and before a `Write` or `Edit` on any Markdown file in the repo. It injects a

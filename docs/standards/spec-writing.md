@@ -12,7 +12,7 @@ these steps immediately, before it moves to another task:
 1. Write the full spec to `docs/spec/NNNN-slug.md`. Use the next sequential number, zero-padded to
    four digits, independent of the GitHub issue number. This matches the numbering that
    `docs/adr/` already uses. The file has no frontmatter, and its first line is a sentence-case
-   `#` heading that states the feature, not the issue title.
+   `#` heading that states the feature.
 2. Retitle the GitHub issue. Replace the `Spec:` prefix with `Feature:`. Keep the rest of the
    title unchanged.
 3. Replace the issue body with a short paragraph that states the problem and the solution in

@@ -1,7 +1,7 @@
 // Fixture for the core-path check. Two blocks request the local test server: `/json` first,
 // then `/status`. The bodies differ in both URL and JSON keys, so a stale viewer render fails
 // on two independent tells. `baseUrl` comes from the sidecar the test server writes beside this
-// file — never a hardcoded port.
+// file, and never from a hardcoded port.
 
 #r "nuget: FsHttp"
 

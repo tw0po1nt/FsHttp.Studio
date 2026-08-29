@@ -24,7 +24,7 @@ let private env ct (body: byte[]) =
 
 let private check (name: string) (cond: bool) =
     if cond then
-        printfn "  ok — %s" name
+        printfn "  ok: %s" name
     else
         failwithf "renderer JS smoke FAILED: %s" name
 

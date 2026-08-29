@@ -8,7 +8,7 @@
 Required when the diff touches `src/renderer/`, `src/webview/`, or `src/host/ResponseViewer.fs`,
 or when it changes a CodeLens title, a notification, a status bar item, or an icon.
 
-Capture the running editor, not a mock page. Crop to the surface under review. Add a second image
+Capture the running editor. Crop to the surface under review. Add a second image
 for a change to an existing surface, so a reviewer sees the state before and after.
 
 Commit the image to `docs/screenshots/` on this branch, and link its raw URL here. Pin that URL to

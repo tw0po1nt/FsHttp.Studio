@@ -1,7 +1,7 @@
 // No-requests lens: when a script's parse fails and the locator finds no block, one CodeLens at
-// line 1 states why. Spec 0014 Decisions 1-2, as four checks that drive the real editor through
+// line 1 states why. Four checks that drive the real editor through
 // ExTester.tryReadCodeLensTitles. Partial loss and damage below the blocks keep their Run
-// lenses; only total loss with a failed parse takes the line-1 lens.
+// lenses, and only total loss with a failed parse takes the line-1 lens.
 module NoRequestsLensTests
 
 open Fable.Mocha
@@ -26,7 +26,7 @@ let private tryNoResponseViewer () =
     }
 
 /// The lens carries no command, so VSCode paints its title as plain text: the decoration holds a
-/// `<span>` and no `<a id>` (spec 0014, Decision 2). Read from the DOM rather than from a click:
+/// `<span>` and no `<a id>`. Read from the DOM rather than from a click:
 /// this fixture locates no block, so nothing this lens could have carried would open a viewer,
 /// and a click that opens nothing is no evidence about the command.
 let private tryNoRequestsLensIsPlainText () =

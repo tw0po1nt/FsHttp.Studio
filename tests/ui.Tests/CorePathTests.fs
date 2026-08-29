@@ -1,12 +1,11 @@
 // The core path: open the fixture, click a Run request lens, assert the first response, then
-// click the second block's lens and assert the viewer replaces the first response. Spec 0006
-// steps 1–7, as one check — the spec prices all seven steps against one per-check budget, and a
-// split would also make the second half depend silently on the first half having run.
+// click the second block's lens and assert the viewer replaces the first response, as one check.
+// All seven steps are priced against one per-check budget, and a split would also make the second
+// half depend silently on the first half having run.
 //
 // Both fixture blocks compute their URL, and both URL assertions here are for the absolute URL
-// that went on the wire. That is what carries spec 0012's Seam 4: `RunCommand.runOne` has no
-// suite of its own, so this is where the host reading method and URL off the run result is
-// claimed against the running product.
+// that went on the wire. `RunCommand.runOne` has no suite of its own, so this is where the host
+// reading method and URL off the run result is claimed against the running product.
 module CorePathTests
 
 open Fable.Mocha
@@ -17,9 +16,9 @@ let private fixtureFileName = "core-path.fsx"
 /// The first block's URL exactly as it went on the wire, scheme and port included. Both fixture
 /// blocks compute their URL (`GET $"{baseUrl}/json"`), so this is the claim that the status line
 /// reads the URL off the run result rather than re-deriving it from the block's own source text
-/// (docs/spec/0012-request-as-sent.md, Decision 11): source text renders `{baseUrl}/json`, which
-/// carries neither host nor port and cannot contain this. Built at call time, not at module load —
-/// the address comes from the sidecar, which only setup has proven readable.
+/// Source text renders `{baseUrl}/json`, which carries neither host nor port and cannot contain
+/// this. Built at call time rather than at module load, because the address comes from the
+/// sidecar, which only setup has proven readable.
 ///
 /// The `/json` path is also what distinguishes this response from `/status`.
 let private firstBlockUrl () = Harness.baseUrl () + "/json"
@@ -46,8 +45,8 @@ let private tryFirstResponseRendered () =
     Checks.tryJsonProbeResponseRendered (firstBlockUrl ())
 
 /// The second response arrived *and* replaced the first. Absence of the first body's key is
-/// asserted only here, inside the same `eventually` that proves the second response is present —
-/// absence at a fixed time proves nothing.
+/// asserted only here, inside the same `eventually` that proves the second response is present.
+/// Absence at a fixed time proves nothing.
 let private trySecondResponseReplacedFirst () =
     Checks.viewerSatisfies (fun dom ->
         dom.UrlText.Contains(secondBlockUrl ())
@@ -60,8 +59,8 @@ let private trySecondResponseReplacedFirst () =
 /// With two tabs open, the lens read can resolve a hidden `.editor-instance` that carries no
 /// CodeLens widgets, and report the product as having painted nothing.
 ///
-/// Leaves the fixture and the viewer open, showing the second response. That is the state spec 3's
-/// check expects to inherit and replace.
+/// Leaves the fixture and the viewer open, showing the second response. That is the state the
+/// next check expects to inherit and replace.
 let private theCorePath =
     async {
         do! Checks.openFixtureAsSoleTab fixtureFileName
@@ -86,7 +85,7 @@ let private theCorePath =
 
         // Soft: `Running…` is transient. Assert it only on this cold first Run, where a
         // `#r "nuget:"` restore keeps the in-flight window open for seconds. If it flakes in
-        // practice, drop the assertion — do not add a sleep or a special retry to force it.
+        // practice, drop the assertion. Do not add a sleep or a special retry to force it.
         do! Harness.eventually Harness.ViewerUpdateDeadlineMs "Running… in the response viewer" tryRunningInViewer
 
         do!

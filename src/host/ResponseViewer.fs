@@ -108,10 +108,10 @@ summary { cursor: pointer; user-select: none; list-style: none; }
 summary::-webkit-details-marker { display: none; }
 
 /* Each section sits in a positioned shell so its copy button stays visible while the section is
-   collapsed, and does not scroll with the body (docs/spec/0013-copy-buttons.md, Decision 2). */
+   collapsed, and does not scroll with the body. */
 .section-shell { position: relative; margin-bottom: 12px; }
 /* The body is the last section, and it had no bottom margin before the shell existed.
-   Zero here holds the spacing where it was (docs/spec/0013-copy-buttons.md, Decision 12). */
+   Zero here holds the spacing where it was. */
 .section-shell:last-child { margin-bottom: 0; }
 .copy-button {
   position: absolute;
@@ -135,8 +135,7 @@ summary::-webkit-details-marker { display: none; }
 
 /* headers, and the request section that mirrors them. `.request` sits between the status line
    and the response headers, and is styled by the same rules so the two cannot drift apart.
-   Spacing lives on `.section-shell`, so it does not double (docs/spec/0013-copy-buttons.md,
-   Decision 12). */
+   Spacing lives on `.section-shell`, so it does not double. */
 .headers,
 .request {
   border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.25));

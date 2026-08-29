@@ -42,10 +42,10 @@ let statusText (state: State) (view: ScriptView) : string option =
     | Ready, ScriptPending -> Some "looking for requests…"
     | Ready, Script(1, false) -> Some "1 request"
     | Ready, Script(n, false) when n > 1 -> Some(sprintf "%d requests" n)
-    | Ready, Script(n, true) when n >= 1 -> Some(sprintf "%d requests — a syntax error can hide others" n)
+    | Ready, Script(n, true) when n >= 1 -> Some(sprintf "%d requests: a syntax error can hide others" n)
     // The wire never sends a count below zero, but `int` admits one.
     | Ready, Script(_, false) -> Some "no requests found"
-    | Ready, Script(_, true) -> Some "no requests found — syntax error"
+    | Ready, Script(_, true) -> Some "no requests found: syntax error"
 
 /// The CodeLens title for a script that failed to parse and holds no block. `Some` only for
 /// `Script(0, true)`. A count at or below
@@ -165,8 +165,8 @@ let formatCompileError (diagnostics: Diagnostic list) : string =
     sprintf "Compile error:\n%s" body
 
 /// Decodes base64 without throwing. The companion writes this field, so a value that will not
-/// decode is a defect on our own wire — but it reaches `parseRunResult`, which owes its caller a
-/// `RunProtocolError` and not an exception raised inside a promise callback.
+/// decode is a defect on our own wire. It reaches `parseRunResult`, which owes its caller a
+/// `RunProtocolError` rather than an exception raised inside a promise callback.
 let private tryFromBase64 (encoded: string) : byte[] option =
     try
         Some(System.Convert.FromBase64String encoded)

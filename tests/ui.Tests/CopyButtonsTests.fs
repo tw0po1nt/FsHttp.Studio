@@ -1,17 +1,17 @@
-// The copy buttons, against the running editor. Spec 0013's UI-suite section replaces the manual
-// smoke: a click puts the section's payload on the clipboard, the button's own label reports the
-// result, and a click never toggles the section. The Seam-B suite already proves `copyText` and
-// the DOM shape; this module claims the delegated listener, the clipboard write, and the flash.
+// The copy buttons, against the running editor. A click puts the section's payload on the
+// clipboard, the button's own label reports the result, and a click never toggles the section.
+// The renderer suite already proves `copyText` and the DOM shape, and this module claims the
+// delegated listener, the clipboard write, and the flash.
 module CopyButtonsTests
 
 open Fable.Mocha
 
-/// Both header sections collapsed, each copy button laid out, and the three shell margins as
-/// Decision 12 requires: 12px, 12px, then 0 on the last shell (the body had no bottom margin).
+/// Both header sections collapsed, each copy button laid out, and the three shell margins the
+/// product requires: 12px, 12px, then 0 on the last shell, because the body has no bottom margin.
 ///
-/// `Displayed` claims the button is present and has a size. Decision 2's defect — a button that
-/// the browser reports as visible while it paints nothing inside a closed `<details>` — is not
-/// what this measures; the spec says only a screenshot shows that, and the PR carries one.
+/// `Displayed` claims the button is present and has a size. The closed-`<details>` defect, where
+/// the browser reports a button as visible while it paints nothing, is outside what this
+/// measures. Only a screenshot shows that one.
 let private tryCollapsedButtonsAndSpacing () =
     async {
         match! ExTester.tryReadCopySurface () with
@@ -50,8 +50,7 @@ let private tryCopySucceeded (key: string) (requestWasOpen: bool) (headersWereOp
     }
 
 /// The refused write, which no platform in this suite produces on its own: the witness rejects,
-/// and the button has to say so rather than leave the user to paste whatever was there before
-/// (Decision 8, user story 8).
+/// and the button has to say so rather than leave the user to paste whatever was there before.
 let private tryCopyReportedFailure (key: string) =
     async {
         match! ExTester.tryClickCopyButton ExTester.Refused key with
@@ -70,7 +69,7 @@ let private headersPayloadHolds (text: string) =
 /// The echo acknowledgement as it went on the wire. Matched in parts for the reason `Harness`
 /// names that contract in parts, plus the absence of a newline: the viewer pretty-prints this
 /// body across several lines, so a one-line paste is the tell that the copy read the response
-/// bytes and not the rendered tree (Decision 3, and user story 1).
+/// bytes rather than the rendered tree.
 let private bodyPayloadHolds (text: string) =
     text.Contains("\"" + Harness.echoAckKey + "\"")
     && text.Contains("\"" + Harness.echoAckValue + "\"")

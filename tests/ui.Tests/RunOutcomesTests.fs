@@ -1,6 +1,6 @@
 // Run outcomes render honestly: a real 404 travels the whole wire and renders as a successful
 // Run with an HTTP error response, then a dead-port Run renders as plain runtime-error text with
-// no response structure. Spec 0007, as one check — two Runs against the already-warm session and
+// no response structure. One check, with two Runs against the already-warm session and
 // the already-open viewer the core-path check left behind.
 module RunOutcomesTests
 
@@ -31,7 +31,7 @@ let private urlEndsInNotFound (urlText: string) =
 
 /// A successful Run with an HTTP error response: status 404, the named route's URL, the named
 /// route's body rendered by content type, the 4xx status band, and no runtime-error text. The
-/// absence of failure is asserted only inside this settled state — absence at a fixed time is not
+/// absence of failure is asserted only inside this settled state, because absence at a fixed time is not
 /// meaningful.
 let private tryNotFoundRenderedHonestly () =
     Checks.viewerSatisfies (fun dom ->
@@ -56,7 +56,7 @@ let private tryDeadPortRenderedAsRuntimeError () =
         && dom.StatusCodeText = "")
 
 /// Inherits the warm companion and the open viewer from the core-path check, and takes over the
-/// fixture column for its own fixture — see `ExTester.openFixtureAsSoleTab` for what that
+/// fixture column for its own fixture. `ExTester.openFixtureAsSoleTab` holds what that
 /// discards. Runs both outcomes and leaves the viewer showing the runtime error.
 let private runOutcomesRenderHonestly =
     async {

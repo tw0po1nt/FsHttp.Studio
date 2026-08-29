@@ -1,8 +1,8 @@
 // Companion death is visible and recoverable: hang a Run, wait for the request to arrive at the
 // server, kill every companion process, assert the viewer leaves `Running…` for the stopped
 // message and the lenses leave `▶ Run request` for the stopped title, reload the window, and
-// assert a Run succeeds again. Spec 0011's check half, as one check. Runs last — it kills the
-// companion and reloads the window, so no later check can inherit the session. Teardown releases
+// assert a Run succeeds again, as one check. Runs last, because it kills the companion and
+// reloads the window, so no later check can inherit the session. Teardown releases
 // the hang even when the body fails partway.
 module CompanionDeathTests
 
@@ -25,8 +25,8 @@ let private tryClickRecoveryLens () =
 let private tryRunningInViewer () =
     Checks.viewerSatisfies (fun dom -> dom.RunInProgressLabel.Contains runInProgressLabel)
 
-/// The hang route has at least one request waiting. Parsed from `/status`, not matched as a
-/// substring — a count of ten would also contain the characters of a zero count.
+/// The hang route has at least one request waiting. Parsed from `/status` rather than matched as
+/// a substring, because a count of ten would also contain the characters of a zero count.
 let private tryRequestWaitingAtServer (serverBaseUrl: string) =
     async {
         match Harness.slowWaitingCount serverBaseUrl with
@@ -45,10 +45,10 @@ let private tryStoppedMessageRendered () =
         dom.RootText.Contains Harness.companionStoppedText
         && not (dom.RunInProgressLabel.Contains runInProgressLabel))
 
-/// Both lenses now read the stopped title, and neither still offers a Run (ADR-0003's "no
-/// companion, no runnable lenses").
+/// Both lenses now read the stopped title, and neither still offers a Run. No companion means no
+/// runnable lenses.
 ///
-/// This reads the editor, and not the provider. The provider already returned the correct list
+/// This reads the editor rather than the provider. The provider already returned the correct list
 /// under the earlier rule, and the editor kept the stale `▶ Run request` lens anyway, which is
 /// the defect this claim exists to hold shut. An exact count also catches the opposite failure,
 /// where the stopped title lands beside the lens it was meant to replace.
@@ -91,7 +91,7 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
 
         do! Harness.eventually Harness.ViewerUpdateDeadlineMs "Running… in the response viewer" tryRunningInViewer
 
-        // The Run's own deadline, not a workbench one: what this waits out is a `#r "nuget:"`
+        // The Run's own deadline rather than a workbench one: what this waits out is a `#r "nuget:"`
         // restore followed by a socket, which is the same span the core path already prices at
         // `ViewerUpdateDeadlineMs` for its cold first Run.
         do!
@@ -124,7 +124,7 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
                 tryStoppedLensAboveEachBlock
 
         // The viewer took focus when the Run opened it, and has held it since, so no text editor
-        // is active. That is Decision 6's other hiding case, and the only place in the suite that
+        // is active. That is the other hiding case, and the only place in the suite that
         // reaches it without contriving one: the item is hidden even though the companion has
         // just died and has something to say.
         do!
@@ -192,7 +192,7 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
     }
 
 /// Inherits the warm companion and open viewer from the compile-error check, takes over the
-/// fixture column, and leaves the session after a reload — no later check should inherit it.
+/// fixture column, and leaves the session after a reload, so no later check should inherit it.
 let private companionDeathIsVisibleAndRecoverable =
     async {
         let serverBaseUrl = Harness.baseUrl ()

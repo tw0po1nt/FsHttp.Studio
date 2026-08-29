@@ -2,11 +2,11 @@
 
 House rules for F# in this repo, beyond the rules that tooling already enforces. **Tooling owns formatting.** Fantomas (`fantomas --check`, run in CI) and `.editorconfig` (4-space indent, final newline) do that work. Do not restate the layout rules, and do not fix layout by hand. These rules cover what a formatter cannot see.
 
-Each rule is a convention, not a lint. Cite it in review, and weigh it against the case. Where a rule here and one of Fowler's generic smells disagree, the rule here wins.
+Each rule is a convention. Cite it in review, and weigh it against the case. Where a rule here and one of Fowler's generic smells disagree, the rule here wins.
 
 ## 1. Names and comments use the glossary
 
-`CONTEXT.md` is the ubiquitous language. Identifiers, comments, log strings, and envelope tags that name a domain concept use the glossary term, and avoid the listed `_Avoid_` synonyms. Write **Companion**, not "server", "backend", or "host". Write **Block**, not "request" or "snippet". Write **Run**, not "execute" or "send". Write **Envelope**, not "message" or "payload". "Extension host" is the one sanctioned use of "host", because it is the glossary's own name for the JS side. A name that you cannot express in glossary terms is a signal: the concept is either missing from `CONTEXT.md` or muddled in the code. Resolve that, and do not reach for a synonym.
+`CONTEXT.md` is the ubiquitous language. Identifiers, comments, log strings, and envelope tags that name a domain concept use the glossary term, and avoid the listed `_Avoid_` synonyms. Write **Companion** in place of "server", "backend", or "host". Write **Block** in place of "request" or "snippet". Write **Run** in place of "execute" or "send". Write **Envelope** in place of "message" or "payload". "Extension host" is the one sanctioned use of "host", because it is the glossary's own name for the JS side. A name that you cannot express in glossary terms is a signal: the concept is either missing from `CONTEXT.md` or muddled in the code. Resolve that, and do not reach for a synonym.
 
 ## 2. Cross-boundary wire helpers live in one module
 
@@ -21,11 +21,11 @@ When you drive a child process (`--worker`, or any `Process.Start`), a crashed c
 - A child that closes stdout without a frame → `tryReadFrame` returns `None` → a clean `RuntimeError`. ✓ (already handled)
 - A child that emits a frame, or nothing, and then **hangs** must not block the caller. `proc.WaitForExit()` and a blocking `tryReadFrame` are both unbounded. Use a bounded wait (`WaitForExit(timeoutMs)`), call `proc.Kill()` on expiry, and map the result to `RuntimeError`.
 
-`use proc = proc` gives disposal, which is necessary but not sufficient. Disposal does not unblock a wait. A driven process without a timeout is an incomplete implementation, not a deferred nicety.
+`use proc = proc` gives disposal, which is necessary but not sufficient. Disposal does not unblock a wait. A driven process without a timeout is an incomplete implementation.
 
 ## 4. Compound reads-and-writes of process-global state are one atomic step
 
-Process-global mutable state under a lock, such as `loadedVersions`, must take that lock **once for each logical operation**, not once for each access. A check in one `lock` scope, followed by an act in another scope, is a TOCTOU gap. It is correct only while the caller is single-threaded, and it stops being correct silently on the day a second caller appears. If `run` reads `conflictsWithLoaded` and then writes `markLoaded`, that check and that act belong under one lock. If the state is single-threaded and always will be, do not add the lock at all. A half-taken lock advertises a safety that it does not provide.
+Process-global mutable state under a lock, such as `loadedVersions`, must take that lock **once for each logical operation**. A check in one `lock` scope, followed by an act in another scope, is a TOCTOU gap. It is correct only while the caller is single-threaded, and it stops being correct silently on the day a second caller appears. If `run` reads `conflictsWithLoaded` and then writes `markLoaded`, that check and that act belong under one lock. If the state is single-threaded and always will be, do not add the lock at all. A half-taken lock advertises a safety that it does not provide.
 
 ## 5. Comments state what the code cannot, and they speak from where they stand
 
@@ -73,7 +73,7 @@ A record whose fields are function types is a smell. It can hide a cycle between
 
 Use a closure-record field only when none of these three alternatives fits. State the reason in your reply to the user, and keep it out of a source comment (rule 5).
 
-## The hook is a backstop, not the mechanism
+## The hook is a backstop
 
 A `PreToolUse` hook (`.claude/settings.json`) fires before a `Write` or an `Edit` on a `.fs` or
 `.fsx` file. It names the rules above at the moment an agent is about to write F#. The hook cannot

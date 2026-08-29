@@ -14,7 +14,7 @@ command, and it fails on errors that a Fable-only loop never shows.
 
 **Run the `simplified-technical-english` skill on every piece of prose you write.** All prose means
 all prose: docs, specs, ADRs, issue text, pull request text, commit messages, and code comments. Run
-the skill before you post the text, not after. A one-line code comment is still prose.
+the skill before you post the text. A one-line code comment is still prose.
 
 **Name a domain concept with the term that `CONTEXT.md` defines.** This binds an identifier, a
 comment, a log string, an envelope tag, a test name, an issue title, and a commit message. A concept
@@ -70,10 +70,10 @@ overlays them.
 
 **Triage labels.** The five triage roles, where each label string is equal to its role name:
 
-- `needs-triage` — a maintainer must evaluate this issue
-- `needs-info` — the reporter must supply more information
-- `ready-for-agent` — fully specified, ready for an AFK agent
-- `ready-for-human` — a person must implement this
-- `wontfix` — this will not be fixed
+- `needs-triage`: a maintainer must evaluate this issue
+- `needs-info`: the reporter must supply more information
+- `ready-for-agent`: fully specified, ready for an AFK agent
+- `ready-for-human`: a person must implement this
+- `wontfix`: this will not be fixed
 
 When a skill names a role, use the label string of the same name.

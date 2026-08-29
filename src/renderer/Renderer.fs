@@ -164,7 +164,7 @@ let private renderBinary (bytes: byte[]) : Node =
     el
         "div"
         [ "class", "response-binary" ]
-        [ el "div" [ "class", "binary-note" ] [ Node.Text(sprintf "Binary body — %s" (humanSize bytes.Length)) ]
+        [ el "div" [ "class", "binary-note" ] [ Node.Text(sprintf "Binary body: %s" (humanSize bytes.Length)) ]
           el "pre" [ "class", "hex-dump" ] [ Node.Text(hexDump bytes) ] ]
 
 /// The fallback for text, XML, and unknown types. It gives readable monospace when the bytes

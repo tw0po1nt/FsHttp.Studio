@@ -14,7 +14,7 @@ let overBudget (timing: PhaseTiming) = timing.ElapsedMs > timing.BudgetMs
 let budgetFailure (timing: PhaseTiming) =
     sprintf "%s exceeded the %i s budget (observed %.0f ms)" timing.Name (budgetSeconds timing) timing.ElapsedMs
 
-/// `caption` heads the table, because a run emits more than one — the job summary appends them,
+/// `caption` heads the table, because a run emits more than one. The job summary appends them,
 /// and two bare tables in a row read as one.
 let renderTable (caption: string) (rows: PhaseTiming list) =
     let body =

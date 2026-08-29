@@ -41,7 +41,7 @@ let notFoundBody = "ui-test-server:notfound"
 /// Cross-process contract for `POST /echo`. A fixed acknowledgement that deliberately carries
 /// none of the posted body: the request-section check asserts the posted body inside the viewer's
 /// Request section, and a response that echoed it back would let that assertion pass against the
-/// response body region instead (docs/spec/0012-request-as-sent.md, Seam 4).
+/// response body region instead.
 let echoAckBody = """{"echoed":"ui-test-server"}"""
 
 let private catchAllBody = "ui-test-server:unknown"

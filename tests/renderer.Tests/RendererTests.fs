@@ -62,7 +62,7 @@ let dispatchTests =
               let node =
                   renderBody (envelope "application/json" (utf8 """{"name":"fs","tags":[true,null,"x"],"n":42}"""))
 
-              Expect.isNonEmpty (byClass "response-json" node) "should be a JSON render, not the text fallback"
+              Expect.isNonEmpty (byClass "response-json" node) "should be a JSON render rather than the text fallback"
               Expect.isNonEmpty (byTag "details" node) "objects/arrays should be collapsible <details> nodes"
 
               let keyTexts = byClass "json-key" node |> List.map innerText
@@ -75,7 +75,7 @@ let dispatchTests =
               Expect.isNonEmpty (byClass "json-string" node) "strings should be highlighted"
           }
 
-          test "a JSON string value with special characters is re-escaped, not shown raw" {
+          test "a JSON string value with special characters is re-escaped rather than shown raw" {
               let node =
                   renderBody (envelope "application/json" (utf8 """{"msg":"say \"hi\"\n"}"""))
 
@@ -186,7 +186,7 @@ let httpErrorTests =
                   "the error body should still render as its Content-Type (JSON)"
           }
 
-          test "a 500 with a text body renders the body, not an error wrapper" {
+          test "a 500 with a text body renders the body rather than an error wrapper" {
               let env =
                   { envelope "text/plain" (utf8 "internal boom") with
                       Status = 500
@@ -321,7 +321,7 @@ let requestSectionTests =
           }
 
           test "a NotCaptured body renders its reason string and no body element" {
-              let reason = "streamed body — not captured, so that the upload is unchanged"
+              let reason = "streamed body: not captured, so that the upload is unchanged"
 
               let env =
                   { envelope "text/plain" (utf8 "ok") with
@@ -432,7 +432,7 @@ let private copied (env: ResponseEnvelope) (key: string) : string =
 let copyTextTests =
     testList
         "copyText"
-        [ test "a JSON body copies the raw UTF-8 bytes, not the tree" {
+        [ test "a JSON body copies the raw UTF-8 bytes rather than the tree" {
               let json = """{"name":"fs","tags":["a"]}"""
               let text = copied (envelope "application/json" (utf8 json)) "response-body"
 
@@ -453,7 +453,7 @@ let copyTextTests =
               Expect.stringEnds text "… (44 more bytes)" "the truncation note must travel with the paste"
           }
 
-          test "an image/svg+xml body copies the SVG source, not a hex dump" {
+          test "an image/svg+xml body copies the SVG source rather than a hex dump" {
               let svg = """<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>"""
               let text = copied (envelope "image/svg+xml" (utf8 svg)) "response-body"
 

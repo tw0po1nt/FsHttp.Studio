@@ -20,8 +20,8 @@ let PostReloadRecoveryDeadlineMs = 60_000
 /// Wait for the companion to report `ready`, paid once in setup. It is the longest wait the
 /// harness makes, and deliberately so: the companion's first response costs a `dotnet --list-sdks`
 /// probe, a .NET process start, and FCS's first parse. On a slow runner that cold start alone has
-/// been measured above 45 s. Setup absorbs it inside `SetupBudgetMs` so no product check pays it —
-/// a check that waits on cold start measures the runner, not the product.
+/// been measured above 45 s. Setup absorbs it inside `SetupBudgetMs` so no product check pays it.
+/// A check that waits on cold start measures the runner rather than the product.
 let CompanionReadyDeadlineMs = 120_000
 
 /// How long a claim that the editor paints *no* lens must keep holding before it is believed. An
@@ -48,7 +48,7 @@ let SuiteBudgetMs = 300_000
 
 /// Cross-process contract for `GET /json`. Must match `UiTestServer.Server.jsonProbeBody`. The
 /// key and the value are named separately because a check reading the viewer's pretty-printed DOM
-/// cannot match the one-line body — it matches these two parts, which whitespace cannot move.
+/// cannot match the one-line body. It matches these two parts, which whitespace cannot move.
 let jsonProbeKey = "probe"
 let jsonProbeValue = "ui-test-server"
 let jsonProbeBody = sprintf """{"%s":"%s"}""" jsonProbeKey jsonProbeValue
@@ -76,15 +76,14 @@ let echoAckValue = "ui-test-server"
 /// has already moved, so it matches the key and the value rather than the one-line body.
 ///
 /// The value is deliberately absent from every other fixture and from the echo acknowledgement,
-/// so finding it in the viewer can only mean the Request section rendered what was sent
-/// (docs/spec/0012-request-as-sent.md, Seam 4).
+/// so finding it in the viewer can only mean the Request section rendered what was sent.
 let postedBodyKey = "posted"
 
 let postedBodyValue = "request-section-fixture"
 let postedBody = sprintf """{"%s":"%s"}""" postedBodyKey postedBodyValue
 
 /// The request header the fixture sets, and which the Request section must render as a row. A
-/// header the user wrote is the other half of "the request as sent" — the body alone would not
+/// header the user wrote is the other half of "the request as sent". The body alone would not
 /// show that the headers travelled.
 let postedHeaderName = "X-Fixture"
 
@@ -100,10 +99,9 @@ let compileErrorLabel = "Compile error"
 
 /// The text a pending Run abandons to when the companion exits. Taken from the shipped value, as
 /// `LoopLensTests` and `CrossBlockRefusedRunTests` take theirs: this suite compiles `Refusals.fs`,
-/// and a check that restated the words would pin the wording in a second place
-/// (docs/spec/0003-lens-tells-the-truth.md, user story 11). `RefusalsTests` is where the wording
-/// itself is pinned. What this asserts is that the host put *this* sentence in the viewer, and not
-/// a different one.
+/// and a check that restated the words would pin the wording in a second place. `RefusalsTests`
+/// is where the wording itself is pinned. What this asserts is that the host put *this* sentence
+/// in the viewer rather than a different one.
 let companionStoppedText = Refusals.companionStopped.Detail
 
 let private extensionStatusPrefix = "FsHttp.Studio"
@@ -114,7 +112,7 @@ let private extensionStatusPrefix = "FsHttp.Studio"
 ///
 /// Only `companion stopped` is asserted end to end, by the companion-death check, because it is
 /// the only one of the three the suite can reach on purpose. `starting…` was measured as a window
-/// of under a second on a warm reload — a poll that waited for it read `2 requests` instead — and
+/// of under a second on a warm reload, where a poll that waited for it read `2 requests` instead.
 /// `.NET SDK not found` needs a workbench with no SDK on PATH, which is not this run. Those two
 /// rows are pinned as pure values in `ProtocolTests.statusTextTests` instead.
 let private companionNotReadyBodies =
@@ -179,8 +177,8 @@ let isProvenLive () =
 
 /// What one poll saw. `Holds` ends the wait. `DoesNotHold` is a poll with nothing to say about the
 /// state it found, which is most of them. `Observed` carries the poll's own account of that state,
-/// for a condition whose opposite defects fail the same way — an exact count that reads too few and
-/// one that reads too many produce the same timeout, and only the observation tells them apart.
+/// for a condition whose opposite defects fail the same way: an exact count that reads too few
+/// and one that reads too many produce the same timeout, and only the observation tells them apart.
 type Poll =
     | Holds
     | DoesNotHold
@@ -255,7 +253,7 @@ let private sidecarUrls () =
     | Proc.SidecarLive(baseUrl, deadUrl) -> baseUrl, deadUrl
 
 /// The test server's base URL. A check that reaches the server directly rather than through a
-/// Run — the companion-death check's arrival wait and its hang release — resolves it here.
+/// Run, such as the companion-death check's arrival wait and its hang release, resolves it here.
 let baseUrl () = fst (sidecarUrls ())
 
 let private verifySidecarLive () =
@@ -266,10 +264,10 @@ let private verifySidecarLive () =
         failSetup (sprintf "test server healthcheck failed at %s/json (got %A, expected %s)" baseUrl body jsonProbeBody)
 
     if not (Proc.curlConnectionRefused deadUrl) then
-        failSetup (sprintf "dead port answered at %s — sidecar may be stale" deadUrl)
+        failSetup (sprintf "dead port answered at %s, so the sidecar may be stale" deadUrl)
 
-/// True when the Explorer shows the fixture folder as a workspace root. A workspace folder, not
-/// only an open tab, is what makes the extension's activation and every later check start from
+/// True when the Explorer shows the fixture folder as a workspace root. A workspace folder,
+/// rather than an open tab alone, is what makes the extension's activation and every later check start from
 /// the same state.
 let private tryFixtureFolderOpen () =
     async {
@@ -372,7 +370,7 @@ let private tryCompanionRunning () =
     async { return companionPids () |> Array.isEmpty |> not }
 
 /// The hang route's waiting count from `GET /status`, or `None` when the body does not parse.
-/// The companion-death check kills only after this rises above zero — a kill timed to the click
+/// The companion-death check kills only after this rises above zero. A kill timed to the click
 /// or to `Running…` can land during the first `#r "nuget:"` restore, before any request reaches
 /// the server. Reads through `slowWaitingKey` rather than the literal, so a server-side rename
 /// cannot leave this polling a key nothing writes.
@@ -391,9 +389,9 @@ let releaseHang (serverBaseUrl: string) : unit =
     Proc.httpStatus (serverBaseUrl + "/release") |> ignore
 
 /// Runs `body`, then `teardown` whether the body held or failed. The body's failure is the
-/// diagnostic one — it carries the `.fs` frame naming the assertion that went red — so a teardown
-/// that fails on top of it is logged under `teardownSubject` rather than raised, and cannot
-/// displace that frame. A teardown that fails on its own is the only failure there is.
+/// diagnostic one, because it carries the `.fs` frame naming the assertion that went red, so a
+/// teardown that fails on top of it is logged under `teardownSubject` rather than raised, and
+/// cannot displace that frame. A teardown that fails on its own is the only failure there is.
 let withTeardown (teardownSubject: string) (teardown: unit -> Async<unit>) (body: Async<unit>) : Async<unit> =
     async {
         let mutable bodyError: exn option = None

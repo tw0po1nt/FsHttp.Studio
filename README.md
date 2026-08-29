@@ -20,7 +20,7 @@ A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsH
 - a JSON payload becomes one dense line you cannot browse,
 - an HTML page becomes escaped source.
 
-The part that makes a request tool worth using — *seeing* the response — is the exact part FSI cannot do. FSI's printer also destroys the response body, because that body is read-once by default. Reading the bytes yourself is therefore a trap.
+*Seeing* the response is the part that makes a request tool worth using, and it is the exact part FSI cannot do. FSI's printer also destroys the response body, because that body is read-once by default. Reading the bytes yourself is therefore a trap.
 
 FsHttp.Studio closes that gap. The request stays pure F#, and the editor renders the response richly.
 
@@ -34,8 +34,8 @@ Open a `.fsx` script that contains FsHttp requests. A **`▶ Run request` CodeLe
   - **JSON** displays as a collapsible, syntax-highlighted tree,
   - **HTML** displays as a rendered page,
   - all other content displays as readable, wrapped text.
-- A thin status line shows the method, the URL, a color-coded status code, the round-trip time, and the size. A collapsible **Request** section shows the method, URL, headers, and body exactly as sent — not just as written, since FsHttp's transformers can rewrite any of them. Response headers stay one click away in their own collapsible section.
-- Each of those three sections — Request, response headers, response body — has a **Copy** button, so you can paste any of them elsewhere without hand-selecting text out of a panel.
+- A thin status line shows the method, the URL, a color-coded status code, the round-trip time, and the size. A collapsible **Request** section shows the method, URL, headers, and body exactly as sent, because FsHttp's transformers can rewrite any of them after you write them. Response headers stay one click away in their own collapsible section.
+- Three sections carry a **Copy** button: Request, response headers, and response body. You can paste any of them elsewhere without hand-selecting text out of a panel.
 
 FsHttp.Studio honors your `#r "nuget: FsHttp, x.y.z"` version pin exactly.
 
@@ -77,7 +77,7 @@ shasum -a 256 -c fshttp-studio-<version>.vsix.sha256
 ```powershell
 $expected = (Get-Content fshttp-studio-<version>.vsix.sha256).Split(' ')[0]
 $actual   = (Get-FileHash fshttp-studio-<version>.vsix -Algorithm SHA256).Hash
-if ($actual -ieq $expected) { "OK" } else { "MISMATCH — download is corrupt" }
+if ($actual -ieq $expected) { "OK" } else { "MISMATCH: download is corrupt" }
 ```
 
 A mismatch means the bytes changed before they reached your machine. Download the file again, and verify it again before you install it. A different transport often avoids the tool that corrupted the first download. For example, use `curl -L`, `Invoke-WebRequest`, or the `gh` CLI.

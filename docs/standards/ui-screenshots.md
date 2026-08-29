@@ -11,9 +11,9 @@ enough contrast. Only a picture proves that.
 
 A change to one of these paths changes what the user sees:
 
-- `src/renderer/` — the markup of the response viewer
-- `src/host/ResponseViewer.fs` — the styles and the shell of the panel
-- `src/webview/` — the mount glue and the scripts of the panel
+- `src/renderer/`: the markup of the response viewer
+- `src/host/ResponseViewer.fs`: the styles and the shell of the panel
+- `src/webview/`: the mount glue and the scripts of the panel
 
 A change to a CodeLens title, a notification, a status bar item, or an icon also counts.
 
@@ -49,7 +49,7 @@ on request. Use it, and remove the capture code afterward.
    reach the main line.
 
 Take a second screenshot only after the editor repaints. Two captures in one test can return the
-same frame, and two identical files prove one state, not two.
+same frame, and two identical files prove one state.
 
 ## Where the image lives
 
@@ -76,7 +76,7 @@ by name.
 The `gh` command line cannot upload an image to a pull request, because that endpoint needs a
 browser session. A committed image is therefore the only route an agent can take alone.
 
-## The hook is a backstop, not the mechanism
+## The hook is a backstop
 
 A `PreToolUse` hook (`.claude/settings.json`) fires before a `gh pr create` or a `gh pr edit`
 command. It reads the paths that the branch changed. It injects a reminder only when those paths

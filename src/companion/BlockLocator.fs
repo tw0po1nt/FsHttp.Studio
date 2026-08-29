@@ -31,7 +31,7 @@ type RefusalCode =
     /// F3. A binding that is not module-scoped: neither under a module `let` nor a member, or an
     /// inner `let`/`use`. Both shapes mean the same thing to a reader, so they share one code.
     | InnerBinding
-    /// F3. A binding whose value is a lambda, not the block.
+    /// F3. A binding whose value is a lambda rather than the block.
     | LambdaValue
     /// F3. A binding whose head pattern gives no single name to invoke.
     | NoNameToCall
@@ -57,7 +57,7 @@ let reasonFor (code: RefusalCode) =
     | NeedsArguments -> "the function takes arguments we would have to invent"
     | ClassMember -> "a class member needs an instance we would have to invent"
     | InnerBinding -> "an inner binding is not reachable from a later FSI interaction"
-    | LambdaValue -> "the binding's value is a lambda, not the block"
+    | LambdaValue -> "the binding's value is a lambda rather than the block"
     | NoNameToCall -> "the binding does not give a name to invoke"
     | TupleBinding -> "a tuple binding binds several values, so its value is not the block"
     | InsideAnotherRequest -> "the block sits inside another block's own expression"
@@ -151,7 +151,7 @@ let private samePos (a: pos) (b: pos) = a.Line = b.Line && a.Column = b.Column
 /// True when `node` is a leading ancestor of the block: an expression whose own range starts
 /// exactly where the block starts, so the block is its leading part and not one argument among
 /// others. The Setup boundary truncates at the block's own end, which drops such an
-/// ancestor's trailing suffix intact — `http { } |> Request.send`'s pipe App starts at the
+/// ancestor's trailing suffix intact: `http { } |> Request.send`'s pipe App starts at the
 /// block, so truncation drops `|> Request.send` with no routing branch needed for case 12.
 let private leadingAt (blockStart: pos) (node: SyntaxNode) =
     match node with
@@ -163,8 +163,8 @@ let private leadingAt (blockStart: pos) (node: SyntaxNode) =
 /// R2's transparency is narrower than `leadingAt`: only a type annotation or parens may sit
 /// between a binding and the block for the binding's *value* to be the block.
 /// Returns the remaining path once every such wrapper is consumed. A parenthesis starts at its
-/// own `(`, before the block, so `leadingAt` never reaches one — this is the only thing that
-/// does. It stays narrow on purpose: R1 inserts `let <name> = ` at the block's own start, and a
+/// own `(`, before the block, so `leadingAt` never reaches one. This function is the only
+/// thing that does. It stays narrow on purpose: R1 inserts `let <name> = ` at the block's own start, and a
 /// parenthesis between the statement and the block would put that insertion inside the parens.
 let rec private skipValueWrappers (path: SyntaxNode list) =
     match path with
@@ -187,8 +187,9 @@ let private enclosingModules (path: SyntaxNode list) =
         | _ -> None)
 
 /// One identifier, spelled the way an invocation can name it. `Ident.idText` carries the *text*
-/// of a name and never its backticks, so a name that is not a plain identifier — ``get pikachu``,
-/// or a keyword such as ``type`` — comes back in a spelling that does not parse. Restore the
+/// of a name and never its backticks, so a name that is not a plain identifier, such as
+/// ``get pikachu`` or a keyword such as ``type``, comes back in a spelling that does not parse.
+/// Restore the
 /// backticks that such a name needs. A plain identifier passes through unchanged, so the common
 /// case reads exactly as the user wrote it.
 let private invocationSpelling (id: Ident) =
@@ -208,16 +209,16 @@ let private accessRange (a: SynAccess option) =
 
 /// Every `private` keyword on the target's own path that would put the invocation out of
 /// reach: its own binding's, and each enclosing module's. Each invocation is a separate FSI
-/// interaction, so a `private` binding — or a binding inside a `private` module — is not
+/// interaction, so a `private` binding, or a binding inside a `private` module, is not
 /// accessible from it. `internal` needs no treatment, because an `internal` binding is
 /// accessible from a later interaction, so it is deliberately not matched here.
 let private privateSpansOn (ownBinding: SynAccess option) (path: SyntaxNode list) =
     accessRange ownBinding
     @ (enclosingModules path |> List.collect (snd >> accessRange))
 
-/// `private` can sit on the binding *or* on its head pattern — `let private x = …` puts it on
-/// `SynPat.Named`, not on `SynBinding.accessibility` — so a read of the binding alone misses it
-/// silently.
+/// `private` can sit on the binding *or* on its head pattern. `let private x = …` puts it on
+/// `SynPat.Named` rather than on `SynBinding.accessibility`, so a read of the binding alone
+/// misses it silently.
 let private patternAccess (headPat: SynPat) =
     match headPat with
     | SynPat.Named(accessibility = a)
@@ -226,8 +227,9 @@ let private patternAccess (headPat: SynPat) =
 
 /// The R2 target's own type annotation span, colon included: from the end of the head pattern
 /// (and its arguments, if any) to the end of the type. Measured directly, because FCS's own
-/// `SynBindingReturnInfo.Range` covers only the type name (`Response`, not `: Response`), so a
-/// blank of that range alone would leave a bare `:` with nothing after it, which does not parse.
+/// `SynBindingReturnInfo.Range` covers the type name alone and leaves out the leading colon,
+/// so a blank of that range alone would leave a bare `:` with nothing after it, which does not
+/// parse.
 /// Starting from the head pattern's own end keeps the bound name untouched.
 let private typeAnnotationSpan (headPat: SynPat) (returnInfo: SynBindingReturnInfo option) : range option =
     // `range` is a struct. An inline `headPat.Range.End` hits FS0052. Bind it first.
@@ -236,8 +238,8 @@ let private typeAnnotationSpan (headPat: SynPat) (returnInfo: SynBindingReturnIn
     returnInfo
     |> Option.map (fun (SynBindingReturnInfo(range = r)) -> Range.mkRange r.FileName headPatRange.End r.End)
 
-/// What a binding's head pattern offers an invocation. This is a *head-pattern* verdict, not a
-/// refusal: `classify` turns `TakesArguments` into the `NeedsArguments` code and `NoName` into
+/// What a binding's head pattern offers an invocation. This is a *head-pattern* verdict:
+/// `classify` turns `TakesArguments` into the `NeedsArguments` code and `NoName` into
 /// `NoNameToCall`.
 type private NameResult =
     | Invocable of string
@@ -363,8 +365,8 @@ let rec private blankSpan (blockRange: range) (path: SyntaxNode list) =
 ///
 /// A `SynPat.LongIdent`'s argument patterns are its parameters, which bind inside the binding and
 /// not beside it, so the walk takes the head name alone and does not descend into them. That
-/// treats a union-case destructure — `let Some x = …` — as binding `Some`, which is wrong but
-/// inert: no diagnostic names a constructor as an unbound *value*.
+/// treats a union-case destructure such as `let Some x = …` as binding `Some`, which is wrong
+/// but inert: no diagnostic names a constructor as an unbound *value*.
 let rec private headPatternNames (pat: SynPat) : string list =
     match pat with
     | SynPat.Named(ident = SynIdent(ident = id)) -> [ id.idText ]
@@ -389,9 +391,9 @@ let rec private headPatternNames (pat: SynPat) : string list =
 /// `blankSpan` erases a whole module-level `let`, the declaration's head pattern names go with
 /// it, and everywhere else the blank keeps the head pattern and so removes no name.
 ///
-/// The walk reaches the binding through any intervening expression node, so a tuple binding —
-/// `let a, b = http { … }, http { … }`, which `classify` refuses before it ever sees the binding
-/// — still reports both `a` and `b`. Blanking is what decides this, not routing.
+/// The walk reaches the binding through any intervening expression node, so a tuple binding
+/// such as `let a, b = http { … }, http { … }` still reports both `a` and `b`, even though
+/// `classify` refuses it before it ever sees the binding. Blanking is what decides this.
 let rec private blankedNames (path: SyntaxNode list) : string list =
     match path with
     | SyntaxNode.SynBinding(SynBinding(headPat = headPat)) :: parents ->

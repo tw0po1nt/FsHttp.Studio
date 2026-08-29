@@ -1,5 +1,5 @@
-// Document-aware status bar: each Decision 5 and Decision 6 row, read from ExTester.StatusBar
-// while the real editor holds the matching fixture. Spec 0014 as UI checks — not a manual pass
+// Document-aware status bar: each text row and each visibility row, read from ExTester.StatusBar
+// while the real editor holds the matching fixture. UI checks rather than a manual pass
 // over a running extension.
 module StatusBarTests
 
@@ -20,10 +20,10 @@ let private emptyStatus = Checks.statusBarText "no requests found"
 let private notScriptStatus = Checks.statusBarText "not an .fsx script"
 
 let private syntaxEmptyStatus =
-    Checks.statusBarText "no requests found — syntax error"
+    Checks.statusBarText "no requests found: syntax error"
 
 let private syntaxPartialStatus =
-    Checks.statusBarText "1 requests — a syntax error can hide others"
+    Checks.statusBarText "1 requests: a syntax error can hide others"
 
 let private waitForStatus (expected: string) (subject: string) =
     Harness.eventuallyObserved Harness.LensAppearanceDeadlineMs subject (fun () -> Checks.tryStatusBarText expected)
@@ -53,14 +53,14 @@ let private syntaxErrorRows =
     async {
         do! Checks.openFixtureAsSoleTab aboveFixture
 
-        do! waitForStatus syntaxEmptyStatus "FsHttp.Studio: no requests found — syntax error on total loss"
+        do! waitForStatus syntaxEmptyStatus "the status bar reports no requests found and a syntax error on total loss"
 
         do! Checks.openFixtureAsSoleTab betweenFixture
 
         do!
             waitForStatus
                 syntaxPartialStatus
-                "FsHttp.Studio: N requests — a syntax error can hide others on partial loss"
+                "the status bar reports N requests and a hidden-block warning on partial loss"
     }
 
 /// Hide outside F#, then show again on an `.fsx` script.
@@ -104,13 +104,13 @@ let private pendingOnDocumentSwitch =
 
 /// The active script's count settles and stays put while another script is open.
 ///
-/// This is the weaker half of Decision 5's active-document guard, and it is deliberately labelled
-/// as such. The rule itself — a response for another document is dropped — is pinned as a pure
+/// This is the weaker half of the active-document guard, and it is deliberately labelled as such.
+/// The rule itself, that a response for another document is dropped, is pinned as a pure
 /// value by `ProtocolTests.mirrorsActiveDocumentTests`, because the workbench cannot be made to
 /// produce the losing response: a second script that is open but not active gets no lens query,
 /// and one that is visible beside the active script does not locate again on demand. Removing the
 /// guard from the product was measured against this check in both layouts, and it stayed green
-/// either way. What it does claim is what a user would see — a count that arrives and then holds,
+/// either way. What it does claim is what a user would see: a count that arrives and then holds,
 /// rather than one that flickers to another script's.
 let private countHoldsWithASecondScriptOpen =
     async {

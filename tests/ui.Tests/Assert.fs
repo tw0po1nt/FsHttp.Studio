@@ -1,4 +1,4 @@
-// Assertions for the UI suite. Each one throws a real JS `Error`, not an F# exception, so Mocha
+// Assertions for the UI suite. Each one throws a real JS `Error` rather than an F# exception, so Mocha
 // reports a stack that `--enable-source-maps` can resolve back to the `.fs` line that failed.
 // `run.sh` sets `NODE_OPTIONS=--enable-source-maps` for exactly that reason; without it a failure
 // points at the bundle.
@@ -7,7 +7,7 @@ module Assert
 open Fable.Core
 
 // Throws a real JS `Error`. Typed as `'a` so a failing branch can inhabit any return type the
-// same way `failwith` does. The IIFE keeps the emit a value expression — a bare `throw` inside
+// same way `failwith` does. The IIFE keeps the emit a value expression, because a bare `throw` inside
 // a `return` is not valid JavaScript, which is what Fable would emit for a polymorphic `Emit`.
 [<Emit("(() => { throw new Error($0); })()")>]
 let private throwError (_message: string) : 'a = jsNative

@@ -1,9 +1,7 @@
 module Companion.Tests.BlockRunnerTests
 
-// Seam A. It drives Run as a black box against a real local server: feed .fsx source and a block
-// index, then assert the outcome. This matches the ticket's acceptance criteria directly.
-// `BlockLocatorTests` drives location. `RequestHandlerTests` drives the envelope dispatch that
-// sits on top of both. This file drives `BlockRunner.run` itself.
+// Drives Run as a black box against a real local server: feed .fsx source and a block index,
+// then assert the outcome. This file drives `BlockRunner.run` itself.
 
 open System
 open System.IO
@@ -14,9 +12,8 @@ open Companion.BlockRunner
 open Companion.RequestCapture
 open Companion.Tests.TestServer
 
-/// A published FsHttp version. Reflection extraction is stable across versions 13 to 15
-/// (ADR-0002). This pin is explicit, and not "latest", so the suite does not drift with a new
-/// release.
+/// A published FsHttp version. Reflection extraction is stable across versions 13 to 15. The
+/// pin is explicit rather than "latest", so the suite does not drift with a new release.
 let private fsHttpRef = "15.0.3"
 
 /// A script with the preamble every case here needs: the suite's own pinned `#r`, and the `open`
@@ -106,7 +103,7 @@ let private expectTimedRun (runner: string -> int -> string option -> RunOutcome
     | other -> failtestf "expected ok with requestMs, got %A" other
 
 /// Asserts that a diagnostic points somewhere the editor can actually highlight. A setup
-/// diagnostic may be anchored rather than native, so the line is not fixed, but it must still
+/// diagnostic may be anchored rather than native, so the line varies, and it must still
 /// land inside the script: a phantom line past the end fails to highlight in the UI.
 let private expectLineInFile (source: string) (d: Diagnostic) =
     let lineCount = source.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').Length
@@ -151,7 +148,7 @@ let tests =
               | other -> failtestf "expected ok, got %A" other
           }
 
-          test "a non-2xx HTTP response is a successful run, not an error" {
+          test "a non-2xx HTTP response is a successful run rather than an error" {
               use server = new TestServer(Map [ "/missing", textHandler 404 "not found" ])
 
               let source = script (sprintf "http {\n    GET \"%s/missing\"\n}\n" server.BaseUrl)
@@ -161,7 +158,7 @@ let tests =
               | other -> failtestf "a non-2xx response should still be ok, got %A" other
           }
 
-          test "the companion has no static FsHttp reference (ADR-0002) — the pin can only come from the user's own #r" {
+          test "the companion has no static FsHttp reference, so the pin can only come from the user's own #r" {
               let referencedNames =
                   typeof<RunOutcome>.Assembly.GetReferencedAssemblies()
                   |> Array.map (fun a -> a.Name)
@@ -171,7 +168,7 @@ let tests =
                   "the companion project must not reference FsHttp itself, or a host reference would silently override the user's pin"
           }
 
-          test "without the user's own #r, FsHttp resolves to nothing — there is no companion-forced fallback" {
+          test "without the user's own #r, FsHttp resolves to nothing, because there is no companion-forced fallback" {
               // There is no `#r "nuget: FsHttp"` at all. If the companion supplied one itself,
               // `open FsHttp` here would still succeed. It does not succeed, which proves that
               // the pin the "ok" tests use comes from the source text, and not from a fallback
@@ -189,7 +186,7 @@ let tests =
 
                       Expect.isTrue
                           (d.Range.StartLine <= sourceLineCount)
-                          "an addendum-origin diagnostic must be clamped inside the user's source, not a phantom line"
+                          "an addendum-origin diagnostic must be clamped inside the user's source rather than onto a phantom line"
               | other ->
                   failtestf "expected compileError (FsHttp is unresolved without the user's own #r), got %A" other
           }
@@ -211,9 +208,8 @@ let tests =
               | other -> failtestf "expected ok, got %A" other
           }
 
-          // The Run reaches the block where the user wrote it (docs/spec/0002), instead of
-          // extracting it. Each of these shapes sends exactly one request, which is the
-          // isolation criterion that Decision 4 protects.
+          // The Run reaches the block where the user wrote it, instead of extracting it. Each of
+          // these shapes sends exactly one request, which is the isolation criterion.
           for name, sourceFor in
               [ "bare, top-level block", fun (url: string) -> sprintf "http {\n    GET \"%s\"\n}\n" url
                 "block in a nested module",
@@ -261,7 +257,7 @@ let tests =
               | other -> failtestf "expected ok, got %A" other
           }
 
-          test "a private binding runs: `private` is blanked on the target's own path (Decision 6)" {
+          test "a private binding runs: `private` is blanked on the target's own path" {
               // Each invocation is a separate FSI interaction, so an un-blanked `private` binding
               // would fail with "not accessible from this code location". `PrivateSpans` carries
               // the keyword's own span; this proves the Run actually blanks it.
@@ -278,7 +274,7 @@ let tests =
               | other -> failtestf "expected ok, got %A" other
           }
 
-          test "a block in a `module private` runs: the module's own `private` is blanked too (Decision 6)" {
+          test "a block in a `module private` runs: the module's own `private` is blanked too" {
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
 
@@ -292,7 +288,7 @@ let tests =
               | other -> failtestf "expected ok, got %A" other
           }
 
-          test "an internal binding runs with no treatment (Decision 6's measurement)" {
+          test "an internal binding runs with no treatment" {
               // `internal` needs no blanking: an `internal` binding is accessible from a later
               // FSI interaction. This test records that measurement -- it must pass with
               // `PrivateSpans` staying empty for this shape (already asserted in
@@ -336,10 +332,10 @@ let tests =
               | other -> failtestf "expected ok, got %A" other
           }
 
-          test "a type annotation the truncation contradicts does not stop the Run (Decision 7)" {
-              // The Setup boundary (Decision 1) drops the trailing `|> Request.send`, so the
+          test "a type annotation the truncation contradicts does not stop the Run" {
+              // The Setup boundary drops the trailing `|> Request.send`, so the
               // annotated binding keeps a `Response` annotation describing the truncated `http { }`
-              // value, not the untruncated pipe. Left un-blanked, the Setup would report a
+              // value rather than the untruncated pipe. Left un-blanked, the Setup would report a
               // false compile error against a binding the user wrote correctly.
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
@@ -354,7 +350,7 @@ let tests =
               match runSource source 0 with
               | Ok(_, response) ->
                   Expect.equal response.Status 200 "the annotated binding should still run"
-                  Expect.equal hitCounter.Value 1 "it should send exactly one request, not two"
+                  Expect.equal hitCounter.Value 1 "it should send exactly one request"
               | other -> failtestf "expected ok, got %A" other
           }
 
@@ -362,7 +358,7 @@ let tests =
               // extra.fsx case 24. The inner block's own `Blank` span is `nested`'s whole
               // declaration, which *contains* the outer block being run. Blanking that span as a
               // sibling would delete the very block the user clicked. `containsBlock` must skip
-              // it, not just filter by block identity.
+              // it rather than filter by block identity.
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/outer", countingHandler hitCounter ])
 
@@ -380,12 +376,12 @@ let tests =
               | other -> failtestf "expected ok, got %A" other
           }
 
-          test "a class-member block does not break a different block's Run that names the type (Hazard 2)" {
-              // Decision 5's second hazard: the blank span for a block inside a class member must
-              // stop at the member's own right side, which is where `BlockLocator` already narrows
-              // it, not the whole type definition. This proves the Run survives it as a sibling: the
-              // block below both the type and the member still runs, with the type's own name
-              // still resolvable in between.
+          test "a class-member block does not break a different block's Run that names the type" {
+              // The blank span for a block inside a class member must stop at the member's own right
+              // side, which is where `BlockLocator` already narrows it rather than the whole type
+              // definition. This proves the Run survives it as a sibling: the block below both
+              // the type and the member still runs, with the type's own name still resolvable in
+              // between.
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/below", countingHandler hitCounter ])
 
@@ -404,7 +400,7 @@ let tests =
           }
 
           test "a block piped to Request.send in the script still sends exactly one request" {
-              // Matrix case 12. The Setup boundary (Decision 1) truncates at the block's own
+              // The Setup boundary truncates at the block's own
               // end, which drops the script's own trailing `|> Request.send` -- the invocation
               // interaction supplies its own. Two sends here would mean the boundary let the
               // user's own pipe through as well as the companion's.
@@ -420,7 +416,7 @@ let tests =
           }
 
           test "the code after the target block does not run" {
-              // The Setup boundary (Decision 1) stops at the end of the target block's own
+              // The Setup boundary stops at the end of the target block's own
               // expression. A second declaration below the block, in the same module, is
               // outside that boundary entirely -- not blanked, just never evaluated.
               let firstHits = ref 0
@@ -446,9 +442,9 @@ let tests =
 
           test "a diagnostic on the block's first line reports the true column on the R1 route" {
               // R1 inserts `let ``__fsHttpStudio_target`` = ` at the block's own start, on the
-              // block's own line (Decision 2), which shifts every later column on that one line
+              // block's own line, which shifts every later column on that one line
               // forward. A diagnostic there must report the column the user actually wrote,
-              // with the shift subtracted back out (Decision 9), not the raw FSI column.
+              // with the shift subtracted back out rather than the raw FSI column.
               let source = script "http { GET undefinedBaseUrl }\n"
 
               let blockLine = "http { GET undefinedBaseUrl }"
@@ -497,7 +493,7 @@ let tests =
 
           test "a let-bound block's streamed body stays readable across repeated Runs (R2 route)" {
               // The R1 variant of this regression already exists below. R2's own Setup text is
-              // a plain `let`, which is exactly the shape Decision 10 calls out: the Setup
+              // a plain `let`, and that shape is the one that matters: the Setup
               // builds the block's context as part of evaluating that `let`, before the
               // companion addendum's `GlobalConfig.set` runs, so the response-reading guard must
               // be re-applied at invocation time or the same "stream was already consumed"
@@ -518,7 +514,7 @@ let tests =
                       Expect.equal
                           (Convert.FromBase64String response.BodyBase64)
                           body
-                          (sprintf "Run #%d body should be byte-intact, not a consumed stream" i)
+                          (sprintf "Run #%d body should be byte-intact rather than a consumed stream" i)
                   | other -> failtestf "Run #%d expected ok, got %A" i other
           }
 
@@ -533,19 +529,18 @@ let tests =
 
                   Expect.isFalse
                       (d.Message.Contains "Setup failed to evaluate")
-                      "a block diagnostic must keep the compiler's own text, not the Setup introduction (Decision 8)"
+                      "a block diagnostic must keep the compiler's own text rather than the Setup introduction"
               | other -> failtestf "expected compileError, got %A" other
           }
 
-          test "a diagnostic inside the R1 inserted text takes the Setup treatment, not the block's" {
+          test "a diagnostic inside the R1 inserted text takes the Setup treatment rather than the block's" {
               // R1 inserts `let ``__fsHttpStudio_target`` = ` at the block's own start column,
               // and that column is also where `unshiftPos` clamps a position landing inside the
               // inserted text. Such a position therefore passes the block test, and the
               // compiler's bare text would reach the user as though they had written it.
-              // ADR-0007 records this exact collision: a user binding of the reserved name in
-              // the same scope, which reports a duplicate definition on the inserted name.
-              // The fault is in the companion's own generated text, so Decision 8 gives it the
-              // Setup treatment.
+              // The collision is a user binding of the reserved name in the same scope, which reports
+              // a duplicate definition on the inserted name. The fault is in the companion's own
+              // generated text, so the split rule gives it the Setup treatment.
               let source =
                   script
                       "module M =\n    let ``__fsHttpStudio_target`` = 1\n\n    http {\n        GET \"https://example.com\"\n    }\n"
@@ -557,7 +552,7 @@ let tests =
                   Expect.isTrue
                       (diagnostics
                        |> List.forall (fun d -> d.Message.Contains "Setup failed to evaluate"))
-                      "a fault in the companion's own inserted text must carry the Setup introduction, not read as the user's"
+                      "a fault in the companion's own inserted text must carry the Setup introduction rather than read as the user's"
 
                   for d in diagnostics do
                       expectLineInFile source d
@@ -576,7 +571,8 @@ let tests =
               | other -> failtestf "expected compileError, got %A" other
           }
 
-          test "a setup that fails to parse reports the setup's own compileError, not a phantom error naming http" {
+          test
+              "a setup that fails to parse reports the setup's own compileError rather than a phantom error naming http" {
               // `EvalInteractionNonThrowing` returns `Choice1Of2` (no exception) for a Setup
               // that fails to *parse*, and discards the failure into the diagnostics array. The
               // companion used to read that array only in the `Choice2Of2` branch, so this
@@ -590,7 +586,7 @@ let tests =
               // The target block's own text is now part of the same Setup interaction (Decision
               // 1), and the parse recovery from the broken `let f` cascades far enough that the
               // compiler also reports "'http' is not defined" at the block's own position. That
-              // one diagnostic is a genuine block diagnostic under Decision 8's split rule (it
+              // one diagnostic is a genuine block diagnostic under the split rule (it
               // starts inside the block's span), so this test scopes its assertions to the
               // diagnostics that carry the Setup introduction, and does not require every
               // diagnostic to.
@@ -607,26 +603,25 @@ let tests =
 
                   Expect.isNonEmpty
                       setupDiagnostics
-                      "the setup's own failure must be reported, not swallowed by the cascading block diagnostic"
+                      "the setup's own failure must be reported rather than swallowed by the cascading block diagnostic"
 
                   Expect.isTrue
                       (setupDiagnostics
                        |> List.exists (fun d -> d.Range.StartLine = 2 || d.Range.StartLine = 3))
-                      "at least one Setup diagnostic should keep its real location on the broken `let`/`|>` lines, not fall back to a phantom line"
+                      "at least one Setup diagnostic should keep its real location on the broken `let`/`|>` lines rather than fall back to a phantom line"
 
                   for d in setupDiagnostics do
                       expectLineInFile source d
 
                       Expect.isFalse
                           (d.Message.Contains "http")
-                          "a Setup diagnostic's message must not name 'http' -- that would be the symptom of the discarded-diagnostics defect, not the true fault"
+                          "a Setup diagnostic's message must not name 'http', which is the symptom of the discarded-diagnostics defect rather than the true fault"
               | other -> failtestf "expected compileError, got %A" other
           }
 
           test "a block in a for-loop body is refused with its code, and sends nothing" {
-              // A loop body is decided at run time (Decision 2's F1 family), so `classify`
-              // refuses it before `run` reserves any pin or evaluates anything -- not the
-              // Setup, and not a request to the server (docs/spec/0003, Decision 5).
+              // A loop body is decided at run time, so `classify` refuses it before `run` reserves any
+              // pin, evaluates the Setup, or sends a request to the server.
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
 
@@ -646,7 +641,7 @@ let tests =
           test "a refused Run leaves its script's #r pin unmarked in loadedVersions" {
               // routeAndReserve marks each Run's pins in loadedVersions up front, before any
               // evaluation, so a refusal that reached it would over-mark a pin no session ever
-              // loaded (docs/spec/0003, Decision 5). A fictitious package name keeps this test
+              // loaded. A fictitious package name keeps this test
               // isolated from every other case's real FsHttp pin.
               let package = "FsHttp.Studio.Tests.RefusalGateFixture"
 
@@ -686,8 +681,7 @@ let tests =
           test "case 11c: a reference inside the consumer's own block is refused with the name" {
               // The reference sits in the target block's *own* span, which is where a real
               // producer/consumer pair puts it. That is the path `splitDiagnostic` would
-              // otherwise treat as a fault in the user's block; case 11c has to claim it first
-              // (docs/spec/0003-lens-tells-the-truth.md, Decision 7).
+              // otherwise treat as a fault in the user's block, and the refusal has to claim it first.
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
 
@@ -710,8 +704,7 @@ let tests =
           test "case 11c: a reference from a sibling statement is refused with the name" {
               // The producer block (index 0) is the sibling the Setup blanks when the consumer
               // (index 1) is the target. `consumerRef` names the producer's own binding, so
-              // blanking it leaves that reference unbound, and FCS reports FS0039 for `dexId`
-              // (docs/spec/0003-lens-tells-the-truth.md, Decision 7).
+              // blanking it leaves that reference unbound, and FCS reports FS0039 for `dexId`.
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
 
@@ -746,7 +739,7 @@ let tests =
           test "a typo beside a blanked-name error still stays a compile error" {
               // Both `dexId` (blanked) and `totallyUndefinedName` (a genuine typo) produce their
               // own FS0039 in the same Setup interaction. The refusal claims the Run only when
-              // the missing binding is the whole story (Decision 7's precedence rule), so a
+              // the missing binding is the whole story, so a
               // mixed set of errors must still compile-error.
               let source =
                   script (
@@ -761,8 +754,8 @@ let tests =
           test "case 11c: a blanked binding that no route reaches still names the value it took" {
               // `getUser` takes an argument, so its own block is refused (`needsArguments`) and no
               // Run ever reaches it. Blanking it still removes `getUser` from module scope, which
-              // is what a consumer loses -- so the name comes from the head pattern, not from the
-              // route.
+              // is what a consumer loses, so the name comes from the head pattern rather than from
+              // the route.
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
 
@@ -785,7 +778,7 @@ let tests =
           test "case 11c: a backtick-quoted name is reported without its backticks" {
               // The diagnostic's range reads ``dex id`` back with the backticks the source wrote.
               // The refusal sentence quotes the name to a user, so it carries the bare name --
-              // the backticks are F# syntax, not part of what the binding is called.
+              // the backticks are F# syntax rather than part of what the binding is called.
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
 
@@ -805,7 +798,7 @@ let tests =
               | other -> failtestf "expected Refused for a backtick-quoted name, got %A" other
           }
 
-          test "a setup that throws at run time returns runtimeError, not compileError" {
+          test "a setup that throws at run time returns runtimeError rather than compileError" {
               // The Setup here compiles: it produces zero error diagnostics and fails only when
               // it runs. The diagnostics-first check must therefore fall through to the
               // exception branch. This guards the boundary from the other side: a check that
@@ -829,7 +822,7 @@ let tests =
               // session, which is what makes the reuse possible. A body that streams a moment
               // after its headers reaches this path, and an immediate body, which every other
               // case here sends, does not. This test runs three times, so it covers the Run
-              // that reuses the pooled connection, and not only the first Run.
+              // that reuses the pooled connection, and every Run after it.
               let body = Array.append pngMagic (Array.replicate 40000 0x5Auy)
 
               use server =
@@ -846,7 +839,7 @@ let tests =
                       Expect.equal
                           (Convert.FromBase64String response.BodyBase64)
                           body
-                          (sprintf "Run #%d body should be byte-intact, not a consumed stream" i)
+                          (sprintf "Run #%d body should be byte-intact rather than a consumed stream" i)
                   | other -> failtestf "Run #%d expected ok, got %A" i other
           }
 
@@ -882,7 +875,7 @@ let tests =
               | other -> failtestf "second pin expected ok (no ALC collision), got %A" other
           }
 
-          test "a worker that never produces a frame is bounded to a runtimeError, not a wedge" {
+          test "a worker that never produces a frame is bounded to a runtimeError rather than a wedge" {
               // A worker whose block hangs emits no frame at all, so the parent's frame read
               // would block forever without a bound. Here a request to a server that never
               // answers causes the hang. `runInWorker` caps the wait, calls Kill() on the child
@@ -907,7 +900,7 @@ let tests =
               Expect.isLessThan
                   sw.Elapsed.TotalMilliseconds
                   60000.0
-                  "the hung worker must return on a bound, not wedge the Run indefinitely"
+                  "the hung worker must return on a bound rather than wedge the Run indefinitely"
           }
 
           test "a network failure returns runtimeError, distinct from compileError" {
@@ -921,20 +914,22 @@ let tests =
           test "requestMs covers a known server delay and sits below the whole call's elapsed time" {
               // The companion brackets the invocation alone. Against the delayed server that
               // number must cover the delay, and it must stay well below the host-side total
-              // that also pays for session creation and Setup
-              // (docs/spec/0004-run-path-robustness.md, Decision 7).
+              // that also pays for session creation and Setup.
               expectTimedRun runDirectUnbounded (fun requestMs totalMs ->
                   Expect.isGreaterThanOrEqual
                       requestMs
                       (float timedRunDelayMs)
                       "requestMs must cover the server's known delay"
 
-                  Expect.isLessThan requestMs totalMs "requestMs is the invocation, not the whole call"
+                  Expect.isLessThan requestMs totalMs "requestMs is the invocation rather than the whole call"
 
                   // Session creation alone is on the order of 100 ms on a warm process. A
                   // requestMs that is within 50 ms of the total would mean the bracket still
                   // wrapped the session.
-                  Expect.isLessThan requestMs (totalMs - 50.0) "requestMs must sit well below the total, not beside it")
+                  Expect.isLessThan
+                      requestMs
+                      (totalMs - 50.0)
+                      "requestMs must sit well below the total rather than beside it")
           }
 
           test "the worker path carries requestMs through the wire" {
@@ -1006,7 +1001,7 @@ let tests =
           test "the in-process path resolves __SOURCE_DIRECTORY__ from a known scriptFileName" {
               // A Run that reads a file beside the script must resolve against the script's own
               // directory, and not against the companion's working directory. Drive
-              // `runInProcessDirect`, not `run`: `run` routes on process-global pin state, so it
+              // `runInProcessDirect` rather than `run`: `run` routes on process-global pin state, so it
               // could land in the worker and prove nothing about the warm path.
               expectResolvesBesideScript "inprocess" runDirectUnbounded
           }
@@ -1017,7 +1012,7 @@ let tests =
               expectResolvesBesideScript "worker" runWorkerUnbounded
           }
 
-          // --- request timeout (docs/spec/0004-run-path-robustness.md, Seam 1 scenarios 1–6, 8) -
+          // --- request timeout ---
 
           test "a hanging server ends the Run at the request bound" {
               use release = new Threading.ManualResetEventSlim(false)
@@ -1049,7 +1044,7 @@ let tests =
               Expect.isLessThan
                   sw.Elapsed.TotalMilliseconds
                   (float boundMs + 2000.0)
-                  "the Run must end near the bound, not at HttpClient's default"
+                  "the Run must end near the bound rather than at HttpClient's default"
 
               Expect.isLessThan
                   sw.Elapsed.TotalMilliseconds
@@ -1062,7 +1057,7 @@ let tests =
               use server = new TestServer(Map [ "/hang", hangingHandler release ])
               let injectedMs = 1500
               // The block's own bound is longer than the injected one. Option.orElse must keep
-              // it, so the Run lasts past the injected bound (Decision 2).
+              // it, so the Run lasts past the injected bound.
               let source =
                   script (sprintf "http {\n    GET \"%s/hang\"\n    config_timeoutInSeconds 3.0\n}\n" server.BaseUrl)
 
@@ -1073,10 +1068,9 @@ let tests =
 
               match outcome with
               | RuntimeError message ->
-                  // The number in the message is the bound that was *applied*, not the one that
+                  // The number in the message is the bound that was *applied* rather than the one that
                   // was injected. The block's own 3 s won, so the user must read 3000 back and
-                  // not the 1500 they would otherwise raise their setting past for nothing
-                  // (docs/spec/0004-run-path-robustness.md, Decision 5).
+                  // not the 1500 they would otherwise raise their setting past for nothing.
                   Expect.stringContains message "3000 ms" "the message must name the block's own applied bound"
 
                   Expect.isFalse
@@ -1104,7 +1098,7 @@ let tests =
                   Expect.stringContains
                       message
                       (string boundMs)
-                      "a slow body must time out under the bound, not return a truncated Ok"
+                      "a slow body must time out under the bound rather than return a truncated Ok"
 
                   Expect.isFalse (message.Contains "A task was canceled") "the timeout message must be the written one"
               | Ok _ as other -> failtestf "expected RuntimeError for a dribbling body, got %A" other
@@ -1129,8 +1123,7 @@ let tests =
               | other -> failtestf "expected Ok with timeoutMs = 0, got %A" other
 
               // The invocation's Config.update carries no `Option.orElse` when timeoutMs is 0,
-              // so Config.timeout at invocation time is whatever the block itself set
-              // (Decision 2's escape hatch).
+              // so Config.timeout at invocation time is whatever the block itself set.
               Expect.isFalse
                   ((invocationConfigUpdate 0).Contains "Option.orElse")
                   "timeoutMs = 0 must inject no timeout default"
@@ -1169,7 +1162,7 @@ let tests =
               | other -> failtestf "expected Ok against a 2 s server with timeoutMs = 0, got %A" other
           }
 
-          test "a refused connection reports the connection failure, not the timeout message" {
+          test "a refused connection reports the connection failure rather than the timeout message" {
               let source = script "http {\n    GET \"http://127.0.0.1:1/nope\"\n}\n"
 
               match run source 0 None 30000 with
@@ -1248,8 +1241,7 @@ let tests =
                   "the pin-forced worker must end near the request bound"
           }
 
-          // docs/spec/0012-request-as-sent.md, Seam 1 test 6 and the companion half of
-          // Decisions 1 and 9-10: the request on a successful Run comes from requestMessage.
+          // The request on a successful Run comes from requestMessage.
           test "a computed URL with a query string keeps its percent-escapes on AbsoluteUri" {
               use server = new TestServer(Map [ "/search", textHandler 200 "ok" ])
 
@@ -1375,8 +1367,7 @@ let pinTests =
                   "each pin should appear once, in source order"
           } ]
 
-/// Pure wire round-trips for the `request` object on an `ok` envelope
-/// (docs/spec/0012-request-as-sent.md, Decision 10). No FSI, no server.
+/// Pure wire round-trips for the `request` object on an `ok` envelope. No FSI, no server.
 module private RequestWire =
 
     let responseStub =
@@ -1465,9 +1456,8 @@ let requestWireTests =
                   "an unknown bodyState is a defect on our own wire"
           } ]
 
-// The state a missed capture lookup degrades to. The lookup itself is covered in
-// `RequestCaptureTests`; what matters here is that a request that did send a body never
-// reports "no body" (docs/spec/0012-request-as-sent.md, Decisions 7-8).
+// The state a missed capture lookup degrades to. A request that did send a body never
+// reports "no body".
 [<Tests>]
 let capturedBodyForTests =
     testList
@@ -1477,7 +1467,7 @@ let capturedBodyForTests =
               Expect.equal (capturedBodyFor message) NoBody "a GET with no content sent no body"
           }
 
-          test "a miss on a message that carried content is NotCaptured, not NoBody" {
+          test "a miss on a message that carried content is NotCaptured rather than NoBody" {
               use message = new HttpRequestMessage(HttpMethod.Post, "https://example.com/a")
               message.Content <- new StringContent("""{"name":"pikachu"}""")
 
@@ -1516,7 +1506,7 @@ let conflictTests =
 
               Expect.isTrue
                   (pinConflicts (Some(Pinned "15.0.3")) (Some "13.3.0"))
-                  "a different explicit version is the original collision — route to a worker"
+                  "a different explicit version is the original collision, so route to a worker"
           }
 
           test "version-less then version-less stays in-process (same latest resolves)" {

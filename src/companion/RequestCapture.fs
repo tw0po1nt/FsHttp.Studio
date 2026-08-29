@@ -21,7 +21,7 @@ let private maxCaptureBytes = 1_048_576L
 /// would force the upload into memory and change what goes on the wire.
 [<Literal>]
 let streamedBodyReason =
-    "streamed body — not captured, so that the upload is unchanged"
+    "streamed body: not captured, so that the upload is unchanged"
 
 /// Shown when the top-level `Content-Length` is absent on a content that is not streamed. The
 /// size cap needs a known size before any read, so an unknown size is a refusal to
@@ -29,7 +29,7 @@ let streamedBodyReason =
 /// "streamed body" about a body that is not streamed.
 [<Literal>]
 let unknownLengthReason =
-    "body length unknown — not captured, so that the send is unchanged"
+    "body length unknown: not captured, so that the send is unchanged"
 
 /// Shown when the read itself failed. An exotic `HttpContent` may throw on read. The capture
 /// is a bystander to the Run: it reports the failure here rather than letting it reach the
@@ -38,7 +38,7 @@ let unknownLengthReason =
 let unreadableBodyReason = "body could not be read, so it is not shown"
 
 /// Shown when the lookup finds no entry for a request that carried content. The transformer
-/// stores a body for every request it sees, so a miss means it never ran — and a request with
+/// stores a body for every request it sees, so a miss means it never ran, and a request with
 /// content did send a body. "No body" would be a false statement about a real one.
 [<Literal>]
 let uncapturedBodyReason = "body was not captured, so it is not shown"
@@ -59,7 +59,7 @@ let private tooLargeReason (byteCount: int64) : string =
 /// True when reading this content would force a stream into memory. The decision is the
 /// runtime type alone, before any header read or body read: a seekable `StreamContent` still
 /// reports a `ContentLength`, so length is not the signal. Inside a multipart, only type
-/// tests are safe — reading a nested part's `ContentLength` materializes a header into that
+/// tests are safe. Reading a nested part's `ContentLength` materializes a header into that
 /// part and grows the payload on the wire.
 let rec isStreamed (c: HttpContent) : bool =
     match c with

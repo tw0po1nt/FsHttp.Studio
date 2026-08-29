@@ -19,7 +19,7 @@ GitHub pre-release at `v<version>-beta.<n>` with the `.vsix` attached. An operat
 `docs/manual-check.md`, and records the result on the pre-release. `release.yml`
 refuses a version that has no Beta, and a `force` input releases a change that needs no walk.
 
-## The Beta version is synthesized, not committed
+## The Beta version is synthesized
 
 `package.json` holds the **target release version** for the whole cycle. `beta.yml` counts the
 existing `v<version>-beta.*` tags, adds one, and stamps `npm version --no-git-tag-version` into the

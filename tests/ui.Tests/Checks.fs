@@ -2,7 +2,7 @@
 // lookup each check does, and the viewer read each viewer assertion starts from. A check file
 // keeps only its own tells, so two checks cannot drift apart on the parts that are not their
 // subject. Lands here rather than in `Harness`, which owns setup, budgets, and the wait
-// combinator — this module owns nothing but what a check reuses.
+// combinator. This module owns nothing but what a check reuses.
 module Checks
 
 open System.IO
@@ -11,10 +11,10 @@ open System.IO
 /// it. Asserted as rendered, and reused as the partial title a click matches on.
 let lensTitle = "▶ Run request"
 
-/// The line-1 lens when the script failed to parse and holds no block
-/// (docs/spec/0014-explain-missing-lenses.md, Decision 2). Named here beside `lensTitle` so a
-/// check reads the two together, and derived from the product in `ExTester`, whose lens harvest
-/// has to recognize the same span. Not retyped: two copies of a shipped sentence drift apart.
+/// The line-1 lens when the script failed to parse and holds no block. Named here beside
+/// `lensTitle` so a check reads the two together, and derived from the product in `ExTester`,
+/// whose lens harvest has to recognize the same span. Two copies of a shipped sentence drift
+/// apart, so this one is derived rather than retyped.
 let noRequestsLensTitle = ExTester.noRequestsLensTitle
 
 /// A fixture checked in beside the sidecar. The sidecar path is the only location the suite is
@@ -61,7 +61,7 @@ let describeTitles (titles: string[]) =
 
 /// A read that raised, worded so a reader cannot mistake it for an editor that painted no lens.
 let describeReadFailure (reason: string) =
-    sprintf "no reading at all — the CodeLens query raised: %s" reason
+    sprintf "no reading at all: the CodeLens query raised: %s" reason
 
 /// True when the editor holds the fixture once, measured in lines against the file on disk.
 ///
@@ -69,13 +69,13 @@ let describeReadFailure (reason: string) =
 /// pins the editor below that version for exactly this reason. The tab of a doubled document
 /// reports clean and the file on disk is unchanged, so the size is the only tell. Every later
 /// reading answers a doubled document the same way a correct one answers it, up to the point where
-/// a lens count reads like a provider that paints twice — which is a defect in a different
+/// a lens count reads like a provider that paints twice, which is a defect in a different
 /// component. This claim separates the two, at the open, and it is what makes a pin that stops
 /// working visible on the run that raises it rather than three checks later.
 let private tryFixtureLoadedOnce (fileName: string) =
     async {
         match! ExTester.tryFixtureBufferText () with
-        | None -> return Harness.Observed "no reading at all — the fixture editor could not be reached"
+        | None -> return Harness.Observed "no reading at all: the fixture editor could not be reached"
         | Some text ->
             match fixtureLineCountOnDisk fileName with
             | None -> return Harness.Observed(sprintf "a %s the suite could not read" fileName)
@@ -128,9 +128,9 @@ let openFixtureAsSoleTab (tabTitle: string) =
                 (fun () -> tryFixtureLoadedOnce tabTitle)
     }
 
-/// Exactly one lens per block, each carrying the Run request title. An exact count is the claim the
-/// spec makes — a provider that over-detects and stacks an extra lens is as wrong as one that finds
-/// only the first block. Those two defects time out identically, so a poll that does not hold
+/// Exactly one lens per block, each carrying the Run request title. The count is exact, because a
+/// provider that over-detects and stacks an extra lens is as wrong as one that finds only the
+/// first block. Those two defects time out identically, so a poll that does not hold
 /// reports the titles it read and the log names which one occurred without a screenshot.
 let tryRunRequestLensAboveEachBlock (blockCount: int) (fileName: string) =
     async {
@@ -173,7 +173,7 @@ let tryOnlyLensTitle (blockCount: int) (expectedTitle: string) =
     }
 
 /// True when no rendered lens title contains the Run request title. Pair with a prior tell that
-/// the provider has already painted lenses on this block — absence alone is not meaningful.
+/// the provider has already painted lenses on this block, because absence alone carries no meaning.
 /// A read that failed reports `false` rather than absence. This tell claims that no Run request
 /// lens is painted, and a query that never ran is no evidence for that claim.
 let tryNoRunRequestLens () =
@@ -183,13 +183,13 @@ let tryNoRunRequestLens () =
         | ExTester.LensTitles titles -> return titles |> Array.forall (fun t -> not (t.Contains lensTitle))
     }
 
-/// The full status-bar text Decision 5 writes for a Ready script view, including the product
-/// prefix `Extension.setStatusText` adds.
+/// The full status-bar text the product writes for a Ready script view, including the prefix
+/// `Extension.setStatusText` adds.
 let statusBarText (body: string) = "FsHttp.Studio: " + body
 
 /// The account a status poll gives of the reading it took. Written once, because the three status
-/// polls below differ only in which reading holds — a second copy of these sentences would let two
-/// timeouts describe the same workbench in different words.
+/// polls below differ only in which reading holds, and a second copy of these sentences would let
+/// two timeouts describe the same workbench in different words.
 let private describeStatus (status: ExTester.FsHttpStatus) =
     match status with
     | ExTester.StatusText text -> sprintf "status %s" text
@@ -204,7 +204,7 @@ let tryStatusBarText (expected: string) =
         | other -> return Harness.Observed(describeStatus other)
     }
 
-/// True when no visible FsHttp.Studio status-bar item is in the workbench (Decision 6).
+/// True when no visible FsHttp.Studio status-bar item is in the workbench.
 let tryStatusBarHidden () =
     async {
         match! ExTester.tryReadFsHttpStatus () with
@@ -213,7 +213,7 @@ let tryStatusBarHidden () =
     }
 
 /// `expected` is on the item, and has been since `stableUntil` was computed. A reading that
-/// matches before the settle window closes is not yet the claim — the point is that nothing
+/// matches before the settle window closes is not yet the claim. The claim is that nothing
 /// overwrote the item while a second visible document could still be locating.
 let tryStatusBarTextStays (expected: string) (stableUntil: float) =
     async {

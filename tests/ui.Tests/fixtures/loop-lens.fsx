@@ -1,5 +1,5 @@
-// Fixture for the loop-lens check. One block inside a `for` loop — the `loopBody` refusal
-// shape — and nothing else a Run could reach. The URL is an inert loopback literal: a refused
+// Fixture for the loop-lens check. One block inside a `for` loop, which is the `loopBody`
+// refusal shape, and nothing else a Run could reach. The URL is an inert loopback literal: a refused
 // block is never evaluated, so this fixture needs no sidecar and no live server.
 
 #r "nuget: FsHttp"
