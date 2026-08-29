@@ -15,10 +15,7 @@ let private getSdkLabel = "Get the .NET SDK"
 [<Literal>]
 let private dotnetDownloadUrl = "https://aka.ms/dotnet/download"
 
-/// The SDK floor to fall back on when the companion's runtimeconfig is unreadable, which means
-/// a broken install. It is the major version that the companion's toolchain pins (ADR-0002).
-/// The shipped `Companion.runtimeconfig.json` is the primary source. This value guards only a
-/// missing or corrupt package.
+/// Reached only when the shipped `Companion.runtimeconfig.json` is missing or corrupt.
 [<Literal>]
 let private fallbackRequiredMajor = 10
 

@@ -25,15 +25,12 @@ let private classes (node: Node) : string list =
 
 let hasClass (cls: string) (node: Node) : bool = classes node |> List.contains cls
 
-/// All elements with the given tag, at any position in the tree.
 let byTag (t: string) (node: Node) : Node list =
     descendants node |> List.filter (fun n -> tag n = Some t)
 
-/// All elements that carry the given CSS class, at any position in the tree.
 let byClass (cls: string) (node: Node) : Node list =
     descendants node |> List.filter (hasClass cls)
 
-/// The concatenated text of a node and every node below it.
 let rec innerText (node: Node) : string =
     match node with
     | Node.Text t -> t

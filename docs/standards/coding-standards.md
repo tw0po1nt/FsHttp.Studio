@@ -27,32 +27,43 @@ When you drive a child process (`--worker`, or any `Process.Start`), a crashed c
 
 Process-global mutable state under a lock, such as `loadedVersions`, must take that lock **once for each logical operation**, not once for each access. A check in one `lock` scope, followed by an act in another scope, is a TOCTOU gap. It is correct only while the caller is single-threaded, and it stops being correct silently on the day a second caller appears. If `run` reads `conflictsWithLoaded` and then writes `markLoaded`, that check and that act belong under one lock. If the state is single-threaded and always will be, do not add the lock at all. A half-taken lock advertises a safety that it does not provide.
 
-## 5. Do not cite issue or PR numbers in source
+## 5. Comments state what the code cannot, and they speak from where they stand
 
-Source is not the issue tracker. Comments, test names, and identifiers must not carry bare issue or PR numbers, such as `#38`, `issue #16`, or `ticket #17`. The tracker renumbers its items, and the number tells a reader of the code nothing. The commit message and the pull request hold that history, and `git blame` sends a reader there. A test name states the behavior under test, not the ticket that asked for it. A comment that rule 6 permits states the constraint itself, and a ticket number is not a constraint.
+Write a comment only for what a competent reader cannot derive from the code itself: an external
+constraint, a non-obvious invariant, or a workaround for a defect elsewhere. Keep it to one line,
+and state the fact. That list is the whole permission. A comment that describes what the code does,
+or that argues for your implementation choice, falls outside it, and so does a new comment on
+existing code. Explain a decision you made in your reply to the user, where the commit message and
+the pull request keep it.
 
-A **`TODO`** is the one exception, because it points at work that is not yet done. A `TODO` carries the **full URL**, never a bare number, so it stays one click away and survives a move of the tracker:
+A comment speaks from where it stands. It cites nothing that sends the reader off the page: no
+spec path, no ADR number, no file path, no URL, and no issue or PR number such as `#38` or
+`ticket #17`. A citation makes the reader open a second document to learn what the line in front of
+them means, and the reader pays that cost on every pass. State the constraint itself, because the
+constraint is the thing the reader needs. A tracker number carries the further defect that the
+tracker renumbers its items. `git blame`, the commit message, and the pull request hold the history,
+and a test name states the behavior under test rather than the ticket that asked for it.
+
+A **`TODO`** is the one exception, because it points at work that does not exist yet, so no fact on
+the page can stand for it. A `TODO` carries the **full URL**, so the work stays one click away and
+survives a move of the tracker:
 
 ```fsharp
 // TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/42): bound the worker wait
 ```
 
-In-repo references are correct and encouraged, such as `ADR-0002`, a file path, or another module. They live and move with the code.
+This rule governs `///` XML doc comments as much as `//` comments. A doc comment that restates the
+signature, such as `/// Gets the name` above `member Name`, adds no information. A reader must read
+past it for nothing. Write a `///` comment only when it states something the signature does not,
+such as a parameter's unit or valid range, a non-obvious exception, or a constraint on how to use
+the member.
 
-## 6. Comments state what the code cannot
+This rule is an overlay on the vendored `simplified-technical-english` skill, whose "Code comments
+and software text" section says that a comment explains why the code exists. Apply STE to the
+wording of a comment that this rule permits, and take the question of whether to write the comment
+from here.
 
-Do not write comments that describe what the code does or justify your implementation choices. If you want to explain a decision you made, say it in your reply to me — never in the source file. The only comments allowed are ones a competent reader could not derive from the code itself: an external constraint, a non-obvious invariant, or a workaround for a bug elsewhere. One line, and state the fact, not the rationale for your approach. When editing existing code, do not add comments that weren't there unless the previous statement applies.
-
-The vendored `simplified-technical-english` skill carries a "Code comments and software text"
-section that says a comment explains why the code exists. **This rule wins.** An agent must not
-edit the vendored skill file. Apply STE to the wording of a comment that this rule permits, and
-ignore the vendored guidance on whether to write the comment at all.
-
-An XML doc comment (`///`) is exempt. It is the documented API surface, it feeds IntelliSense for
-a caller who never opens the file, and it is a different genre from inline commentary. This rule
-governs `//` alone.
-
-## 7. A record of closures needs strong justification
+## 6. A record of closures needs strong justification
 
 A record whose fields are function types is a smell. It can hide a cycle between two modules. It can also hide state that a caller cannot see or test without a call to the closure. Consider these alternatives, in this order, before you use one:
 
@@ -60,7 +71,14 @@ A record whose fields are function types is a smell. It can hide a cycle between
 2. **For a narrow scope, use individual function parameters.** A function that needs a callback takes that callback as a parameter. The dependency stays visible at the call site. A test can supply the callback directly, with no record to construct first.
 3. **To share state across a boundary, use an interface.** An interface names its members. A caller can see what the interface does without a read of a closure body. A test can supply a fake implementation, with no real state to set up.
 
-Use a closure-record field only when none of these three alternatives fits. State the reason in your reply to the user, not in a source comment (rule 6).
+Use a closure-record field only when none of these three alternatives fits. State the reason in your reply to the user, and keep it out of a source comment (rule 5).
+
+## The hook is a backstop, not the mechanism
+
+A `PreToolUse` hook (`.claude/settings.json`) fires before a `Write` or an `Edit` on a `.fs` or
+`.fsx` file. It names the rules above at the moment an agent is about to write F#. The hook cannot
+read the pending code, and it cannot judge a comment. It also cannot see a file that a Bash command
+writes. The rules above are still the requirement.
 
 ---
 

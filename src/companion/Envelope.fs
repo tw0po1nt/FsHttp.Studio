@@ -3,8 +3,7 @@ module Companion.Envelope
 open System.IO
 open System.Text.Json
 
-/// A 4-byte big-endian length prefix, then the JSON payload. The wire is framed, not
-/// line-delimited, so a very large base64 body has no line or size ceiling (ADR-0002).
+/// Framing rather than line delimiting, so a large base64 body has no line or size ceiling.
 let writeFrame (out: Stream) (payload: byte[]) =
     let len = payload.Length
     let prefix = [| byte (len >>> 24); byte (len >>> 16); byte (len >>> 8); byte len |]
@@ -44,13 +43,13 @@ let tryReadFrame (input: Stream) : byte[] option =
 
 // A missing or JSON-null string reads as "". A missing int reads as 0.
 
-/// The string value of a JSON element. Returns "" when the element is JSON null.
+/// Returns "" when the element is JSON null.
 let jsonString (e: JsonElement) : string =
     match e.GetString() with
     | null -> ""
     | s -> s
 
-/// Reads a string property by name. Returns "" when the property is absent or JSON null.
+/// Returns "" when the property is absent or JSON null.
 let getStringProp (name: string) (root: JsonElement) : string =
     match root.TryGetProperty name with
     | true, v -> jsonString v
@@ -63,7 +62,7 @@ let getOptionalStringProp (name: string) (root: JsonElement) : string option =
     | "" -> None
     | s -> Some s
 
-/// Reads an int property by name. Returns 0 when the property is absent.
+/// Returns 0 when the property is absent.
 let getIntProp (name: string) (root: JsonElement) : int =
     match root.TryGetProperty name with
     | true, v -> v.GetInt32()

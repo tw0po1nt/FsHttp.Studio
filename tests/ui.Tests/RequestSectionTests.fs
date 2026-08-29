@@ -4,10 +4,9 @@
 // captured in the companion, carried through three `bodyState` fields on two wires, decoded in the
 // webview, and rendered into a section the user has to open.
 //
-// It replaces the hand check the PR for issue #202 was going to carry ("run a POST with a JSON
-// body and confirm the Request section shows it"). The renderer suite already proves the section
-// renders from a canned envelope; what no pure suite can prove is that the bytes reaching it are
-// the bytes that went on the wire.
+// It replaces a hand check ("run a POST with a JSON body and confirm the Request section shows
+// it"). The renderer suite already proves the section renders from a canned envelope; what no
+// pure suite can prove is that the bytes reaching it are the bytes that went on the wire.
 //
 // The fixture POSTs to `/echo`, which acknowledges without repeating the body, so the posted text
 // appearing anywhere in the viewer can only have come through the request path.
@@ -39,8 +38,6 @@ let private tryRequestShowsWhatWasSent () =
         && dom.RequestText.Contains Harness.postedBodyKey
         && dom.RequestText.Contains Harness.postedBodyValue)
 
-/// Runs the echo fixture through `Checks.runEchoFixture`, then reads the section: collapsed
-/// first, then opened.
 let private theRequestSection =
     async {
         do! Checks.runEchoFixture ()

@@ -34,7 +34,7 @@ docs/**
 .local/**
 .idea/**
 scripts/**
-.banned-words
+.banned-patterns
 AGENTS.md
 CLAUDE.md
 CONTEXT.md

@@ -66,7 +66,7 @@ suite replaced never covered it either.
 The stopped lens stands on the ranges of the last locate. A script that no locate ever covered has
 none. The suite drives the covered case only. It opens the fixture while the companion is ready,
 and then kills the companion. A regression in the uncovered case therefore ships uncaught. See
-[ADR-0003](./adr/0003-block-location-in-companion.md).
+[ADR-0003](../adr/0003-block-location-in-companion.md).
 
 **A new untestable surface belongs in this section.**
 A spec that finds a surface no suite drives records that surface here. Prefer to automate the

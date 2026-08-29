@@ -18,17 +18,15 @@ open Companion.RequestCapture
 
 type Diagnostic = { Message: string; Range: BlockRange }
 
-/// The request that was actually sent, read off `Response.requestMessage` plus the body
-/// capture (docs/spec/0012-request-as-sent.md, Decisions 1 and 9).
+/// The request that was actually sent, read off `Response.requestMessage` plus the body capture.
 type RequestData =
     { Method: string
       Url: string
       Headers: (string * string) list
       Body: CapturedBody }
 
-/// The response half of a successful Run. `RequestMs` is the invocation bracket only: the
-/// single `EvalExpressionNonThrowing` that sends the request
-/// (docs/spec/0004-run-path-robustness.md, Decision 7). It is not the host-side total.
+/// `RequestMs` brackets the single `EvalExpressionNonThrowing` that sends the request, and it
+/// excludes the host-side total.
 type ResponseData =
     { Status: int
       Reason: string
@@ -46,12 +44,8 @@ type RunOutcome =
     /// `None`.
     | Refused of code: string * name: string option
 
-/// The two response-reading settings, as the generated F# record fields alone. This one text is
-/// the only place either field name is spelled. The addendum applies them to
-/// `GlobalConfig.defaults`, and `invocationConfigUpdate` applies them to the block's own value
-/// (Decision 10 of docs/spec/0002-reach-a-block-anywhere.md). Neither copy can drift from the
-/// other, because neither writes the fields out a second time. `companionAddendum` carries the
-/// reason that each setting is load-bearing.
+/// The only place either field name is spelled. The addendum and `invocationConfigUpdate` both
+/// read this text, so the two copies cannot drift.
 let private responseReadingFields =
     "bufferResponseContent = true; httpCompletionOption = System.Net.Http.HttpCompletionOption.ResponseContentRead"
 
@@ -61,24 +55,19 @@ let private responseReadingGuard =
 
 /// The FSI binding that the invocation's `Config.update` writes the *applied* timeout into, in
 /// milliseconds, with `0.` for "no bound at all". The companion reads it back when a
-/// cancellation surfaces, so the message names the bound that actually fired rather than the
-/// bound that rode the wire. The two differ whenever the block set its own
-/// `config_timeoutInSeconds`: `Option.orElse` keeps the block's value, and that is the number
-/// the user needs to read (docs/spec/0004-run-path-robustness.md, Decision 5). The binding is
-/// also the invocation-time `Config` read that Seam 1 scenario 5 asserts against.
+/// cancellation surfaces, so the message names the bound that fired rather than the bound that
+/// rode the wire. The two differ whenever the block set its own `config_timeoutInSeconds`.
 let private appliedTimeoutBinding = "__fsHttpStudioAppliedTimeoutMs"
 
 /// The FSI name of the body-capture transformer. The addendum binds it once by reflecting into
 /// `Companion.RequestCapture.captureRequest` (already loaded in this process). The invocation's
-/// `Config.update` then prepends it to `httpMessageTransformers`
-/// (docs/spec/0012-request-as-sent.md, Decision 4). FSI cannot close over a companion CLR value
-/// directly, so the addendum resolves the method through the loaded assembly instead of a `#r`.
+/// `Config.update` then prepends it to `httpMessageTransformers`. FSI cannot close over a
+/// companion CLR value, so the addendum resolves the method through the loaded assembly.
 let private captureRequestBinding = "__fsHttpStudioCaptureRequest"
 
 /// The Runtime error text for a request that hit its bound. `timeoutMs` is the bound that was
 /// applied, so a user who raised `fshttpStudio.requestTimeoutMs`, or who set a timeout on the
-/// block, reads their own number back. Public so Seam 1 can assert the wording without
-/// duplicating it.
+/// block, reads their own number back.
 let requestTimeoutMessage (timeoutMs: int) : string =
     sprintf
         "No response within %d ms. FsHttp.Studio stopped waiting.\nRaise fshttpStudio.requestTimeoutMs to wait longer, or set it to 0 to wait as long as HttpClient allows."
@@ -88,9 +77,7 @@ let requestTimeoutMessage (timeoutMs: int) : string =
 /// transformer, an optional injected timeout, and the write to `appliedTimeoutBinding`.
 /// `timeoutMs = 0` means do not inject, so `Config.timeout` stays whatever the block already
 /// carried (`None` when the block set none). A positive `timeoutMs` adds an `Option.orElse`
-/// default, so a block that already set `config_timeoutInSeconds` keeps it
-/// (docs/spec/0004-run-path-robustness.md, Decisions 2 and 4;
-/// docs/spec/0012-request-as-sent.md, Decision 4).
+/// default, so a block that already set `config_timeoutInSeconds` keeps it.
 let invocationConfigUpdate (timeoutMs: int) : string =
     let timeoutField =
         if timeoutMs <= 0 then
@@ -112,7 +99,7 @@ let invocationConfigUpdate (timeoutMs: int) : string =
 /// (`AggregateException` → `HttpRequestException` → `SocketException`), and
 /// `AggregateException`'s own message is the generic "One or more errors occurred.". A timeout
 /// arrives bare. One unwrap serves both readers below, so they cannot disagree about which
-/// exception they are looking at (docs/spec/0004-run-path-robustness.md, Decision 5).
+/// exception they are looking at.
 let private unwrapAggregate (ex: exn) : exn =
     match ex with
     | :? AggregateException as ae ->
@@ -153,39 +140,17 @@ let private runtimeErrorFrom (readAppliedTimeoutMs: unit -> int) (ex: exn) : Run
     else
         RuntimeError root.Message
 
-/// Companion-side addendum, evaluated after the user's own setup. It silences FsHttp's FSI
-/// debug logging, and it forces a read of the whole response body *before* the value that we
-/// reflect over returns. It carries no `#r` of its own, because the user's setup is the only
-/// source of an FsHttp package reference (ADR-0002).
-///
-/// `httpCompletionOption = ResponseContentRead` is load-bearing, not a nicety. FsHttp defaults
-/// to `ResponseHeadersRead`. With that default, `Request.send` returns as soon as the headers
-/// arrive, and the body stays a *read-once* `HttpConnectionResponseContent` bound to the live
-/// keep-alive socket.
-///
-/// FsHttp's own `bufferResponseContent = true` must drain that stream into a replayable buffer.
-/// But FsHttp reuses one process-wide static `HttpClient` across every Run's fresh FSI session.
-/// A Run that reuses a pooled keep-alive connection can therefore receive a content whose
-/// stream is already consumed. `ReadAsByteArrayAsync` (`extractResponse`) then throws "The
-/// stream was already consumed. It cannot be read again." A server that streams the body a
-/// moment after its headers is the reliable trigger.
-///
-/// `ResponseContentRead` makes the BCL read the whole body into memory as part of the send,
-/// independent of any later connection state, so every Run reads it cleanly.
-/// `bufferResponseContent` stays on as a second guard.
-///
-/// It also declares `appliedTimeoutBinding`, which the invocation writes and the companion
-/// reads back, and `captureRequestBinding`, which resolves the companion's `captureRequest`
-/// into an FSI value the invocation can prepend to `httpMessageTransformers`. Both are
-/// declared here, and not in the invocation, because the invocation is a single expression
-/// and has nowhere to put a declaration.
-/// The `captureRequestBinding` declaration. The lookup is total: a companion whose capture the
-/// reflection cannot find binds `id` instead, so the Run still sends and only the body display
-/// is lost. A throwing lookup here would break every Run, not only the capture.
-///
-/// Public so Seam 1 can evaluate this text in an FSI session of its own and drive the resulting
-/// function, rather than assert that a string contains a name. Reflection into a loaded assembly
-/// is the one part of the addendum that a type checker cannot verify.
+/// Works around an FsHttp defect: FsHttp reuses one process-wide static `HttpClient`, so a Run
+/// that reuses a pooled keep-alive connection can receive a content whose stream is already
+/// consumed, and `ReadAsByteArrayAsync` then throws "The stream was already consumed."
+/// `httpCompletionOption = ResponseContentRead` makes the BCL read the whole body during the
+/// send, independent of any later connection state. `bufferResponseContent` stays on as a second
+/// guard.
+/// The addendum carries no `#r`, because the user's setup is the only source of an FsHttp
+/// package reference. It declares `appliedTimeoutBinding` and `captureRequestBinding`, because
+/// the invocation is a single expression with nowhere to put a declaration.
+/// The reflection lookup is total: a companion whose capture it cannot find binds `id`, so the
+/// Run still sends and only the body display is lost. A throwing lookup would break every Run.
 let captureRequestDeclaration =
     [ sprintf
           "let %s : System.Net.Http.HttpRequestMessage -> System.Net.Http.HttpRequestMessage ="
@@ -265,12 +230,12 @@ let private blankSpan (lines: string[]) (r: BlockRange) =
 
 /// Blanks a span to pure spaces, with no `()` placeholder: the two uses below remove a keyword or
 /// an annotation, not an expression's value, and the surrounding syntax stays valid with nothing
-/// in its place (Decisions 6 and 7).
+/// in its place.
 let private blankToSpaces (lines: string[]) (r: BlockRange) =
     blankRange (fun width -> String(' ', width)) lines r
 
 /// True when `outer` fully contains `inner`: at or before its start, and at or after its end.
-/// Guards Decision 5's first hazard -- a sibling whose blank span contains the target must never
+/// A sibling whose blank span contains the target must never
 /// be blanked, or the blank would delete the very block the user clicked. `let a, b = http { },
 /// http { }` gives both blocks one statement span; a block nested inside another block's own
 /// expression gives the same shape, and it is the one hazard 1 shape that is actually runnable
@@ -287,15 +252,14 @@ let private containsBlock (outer: BlockRange) (inner: BlockRange) =
     startsAtOrBefore && endsAtOrAfter
 
 /// The R1 route names nothing, so the Run invents a name. Backtick-quoted so that no legal user
-/// identifier can ever collide with it by accident (ADR-0007 records the deliberate one: a user
-/// binding of the same backtick-quoted name in the same scope still collides, and the Run does
-/// not avoid it).
+/// identifier can collide with it by accident. A user binding of the same backtick-quoted name
+/// in the same scope still collides, and the Run does not avoid that.
 [<Literal>]
 let private reservedTargetName = "__fsHttpStudio_target"
 
-/// Inserted at the block's own start column, on the block's own line (Decision 2's R1 rule).
-/// Its own length is the column residue that `unshiftPos` and `shiftForward` carry as `Offset`
-/// (Decision 9). Every user of that residue reads the length from here, so the reserved name is
+/// Inserted at the block's own start column, on the block's own line.
+/// Its own length is the column residue that `unshiftPos` and `shiftForward` carry as `Offset`.
+/// Every user of that residue reads the length from here, so the reserved name is
 /// free to change without a second edit.
 let private r1InsertText = sprintf "let ``%s`` = " reservedTargetName
 
@@ -329,7 +293,7 @@ let private qualifyInvocation (qualifier: string list) (invocation: string) : st
 
     ((qualifier @ [ name ]) |> String.concat ".") + arity
 
-/// What the R1 insertion does to one line's columns (Decision 9). The R2 route names nothing and
+/// What the R1 insertion does to one line's columns. The R2 route names nothing and
 /// inserts no text, so it carries no shift at all — every `ColumnShift option` below is `None`
 /// there, and every translation is the identity.
 type private ColumnShift =
@@ -360,7 +324,7 @@ let private shiftForward (shift: ColumnShift option) (line: int, col: int) =
     | Some s when line = s.Line && col >= s.InsertCol -> line, col + s.Offset
     | _ -> line, col
 
-/// Moves a Setup-interaction-coordinate column back to the original source (Decision 9). A
+/// Moves a Setup-interaction-coordinate column back to the original source. A
 /// column before the insertion point is untouched. A column inside the inserted text itself has
 /// no original counterpart, and clamps to the insertion point. A column at or past the inserted
 /// text's end is the block's own text, shifted forward by `offset`, so it subtracts back out.
@@ -376,26 +340,19 @@ let private unshiftPos (shift: ColumnShift option) (line: int, col: int) =
 /// the companion's own generated `let <name> = `. Such a position has no user-source counterpart,
 /// and `unshiftPos` clamps it to the insertion point — which is also the block's own start
 /// column, so it would otherwise pass `withinBlock` and be misreported as the user's fault.
-/// Decision 8 puts the companion's own generated text on the Setup side of the split, so this
-/// test runs on the *raw* position, before the clamp erases the distinction.
+/// The companion's own generated text belongs on the Setup side of the split, so this test runs
+/// on the *raw* position, before the clamp erases the distinction.
 let private withinInsertion (shift: ColumnShift option) (line: int, col: int) =
     match shift with
     | Some s -> line = s.Line && col >= s.InsertCol && col < s.InsertCol + s.Offset
     | None -> false
 
-/// Builds the Setup text (Decision 1): everything from line 1 through the end of the target
-/// block's own expression, truncated at its end column, with every *other* located block's
-/// `Blank` span replaced first. A click on the target therefore fires exactly one request, which
-/// is the isolation criterion, and the code after the target never runs at all — it is not part
-/// of either FSI interaction, not even blanked.
-///
-/// The R1 route inserts `let <name> = ` at the block's own start (Decision 2) before the
-/// truncation point is computed, because that insertion can land on the same line the boundary
-/// truncates.
-///
-/// Also returns every name a blanked sibling's statement removed (Decision 7 of
-/// docs/spec/0003-lens-tells-the-truth.md, case 11c): the Setup blanking step is the one place
-/// that knows which names it took away, so it is the one place that records them.
+/// Everything from line 1 through the end of the target block's expression, with every other
+/// located block's `Blank` span replaced first, so a click fires exactly one request.
+/// The R1 insertion of `let <name> = ` happens before the truncation point is computed, because
+/// that insertion can land on the line the boundary truncates.
+/// Also returns every name a blanked sibling removed, because the blanking step is the only place
+/// that knows which names it took away.
 let private buildSetupText
     (source: string)
     (blocks: LocatedBlock list)
@@ -435,9 +392,8 @@ let private buildSetupText
     Array.append prefixLines [| lastLineText |] |> String.concat "\n", shift, blankedNames
 
 /// The second interaction: invokes the target by its qualified name, and applies the
-/// response-reading guard (and the optional request timeout) to its value before sending
-/// (Decision 10 of docs/spec/0002-reach-a-block-anywhere.md; Decisions 2 and 3 of
-/// docs/spec/0004-run-path-robustness.md). The Setup builds the block's context *inside*
+/// response-reading guard (and the optional request timeout) to its value before sending.
+/// The Setup builds the block's context *inside*
 /// itself, and thus before the companion addendum's `GlobalConfig.set` runs, so the context
 /// would otherwise still carry FsHttp's `ResponseHeadersRead` default and leave the body a
 /// read-once stream. `Config.update` re-applies the guard on the built value, which is
@@ -451,14 +407,11 @@ let private invocationText (timeoutMs: int) (target: LocatedBlock) : string =
 let private errorDiagnostics (diags: FSharpDiagnostic[]) =
     diags |> Array.filter (fun d -> d.Severity = FSharpDiagnosticSeverity.Error)
 
-/// FCS's own "unbound value" diagnostic code. Stable across localizations, unlike the message
-/// text (docs/spec/0003-lens-tells-the-truth.md, Decision 7).
+/// FCS's own "unbound value" diagnostic code, which stays stable across localizations.
 [<Literal>]
 let private unboundValueErrorNumber = 39
 
-/// The wire spelling of the case 11c refusal. It is a Run outcome and not a `RefusalCode`, so
-/// `BlockLocator.codeToWire` does not carry it (docs/spec/0003-lens-tells-the-truth.md,
-/// Decision 7) and it is named here instead of spelled inline at the one place that emits it.
+/// A Run outcome rather than a `RefusalCode`, so `BlockLocator.codeToWire` does not carry it.
 [<Literal>]
 let private unboundBlockValueCode = "unboundBlockValue"
 
@@ -500,9 +453,8 @@ let private withinBlock (block: BlockRange) (line: int, col: int) =
 /// no resolvable `#r`. Anchor such a diagnostic at the top of the script, where the missing
 /// reference belongs. A phantom line past the end would fail to highlight in the UI.
 ///
-/// *Every* diagnostic from here keeps its compiler text verbatim behind a `Setup failed to
-/// evaluate:` prefix, not only an anchored one. See
-/// `docs/spec/0001-report-setup-compile-error.md`, Decision 3.
+/// Every diagnostic from here keeps its compiler text verbatim behind a `Setup failed to
+/// evaluate:` prefix, including an anchored one.
 let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d: FSharpDiagnostic) : Diagnostic =
     let message = sprintf "Setup failed to evaluate: %s" d.Message
     let sl, sc = unshiftPos shift (d.StartLine, d.StartColumn)
@@ -524,7 +476,7 @@ let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d:
               EndLine = el
               EndCol = ec } }
 
-/// Case 11c (Decision 7): whether `errors` refuses the Run rather than compile-erroring it. Every
+/// Whether `errors` refuses the Run rather than compile-erroring it. Every
 /// error diagnostic must trace to a blanked name for the refusal to claim the Run -- one
 /// unrelated error (the user's own typo, or an FS0039 naming something no sibling bound) means
 /// the missing binding is not the whole story, and the whole thing is a compile error instead.
@@ -567,8 +519,8 @@ let private blankedNameRefusal
             None
 
 /// A diagnostic that starts inside the target block's own span keeps the compiler's text
-/// unchanged, at its own (unshifted) position (Decision 8) — no introductory sentence, because
-/// the fault is in the user's block, not in text the companion generated.
+/// unchanged, at its own (unshifted) position, with no introductory sentence, because the fault
+/// is in the user's block rather than in text the companion generated.
 let private blockDiagnostic (shift: ColumnShift option) (d: FSharpDiagnostic) : Diagnostic =
     let sl, sc = unshiftPos shift (d.StartLine, d.StartColumn)
     let el, ec = unshiftPos shift (d.EndLine, d.EndColumn)
@@ -581,12 +533,12 @@ let private blockDiagnostic (shift: ColumnShift option) (d: FSharpDiagnostic) : 
           EndCol = ec } }
 
 /// Splits a Setup-interaction diagnostic between the two treatments above, by whether its
-/// (unshifted) start position lands inside the target's own block span (Decision 8).
+/// (unshifted) start position lands inside the target's own block span.
 ///
 /// A diagnostic that starts inside the R1 inserted text is the one exception, and it takes the
 /// Setup treatment. The fault there is in the companion's own generated `let <name> = `, not in
-/// anything the user wrote — a user binding of the reserved name in the same scope, which
-/// ADR-0007 records as the deliberate collision, reports its duplicate definition exactly there.
+/// anything the user wrote. A user binding of the reserved name in the same scope reports its
+/// duplicate definition exactly there.
 /// The test runs before `unshiftPos`, because the clamp moves such a position onto the block's
 /// own start column and it would otherwise read as the user's fault.
 let private splitDiagnostic
@@ -606,7 +558,7 @@ let private splitDiagnostic
 /// that this function reads are FsHttp's `Response` record shape, which is stable across the
 /// FsHttp versions that we target. A missing property is therefore a real extraction bug, and
 /// not a case to recover from. The response body itself comes from the BCL `HttpContent` type,
-/// which ADR-0002 commits to as version-independent.
+/// which is version-independent.
 let private prop (name: string) (t: Type) : Reflection.PropertyInfo =
     match t.GetProperty name with
     | null -> failwithf "reflection: property '%s' not found on %s" name t.FullName
@@ -623,13 +575,9 @@ let private NotCapturedState = "notCaptured"
 
 /// The body to show for a sent request. A hit is the captured body itself. A miss degrades
 /// rather than breaking the status line, because the method, URL, and headers do not depend on
-/// the capture at all (docs/spec/0012-request-as-sent.md, Decision 7).
-///
-/// The content decides which blank state a miss degrades to, not the miss. With no content
-/// there was no body, and "no body" is true. With content there was a body, and the capture
-/// simply never ran — so "no body" would state something false about a real one (Decision 8).
-///
-/// Public so the miss is testable without an FSI value to reflect over.
+/// the capture at all.
+/// The content decides which blank state a miss degrades to. With no content there was no body.
+/// With content there was a body that the capture never read, so "no body" would be false.
 let capturedBodyFor (requestMessage: HttpRequestMessage) : CapturedBody =
     match tryGetCapturedBody requestMessage with
     | Some body -> body
@@ -639,8 +587,7 @@ let capturedBodyFor (requestMessage: HttpRequestMessage) : CapturedBody =
         | _ -> NotCaptured uncapturedBodyReason
 
 /// Maps a captured body onto the wire's three-state `bodyState` / `bodyBase64` / `bodyReason`
-/// triple (docs/spec/0012-request-as-sent.md, Decision 10). Only the matching field carries a
-/// value; the others are empty strings.
+/// triple. Only the matching field carries a value, and the others are empty strings.
 let private bodyToWire (body: CapturedBody) : string * string * string =
     match body with
     | NoBody -> NoneState, "", ""
@@ -943,8 +890,7 @@ let extractPins (source: string) : (string * string option) list =
 /// explicit `#r "nuget: pkg, v"`. `Versionless` is a `#r "nuget: pkg"` that resolved *some*
 /// latest version that we cannot name. The version-less case is load-bearing, and the map
 /// records it instead of nothing. It still poisons the ALC, so a later Run that pins a
-/// *different* version would collide with it in-process (ADR-0006). This is public for the
-/// routing unit tests.
+/// *different* version would collide with it in-process.
 type LoadedVersion =
     | Pinned of string
     | Versionless
@@ -995,8 +941,8 @@ type private RunRoute =
 /// conflict *check* and the reservation *act* run under a single `lock loadLock`, so the two
 /// are one atomic step. The lock is taken once for each logical operation, not once for each
 /// access. A check in one lock scope, followed by a mark in another scope, leaves a TOCTOU gap.
-/// A future concurrent caller could load a conflicting version in that gap (coding-standards
-/// rule 4). The request loop is serial today, and the lock exists to stay correct when it is not.
+/// A future concurrent caller could load a conflicting version in that gap.
+/// The request loop is serial today, and the lock keeps it correct when that changes.
 ///
 /// The reservation happens *before* the evaluation runs, not after a successful load, and this
 /// is deliberate. The map is a conservative over-approximation of what the shared ALC can hold.
@@ -1004,7 +950,7 @@ type private RunRoute =
 /// resolved assembly then outlives the session even when the evaluation compile-errors or
 /// throws. An over-mark of a Run that never loaded only over-routes a *later* Run to a safe,
 /// cold worker. An under-mark of a Run that did load reopens the "Could not load type … from
-/// assembly …" ALC collision (ADR-0006). The two errors are not symmetric, so we mark up front.
+/// assembly …" ALC collision. The two errors have different costs, so the mark happens up front.
 let private routeAndReserve (pins: (string * string option) list) : RunRoute =
     lock loadLock (fun () ->
         let conflicts =
@@ -1029,8 +975,7 @@ let private routeAndReserve (pins: (string * string option) list) : RunRoute =
             InProcess)
 
 /// The bound on the time that a `--worker` child can take to produce its response frame. After
-/// this time the Run terminates by force (coding-standards rule 3: every external process gets
-/// a bounded wait and a kill path). The bound is long enough to absorb a cold first-run
+/// this time the Run terminates by force. The bound is long enough to absorb a cold first-run
 /// `#r "nuget:"` restore of a newly pinned version. It is short enough that a stalled worker
 /// cannot hang the Run indefinitely. A user block that loops forever, or a request to a server
 /// that never answers, both stall a worker. This is public so that tests can drive the hung
@@ -1119,7 +1064,7 @@ let runInWorker
 
 /// Runs the located block at `blockIndex` (0-based, source order) and returns its outcome.
 ///
-/// The gate runs first (Decision 5 of docs/spec/0003-lens-tells-the-truth.md): a target that
+/// The gate runs first. A target that
 /// `classify` refuses returns `Refused` here, before `routeAndReserve` marks any pin and before
 /// any worker process starts. `routeAndReserve` marks each of the Run's pins in `loadedVersions`
 /// up front, before any evaluation, so a refusal that reached it would mark pins that no session

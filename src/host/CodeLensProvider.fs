@@ -11,8 +11,8 @@ open Protocol
 let commandId = "fshttpStudio.runBlock"
 
 /// The command that a click on a refused lens invokes. `RunCommand.fs` registers the handler
-/// under this id. Not declared in `package.json`'s `contributes.commands` (docs/spec/0003,
-/// Decision 8): it needs to work for a lens click only, and never appear in the command palette.
+/// under this id. Deliberately absent from `package.json`'s `contributes.commands`, so it stays
+/// out of the command palette.
 [<Literal>]
 let explainCommandId = "fshttpStudio.explainBlockRefusal"
 
@@ -28,9 +28,8 @@ let private emitter = EventEmitter<unit>()
 let mutable private handle: Companion.Handle option = None
 let mutable private ready = false
 
-/// Called on every successful `locate` response so the status bar can mirror the same count the
-/// lenses already show (docs/spec/0014-explain-missing-lenses.md, Decision 5). `Extension` owns
-/// the item and decides whether the document is still the active editor's document.
+/// `Extension` owns the status bar item and decides whether the document is still the active
+/// editor's document.
 let mutable private onLocated: (TextDocument -> ScriptView -> unit) option = None
 
 /// The ranges the last successful `locate` returned for each script, keyed by the document's own
@@ -97,8 +96,7 @@ let private buildCodeLens (document: TextDocument) (i: int) (r: BlockRange) : Co
     | Some code -> lensAt document i r (Refusals.lensTitle code) explainCommandId
     | None -> lensAt document i r "▶ Run request" commandId
 
-/// One informational lens at line 1. The command id is empty, so VSCode paints the title as plain
-/// text and a click runs nothing (docs/spec/0014-explain-missing-lenses.md, Decision 2).
+/// An empty command id makes VSCode paint the title as plain text, so a click runs nothing.
 let private plainTextLens (title: string) : CodeLens =
     let range = Range(0.0, 0.0, 0.0, 0.0)
 

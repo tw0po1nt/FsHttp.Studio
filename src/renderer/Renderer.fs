@@ -12,15 +12,13 @@ type Node =
     | Element of tag: string * attrs: (string * string) list * children: Node list
     | Text of string
 
-/// A request body as the viewer must see it. Blank must not mean "no body", "captured bytes",
-/// and "we chose not to read it" at once (docs/spec/0012-request-as-sent.md, Decision 8).
+/// Blank must not mean "no body", "captured bytes", and "we chose not to read it" at once.
 type CapturedBody =
     | NoBody
     | Captured of bytes: byte[]
     | NotCaptured of reason: string
 
-/// The request that was actually sent. Method and URL feed the status line. Headers and body
-/// feed the collapsible Request section (docs/spec/0012-request-as-sent.md, Decision 12).
+/// The request that was actually sent.
 type RequestView =
     { Method: string
       Url: string
@@ -160,10 +158,8 @@ let private hexDump (bytes: byte[]) : string =
     else
         dumped
 
-/// The size-and-hex view for bytes that do not decode as text. The note says "Binary body" and
-/// not "Binary response": `renderContent` puts this same view inside the Request section, where
-/// the bytes are a request body, and a note that called them a response would state something
-/// false about what was sent (docs/spec/0012-request-as-sent.md, Decision 8).
+/// The note must say "Binary body", because `renderContent` puts this same view inside the
+/// Request section, where the bytes are a request body.
 let private renderBinary (bytes: byte[]) : Node =
     el
         "div"
@@ -215,9 +211,7 @@ let private isJson (ct: string) =
 let private isHtml (ct: string) =
     ct = "text/html" || ct = "application/xhtml+xml"
 
-/// Shared body dispatch for JSON, text, and hex. Image and HTML previews stay out of this path:
-/// a request body is data that was sent, not a document to preview
-/// (docs/spec/0012-request-as-sent.md, Decision 12).
+/// Image and HTML previews stay out of this path, because a request body is data that was sent.
 let renderContent (contentType: string) (body: byte[]) : Node =
     let ct = normalizeContentType contentType
 
@@ -280,9 +274,6 @@ let private renderRequestBody (request: RequestView) : Node list =
     | NotCaptured reason -> [ el "div" [ "class", "binary-note" ] [ Node.Text reason ] ]
     | Captured bytes -> [ renderContent request.ContentType bytes ]
 
-/// The collapsible Request section. It sits between the status line and the response headers,
-/// and starts collapsed — the response is what the user came for
-/// (docs/spec/0012-request-as-sent.md, Decision 12).
 let private renderRequest (request: RequestView) : Node =
     el
         "details"
@@ -291,9 +282,8 @@ let private renderRequest (request: RequestView) : Node =
          :: headerRows request.Headers
          @ renderRequestBody request)
 
-/// The text a copy button puts on the clipboard for a body. It reads the bytes, and never the
-/// Content-Type: a JSON body copies the raw bytes (not the tree), and a binary body copies the
-/// same truncated hex dump the panel shows (docs/spec/0013-copy-buttons.md, Decisions 3 and 4).
+/// Reads the bytes and never the Content-Type. A JSON body copies the raw bytes, and a binary
+/// body copies the same truncated hex dump the panel shows.
 let private bodyCopyText (bytes: byte[]) : string =
     if looksBinary bytes then
         hexDump bytes
@@ -301,8 +291,7 @@ let private bodyCopyText (bytes: byte[]) : string =
         decodeText bytes
 
 /// A message-shaped block: a first line, one `Name: value` line for each header, and an optional
-/// body after a blank line. The request and the response-headers keys share this shape
-/// (docs/spec/0013-copy-buttons.md, Decision 5).
+/// body after a blank line. The request and the response-headers keys share this shape.
 let private messageText (firstLine: string) (headers: (string * string) list) (body: string option) : string =
     let headerLines =
         headers |> List.map (fun (name, value) -> sprintf "%s: %s" name value)
@@ -313,9 +302,7 @@ let private messageText (firstLine: string) (headers: (string * string) list) (b
     | None -> head
     | Some text -> head + "\n\n" + text
 
-/// The text that a copy button puts on the clipboard, for one copy key. `None` means that there
-/// is nothing to copy, and the renderer then omits the button
-/// (docs/spec/0013-copy-buttons.md, Decision 6).
+/// `None` means that there is nothing to copy, and the renderer then omits the button.
 let copyText (env: ResponseEnvelope) (key: string) : string option =
     match key with
     | "request" ->
@@ -334,15 +321,12 @@ let copyText (env: ResponseEnvelope) (key: string) : string option =
             Some(bodyCopyText env.Body)
     | _ -> None
 
-/// The label a copy button rests at. Lives beside `copyText` rather than inside `copyButton`,
-/// because the webview's label flash has to restore exactly this text after it reports an
-/// outcome, and the two would otherwise be one string typed twice across Seam B
-/// (docs/spec/0013-copy-buttons.md, Decision 8).
+/// The webview's label flash restores exactly this text, so the two ends of that boundary must
+/// read one string rather than two copies.
 let copyButtonLabel = "Copy"
 
-/// A copy button for one key, or nothing when `copyText` yields `None`
-/// (docs/spec/0013-copy-buttons.md, Decision 7). `aria-live` is static markup, so it ships with
-/// the button rather than with the label flash that reads it (Decision 8).
+/// `aria-live` is static markup, so it ships with the button rather than with the label flash
+/// that reads it.
 let private copyButton (env: ResponseEnvelope) (key: string) : Node list =
     match copyText env key with
     | Some _ ->
@@ -355,8 +339,8 @@ let private copyButton (env: ResponseEnvelope) (key: string) : Node list =
               [ Node.Text copyButtonLabel ] ]
     | None -> []
 
-/// Wraps a section so its copy button stays a sibling of the section, never a descendant of
-/// `<details>`, `<summary>`, or a scrolling body (docs/spec/0013-copy-buttons.md, Decision 2).
+/// Keeps a copy button a sibling of its section, never a descendant of `<details>`, `<summary>`,
+/// or a scrolling body.
 let private sectionShell (env: ResponseEnvelope) (key: string) (section: Node) : Node =
     el "div" [ "class", "section-shell" ] (copyButton env key @ [ section ])
 

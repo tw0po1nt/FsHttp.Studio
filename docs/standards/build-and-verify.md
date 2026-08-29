@@ -26,11 +26,11 @@ build fails on errors that a Fable-only loop never shows.
 | Command | What it proves |
 | --- | --- |
 | `dotnet test FsHttp.Studio.slnx --no-build` | The unit suites pass. |
-| `dotnet fantomas --check .` | The formatting matches. Tooling owns layout. See `docs/coding-standards.md`. |
+| `dotnet fantomas --check .` | The formatting matches. Tooling owns layout. See `docs/standards/coding-standards.md`. |
 | `npm run compile` | The companion publishes, Fable emits, and esbuild bundles. |
 | `npm run smoke` | The bundled renderer runs under node. |
 | `npm run package` | The `.vsix` builds. |
-| `./tests/ui.Tests/run.sh` | The UI suite, which is the release gate. See `docs/release-gate.md`. |
+| `./tests/ui.Tests/run.sh` | The UI suite, which is the release gate. See `docs/standards/release-gate.md`. |
 
 `package.json` holds the individual `build:*` scripts that `compile` composes. Use one of those
 scripts only when you rebuild a single side.

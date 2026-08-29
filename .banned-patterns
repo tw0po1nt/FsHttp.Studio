@@ -1,0 +1,79 @@
+# Every line holds an extended regular expression, a tab, and the message that a
+# hit reports. A blank line is skipped, and a line that starts with `#` is a
+# note. The match is case-insensitive, so write each pattern in lower case. Use
+# `\b` to bound a whole word.
+#
+# scripts/check-banned-patterns.sh reads this file and runs in CI. A PreToolUse
+# hook reads the same file and refuses a Write or an Edit that carries a hit.
+# AGENTS.md states the rule, and docs/standards/technical-prose.md holds the
+# reasoning behind the prose patterns.
+#
+# The check reads Markdown files, the `//` comment lines of F# source, and the
+# string literals of F# source. It strips fenced code blocks and inline code
+# spans first, so a rule can name the text it forbids by writing that text in
+# backticks.
+
+# ---------------------------------------------------------------------------
+# Terminology
+# ---------------------------------------------------------------------------
+\bprd\b	Write `spec`. AGENTS.md states the word this repo uses.
+
+# ---------------------------------------------------------------------------
+# British spellings. This repo writes American English.
+# ---------------------------------------------------------------------------
+\b(colour|colours|behaviour|behaviours|serialise|serialised|serialises|honoured|cancelled)\b	Use the American spelling.
+
+# ---------------------------------------------------------------------------
+# Slop
+# ---------------------------------------------------------------------------
+\b(provenance|leverag(e|es|ed|ing)|utiliz(e|es|ed|ing)|utilis(e|es|ed|ing))\b	Write what the thing is.
+
+# ---------------------------------------------------------------------------
+# Inflated adjectives
+# ---------------------------------------------------------------------------
+\b(crucial|vital|pivotal|paramount|essential|seamless|seamlessly|robust|comprehensive|powerful|cutting-edge|state-of-the-art|world-class|best-in-class|game-changing|meticulous|meticulously|nuanced|holistic|intricate|vibrant)\b	Delete the adjective, or state the measurable fact it stands for.
+
+# ---------------------------------------------------------------------------
+# Ceremony verbs
+# ---------------------------------------------------------------------------
+\b(delve|delves|delved|delving|facilitat(e|es|ed|ing)|foster|fosters|fostered|underscor(e|es|ed|ing)|showcas(e|es|ed|ing)|streamlin(e|es|ed|ing)|empower|empowers|empowered|unlock|unlocks|unlocked|elevat(e|es|ed|ing)|embark|embarks|embarked|navigat(e|es|ed|ing)|boasts)\b	Use the plain verb for the action.
+
+# ---------------------------------------------------------------------------
+# Metaphor that reaches for grandeur
+# ---------------------------------------------------------------------------
+\b(realm|landscape|tapestry|testament|journey|ecosystem|synergy|synergies)\b	Name the thing directly.
+
+# ---------------------------------------------------------------------------
+# Transition filler
+# ---------------------------------------------------------------------------
+\b(moreover|furthermore|additionally|notably|importantly|arguably|ultimately|effectively|significantly)\b	Delete the transition. Start the sentence with its subject.
+
+# ---------------------------------------------------------------------------
+# Chat boilerplate
+# ---------------------------------------------------------------------------
+(it.s worth noting|worth noting that|that said,|at the end of the day|deep dive|dives? into|when it comes to|plays? an? (crucial|key|vital|critical) role|a testament to|great question|i hope this helps|as an ai)	Delete the filler. State the fact.
+\b(myriad|plethora|insights)\b	Delete the filler. State the fact.
+
+# ---------------------------------------------------------------------------
+# Considered and kept
+#
+# `harness` is the CONTEXT.md glossary term for the UI test harness, and rule 1
+# of docs/standards/coding-standards.md requires that word.
+# `solution` names the .NET solution file, FsHttp.Studio.slnx.
+# `richly` is the one-line description of what this extension does.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# The antithesis and the em dash
+#
+# docs/standards/technical-prose.md states both rules, and both bind from now.
+# The patterns stay inactive until the sweep removes the existing hits, because
+# an active pattern here fails CI against text that no one has rewritten yet.
+# Uncomment each line in the sweep.
+#
+# , not 	Assert the fact directly. Delete the negated half.
+# \bnot [^.,;]{1,40}(, but |but rather ) 	Assert the fact directly. Delete the negated half.
+# \bnot (just|merely|simply|only) 	Assert the fact directly. Delete the negated half.
+# (is|are|was|were) not [^.]{1,40}\. (it|they) (is|are|was|were) 	Assert the fact directly. Delete the negated half.
+# em dash 	Use a comma, a colon, or a period.
+# ---------------------------------------------------------------------------

@@ -49,9 +49,8 @@ type Range(_startLine: float, _startCharacter: float, _endLine: float, _endChara
 type CodeLens(_range: Range, _command: obj) = class end
 
 type CodeLensProvider =
-    /// Fires to tell VSCode to invoke `provideCodeLenses` again, even when the document itself
-    /// did not change. A companion transition into or out of `Ready` is exactly that case
-    /// (ADR-0003: no CodeLenses while the companion is absent).
+    /// Fire this when the companion enters or leaves `Ready`, because no document change
+    /// accompanies that transition.
     abstract onDidChangeCodeLenses: obj
     abstract provideCodeLenses: document: TextDocument * token: obj -> JS.Promise<ResizeArray<CodeLens>>
 
@@ -115,8 +114,7 @@ type IWindow =
     /// click. The promise resolves to the clicked item's label, or to `undefined` when the user
     /// dismisses the message.
     abstract showWarningMessage: message: string * item: string -> JS.Promise<obj>
-    /// vscode.window.showWarningMessage(message). No button: a refusal toast (docs/spec/0003,
-    /// Decision 8) states the reason and needs no reply.
+    /// vscode.window.showWarningMessage(message). No button, for a toast that needs no reply.
     abstract showWarningMessage: message: string -> JS.Promise<obj>
 
 [<Import("window", "vscode")>]

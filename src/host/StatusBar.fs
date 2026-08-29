@@ -8,7 +8,7 @@ let mutable private companionState: State = Starting
 let mutable private scriptView: ScriptView = NoFSharpDocument
 
 /// Writes the status-bar body, or hides the item when `statusText` has nothing to say
-/// (Decision 6). A no-op until `register` hands over the item.
+/// A no-op until `register` hands over the item.
 let private setStatusText (text: string option) =
     match item, text with
     | Some bar, Some body ->
@@ -45,7 +45,7 @@ let private scriptViewFor (document: TextDocument) : ScriptView =
 
 /// Follows the active document. `None` is a workbench with no active text editor at all — the
 /// response viewer holds focus, say — which hides the item on the same terms as a non-F#
-/// document (Decision 6).
+/// document.
 let onActiveEditorChanged (editor: TextEditor option) =
     match editor with
     | None -> setScriptView NoFSharpDocument
