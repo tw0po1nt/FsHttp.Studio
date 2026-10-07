@@ -1,0 +1,1 @@
+{"source":"#r \u0022nuget: FsHttp\u0022\nopen FsHttp\n\nhttp {\n    GET \u0022https://example.com/pokemon/\u00E9\u0022\n}\n\nfor i in 1 .. 3 do\n    http {\n        GET \u0022https://example.com/\u0022\n    }\n    |\u003E ignore\n","tag":"locate"}

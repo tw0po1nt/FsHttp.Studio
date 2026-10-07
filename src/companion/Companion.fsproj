@@ -13,6 +13,16 @@
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   </PropertyGroup>
 
+  <!-- package.json holds the one version of both Clients and the companion. The companion sends it
+       in `ready`. -->
+  <PropertyGroup>
+    <PackageJsonText>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../package.json'))</PackageJsonText>
+    <PackageJsonVersion>$([System.Text.RegularExpressions.Regex]::Match($(PackageJsonText), '"version"\s*:\s*"([^"]+)"').Groups[1].Value)</PackageJsonVersion>
+    <Version>$(PackageJsonVersion)</Version>
+    <InformationalVersion>$(PackageJsonVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
   <ItemGroup>
     <Compile Include="Envelope.fs" />
     <Compile Include="BlockLocator.fs" />

@@ -4,6 +4,7 @@ module Companion.Tests.RequestHandlerTests
 // location logic itself. A "locate" request round-trips through JSON to a "blocks" response,
 // which carries one range for each block. This mirrors the response protocol.
 
+open System.IO
 open System.Text.Json
 open Expecto
 open Companion.RequestHandler
@@ -85,6 +86,20 @@ let tests =
           test "hello request still returns ready" {
               let response = respondTo (JsonSerializer.Serialize {| tag = "hello" |})
               Expect.equal (response.GetProperty("tag").GetString()) "ready" "hello should be answered with ready"
+          }
+
+          test "hello gets a ready that carries the package.json version" {
+              let packageJson =
+                  File.ReadAllText(Path.Combine(__SOURCE_DIRECTORY__, "..", "..", "package.json"))
+
+              use doc = JsonDocument.Parse packageJson
+              let expected = doc.RootElement.GetProperty("version").GetString()
+              let response = respondTo (JsonSerializer.Serialize {| tag = "hello" |})
+
+              Expect.equal
+                  (response.GetProperty("version").GetString())
+                  expected
+                  "a Client compares this version with its own"
           }
 
           test "unknown request tag returns an error envelope" {
