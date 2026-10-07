@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <!-- host.Tests references this project and the companion, which pins FSharp.Core. Pin the same
+         version here, so that a newer SDK cannot cause a NU1605 downgrade error. -->
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="10.1.204" />
     <PackageReference Include="Fable.Core" Version="5.2.0" />
   </ItemGroup>
 
