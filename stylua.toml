@@ -1,0 +1,4 @@
+# StyLua sets the layout of each Lua file. CI runs `stylua --check .`.
+column_width = 120
+indent_type = "Spaces"
+indent_width = 4

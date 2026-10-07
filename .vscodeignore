@@ -68,3 +68,6 @@ build.lua
 lazy.lua
 **/*.lua
 .tests/**
+stylua.toml
+.styluaignore
+.luarc.json

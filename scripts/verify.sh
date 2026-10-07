@@ -9,14 +9,17 @@ cd "$(git rev-parse --show-toplevel)"
 
 steps=(
   "./scripts/check-banned-patterns.sh"
+  "stylua --check ."
   "dotnet tool restore"
   "dotnet fantomas --check ."
   "dotnet fsi scripts/generate-lua.fsx --check"
   "dotnet build FsHttp.Studio.slnx"
   "dotnet test FsHttp.Studio.slnx --no-build"
   "npm ci"
-  "npm run compile"
+  "npm run package"
+  "./scripts/check-vsix-holds-no-lua.sh"
   "npm run smoke"
+  "./scripts/check-lua-types.sh"
   "nvim -l tests/minit.lua --minitest"
 )
 
