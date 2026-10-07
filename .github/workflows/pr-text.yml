@@ -1,0 +1,46 @@
+name: PR text
+
+# Checks the text of a pull request against .banned-patterns: the title, the
+# body, and each commit message. No tracked file holds that text, so the file
+# check in ci.yml cannot see it. The `edited` type runs the check again when
+# the title or the body changes.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened]
+
+concurrency:
+  group: pr-text-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The title and the body come in through env, because text that a user
+      # wrote must never become part of the script.
+      - name: Check the title, the body, and the commit messages
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          status=0
+          printf '%s\n' "$PR_TITLE" > "$RUNNER_TEMP/title.md"
+          printf '%s\n' "$PR_BODY" > "$RUNNER_TEMP/body.md"
+          ./scripts/check-banned-patterns.sh --text "PR title" "$RUNNER_TEMP/title.md" || status=1
+          ./scripts/check-banned-patterns.sh --text "PR body" "$RUNNER_TEMP/body.md" || status=1
+          for sha in $(git rev-list --reverse "$BASE_SHA..$HEAD_SHA"); do
+            git log -1 --format=%B "$sha" > "$RUNNER_TEMP/commit.md"
+            ./scripts/check-banned-patterns.sh --text "commit ${sha:0:7}" "$RUNNER_TEMP/commit.md" || status=1
+          done
+          exit "$status"

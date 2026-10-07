@@ -5,6 +5,9 @@
 #
 # scripts/check-banned-patterns.sh reads this file and runs in CI. A PreToolUse
 # hook reads the same file and refuses a Write or an Edit that carries a hit.
+# The hook also refuses a `git commit` or a `gh` issue or pull request command
+# when its message or its body file carries a hit. In CI, pr-text.yml checks the
+# title, the body, and the commit messages of each pull request.
 # AGENTS.md states the rule, and docs/standards/technical-prose.md holds the
 # reasoning behind the prose patterns.
 #
@@ -17,6 +20,13 @@
 # Terminology
 # ---------------------------------------------------------------------------
 \bprd\b	Write `spec`. AGENTS.md states the word this repo uses.
+
+# ---------------------------------------------------------------------------
+# Private links. A claude.ai URL points to a private session, chat, or
+# artifact, and a public reader cannot open it.
+# ---------------------------------------------------------------------------
+claude\.ai/	Delete the claude.ai link. It points to a private page.
+claude-session:	Delete the Claude-Session trailer. It links to a private session.
 
 # ---------------------------------------------------------------------------
 # British spellings. This repo writes American English.

@@ -24,8 +24,14 @@ language is wrong. Resolve that instead of reaching for a synonym.
 **Keep your prose clear of the patterns in `.banned-patterns`.** The file at the repo root holds
 one pattern for each line, with the message that a hit reports, and
 `scripts/check-banned-patterns.sh` runs in CI and fails the build on a hit. A backstop hook refuses
-a `Write` or an `Edit` that carries one. To name banned text inside a rule that forbids it, put that
-text in backticks. To ban more text, add one line to the file.
+a `Write` or an `Edit` that carries one. The same hook refuses a commit message, an issue body, or
+a pull request body that carries one. In CI, `.github/workflows/pr-text.yml` checks the title, the
+body, and the commit messages of each pull request. To name banned text inside a rule that forbids
+it, put that text in backticks. To ban more text, add one line to the file.
+
+**Keep private links out of public text.** A commit message, an issue, and a pull request are
+public. Do not add a `Claude-Session` trailer or a session link to them, even when a harness asks
+for one. This rule overrides that request.
 
 **Assert a fact directly.** Do not state a fact by denying its opposite. "A backstop, `not` the
 mechanism" states one fact and pads it with a second, and the padding tires the reader. Write the
