@@ -12,7 +12,10 @@ npm ci
 ./scripts/bootstrap.sh
 ```
 
-`scripts/bootstrap.sh` installs the agent skills that `skills-lock.json` lists.
+`scripts/bootstrap.sh` installs the agent skills that `skills-lock.json` lists. The
+`tw0po1nt/skills` source is a private repo. If you cannot read it, the script skips it, installs
+the other skills, and exits 1. The skills from that source are for the maintainer's review
+workflow, and a contribution does not need them.
 
 ## Verify a change
 
