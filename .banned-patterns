@@ -57,7 +57,7 @@
 # ---------------------------------------------------------------------------
 # Considered and kept
 #
-# `harness` is the CONTEXT.md glossary term for the UI test harness, and rule 1
+# `harness` is the GLOSSARY.md glossary term for the UI test harness, and rule 1
 # of docs/standards/coding-standards.md requires that word.
 # `solution` names the .NET solution file, FsHttp.Studio.slnx.
 # `richly` is the one-line description of what this extension does.

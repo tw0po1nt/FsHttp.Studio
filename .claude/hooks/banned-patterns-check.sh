@@ -18,7 +18,7 @@ case "$file_path" in
 esac
 
 case "$file_path" in
-  */.agents/* | */node_modules/* | */obj/* | *.banned-patterns) exit 0 ;;
+  */.agents/* | */.claude/skills/* | */node_modules/* | */obj/* | *.banned-patterns) exit 0 ;;
 esac
 
 root="${CLAUDE_PROJECT_DIR:-.}"

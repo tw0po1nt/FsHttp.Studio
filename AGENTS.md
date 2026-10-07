@@ -16,7 +16,7 @@ command, and it fails on errors that a Fable-only loop never shows.
 all prose: docs, specs, ADRs, issue text, pull request text, commit messages, and code comments. Run
 the skill before you post the text. A one-line code comment is still prose.
 
-**Name a domain concept with the term that `CONTEXT.md` defines.** This binds an identifier, a
+**Name a domain concept with the term that `GLOSSARY.md` defines.** This binds an identifier, a
 comment, a log string, an envelope tag, a test name, an issue title, and a commit message. A concept
 that you cannot state in glossary terms is a signal: either the glossary is missing it, or your
 language is wrong. Resolve that instead of reaching for a synonym.
@@ -36,11 +36,13 @@ to the user in an interactive session as much as they bind a file, and
 **Use American spellings** in every piece of prose: code comments, identifiers, docs, the README,
 issues, and commit messages.
 
-**A vendored skill is never edited.** `.agents/` holds skills that other authors wrote, and
-`skills-lock.json` tracks them. They keep their authors' prose and spelling. Where this repo needs
-different behavior, a document of its own **overlays** the skill, and the overlay wins. Where a
-hook fires before a risky command, that hook is a **backstop**: it states the rule at the moment of
-risk, and it cannot check that you obeyed. The rule is still the requirement.
+**A vendored skill is never edited.** `.agents/skills/` and `.claude/skills/` hold skills that
+other authors wrote. They keep their authors' prose and spelling. Git tracks only
+`skills-lock.json`, and `./scripts/bootstrap.sh` installs every skill that it lists. To add a
+skill, run `npx skills@latest add <owner>/<repo> -s <name> -a claude-code universal -y --copy`.
+Where this repo needs different behavior, a document of its own **overlays** the skill, and the
+overlay wins. Where a hook fires before a risky command, that hook is a **backstop**: it states the
+rule at the moment of risk, and it cannot check that you obeyed. The rule is still the requirement.
 
 ## Read before you act
 
@@ -48,12 +50,14 @@ risk, and it cannot check that you obeyed. The rule is still the requirement.
   Fantomas and `.editorconfig` cannot check.
 - **Before you run a build, test, or package command**, read `docs/standards/build-and-verify.md`.
   It lists the full command set that CI runs.
-- **Before you explore the codebase**, read `CONTEXT.md` and the ADRs in `docs/adr/` that touch your
+- **Before you explore the codebase**, read `GLOSSARY.md` and the ADRs in `docs/adr/` that touch your
   area. `docs/agents/domain.md` states how to use them, and what to do when your output contradicts
   an ADR.
 - **Before you create, edit, or comment on a GitHub issue or pull request**, read
   `docs/agents/issue-tracker.md`. Issues live as GitHub issues on `tw0po1nt/FsHttp.Studio`, and that
   file holds the `gh` command lines and the wayfinding operations.
+- **Before you write, address, or verify review feedback**, read `docs/agents/feedback-ledger.md`.
+  The ledger is one PR comment, and `./scripts/verify.sh` is its gate.
 - **Before you write a spec**, read `docs/standards/spec-writing.md`. The full text belongs in
   `docs/spec/`, and the issue keeps a short summary and a link to it.
 - **Before you open a pull request that changes `src/renderer/`, `src/webview/`, or

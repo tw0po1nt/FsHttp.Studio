@@ -8,7 +8,7 @@ input="$(cat)"
 file_path="$(jq -r '.tool_input.file_path // empty' <<<"$input")"
 
 # Vendored trees keep their authors' prose. AGENTS.md forbids a rewrite there.
-if echo "$file_path" | grep -Eq '(^|/)(\.agents|node_modules)/'; then
+if echo "$file_path" | grep -Eq '(^|/)(\.agents|\.claude/skills|node_modules)/'; then
   exit 0
 fi
 

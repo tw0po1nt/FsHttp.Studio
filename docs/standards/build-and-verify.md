@@ -32,5 +32,12 @@ build fails on errors that a Fable-only loop never shows.
 | `npm run package` | The `.vsix` builds. |
 | `./tests/ui.Tests/run.sh` | The UI suite, which is the release gate. See `docs/standards/release-gate.md`. |
 
+`./scripts/verify.sh` runs the CI steps in the order that `.github/workflows/ci.yml` runs them:
+the banned-patterns check, then each command above from `dotnet fantomas` through `npm run smoke`.
+Its last line is `verify: green` or `verify: red`, and the feedback skills use it as the gate.
+The script leaves out `npm run package` and the UI suite, because `ci.yml` leaves them out.
+`ui-tests.yml` runs the UI suite separately. When you change a step in `ci.yml`, make the same
+change in the script.
+
 `package.json` holds the individual `build:*` scripts that `compile` composes. Use one of those
 scripts only when you rebuild a single side.

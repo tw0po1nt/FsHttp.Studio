@@ -9,7 +9,10 @@ one wording.
 ```sh
 dotnet tool restore
 npm ci
+./scripts/bootstrap.sh
 ```
+
+`scripts/bootstrap.sh` installs the agent skills that `skills-lock.json` lists.
 
 ## Verify a change
 
@@ -20,6 +23,7 @@ dotnet build FsHttp.Studio.slnx
 Run this command after every change to a `.fs` file. Fable accepts code that the F# compiler
 rejects, so a clean Fable build does not prove that the solution compiles.
 `docs/standards/build-and-verify.md` lists the full command set that CI runs.
+`./scripts/verify.sh` runs the steps of `ci.yml` in one command.
 
 ## Read before you act
 
@@ -32,8 +36,8 @@ rejects, so a clean Fable build does not prove that the solution compiles.
   `docs/spec/`, and the issue keeps a short summary and a link.
 - Before you publish a release, read `docs/standards/release-gate.md`. It states what the UI suite
   covers and what it does not.
-- Before you explore the codebase, read `CONTEXT.md` and the ADRs in `docs/adr/` that touch your
-  area. `CONTEXT.md` is the project glossary, and a name in your change uses its terms.
+- Before you explore the codebase, read `GLOSSARY.md` and the ADRs in `docs/adr/` that touch your
+  area. `GLOSSARY.md` is the project glossary, and a name in your change uses its terms.
 
 ## Prose
 
@@ -44,7 +48,8 @@ commit messages, and code comments.
 `.banned-patterns` lists the text that no prose here uses, and
 `scripts/check-banned-patterns.sh` fails CI on a hit. Assert a fact directly, and do not write an em
 dash. Use American spellings, such as `color` and
-`serialize`. Files under `.agents/` are vendored, and they keep their authors' spelling.
+`serialize`. The skills in `.agents/skills/` and `.claude/skills/` are vendored, and they keep their
+authors' spelling.
 
 ## Issues
 

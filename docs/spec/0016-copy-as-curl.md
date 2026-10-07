@@ -59,7 +59,7 @@ URL, the headers, and the Captured body. No setting is added.
 
 ### 2. The term
 
-`CONTEXT.md` holds the term **Curl command**: the shell text that a Client builds from the request
+`GLOSSARY.md` holds the term **Curl command**: the shell text that a Client builds from the request
 as sent.
 
 ### 3. The body, for each state of the Captured body
