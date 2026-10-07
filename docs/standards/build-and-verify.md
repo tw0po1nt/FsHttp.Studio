@@ -12,7 +12,9 @@ npm ci
 ```
 
 The Lua core suite needs Neovim on `PATH`. It also needs network access, because lazy.nvim fetches
-mini.test and luassert into `.tests/` on each run.
+mini.test and luassert into `.tests/` on each run. On Linux, install the readline headers
+(`libreadline-dev` on Debian and Ubuntu). hererocks builds Lua 5.1 for luassert, and that build
+stops without them.
 
 ## The compiler is the check that matters
 
