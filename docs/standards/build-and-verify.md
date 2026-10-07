@@ -54,3 +54,14 @@ change a step in `ci.yml`, make the same change in the script.
 
 `package.json` holds the individual `build:*` scripts that `compile` composes. Use one of those
 scripts only when you rebuild a single side.
+
+## Golden fixtures
+
+The F# tests write each Golden fixture into `tests/golden/`, and the Lua core suite reads the same
+files. A test fails when its output is different from the committed Golden fixture. When you change
+that output on purpose, run the tests with the update flag to write the Golden fixtures again. Then
+examine the diff before you commit it.
+
+```sh
+UPDATE_GOLDEN_FIXTURES=1 dotnet test FsHttp.Studio.slnx
+```

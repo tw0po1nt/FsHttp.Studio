@@ -9,7 +9,7 @@ local function read(name)
     return bytes
 end
 
-local function fixture_names()
+local function golden_fixture_names()
     local names = {}
     for name, kind in vim.fs.dir(folder) do
         if kind == "file" and name:match("%.json$") then
@@ -20,7 +20,7 @@ local function fixture_names()
     return names
 end
 
--- frames.bin holds the frame of each envelope fixture in this order.
+-- frames.bin holds the frame of each envelope Golden fixture in this order.
 local frame_order = {
     "hello",
     "ready",
@@ -42,12 +42,12 @@ local escapes = "\"quoted\" \\ <tag> & 'single' + `tick` \t\n\r\b\f\1\127 é →
 describe("fshttp.envelope", function()
     local envelope = core_env.load("fshttp.envelope")
 
-    it("finds each envelope fixture", function()
-        assert.equal(#frame_order, #fixture_names())
+    it("finds each envelope Golden fixture", function()
+        assert.equal(#frame_order, #golden_fixture_names())
     end)
 
-    it("decodes and encodes each envelope fixture byte for byte", function()
-        for _, name in ipairs(fixture_names()) do
+    it("decodes and encodes each envelope Golden fixture byte for byte", function()
+        for _, name in ipairs(golden_fixture_names()) do
             local bytes = read(name)
             local decoded, err = envelope.decode(bytes)
             assert.equal(nil, err, name)
@@ -55,7 +55,7 @@ describe("fshttp.envelope", function()
         end
     end)
 
-    it("encodes the three Client envelopes as the fixtures hold them", function()
+    it("encodes the three Client envelopes as the Golden fixtures hold them", function()
         local source = envelope.decode(read("locate.json")).source
         assert.equal(read("hello.json"), envelope.encode({ tag = "hello" }))
         assert.equal(read("locate.json"), envelope.encode({ tag = "locate", source = source }))
@@ -143,7 +143,7 @@ describe("fshttp.frame", function()
         return list
     end
 
-    it("encodes each envelope fixture to the frames that the companion writes", function()
+    it("encodes each envelope Golden fixture to the frames that the companion writes", function()
         local frames = {}
         for i, payload in ipairs(payloads()) do
             frames[i] = frame.encode(payload)

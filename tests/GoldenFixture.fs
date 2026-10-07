@@ -21,7 +21,7 @@ let private firstDifference (expected: byte[]) (actual: byte[]) =
     |> Option.defaultValue (min expected.Length actual.Length)
 
 /// Compares `actual` with the committed Golden fixture at `relativePath` under `folder`, and
-/// fails on a difference. With `UPDATE_GOLDEN_FIXTURES=1`, it writes `actual` to the fixture.
+/// fails on a difference. With `UPDATE_GOLDEN_FIXTURES=1`, it writes `actual` to the Golden fixture.
 let verify (relativePath: string) (actual: byte[]) =
     let path = Path.Combine(folder, relativePath)
 

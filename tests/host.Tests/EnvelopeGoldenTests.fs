@@ -100,8 +100,8 @@ let private compileError =
                 EndLine = 9
                 EndCol = 1 } } ]
 
-/// `frames.bin` holds the frame of each envelope fixture in this order.
-let private fixtures =
+/// `frames.bin` holds the frame of each envelope Golden fixture in this order.
+let private goldenFixtures =
     [ "hello", hello
       "ready", encode (Companion.RequestHandler.ready "1.2.3-beta.4")
       "locate", locate
@@ -119,7 +119,7 @@ let private fixtures =
 let private frames () =
     use stream = new MemoryStream()
 
-    for _, payload in fixtures do
+    for _, payload in goldenFixtures do
         Companion.Envelope.writeFrame stream payload
 
     stream.ToArray()
@@ -132,17 +132,17 @@ let private tagOf (payload: byte[]) =
 let tests =
     testList
         "Envelope Golden fixtures"
-        [ for name, payload in fixtures do
+        [ for name, payload in goldenFixtures do
               test (sprintf "%s matches its Golden fixture" name) {
                   GoldenFixture.verify (Path.Combine("envelope", name + ".json")) payload
               }
 
-          test "frames.bin holds the frame of each envelope fixture" {
+          test "frames.bin holds the frame of each envelope Golden fixture" {
               GoldenFixture.verify (Path.Combine("envelope", "frames.bin")) (frames ())
           }
 
-          test "the fixtures cover each envelope tag" {
-              let tags = fixtures |> List.map (snd >> tagOf) |> Set.ofList
+          test "the Golden fixtures cover each envelope tag" {
+              let tags = goldenFixtures |> List.map (snd >> tagOf) |> Set.ofList
 
               Expect.equal
                   tags
@@ -157,10 +157,10 @@ let tests =
                         "runtimeError"
                         "refused"
                         "error" ])
-                  "each tag needs a fixture"
+                  "each tag needs a Golden fixture"
           }
 
-          test "the blocks fixture holds a Block that a Run can reach and a refused Block" {
+          test "the blocks Golden fixture holds a Block that a Run can reach and a refused Block" {
               use doc = JsonDocument.Parse(respond locate)
               let ranges = doc.RootElement.GetProperty "ranges"
 
@@ -169,7 +169,7 @@ let tests =
               Expect.equal (ranges.[1].GetProperty("refusal").GetString()) "loopBody" "the second Block is in a loop"
           }
 
-          test "the refused fixture is the companion's answer to the run fixture" {
+          test "the refused Golden fixture is the companion's answer to the run Golden fixture" {
               use doc = JsonDocument.Parse(respond run)
               Expect.equal (doc.RootElement.GetProperty("code").GetString()) "loopBody" "a loop body is refused"
           } ]
