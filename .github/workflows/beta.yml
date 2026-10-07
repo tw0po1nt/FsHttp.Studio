@@ -137,6 +137,10 @@ jobs:
           neovim: true
           version: stable
 
+      - name: Install the readline headers that hererocks needs to build Lua 5.1
+        if: steps.path.outputs.kind == 'beta'
+        run: sudo apt-get update && sudo apt-get install -y libreadline-dev
+
       - name: Run the Lua core suite
         if: steps.path.outputs.kind == 'beta'
         run: nvim -l tests/minit.lua --minitest
