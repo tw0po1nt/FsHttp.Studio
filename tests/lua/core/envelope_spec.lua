@@ -50,7 +50,7 @@ describe("fshttp.envelope", function()
         for _, name in ipairs(fixture_names()) do
             local bytes = read(name)
             local decoded, err = envelope.decode(bytes)
-            assert.is_nil(err, name)
+            assert.equal(nil, err, name)
             assert.equal(bytes, envelope.encode(decoded), name)
         end
     end)
