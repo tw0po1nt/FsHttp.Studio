@@ -153,7 +153,7 @@ The tree kill is necessary. A companion can start a `--worker` child, and a work
 
 ### 11. The glossary
 
-`CONTEXT.md` holds the term **Restart**: the command of the user that stops the companion with each
+`GLOSSARY.md` holds the term **Restart**: the command of the user that stops the companion with each
 process that the companion started, and then starts a new companion.
 
 ## Testing Decisions

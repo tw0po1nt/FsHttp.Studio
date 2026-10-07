@@ -6,7 +6,7 @@ Each rule is a convention. Cite it in review, and weigh it against the case. Whe
 
 ## 1. Names and comments use the glossary
 
-`CONTEXT.md` is the ubiquitous language. Identifiers, comments, log strings, and envelope tags that name a domain concept use the glossary term, and avoid the listed `_Avoid_` synonyms. Write **Companion** in place of "server", "backend", or "host". Write **Block** in place of "request" or "snippet". Write **Run** in place of "execute" or "send". Write **Envelope** in place of "message" or "payload". "Extension host" is the one sanctioned use of "host", because it is the glossary's own name for the JS side. A name that you cannot express in glossary terms is a signal: the concept is either missing from `CONTEXT.md` or muddled in the code. Resolve that, and do not reach for a synonym.
+`GLOSSARY.md` is the ubiquitous language. Identifiers, comments, log strings, and envelope tags that name a domain concept use the glossary term, and avoid the listed `_Avoid_` synonyms. Write **Companion** in place of "server", "backend", or "host". Write **Block** in place of "request" or "snippet". Write **Run** in place of "execute" or "send". Write **Envelope** in place of "message" or "payload". "Extension host" is the one sanctioned use of "host", because it is the glossary's own name for the JS side. A name that you cannot express in glossary terms is a signal: the concept is either missing from `GLOSSARY.md` or muddled in the code. Resolve that, and do not reach for a synonym.
 
 ## 2. Cross-boundary wire helpers live in one module
 

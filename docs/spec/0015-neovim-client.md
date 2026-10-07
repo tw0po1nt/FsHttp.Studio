@@ -536,7 +536,7 @@ Ticket: [What gates a release of the Neovim client?](https://github.com/tw0po1nt
 
 - **ADR-0012** records the plain Lua client (A1).
 - **ADR-0013** records the client at the repo root with one version (A2).
-- **`CONTEXT.md`** gets these terms: Client, Status line text, Block mark, Response buffer,
+- **`GLOSSARY.md`** gets these terms: Client, Status line text, Block mark, Response buffer,
   Companion archive, Restart, Curl command, Golden fixture, Release gate, Neovim suite, Lua core
   suite, and UI suite. Active document, Check, Harness, Harness setup, Proven-live, Budget, Sidecar,
   Dead port, Beta, and Branch build become editor-neutral. The ticket

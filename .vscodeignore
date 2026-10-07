@@ -37,7 +37,7 @@ scripts/**
 .banned-patterns
 AGENTS.md
 CLAUDE.md
-CONTEXT.md
+GLOSSARY.md
 skills-lock.json
 
 # Source maps and debug symbols — not needed at runtime
