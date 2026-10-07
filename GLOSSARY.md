@@ -141,7 +141,7 @@ The end-to-end suite that drives a child Neovim against a real companion, the te
 _Avoid_: e2e tests, integration tests, Lua tests.
 
 **Lua core suite**:
-The tests of the pure core of the Neovim client. They run outside Neovim and read the Golden fixtures. A test in this suite is not a Check.
+The tests of the pure core of the Neovim client. They run in headless Neovim, and each core module loads with no access to the Neovim API. They read the Golden fixtures. A test in this suite is not a Check.
 _Avoid_: unit specs, core specs (a spec is a written document).
 
 **Golden fixture**:

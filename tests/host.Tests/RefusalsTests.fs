@@ -152,3 +152,32 @@ let forRefusedTests =
 
               Expect.notEqual r.Title (forCode "unaddressable").Title "a stale lens is not a position refusal"
           } ]
+
+[<Tests>]
+let clientTests =
+    testList
+        "Refusals per Client"
+        [ test "the Neovim staleBlockIndex ends with the Neovim command and names no lens" {
+              let r = staleBlockIndex Neovim
+
+              Expect.stringEnds r.Detail "To run this request, run :FsHttp run again." "the Neovim action"
+              Expect.isFalse (r.Detail.Contains "lens") "Neovim has no lens"
+              Expect.equal r.Title (staleBlockIndex VSCode).Title "the heading is shared"
+          }
+
+          test "forRefused keeps the VSCode staleBlockIndex" {
+              Expect.equal (forRefused "staleBlockIndex" None) (staleBlockIndex VSCode) "VSCode"
+          }
+
+          test "the two no-Block sentences keep their words" {
+              Expect.equal noBlocksParseFailure "No requests found: this script has a syntax error." "parse failure"
+
+              Expect.equal
+                  noBlocksEmpty
+                  "This script has no request. Write an http { } block to run one."
+                  "empty script"
+          }
+
+          test "the fallback code has a catalog row" {
+              Expect.contains catalogCodes fallbackCode "the fallback must be a catalog code"
+          } ]

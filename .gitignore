@@ -42,3 +42,5 @@ tests/ui.Tests/fixtures/sidecar.json
 .scratch/
 
 .fake
+# Lua core suite: lazy.minit installs lazy.nvim, mini.test, and luassert here.
+.tests/

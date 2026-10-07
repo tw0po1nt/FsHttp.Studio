@@ -127,6 +127,24 @@ jobs:
 
       - run: npm ci
 
+      - name: Check the generated Lua text
+        if: steps.path.outputs.kind == 'beta'
+        run: dotnet fsi scripts/generate-lua.fsx --check
+
+      - uses: rhysd/action-setup-vim@v1
+        if: steps.path.outputs.kind == 'beta'
+        with:
+          neovim: true
+          version: stable
+
+      - name: Install the readline headers that hererocks needs to build Lua 5.1
+        if: steps.path.outputs.kind == 'beta'
+        run: sudo apt-get update && sudo apt-get install -y libreadline-dev
+
+      - name: Run the Lua core suite
+        if: steps.path.outputs.kind == 'beta'
+        run: nvim -l tests/minit.lua --minitest
+
       - name: Run the bundled renderer under node
         if: steps.path.outputs.kind == 'beta'
         run: npm run smoke
