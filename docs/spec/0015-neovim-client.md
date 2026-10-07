@@ -289,7 +289,7 @@ Tickets: [Where does the Neovim client show a Run's result?](https://github.com/
   body. The client has no HTML formatter.
 - While a Run is in progress, the buffer shows "Running… Ns".
 
-The layout came from the prototype on the branch `prototype/response-buffer` (variant D):
+The layout came from the prototype in the tag `archive/prototype/response-buffer` (variant D):
 
 ```
 winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repos/fsprojects/FsHttp
@@ -668,7 +668,7 @@ The build adds these entries to the honest gaps when the Neovim suite ships:
 - [Which routes can a Neovim plugin be written in, F# included?](https://github.com/tw0po1nt/FsHttp.Studio/issues/241)
 - [How do Neovim plugin managers install a plugin that needs a .NET binary?](https://github.com/tw0po1nt/FsHttp.Studio/issues/242)
 - [What does it take to upstream a Lua target to Fable?](https://github.com/tw0po1nt/FsHttp.Studio/issues/251)
-- The Response buffer prototype and its screenshots are on the branch `prototype/response-buffer`.
+- The Response buffer prototype and its screenshots are in the tag `archive/prototype/response-buffer`.
 
 ### Sequencing
 
