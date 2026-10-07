@@ -1,0 +1,66 @@
+{
+  "kind": "ok",
+  "block": "html",
+  "request": {
+    "method": "GET",
+    "url": "https://example.com/",
+    "headers": [
+      [
+        "User-Agent",
+        "FsHttp"
+      ]
+    ],
+    "contentType": "",
+    "body": {
+      "state": "none"
+    }
+  },
+  "status": 200,
+  "reason": "OK",
+  "headers": [
+    [
+      "date",
+      "Wed, 07 Oct 2026 01:44:13 GMT"
+    ],
+    [
+      "content-type",
+      "text/html; charset=utf-8"
+    ],
+    [
+      "server",
+      "cloudflare"
+    ],
+    [
+      "last-modified",
+      "Sun, 04 Oct 2026 20:44:03 GMT"
+    ],
+    [
+      "allow",
+      "GET, HEAD"
+    ],
+    [
+      "accept-ranges",
+      "bytes"
+    ],
+    [
+      "age",
+      "7278"
+    ],
+    [
+      "cf-cache-status",
+      "HIT"
+    ],
+    [
+      "cf-ray",
+      "a469382c2f01e566-ORD"
+    ],
+    [
+      "alt-svc",
+      "h3=\":443\"; ma=86400"
+    ]
+  ],
+  "contentType": "text/html; charset=utf-8",
+  "bodyBase64": "PCFkb2N0eXBlIGh0bWw+PGh0bWwgbGFuZz1lbj48aGVhZD48bWV0YSBjaGFyc2V0PXV0Zi04PjxsaW5rIHJlbD1pY29uIGhyZWY9ZGF0YTosPjxtZXRhIG5hbWU9dmlld3BvcnQgY29udGVudD0id2lkdGg9ZGV2aWNlLXdpZHRoLGluaXRpYWwtc2NhbGU9MSI+PHRpdGxlPkV4YW1wbGUgRG9tYWluPC90aXRsZT48c3R5bGU+aHRtbHtjb2xvci1zY2hlbWU6bGlnaHQgZGFyaztiYWNrZ3JvdW5kOmxpZ2h0LWRhcmsoI2VlZSwjMjIyKX1ib2R5e2ZvbnQ6MTZweC8xLjYgc3lzdGVtLXVpLHNhbnMtc2VyaWY7bWF4LXdpZHRoOjI2ZW07bWFyZ2luOmF1dG87cGFkZGluZzoyNXZoIDJlbSAyZW07dGV4dC1hbGlnbjpjZW50ZXJ9PC9zdHlsZT48L2hlYWQ+PGJvZHk+PHA+VGhpcyBkb21haW4gaXMgZm9yIHVzZSBpbiBkb2N1bWVudGF0aW9uIGV4YW1wbGVzIHdpdGhvdXQgbmVlZGluZyBwZXJtaXNzaW9uLiBUaGlzIGlzIG5vdCBhIHNlcnZpY2U7IGF2b2lkIHJlbHlpbmcgb24gaXQgZm9yIHRlc3RpbmcgYW5kIG1vbml0b3JpbmcgcHVycG9zZXMuPC9wPjxzY3JpcHQgc3JjPS9zLmpzPjwvc2NyaXB0PjwvYm9keT48L2h0bWw+Cg==",
+  "requestMs": 89.3,
+  "totalMs": 130.6
+}

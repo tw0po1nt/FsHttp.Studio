@@ -1,0 +1,13 @@
+{
+  "kind": "compileError",
+  "block": "compile",
+  "diagnostics": [
+    {
+      "startLine": 14,
+      "startCol": 17,
+      "endLine": 14,
+      "endCol": 23,
+      "message": "This expression was expected to have type\n    'int'    \nbut here has type\n    'string'    "
+    }
+  ]
+}
