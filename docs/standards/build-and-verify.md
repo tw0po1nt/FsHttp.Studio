@@ -11,6 +11,9 @@ dotnet tool restore
 npm ci
 ```
 
+The Lua core suite needs Neovim on `PATH`. It also needs network access, because lazy.nvim fetches
+mini.test and luassert into `.tests/` on each run.
+
 ## The compiler is the check that matters
 
 ```sh
@@ -27,13 +30,15 @@ build fails on errors that a Fable-only loop never shows.
 | --- | --- |
 | `dotnet test FsHttp.Studio.slnx --no-build` | The unit suites pass. |
 | `dotnet fantomas --check .` | The formatting matches. Tooling owns layout. See `docs/standards/coding-standards.md`. |
+| `dotnet fsi scripts/generate-lua.fsx --check` | The committed files in `lua/fshttp/` match `Refusals.fs` and `package.json`. Without `--check`, the script writes the files again. |
 | `npm run compile` | The companion publishes, Fable emits, and esbuild bundles. |
 | `npm run smoke` | The bundled renderer runs under node. |
+| `nvim -l tests/minit.lua --minitest` | The Lua core suite passes. Each core module loads in an environment with no `vim` global. |
 | `npm run package` | The `.vsix` builds. |
 | `./tests/ui.Tests/run.sh` | The UI suite, which is the release gate. See `docs/standards/release-gate.md`. |
 
 `./scripts/verify.sh` runs the CI steps in the order that `.github/workflows/ci.yml` runs them:
-the banned-patterns check, then each command above from `dotnet fantomas` through `npm run smoke`.
+the banned-patterns check, then each command above except `npm run package` and the UI suite.
 Its last line is `verify: green` or `verify: red`, and the feedback skills use it as the gate.
 The script leaves out `npm run package` and the UI suite, because `ci.yml` leaves them out.
 `ui-tests.yml` runs the UI suite separately. When you change a step in `ci.yml`, make the same

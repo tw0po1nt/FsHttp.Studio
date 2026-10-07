@@ -157,32 +157,27 @@ let forRefusedTests =
 let clientTests =
     testList
         "Refusals per Client"
-        [ test "the Neovim staleBlockIndex ends with the Neovim command" {
-              let r = forRefusedIn Neovim "staleBlockIndex" None
+        [ test "the Neovim staleBlockIndex ends with the Neovim command and names no lens" {
+              let r = staleBlockIndex Neovim
 
               Expect.stringEnds r.Detail "To run this request, run :FsHttp run again." "the Neovim action"
-              Expect.equal r.Title (forRefused "staleBlockIndex" None).Title "the heading is shared"
+              Expect.isFalse (r.Detail.Contains "lens") "Neovim has no lens"
+              Expect.equal r.Title (staleBlockIndex VSCode).Title "the heading is shared"
           }
 
           test "forRefused keeps the VSCode staleBlockIndex" {
-              Expect.equal (forRefused "staleBlockIndex" None) (forRefusedIn VSCode "staleBlockIndex" None) "VSCode"
+              Expect.equal (forRefused "staleBlockIndex" None) (staleBlockIndex VSCode) "VSCode"
           }
 
-          test "the two no-request sentences keep their words" {
-              Expect.equal noRequestsSyntaxError "No requests found: this script has a syntax error." "syntax error"
+          test "the two no-Block sentences keep their words" {
+              Expect.equal noBlocksParseFailure "No requests found: this script has a syntax error." "parse failure"
 
               Expect.equal
-                  noRequestsEmpty
+                  noBlocksEmpty
                   "This script has no request. Write an http { } block to run one."
                   "empty script"
           }
 
-          test "fillCommand fills each Client's command name into a template" {
-              let template = "Run {command} to start it again."
-              Expect.equal (fillCommand ":FsHttp restart" template) "Run :FsHttp restart to start it again." "Neovim"
-
-              Expect.equal
-                  (fillCommand "FsHttp.Studio: Restart companion" template)
-                  "Run FsHttp.Studio: Restart companion to start it again."
-                  "VSCode"
+          test "the fallback code has a catalog row" {
+              Expect.contains catalogCodes fallbackCode "the fallback must be a catalog code"
           } ]

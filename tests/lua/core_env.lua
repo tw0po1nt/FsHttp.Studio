@@ -1,14 +1,31 @@
 local M = {}
 
+-- A core module sees these pure Lua globals and nothing else, so it cannot reach vim, io, os, or package.
+local allowed = {
+    "assert",
+    "error",
+    "getmetatable",
+    "ipairs",
+    "math",
+    "next",
+    "pairs",
+    "pcall",
+    "select",
+    "setmetatable",
+    "string",
+    "table",
+    "tonumber",
+    "tostring",
+    "type",
+    "unpack",
+}
+
 function M.new_env()
-    local env = setmetatable({}, {
-        __index = function(_, key)
-            if key == "vim" then
-                return nil
-            end
-            return _G[key]
-        end,
-    })
+    local env = {}
+    for _, key in ipairs(allowed) do
+        env[key] = _G[key]
+    end
+    env._G = env
     env.require = function(name)
         return M.load(name, env)
     end

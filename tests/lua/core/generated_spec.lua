@@ -11,6 +11,13 @@ describe("the core environment", function()
     it("has no vim global", function()
         assert.is_nil(core_env.new_env().vim)
     end)
+
+    it("reaches no vim through _G, rawget, or package", function()
+        local env = core_env.new_env()
+        assert.is_nil(env._G.vim)
+        assert.is_nil(rawget(env._G, "vim"))
+        assert.is_nil(env.package)
+    end)
 end)
 
 describe("fshttp.refusals", function()
@@ -26,14 +33,18 @@ describe("fshttp.refusals", function()
         assert.equal(tail, detail:sub(-#tail))
     end)
 
-    it("holds the two no-request sentences", function()
-        assert.equal("No requests found: this script has a syntax error.", refusals.no_requests_syntax_error)
-        assert.equal("This script has no request. Write an http { } block to run one.", refusals.no_requests_empty)
+    it("names no lens in the stale Block sentence", function()
+        assert.is_nil(refusals.stale_block_index.detail:find("lens", 1, true))
     end)
 
-    it("holds a lens title for each catalog code", function()
+    it("holds the two no-Block sentences", function()
+        assert.equal("No requests found: this script has a syntax error.", refusals.no_blocks_parse_failure)
+        assert.equal("This script has no request. Write an http { } block to run one.", refusals.no_blocks_empty)
+    end)
+
+    it("holds a Block mark title for each catalog code", function()
         for code, refusal in pairs(refusals.codes) do
-            assert.equal("⊘ " .. refusal.title, refusal.lens_title, code)
+            assert.equal("⊘ " .. refusal.title, refusal.block_mark_title, code)
         end
         assert.is_table(refusals.codes[refusals.fallback_code])
     end)
