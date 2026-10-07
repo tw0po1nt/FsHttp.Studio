@@ -6,6 +6,13 @@ module Refusals
 /// (`lensTitle`), and the response viewer's notice shows the sentence alone.
 type Refusal = { Title: string; Detail: string }
 
+type Client =
+    | VSCode
+    | Neovim
+
+/// `{command}` marks the place where a Client puts the name of its own command.
+let fillCommand (command: string) (template: string) : string = template.Replace("{command}", command)
+
 /// `unaddressable` is both a code of its own and the fallback for an unrecognized code.
 let private catalog: (string * Refusal) list =
     [ "loopBody",
@@ -68,6 +75,9 @@ let private catalog: (string * Refusal) list =
         Detail =
           "FsHttp.Studio cannot address a request in this position. To run this request, move it to its own let binding, at the top level of the script or of a module." } ]
 
+/// Every wire code that has a catalog row, in catalog order.
+let catalogCodes: string list = catalog |> List.map fst
+
 let private table = catalog |> Map.ofList
 
 let private fallback = table.["unaddressable"]
@@ -100,16 +110,32 @@ let private unboundBlockValue (name: string) : Refusal =
             name }
 
 /// A stale lens has no block at its recorded index. It is a Run outcome only, so it has no
-/// `catalog` row or lens title.
-let private staleBlockIndex: Refusal =
+/// `catalog` row or lens title. Only the corrective action differs between Clients.
+let private staleBlockIndex (client: Client) : Refusal =
+    let action =
+        match client with
+        | VSCode -> "run it again from its lens."
+        | Neovim -> "run :FsHttp run again."
+
     { Title = "Cannot run: the script changed"
       Detail =
-        "This request moved or was removed after you started the Run. FsHttp.Studio cannot find it at the position the lens recorded. To run this request, run it again from its lens." }
+        "This request moved or was removed after you started the Run. FsHttp.Studio cannot find it at the position the lens recorded. To run this request, "
+        + action }
+
+/// The sentence for a script that holds a syntax error and no Block.
+let noRequestsSyntaxError: string =
+    "No requests found: this script has a syntax error."
+
+/// The sentence for a script that holds no Block and no syntax error.
+let noRequestsEmpty: string =
+    "This script has no request. Write an http { } block to run one."
 
 /// The one place that knows the outcome-only codes `catalog` omits, so a heading and a body can
 /// never come from two different refusals.
-let forRefused (code: string) (name: string option) : Refusal =
+let forRefusedIn (client: Client) (code: string) (name: string option) : Refusal =
     match code, name with
     | "unboundBlockValue", Some blockedName -> unboundBlockValue blockedName
-    | "staleBlockIndex", None -> staleBlockIndex
+    | "staleBlockIndex", None -> staleBlockIndex client
     | _ -> forCode code
+
+let forRefused (code: string) (name: string option) : Refusal = forRefusedIn VSCode code name

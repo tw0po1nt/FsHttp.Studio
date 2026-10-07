@@ -152,3 +152,37 @@ let forRefusedTests =
 
               Expect.notEqual r.Title (forCode "unaddressable").Title "a stale lens is not a position refusal"
           } ]
+
+[<Tests>]
+let clientTests =
+    testList
+        "Refusals per Client"
+        [ test "the Neovim staleBlockIndex ends with the Neovim command" {
+              let r = forRefusedIn Neovim "staleBlockIndex" None
+
+              Expect.stringEnds r.Detail "To run this request, run :FsHttp run again." "the Neovim action"
+              Expect.equal r.Title (forRefused "staleBlockIndex" None).Title "the heading is shared"
+          }
+
+          test "forRefused keeps the VSCode staleBlockIndex" {
+              Expect.equal (forRefused "staleBlockIndex" None) (forRefusedIn VSCode "staleBlockIndex" None) "VSCode"
+          }
+
+          test "the two no-request sentences keep their words" {
+              Expect.equal noRequestsSyntaxError "No requests found: this script has a syntax error." "syntax error"
+
+              Expect.equal
+                  noRequestsEmpty
+                  "This script has no request. Write an http { } block to run one."
+                  "empty script"
+          }
+
+          test "fillCommand fills each Client's command name into a template" {
+              let template = "Run {command} to start it again."
+              Expect.equal (fillCommand ":FsHttp restart" template) "Run :FsHttp restart to start it again." "Neovim"
+
+              Expect.equal
+                  (fillCommand "FsHttp.Studio: Restart companion" template)
+                  "Run FsHttp.Studio: Restart companion to start it again."
+                  "VSCode"
+          } ]

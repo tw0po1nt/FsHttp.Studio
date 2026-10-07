@@ -59,3 +59,12 @@ media/demo.gif
 
 # Redundant with `vsce package --no-dependencies`, but explicit
 node_modules/**
+
+# Neovim client. The .vsix holds no Lua file.
+lua/**
+plugin/**
+doc/**
+build.lua
+lazy.lua
+**/*.lua
+.tests/**

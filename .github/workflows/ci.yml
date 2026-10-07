@@ -42,6 +42,8 @@ jobs:
 
       - run: dotnet fantomas --check .
 
+      - run: dotnet fsi scripts/generate-lua.fsx --check
+
       - run: dotnet build FsHttp.Studio.slnx
 
       - run: dotnet test FsHttp.Studio.slnx --no-build
@@ -53,3 +55,11 @@ jobs:
       # Runs the renderer core's Fable/JS output under node — the guard that "compiles under Fable"
       # actually "bundles and runs", which the .NET Seam-B suite structurally can't cover.
       - run: npm run smoke
+
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      - name: Run the Lua core suite
+        run: nvim -l tests/minit.lua --minitest

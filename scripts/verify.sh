@@ -11,11 +11,13 @@ steps=(
   "./scripts/check-banned-patterns.sh"
   "dotnet tool restore"
   "dotnet fantomas --check ."
+  "dotnet fsi scripts/generate-lua.fsx --check"
   "dotnet build FsHttp.Studio.slnx"
   "dotnet test FsHttp.Studio.slnx --no-build"
   "npm ci"
   "npm run compile"
   "npm run smoke"
+  "nvim -l tests/minit.lua --minitest"
 )
 
 for step in "${steps[@]}"; do
