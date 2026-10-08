@@ -11,6 +11,9 @@ let writeFrame (out: Stream) (payload: byte[]) =
     out.Write(payload, 0, payload.Length)
     out.Flush()
 
+let encode (envelope: obj) : byte[] =
+    JsonSerializer.SerializeToUtf8Bytes envelope
+
 let private readExactly (input: Stream) (buffer: byte[]) =
     let mutable offset = 0
     let mutable eof = false

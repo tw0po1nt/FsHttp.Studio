@@ -23,6 +23,13 @@ jobs:
 
       - run: ./scripts/check-banned-patterns.sh
 
+      - name: Check the Lua format
+        uses: JohnnyMorganz/stylua-action@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: '2.5.2'
+          args: --check .
+
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
@@ -50,11 +57,35 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run compile
+      # Runs npm run compile, then builds the .vsix.
+      - run: npm run package
+
+      - run: ./scripts/check-vsix-holds-no-lua.sh
 
       # Runs the renderer core's Fable/JS output under node — the guard that "compiles under Fable"
       # actually "bundles and runs", which the .NET Seam-B suite structurally can't cover.
       - run: npm run smoke
+
+      # The Neovim client supports Neovim 0.11 and later, so the type check uses the 0.11 API types.
+      - name: Install Neovim 0.11 for its API types
+        id: nvim-types
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: v0.11.7
+
+      - name: Install lua-language-server
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/lua-language-server"
+          curl -fsSL https://github.com/LuaLS/lua-language-server/releases/download/3.19.1/lua-language-server-3.19.1-linux-x64.tar.gz \
+            | tar -xz -C "$RUNNER_TEMP/lua-language-server"
+          echo "$RUNNER_TEMP/lua-language-server/bin" >> "$GITHUB_PATH"
+
+      - name: Check the Lua types against the Neovim 0.11 API
+        env:
+          VIMRUNTIME: ${{ steps.nvim-types.outputs.vim-dir }}/runtime
+        run: ./scripts/check-lua-types.sh
 
       - uses: rhysd/action-setup-vim@v1
         with:

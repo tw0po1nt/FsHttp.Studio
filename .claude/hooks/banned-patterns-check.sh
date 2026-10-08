@@ -2,7 +2,8 @@
 # PreToolUse check: deny the call when its pending prose matches a pattern that
 # `.banned-patterns` forbids. Two kinds of call carry prose:
 #
-#   - A Write or an Edit on Markdown or F# source.
+#   - A Write or an Edit on Markdown, F# source, Lua source, or a Vim help file
+#     in doc/.
 #   - A Bash command that publishes prose: `git commit`, a `gh` issue or pull
 #     request create, edit, or comment, and a `gh api` call that sends a body.
 #     The check reads the command text and each body file that the command
@@ -44,6 +45,8 @@ else
   case "$file_path" in
     *.md | *.markdown) kind="markdown" ;;
     *.fs | *.fsx) kind="fsharp" ;;
+    *.lua) kind="lua" ;;
+    */doc/*.txt) kind="vimhelp" ;;
     *) exit 0 ;;
   esac
 
@@ -92,8 +95,81 @@ strip_fsharp='
   }
 '
 
+strip_lua='
+  {
+    line = $0
+    n = length(line)
+    out = ""
+    i = 1
+    while (i <= n) {
+      if (closing != "") {
+        j = index(substr(line, i), closing)
+        if (j == 0) { out = out " " substr(line, i); break }
+        out = out " " substr(line, i, j - 1)
+        i += j - 1 + length(closing)
+        closing = ""
+        continue
+      }
+      if (quote != "") {
+        j = i
+        while (j <= n && substr(line, j, 1) != quote) {
+          if (substr(line, j, 1) == "\\") j++
+          j++
+        }
+        out = out " " substr(line, i, j - i)
+        if (j > n) break
+        quote = ""
+        i = j + 1
+        continue
+      }
+      rest = substr(line, i)
+      if (substr(rest, 1, 2) == "--") {
+        rest = substr(rest, 3)
+        if (match(rest, /^\[=*\[/)) {
+          closing = "]" substr(rest, 2, RLENGTH - 2) "]"
+          i += 2 + RLENGTH
+          continue
+        }
+        out = out " " rest
+        break
+      }
+      if (match(rest, /^\[=*\[/)) {
+        closing = "]" substr(rest, 2, RLENGTH - 2) "]"
+        i += RLENGTH
+        continue
+      }
+      c = substr(rest, 1, 1)
+      if (c == "\"" || c == "\047") {
+        quote = c
+        i++
+        continue
+      }
+      i++
+    }
+    gsub(/`[^`]*`/, "", out)
+    print out
+  }
+'
+
+strip_vimhelp='
+  example && /^</ { example = 0; print substr($0, 2); next }
+  example && /^[^[:space:]]/ { example = 0 }
+  example { print ""; next }
+  {
+    line = $0
+    if (match(line, /(^|[[:space:]])>[a-z]*$/)) {
+      example = 1
+      line = substr(line, 1, RSTART - 1)
+    }
+    gsub(/`[^`]*`/, "", line)
+    print line
+  }
+'
+
 case "$kind" in
   markdown) stripped="$(printf '%s\n' "$pending" | awk "$strip_markdown")" ;;
+  lua) stripped="$(printf '%s\n' "$pending" | awk "$strip_lua")" ;;
+  vimhelp) stripped="$(printf '%s\n' "$pending" | awk "$strip_vimhelp")" ;;
   *) stripped="$(printf '%s\n' "$pending" | awk "$strip_fsharp")" ;;
 esac
 

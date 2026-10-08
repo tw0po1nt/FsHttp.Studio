@@ -1,0 +1,4 @@
+# scripts/generate-lua.fsx writes these files, and its --check mode fails CI when
+# a committed file differs from its output. The generator sets their layout.
+lua/fshttp/refusals.lua
+lua/fshttp/version.lua

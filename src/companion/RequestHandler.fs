@@ -1,6 +1,7 @@
 module Companion.RequestHandler
 
 
+open System.Reflection
 open System.Text.Json
 open Companion.Envelope
 open Companion.BlockLocator
@@ -25,6 +26,17 @@ let private toBlockEntry (block: LocatedBlock) : obj =
 let private runResponse (source: string) (blockIndex: int) (scriptFileName: string option) (timeoutMs: int) : obj =
     outcomeToWire (run source blockIndex scriptFileName timeoutMs)
 
+/// The build sets the informational version to the package version, with no source revision.
+let companionVersion =
+    match Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>() with
+    | null -> None
+    | attribute -> Some attribute.InformationalVersion
+
+let ready (version: string option) : obj =
+    match version with
+    | Some version -> {| tag = "ready"; version = version |}
+    | None -> {| tag = "ready" |}
+
 /// Handles one decoded request payload. Returns the response object that the caller
 /// serializes onto the frame channel.
 let respond (request: JsonDocument) : obj =
@@ -32,7 +44,7 @@ let respond (request: JsonDocument) : obj =
     let tag = root |> getStringProp "tag"
 
     match tag with
-    | "hello" -> {| tag = "ready" |}
+    | "hello" -> ready companionVersion
     | "locate" ->
         let source = root |> getStringProp "source"
         let located = locateBlocks source

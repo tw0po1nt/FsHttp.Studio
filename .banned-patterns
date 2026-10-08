@@ -11,10 +11,11 @@
 # AGENTS.md states the rule, and docs/standards/technical-prose.md holds the
 # reasoning behind the prose patterns.
 #
-# The check reads Markdown files, the `//` comment lines of F# source, and the
-# string literals of F# source. It strips fenced code blocks and inline code
-# spans first, so a rule can name the text it forbids by writing that text in
-# backticks.
+# The check reads Markdown files, the `//` comment lines and the string literals
+# of F# source, the `--` comments and the string literals of Lua source, and the
+# Vim help files in doc/. It strips fenced code blocks, Vim help examples, and
+# inline code spans first, so a rule can name the text it forbids by writing
+# that text in backticks.
 
 # ---------------------------------------------------------------------------
 # Terminology

@@ -1,0 +1,2 @@
+# The Lua core suite compares each Golden fixture byte for byte, so Git must not convert its line endings.
+tests/golden/** -text

@@ -13,8 +13,7 @@ let private openFrameChannel () =
     let rawStdin = Console.OpenStandardInput()
     Console.SetOut(Console.Error)
 
-    let emit (o: obj) =
-        writeFrame rawStdout (JsonSerializer.SerializeToUtf8Bytes o)
+    let emit (o: obj) = writeFrame rawStdout (encode o)
 
     rawStdin, emit
 

@@ -1,0 +1,1 @@
+{"bodyBase64":"bm8gc3VjaCBwb2tlbW9u","contentType":"text/plain","headers":{"Content-Type":"text/plain"},"reason":"Not Found","request":{"bodyBase64":"","bodyReason":"","bodyState":"none","headers":{},"method":"GET","url":"https://example.com/missing"},"requestMs":3,"status":404,"tag":"ok"}
