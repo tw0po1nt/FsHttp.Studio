@@ -14,7 +14,7 @@ T["a hung child Neovim stops, and a new child Neovim answers"] = function()
         return #harness.new_companion_pids(known) == 1
     end)
     frozen_companion = harness.new_companion_pids(known)[1]
-    vim.uv.kill(frozen_companion, "sigstop")
+    harness.freeze_process(frozen_companion)
 
     child.mini.lua_notify("while true do end")
     local answered, err = pcall(harness.lua_get, child, "1 + 1")

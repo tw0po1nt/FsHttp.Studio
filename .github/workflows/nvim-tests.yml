@@ -1,4 +1,5 @@
-# Runs the Neovim suite and the Lua core suite.
+# Runs the Neovim suite and the Lua core suite on four legs: Linux with Neovim 0.11, and Linux,
+# macOS, and Windows with the pinned stable Neovim.
 name: Neovim tests
 
 on:
@@ -6,6 +7,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/nvim-tests.yml'
+      # The suite steps live in a composite action that release.yml also calls.
+      - '.github/actions/run-nvim-suite/action.yml'
       - 'build.lua'
       - 'lazy.lua'
       - 'lua/**'
@@ -17,6 +20,7 @@ on:
       - 'tests/nvim/**'
       # The Neovim suite uses the test HTTP server of the UI suite.
       - 'tests/ui.Tests/server/**'
+      - 'tests/ui.Tests/fixtures/**'
       - 'src/**'
       - 'global.json'
       - 'package.json'
@@ -34,9 +38,27 @@ permissions:
 
 jobs:
   nvim-tests:
-    name: Neovim suites (Linux, pinned stable Neovim)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    name: Neovim suites (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    # The Windows leg is the slowest. The suite has its own Budgets, and this cap stops a wedged runner.
+    timeout-minutes: 30
+    strategy:
+      # A red leg must not hide the result of the other legs.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux, Neovim 0.11
+            os: ubuntu-latest
+            neovim-pin: floor
+          - name: Linux, pinned stable Neovim
+            os: ubuntu-latest
+            neovim-pin: stable
+          - name: macOS, pinned stable Neovim
+            os: macos-latest
+            neovim-pin: stable
+          - name: Windows, pinned stable Neovim
+            os: windows-latest
+            neovim-pin: stable
     steps:
       - uses: actions/checkout@v4
 
@@ -49,21 +71,6 @@ jobs:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
 
-      - name: Read the stable Neovim pin
-        id: nvim-pin
-        run: echo "stable=$(jq -r .stable tests/nvim/neovim-pin.json)" >> "$GITHUB_OUTPUT"
-
-      - uses: rhysd/action-setup-vim@v1
+      - uses: ./.github/actions/run-nvim-suite
         with:
-          neovim: true
-          version: ${{ steps.nvim-pin.outputs.stable }}
-
-      - name: Install the readline headers that hererocks needs to build Lua 5.1
-        run: sudo apt-get update && sudo apt-get install -y libreadline-dev
-
-      - name: Run the Lua core suite
-        run: nvim -l tests/minit.lua --minitest
-
-      # The suite has no retry. A flaky Check is a defect to fix.
-      - name: Run the Neovim suite
-        run: tests/nvim/run.sh
+          neovim-pin: ${{ matrix.neovim-pin }}

@@ -92,14 +92,17 @@ surface. Do not leave the instruction only inside a shipped spec.
 
 The Neovim suite drives a child Neovim against a real companion, the test HTTP server, and the
 Sidecar of the UI suite. lazy.minit loads the client in the child as a lazy.nvim spec.
-`nvim-tests.yml` runs the Neovim suite and the Lua core suite. The suite has no retry, so one red
-Check gives a red job.
+`nvim-tests.yml` runs the Neovim suite and the Lua core suite on four legs: Linux with Neovim 0.11,
+and Linux, macOS, and Windows with the pinned stable Neovim. The composite action
+`.github/actions/run-nvim-suite` holds the suite steps. The suite has no retry, so one red Check
+gives a red leg. `update-neovim-pin.yml` opens a pull request when a newer Neovim ships, and it
+dispatches `nvim-tests.yml` against the pin branch.
 
 ### Honest gaps of the Neovim suite
 
-**The suite runs on one leg.** It runs on Linux with the stable Neovim that
-`tests/nvim/neovim-pin.json` pins. A defect that occurs only on Neovim 0.11, macOS, or Windows
-ships uncaught.
+**The suite tests two Neovim versions.** The legs use Neovim 0.11 (`floor` in
+`tests/nvim/neovim-pin.json`) and the pinned stable version (`stable`). A defect that occurs only on
+another version ships uncaught. Neovim 0.11 runs on Linux only.
 
 **`release.yml` does not run the suite yet.** A red Neovim suite cannot refuse a draft Release.
 
@@ -108,9 +111,11 @@ ships uncaught.
 
 **The Budgets come from local runs and one Linux CI run.** The values are 60 s for Harness setup,
 30 s for each Check, and 180 s for the suite. The suite took 128.7 s on the Linux leg of CI, and
-the suite Budget adds a margin for the Checks that the open Neovim client issues add. No measured
-run on macOS or Windows set the Budgets. The suite Budget starts at the first Check, so it leaves
-out Harness setup, as in the UI suite.
+the suite Budget adds a margin for the Checks that the open Neovim client issues add. `harness.lua`
+holds one row of Budgets for each operating system. The macOS and Windows rows copy the Linux row,
+because no measured run on those systems has set them yet. Each leg writes its timing table to the
+job summary. Replace the macOS and Windows rows with values from those tables. The suite Budget
+starts at the first Check, so it leaves out Harness setup, as in the UI suite.
 
 **The suites test lazy.nvim only.** The `vim.pack` route gets no Check.
 

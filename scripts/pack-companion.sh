@@ -38,9 +38,14 @@ fi
 mkdir -p "$OUT"
 NAME="fshttp-studio-companion-$VERSION.tar.gz"
 rm -f "$OUT/$NAME" "$OUT/$NAME.sha256"
-tar -czf "$OUT/$NAME" -C "$PUBLISHED" .
 
+PUBLISHED="$(cd "$PUBLISHED" && pwd)"
+
+# tar reads a drive letter in an archive name as a host name (D:/a/out), which breaks on Windows in
+# Git Bash. The archive therefore gets a relative name inside $OUT.
 cd "$OUT"
+tar -czf "$NAME" -C "$PUBLISHED" .
+
 if command -v sha256sum >/dev/null 2>&1; then
   sha256sum "$NAME" > "$NAME.sha256"
 else

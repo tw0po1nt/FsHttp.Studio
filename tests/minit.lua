@@ -15,9 +15,16 @@ vim.opt.rtp:prepend(lazy_path)
 -- The child Neovim of the lualine Check runs offline, so the runner installs lualine.nvim for it.
 local lualine_commit = "221ce6b2d999187044529f49da6554a92f740a96"
 
+-- lazy.minit installs mini.test and luassert on its own. These commits replace the latest commit of
+-- each, so an upstream change cannot alter a run. lazy.nvim merges the spec by plugin name.
+local mini_test_commit = "72fc8c0ef64a2c5e17cd00447aff586abbe6c27a"
+local luassert_commit = "a1c4902b0528d90f04214e2f334a01c2fb747bce"
+
 require("lazy.minit").setup({
     spec = {
         { "folke/lazy.nvim", commit = lazy_commit },
+        { "echasnovski/mini.test", commit = mini_test_commit },
+        { "lunarmodules/luassert", commit = luassert_commit },
         { "nvim-lualine/lualine.nvim", commit = lualine_commit, lazy = true },
         { dir = vim.uv.cwd() },
     },
