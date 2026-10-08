@@ -1,23 +1,17 @@
 local core_env = require("lua.core_env")
 
-local runtimeconfig = [[
-{
-  "runtimeOptions": {
-    "tfm": "net10.0",
-    "rollForward": "LatestMajor",
-    "framework": {
-      "name": "Microsoft.NETCore.App",
-      "version": "10.0.0"
-    }
-  }
-}]]
-
-local list_sdks = "8.0.404 [/usr/local/share/dotnet/sdk]\n"
-    .. "10.0.201 [/usr/local/share/dotnet/sdk]\n"
-    .. "11.0.100-rc.1.26425.128 [/usr/local/share/dotnet/sdk]\n"
+local function read(path)
+    local file = assert(io.open(path, "rb"))
+    local bytes = file:read("*a")
+    file:close()
+    return bytes
+end
 
 describe("fshttp.sdk", function()
     local sdk = core_env.load("fshttp.sdk")
+    local json = core_env.load("fshttp.json")
+    local bytes = read("tests/golden/sdk/sdk-floor.json")
+    local golden_fixture = json.decode(bytes)
 
     it("uses dotnet on PATH when dotnet_path is nil or blank", function()
         assert.equal("dotnet", sdk.dotnet_command(nil))
@@ -29,30 +23,56 @@ describe("fshttp.sdk", function()
         assert.equal("/opt/dotnet/dotnet", sdk.dotnet_command("/opt/dotnet/dotnet"))
     end)
 
-    it("reads the floor from the framework version of Companion.runtimeconfig.json", function()
-        assert.equal(10, sdk.floor(runtimeconfig))
-        assert.equal(11, sdk.floor((runtimeconfig:gsub('"10%.0%.0"', '"11.0.0"'))))
-    end)
+    local function floor_of(case)
+        local version = case.frameworkVersion
+        if version == json.null then
+            version = nil
+        end
+        local framework = json.object({ { "version", version } })
+        local runtimeconfig = json.object({ { "runtimeOptions", json.object({ { "framework", framework } }) } })
+        return sdk.floor(json.encode(runtimeconfig))
+    end
 
-    it("uses the fallback floor when Companion.runtimeconfig.json is missing or bad", function()
-        assert.equal(10, sdk.fallback_floor)
+    it("uses the fallback floor when Companion.runtimeconfig.json is missing", function()
         assert.equal(sdk.fallback_floor, sdk.floor(nil))
         assert.equal(sdk.fallback_floor, sdk.floor("{"))
-        assert.equal(sdk.fallback_floor, sdk.floor('{"runtimeOptions":{}}'))
-        assert.equal(sdk.fallback_floor, sdk.floor('{"runtimeOptions":{"framework":{"version":"x.0"}}}'))
     end)
 
-    it("finds an SDK at the floor or above in the dotnet --list-sdks output", function()
-        assert.is_true(sdk.has_sdk_at_floor(10, list_sdks))
-        assert.is_true(sdk.has_sdk_at_floor(11, list_sdks))
-        assert.is_true(sdk.has_sdk_at_floor(10, "10.0.100 [C:\\Program Files\\dotnet\\sdk]\r\n"))
+    it("gives each floor case the SDK floor of the Golden fixture", function()
+        for _, case in ipairs(golden_fixture.floorCases) do
+            assert.equal(case.floor, floor_of(case), case.name)
+        end
     end)
 
-    it("finds no SDK when each SDK is below the floor, or when the output is empty", function()
-        assert.is_false(sdk.has_sdk_at_floor(12, list_sdks))
-        assert.is_false(sdk.has_sdk_at_floor(10, "8.0.404 [/sdk]\n9.0.100 [/sdk]\n"))
-        assert.is_false(sdk.has_sdk_at_floor(10, ""))
-        assert.is_false(sdk.has_sdk_at_floor(10, "10abc.0.1 [/sdk]\n"))
+    it("gives each dotnet --list-sdks case the result of the Golden fixture", function()
+        for _, case in ipairs(golden_fixture.listSdksCases) do
+            assert.equal(case.hasSdkAtFloor, sdk.has_sdk_at_floor(case.floor, case.listSdksOutput), case.name)
+        end
+    end)
+
+    it("writes the SDK floor Golden fixture byte for byte", function()
+        local floor_cases = {}
+        for i, case in ipairs(golden_fixture.floorCases) do
+            floor_cases[i] = json.object({
+                { "floor", floor_of(case) },
+                { "frameworkVersion", case.frameworkVersion },
+                { "name", case.name },
+            })
+        end
+        local list_sdks_cases = {}
+        for i, case in ipairs(golden_fixture.listSdksCases) do
+            list_sdks_cases[i] = json.object({
+                { "floor", case.floor },
+                { "hasSdkAtFloor", sdk.has_sdk_at_floor(case.floor, case.listSdksOutput) },
+                { "listSdksOutput", case.listSdksOutput },
+                { "name", case.name },
+            })
+        end
+        local written = json.object({
+            { "floorCases", json.array(floor_cases) },
+            { "listSdksCases", json.array(list_sdks_cases) },
+        })
+        assert.equal(bytes, json.encode(written))
     end)
 
     it("names the floor and the download URL in each WARN notice", function()

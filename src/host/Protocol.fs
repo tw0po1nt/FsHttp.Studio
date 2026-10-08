@@ -84,6 +84,32 @@ let blockAtCursor (cursorLine: int) (ranges: BlockRange list) : int option =
     | [] -> None
     | holding -> holding |> List.maxBy (fun (_, r) -> r.StartLine, r.StartCol) |> fst |> Some
 
+/// The SDK floor when `Companion.runtimeconfig.json` is missing or does not parse.
+let fallbackSdkFloor = 10
+
+let private versionMajor (version: string) : int option =
+    let head = version.Split('.').[0]
+
+    if head <> "" && head |> Seq.forall (fun c -> c >= '0' && c <= '9') then
+        Some(int head)
+    else
+        None
+
+/// `frameworkVersion` is `runtimeOptions.framework.version` of `Companion.runtimeconfig.json`, or
+/// `None` when the file does not hold it.
+let sdkFloor (frameworkVersion: string option) : int =
+    frameworkVersion
+    |> Option.bind versionMajor
+    |> Option.defaultValue fallbackSdkFloor
+
+/// The companion rolls forward onto a newer major version, so an SDK above the floor also runs it.
+let hasSdkAtFloor (floor: int) (listSdksOutput: string) : bool =
+    listSdksOutput.Split('\n')
+    |> Array.exists (fun line ->
+        line.Trim().Split([| ' '; '\t' |]).[0]
+        |> versionMajor
+        |> Option.exists (fun major -> major >= floor))
+
 type Diagnostic = { Message: string; Range: BlockRange }
 
 /// Blank must not mean "no body", "captured bytes", and "we chose not to read it" at once.
