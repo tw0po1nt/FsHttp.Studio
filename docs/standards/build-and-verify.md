@@ -19,6 +19,10 @@ mini.test and luassert into `.tests/` on each run. On Linux, install the readlin
 (`libreadline-dev` on Debian and Ubuntu). hererocks builds Lua 5.1 for luassert, and that build
 stops without them.
 
+The Neovim suite needs the same Neovim and network access, the .NET SDK, `curl`, and `pgrep`.
+`tests/nvim/neovim-pin.json` holds the Neovim versions that CI installs: `floor` for the Lua type
+check, and `stable` for the two Neovim suites.
+
 ## The compiler is the check that matters
 
 ```sh
@@ -43,14 +47,17 @@ build fails on errors that a Fable-only loop never shows.
 | `npm run smoke` | The bundled renderer runs under node. |
 | `./scripts/check-lua-types.sh` | lua-language-server finds no problem in the LuaCATS annotations. The Neovim API types come from the `nvim` on `PATH`, or from `$VIMRUNTIME` when you set it. CI uses the Neovim 0.11 types. |
 | `nvim -l tests/minit.lua --minitest` | The Lua core suite passes. Each core module loads in an environment with no `vim` global. |
+| `./tests/nvim/run.sh` | The Neovim suite passes. The script publishes the test HTTP server and the companion, and then drives a child Neovim against them. `NVIM_TEST_SKIP_BUILD=1` uses the builds that are already in `out/`. |
 | `./tests/ui.Tests/run.sh` | The UI suite, which is the release gate. See `docs/standards/release-gate.md`. |
 
 `./scripts/verify.sh` runs the CI steps in the order that `.github/workflows/ci.yml` runs them:
-the banned-patterns check, then each command above except `npm run compile` and the UI suite.
+the banned-patterns check, then each command above except `npm run compile`, the Neovim suite,
+and the UI suite. Then it runs the Neovim suite.
 Its last line is `verify: green` or `verify: red`, and the feedback skills use it as the gate.
 The script leaves out `npm run compile`, because `npm run package` runs it. The script leaves out
-the UI suite, because `ci.yml` leaves it out. `ui-tests.yml` runs the UI suite separately. When you
-change a step in `ci.yml`, make the same change in the script.
+the UI suite, because `ci.yml` leaves it out. `ui-tests.yml` runs the UI suite separately.
+`nvim-tests.yml` runs the Neovim suite, and the script runs it too, because it needs only Neovim
+and the .NET SDK. When you change a step in `ci.yml`, make the same change in the script.
 
 `package.json` holds the individual `build:*` scripts that `compile` composes. Use one of those
 scripts only when you rebuild a single side.

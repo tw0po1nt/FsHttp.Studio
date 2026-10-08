@@ -1,0 +1,537 @@
+-- The Harness of the Neovim suite: the child Neovim helpers, the wait combinator, the Budgets, and
+-- the mini.test hooks. Each Check uses this module, and defines no wait and no Budget of its own.
+local MiniTest = require("mini.test")
+
+local M = {}
+
+-- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/283): set the Budgets from measured runs on each operating system.
+M.setup_budget_ms = 60000
+M.check_budget_ms = 30000
+M.suite_budget_ms = 120000
+
+M.sidecar_deadline_ms = 30000
+M.companion_exists_deadline_ms = 30000
+M.companion_gone_deadline_ms = 15000
+M.notice_deadline_ms = 15000
+
+-- A child Neovim that gives no answer to one request in this time is hung, and the Harness stops it.
+M.child_answer_deadline_ms = 10000
+
+-- How long a claim that a thing does not occur must hold before the Check believes it.
+M.absence_settle_ms = 3000
+
+M.poll_interval_ms = 100
+
+-- Cross-process contract for `GET /json`. It must match `UiTestServer.Server.jsonProbeBody`.
+M.json_probe_body = '{"probe":"ui-test-server"}'
+
+local root = vim.uv.cwd()
+local suite_dir = root .. "/tests/nvim"
+local fixtures_dir = suite_dir .. "/fixtures"
+local sidecar_path = fixtures_dir .. "/sidecar.json"
+local child_init = suite_dir .. "/child_init.lua"
+
+-- curl exits with this code when nothing accepts the connection.
+local curl_could_not_connect = 7
+
+local shell_timeout_ms = 30000
+
+---@return number
+local function now()
+    return vim.uv.hrtime() / 1e6
+end
+
+---@param cause string
+local function fail_setup(cause)
+    error("Harness setup failed: " .. cause, 0)
+end
+
+---@param name string
+---@param purpose string
+---@return string
+local function required_env(name, purpose)
+    local value = vim.env[name]
+    if value == nil or value == "" then
+        fail_setup(string.format("%s is not set, so the Harness cannot find %s. Run tests/nvim/run.sh.", name, purpose))
+    end
+    ---@cast value string
+    return value
+end
+
+-- The folder of the companion that tests/nvim/run.sh published for this run.
+---@return string
+function M.companion_path()
+    return required_env("NVIM_TEST_COMPANION_PATH", "the companion")
+end
+
+---@param name string
+---@return string
+function M.fixture(name)
+    return fixtures_dir .. "/" .. name
+end
+
+---@param path string
+---@return string?
+local function read_file(path)
+    local file = io.open(path, "rb")
+    if not file then
+        return nil
+    end
+    local text = file:read("*a")
+    file:close()
+    return text
+end
+
+---@param cmd string[]
+---@return vim.SystemCompleted?
+local function run(cmd)
+    local ok, process = pcall(vim.system, cmd, { text = true, timeout = shell_timeout_ms })
+    if not ok then
+        return nil
+    end
+    return process:wait()
+end
+
+-- Polls `predicate` until it holds, or fails when `timeout_ms` passes. `subject` names the thing
+-- that the wait expects, so a timeout names the thing that did not occur.
+---@param timeout_ms integer
+---@param subject string
+---@param predicate fun(): boolean
+function M.eventually(timeout_ms, subject, predicate)
+    local deadline = now() + timeout_ms
+    while not predicate() do
+        if now() >= deadline then
+            error(string.format("Timed out after %d ms waiting for %s", timeout_ms, subject), 0)
+        end
+        vim.wait(M.poll_interval_ms)
+    end
+end
+
+-- Fails when `predicate` is false at a poll in the settle window.
+---@param subject string
+---@param predicate fun(): boolean
+function M.holds_for_settle(subject, predicate)
+    local deadline = now() + M.absence_settle_ms
+    repeat
+        if not predicate() then
+            error(string.format("%s failed at a poll in the %d ms settle window", subject, M.absence_settle_ms), 0)
+        end
+        vim.wait(M.poll_interval_ms)
+    until now() >= deadline
+end
+
+-- Each companion process of this run, found through the command line that holds the companion
+-- folder. A companion of another editor has a different folder, so this list leaves it out.
+---@return integer[]
+function M.companion_pids()
+    local result = run({ "pgrep", "-f", M.companion_path() .. "/Companion.dll" })
+    local pids = {}
+    for pid in ((result and result.stdout) or ""):gmatch("%d+") do
+        pids[#pids + 1] = tonumber(pid)
+    end
+    table.sort(pids)
+    return pids
+end
+
+-- Each companion pid in `M.companion_pids()` that is not in `known`.
+---@param known integer[]
+---@return integer[]
+function M.new_companion_pids(known)
+    local seen = {}
+    for _, pid in ipairs(known) do
+        seen[pid] = true
+    end
+    local new = {}
+    for _, pid in ipairs(M.companion_pids()) do
+        if not seen[pid] then
+            new[#new + 1] = pid
+        end
+    end
+    return new
+end
+
+---@param pid integer
+---@return boolean
+function M.process_exists(pid)
+    return vim.uv.kill(pid, 0) == 0
+end
+
+---@class nvim_suite.Child
+---@field mini table the child Neovim object of mini.test
+---@field job_id integer
+---@field pid integer
+---@field stopped boolean
+
+---@type nvim_suite.Child[]
+local children = {}
+---@type nvim_suite.Child?
+local setup_child
+
+-- Runs `fn` with a watchdog. When the child gives no answer in time, the watchdog kills the child
+-- process. The blocked request then returns an error, and the runner continues to the next Check.
+---@param child nvim_suite.Child
+---@param subject string
+---@param fn fun(): any
+---@return any
+local function guarded(child, subject, fn)
+    local fired = false
+    local timer = assert(vim.uv.new_timer())
+    timer:start(M.child_answer_deadline_ms, 0, function()
+        fired = true
+        vim.uv.kill(child.pid, "sigkill")
+    end)
+    local ok, result = pcall(fn)
+    timer:stop()
+    timer:close()
+    if fired then
+        error(
+            string.format(
+                "the child Neovim gave no answer to %s in %d ms, so the Harness stopped it",
+                subject,
+                M.child_answer_deadline_ms
+            ),
+            0
+        )
+    end
+    if not ok then
+        error(result, 0)
+    end
+    return result
+end
+
+-- Starts a child Neovim that loads the client through lazy.nvim with `opts`.
+---@param opts table
+---@return nvim_suite.Child
+function M.start_child(opts)
+    vim.env.NVIM_TEST_CLIENT_OPTS = vim.json.encode(opts)
+    local mini = MiniTest.new_child_neovim()
+    mini.start({ "-u", child_init })
+    local child = { mini = mini, job_id = mini.job.id, pid = vim.fn.jobpid(mini.job.id), stopped = false }
+    children[#children + 1] = child
+    return child
+end
+
+---@param child nvim_suite.Child
+---@param code string
+---@param args? any[]
+function M.lua(child, code, args)
+    return guarded(child, "a Lua request", function()
+        return child.mini.lua(code, args)
+    end)
+end
+
+---@param child nvim_suite.Child
+---@param expression string
+---@param args? any[]
+function M.lua_get(child, expression, args)
+    return guarded(child, "the Lua expression " .. expression, function()
+        return child.mini.lua_get(expression, args)
+    end)
+end
+
+---@param child nvim_suite.Child
+---@param command string
+function M.cmd(child, command)
+    return guarded(child, "the command " .. command, function()
+        return child.mini.cmd(command)
+    end)
+end
+
+---@param child nvim_suite.Child
+---@param path string
+function M.edit(child, path)
+    M.cmd(child, "edit " .. vim.fn.fnameescape(path))
+end
+
+-- Each notice that the client gave in the child, as { message, level }.
+---@param child nvim_suite.Child
+---@return { message: string, level: integer }[]
+function M.notices(child)
+    return M.lua_get(child, "_G.fshttp_suite_notices")
+end
+
+-- Stops the child Neovim. A child that does not quit in time gets SIGKILL.
+---@param child nvim_suite.Child
+function M.stop_child(child)
+    if child.stopped then
+        return
+    end
+    child.stopped = true
+    pcall(guarded, child, "the quit", function()
+        child.mini.stop()
+    end)
+    if vim.fn.jobwait({ child.job_id }, 0)[1] == -1 then
+        vim.uv.kill(child.pid, "sigkill")
+    end
+end
+
+-- Kills each companion of this run that is not in `keep`. A hung companion that outlives its child
+-- Neovim thus cannot reach the next Check.
+---@param keep integer[]
+local function kill_companions(keep)
+    for _, pid in ipairs(M.new_companion_pids(keep)) do
+        vim.uv.kill(pid, "sigkill")
+    end
+end
+
+---@class nvim_suite.ProvenLive
+---@field server_live boolean
+---@field child_answers boolean
+---@field client_loaded boolean
+---@field fixture_open boolean
+---@field companion_exists boolean
+
+---@return nvim_suite.ProvenLive
+local function nothing_proven()
+    return {
+        server_live = false,
+        child_answers = false,
+        client_loaded = false,
+        fixture_open = false,
+        companion_exists = false,
+    }
+end
+
+local proven_live = nothing_proven()
+---@type integer[]
+local setup_companions = {}
+---@type vim.SystemObj?
+local server
+local setup_elapsed_ms = 0
+---@type number?
+local suite_start_ms
+---@type number?
+local check_start_ms
+---@type { name: string, elapsed_ms: number, budget_ms: number }[]
+local check_rows = {}
+local timing_table_emitted = false
+
+---@return nvim_suite.ProvenLive
+function M.proven_live_state()
+    return vim.deepcopy(proven_live)
+end
+
+---@return boolean
+function M.is_proven_live()
+    for _, proven in pairs(proven_live) do
+        if not proven then
+            return false
+        end
+    end
+    return true
+end
+
+---@return boolean
+function M.timing_table_was_emitted()
+    return timing_table_emitted
+end
+
+-- The child Neovim that Harness setup started. It holds the fixture and the companion.
+---@return nvim_suite.Child
+function M.setup_child()
+    return assert(setup_child, "Harness setup started no child Neovim")
+end
+
+-- The companion pids that the child Neovim of Harness setup started.
+---@return integer[]
+function M.setup_companion_pids()
+    return vim.deepcopy(setup_companions)
+end
+
+---@return string base_url, string dead_url
+local function read_sidecar()
+    local text = read_file(sidecar_path)
+    if not text then
+        fail_setup("the Sidecar is missing at " .. sidecar_path)
+    end
+    local ok, sidecar = pcall(vim.json.decode, text)
+    if not ok or type(sidecar) ~= "table" or type(sidecar.baseUrl) ~= "string" or type(sidecar.deadUrl) ~= "string" then
+        fail_setup(string.format("the Sidecar at %s does not parse: %s", sidecar_path, text))
+    end
+    return sidecar.baseUrl, sidecar.deadUrl
+end
+
+local function start_server()
+    local server_bin = required_env("NVIM_TEST_SERVER", "the test HTTP server")
+    os.remove(sidecar_path)
+    local ok, started = pcall(vim.system, { server_bin }, { cwd = suite_dir, stdout = false, stderr = false })
+    if not ok then
+        fail_setup(string.format("the test HTTP server at %s did not start: %s", server_bin, started))
+    end
+    server = started
+    M.eventually(M.sidecar_deadline_ms, "the test HTTP server to write the Sidecar", function()
+        if started:is_closing() then
+            fail_setup("the test HTTP server stopped before it wrote the Sidecar")
+        end
+        local text = read_file(sidecar_path)
+        return text ~= nil and pcall(vim.json.decode, text)
+    end)
+
+    local base_url, dead_url = read_sidecar()
+    local health = run({ "curl", "-sS", "-m", "10", base_url .. "/json" })
+    local body = health and health.stdout or ""
+    if body ~= M.json_probe_body then
+        fail_setup(
+            string.format("the healthcheck at %s/json got %q, and expected %s", base_url, body, M.json_probe_body)
+        )
+    end
+    local probe = run({ "curl", "-sS", "-m", "10", dead_url })
+    if not probe or probe.code ~= curl_could_not_connect then
+        fail_setup(string.format("the Dead port at %s accepted a connection, so the Sidecar can be stale", dead_url))
+    end
+end
+
+local function stop_server()
+    if server and not server:is_closing() then
+        server:kill("sigterm")
+        server:wait(5000)
+    end
+    os.remove(sidecar_path)
+end
+
+---@param caption string
+---@param rows { name: string, elapsed_ms: number, budget_ms: number }[]
+local function emit_timing_table(caption, rows)
+    local lines = { "#### " .. caption, "", "| Phase | Elapsed | Budget |", "| --- | ---: | ---: |" }
+    for _, row in ipairs(rows) do
+        lines[#lines + 1] = string.format("| %s | %.0f ms | %.0f ms |", row.name, row.elapsed_ms, row.budget_ms)
+    end
+    local markdown = table.concat(lines, "\n") .. "\n\n"
+    io.stdout:write(markdown)
+    local summary = vim.env.GITHUB_STEP_SUMMARY
+    if summary and summary ~= "" then
+        local file = io.open(summary, "a")
+        if file then
+            file:write(markdown)
+            file:close()
+        end
+    end
+    timing_table_emitted = true
+end
+
+---@param row { name: string, elapsed_ms: number, budget_ms: number }
+local function assert_budget(row)
+    if row.elapsed_ms > row.budget_ms then
+        error(
+            string.format(
+                "%s exceeded the %d s budget (observed %.0f ms)",
+                row.name,
+                row.budget_ms / 1000,
+                row.elapsed_ms
+            ),
+            0
+        )
+    end
+end
+
+local function setup_row()
+    return { name = "Harness setup", elapsed_ms = setup_elapsed_ms, budget_ms = M.setup_budget_ms }
+end
+
+local function suite_row()
+    local elapsed = suite_start_ms and (now() - suite_start_ms) or 0
+    return { name = "Suite", elapsed_ms = elapsed, budget_ms = M.suite_budget_ms }
+end
+
+local function run_setup()
+    local start = now()
+    proven_live = nothing_proven()
+    local known_companions = M.companion_pids()
+
+    local ok, err = pcall(function()
+        start_server()
+        proven_live.server_live = true
+
+        local child = M.start_child({ companion_path = M.companion_path() })
+        setup_child = child
+        if M.lua_get(child, "1 + 1") ~= 2 then
+            fail_setup("the child Neovim gave a wrong answer over RPC")
+        end
+        proven_live.child_answers = true
+
+        local loaded = M.lua_get(
+            child,
+            [[(function()
+                for _, plugin in pairs(require("lazy.core.config").plugins) do
+                    if plugin.dir == vim.uv.cwd() and plugin._.loaded then
+                        return vim.g.loaded_fshttp == true
+                    end
+                end
+                return false
+            end)()]]
+        )
+        if not loaded then
+            fail_setup("lazy.nvim did not load the client in the child Neovim")
+        end
+        proven_live.client_loaded = true
+
+        local fixture = M.fixture("setup.fsx")
+        M.edit(child, fixture)
+        local open = M.lua_get(child, "{ vim.api.nvim_buf_get_name(0), vim.bo.filetype }")
+        if open[1] ~= fixture or open[2] ~= "fsharp" then
+            fail_setup(string.format("the fixture did not open as F#: the buffer is %s (%s)", open[1], open[2]))
+        end
+        proven_live.fixture_open = true
+
+        M.eventually(M.companion_exists_deadline_ms, "a companion process to exist", function()
+            return #M.new_companion_pids(known_companions) > 0
+        end)
+        setup_companions = M.new_companion_pids(known_companions)
+        proven_live.companion_exists = true
+    end)
+
+    setup_elapsed_ms = now() - start
+    emit_timing_table("Harness setup", { setup_row() })
+    if not ok then
+        error(err, 0)
+    end
+end
+
+---@return string
+local function current_check_name()
+    local case = MiniTest.current.case
+    if not case then
+        return "unknown Check"
+    end
+    return "Check " .. table.concat(case.desc, ": ", 2)
+end
+
+M.hooks = {
+    pre_once = run_setup,
+    pre_case = function()
+        suite_start_ms = suite_start_ms or now()
+        check_start_ms = now()
+        if not M.is_proven_live() then
+            error("Harness setup did not reach Proven-live, so no Check can run", 0)
+        end
+    end,
+    post_case = function()
+        local elapsed = check_start_ms and (now() - check_start_ms) or 0
+        check_start_ms = nil
+        for _, child in ipairs(children) do
+            if child ~= setup_child then
+                M.stop_child(child)
+            end
+        end
+        kill_companions(setup_companions)
+        local row = { name = current_check_name(), elapsed_ms = elapsed, budget_ms = M.check_budget_ms }
+        check_rows[#check_rows + 1] = row
+        assert_budget(row)
+    end,
+    post_once = function()
+        for _, child in ipairs(children) do
+            M.stop_child(child)
+        end
+        kill_companions({})
+        stop_server()
+
+        local rows = { setup_row() }
+        vim.list_extend(rows, check_rows)
+        rows[#rows + 1] = suite_row()
+        emit_timing_table("Neovim suite timings", rows)
+        assert_budget(setup_row())
+        assert_budget(suite_row())
+    end,
+}
+
+return M

@@ -87,3 +87,32 @@ surface. Do not leave the instruction only inside a shipped spec.
 - Spec 7 (companion death is visible and recoverable): a kill during a Run leaves `Running…` for the
   stopped message, and leaves every `▶ Run request` lens for `⊘ Cannot run: the companion stopped`.
   A window reload recovers a successful Run.
+
+## The Neovim suite
+
+The Neovim suite drives a child Neovim against a real companion, the test HTTP server, and the
+Sidecar of the UI suite. lazy.minit loads the client in the child as a lazy.nvim spec.
+`nvim-tests.yml` runs the Neovim suite and the Lua core suite. The suite has no retry, so one red
+Check gives a red job.
+
+### Honest gaps of the Neovim suite
+
+**The suite runs on one leg.** It runs on Linux with the stable Neovim that
+`tests/nvim/neovim-pin.json` pins. A defect that occurs only on Neovim 0.11, macOS, or Windows
+ships uncaught.
+
+**`release.yml` does not run the suite yet.** A red Neovim suite cannot refuse a draft Release.
+
+**The suite gets the companion from `companion_path`.** The suite publishes the companion into
+`out/nvim-tests/companion`. No Check downloads or verifies a Companion archive.
+
+**The Budgets come from local runs.** The values are 60 s for Harness setup, 30 s for each Check,
+and 120 s for the suite. No measured run on each operating system set them.
+
+### What the Neovim suite covers today
+
+- The Harness: a child Neovim that loads the client through lazy.nvim, the test HTTP server with
+  its Sidecar, Proven-live setup, Budgets, and the setup self-check.
+- The start sequence: a second Script starts no second companion. `VimLeavePre` stops the
+  companion. A `dotnet_path` that names a missing file gives the WARN notice, and no companion
+  starts.

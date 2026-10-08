@@ -44,3 +44,6 @@ tests/ui.Tests/fixtures/sidecar.json
 .fake
 # Lua core suite: lazy.minit installs lazy.nvim, mini.test, and luassert here.
 .tests/
+
+# Neovim suite: generated when the test HTTP server starts
+tests/nvim/fixtures/sidecar.json

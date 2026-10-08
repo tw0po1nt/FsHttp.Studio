@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The gate. It runs the steps of .github/workflows/ci.yml in the same order,
-# so a green local run predicts a green CI run. The last line is
+# and then the Neovim suite of .github/workflows/nvim-tests.yml. Thus a green
+# local run predicts a green CI run. The last line is
 # `verify: green` or `verify: red`, and the feedback skills read that line.
 # Change this script and ci.yml together.
 set -uo pipefail
@@ -21,6 +22,8 @@ steps=(
   "npm run smoke"
   "./scripts/check-lua-types.sh"
   "nvim -l tests/minit.lua --minitest"
+  # nvim-tests.yml runs the Neovim suite.
+  "./tests/nvim/run.sh"
 )
 
 for step in "${steps[@]}"; do
