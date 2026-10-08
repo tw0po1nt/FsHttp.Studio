@@ -44,6 +44,19 @@ let notFoundBody = "ui-test-server:notfound"
 /// response body region instead.
 let echoAckBody = """{"echoed":"ui-test-server"}"""
 
+/// Cross-process contract for `GET /nested-json`. Match exactly in the Neovim suite. The body spans
+/// more than one line, and its lines differ from the lines of the pretty-printed body.
+let nestedJsonBody =
+    String.concat
+        "\n"
+        [ """{"name": "snorlax","""
+          """ "moves": ["""
+          """  "rest","""
+          "  \"snore\""
+          """ ],"""
+          """ "stats": {"hp": 160,"""
+          """  "speed": 30}}""" ]
+
 let private catchAllBody = "ui-test-server:unknown"
 
 let private utf8 = Encoding.UTF8
@@ -133,6 +146,7 @@ type UiTestHttpServer() =
             | "GET", "/slow" -> handleSlow ctx
             | "GET", "/release" -> handleRelease ctx
             | "GET", "/status" -> handleStatus ctx
+            | "GET", "/nested-json" -> writeText ctx 200 "application/json" nestedJsonBody
             // The posted body is read to completion and dropped. Draining it keeps the connection
             // reusable; not echoing it is what makes the request-section check a real claim.
             | "POST", "/echo" ->

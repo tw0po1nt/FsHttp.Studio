@@ -137,7 +137,7 @@ T[":FsHttp run fills the Response buffer, and the next Run replaces it in the sa
     local first = eventually_response(child, "status 200, the /json URL, and the probe body", function(snapshot)
         local window = only_window(snapshot)
         return window ~= nil
-            and has_line(snapshot.lines, harness.json_probe_body)
+            and has_line(snapshot.lines, harness.json_probe_body_line)
             and window.winbar:match("^ 200 OK  %d+ ms · %d+ ms total  26 B  GET ") ~= nil
             and ends_with(window.winbar, base_url .. "/json")
     end)
@@ -193,7 +193,7 @@ T["a closed Response window opens again on the next Run"] = function()
     open_script(child, fixture, { 26, 28 })
     harness.run_at(child, 26)
     eventually_response(child, "the probe body in one Response window", function(snapshot)
-        return only_window(snapshot) ~= nil and has_line(snapshot.lines, harness.json_probe_body)
+        return only_window(snapshot) ~= nil and has_line(snapshot.lines, harness.json_probe_body_line)
     end)
 
     harness.close_response_windows(child)
@@ -291,7 +291,7 @@ T["the Request fold shows what a POST sent"] = function()
         function(snapshot)
             local window = only_window(snapshot)
             return window ~= nil
-                and has_line(snapshot.lines, '{"echoed":"ui-test-server"}')
+                and has_line(snapshot.lines, '  "echoed": "ui-test-server"')
                 and window.closed_folds[1] ~= nil
                 and window.closed_folds[1].text:match("^▸ Request  %(%d+ B%)  %d+ lines$") ~= nil
         end

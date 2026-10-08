@@ -57,7 +57,7 @@ local function view_for(outcome, decode_error, total_ms)
     if outcome == nil then
         return response_view.message(decode_error or refusals.companion_stopped.detail)
     elseif outcome.tag == "ok" then
-        return response_view.result(to_result(outcome, total_ms))
+        return response_view.result(to_result(outcome, total_ms), require("fshttp.body_syntax").parse)
     elseif outcome.tag == "compileError" then
         -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/276): move to a Compile error position with <CR>.
         return response_view.compile_error(outcome.diagnostics)

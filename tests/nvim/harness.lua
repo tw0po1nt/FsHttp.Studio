@@ -27,6 +27,8 @@ M.poll_interval_ms = 100
 
 -- Cross-process contract for `GET /json`. It must match `UiTestServer.Server.jsonProbeBody`.
 M.json_probe_body = '{"probe":"ui-test-server"}'
+-- The child Neovim has no JSON parser, so the Body shows the probe body pretty-printed. This is one line of it.
+M.json_probe_body_line = '  "probe": "ui-test-server"'
 
 local root = vim.uv.cwd()
 local suite_dir = root .. "/tests/nvim"

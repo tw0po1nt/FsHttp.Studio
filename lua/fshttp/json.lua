@@ -310,4 +310,155 @@ function M.encode(value)
     return encode_value(value)
 end
 
+local not_one_value = {}
+
+local function fail_pretty()
+    error(not_one_value, 0)
+end
+
+-- Gives the position after the closing quote of the string at `pos`.
+local function string_end(text, pos)
+    local i = pos + 1
+    while true do
+        local stop = text:find('["\\]', i)
+        if not stop then
+            fail_pretty()
+        end
+        if text:sub(stop, stop) == '"' then
+            return stop + 1
+        end
+        local escape = text:sub(stop + 1, stop + 1)
+        if escape == "u" then
+            if not text:sub(stop + 2, stop + 5):match("^%x%x%x%x$") then
+                fail_pretty()
+            end
+            i = stop + 6
+        elseif short_escapes[escape] then
+            i = stop + 2
+        else
+            fail_pretty()
+        end
+    end
+end
+
+---@class fshttp.PrettyPrint
+---@field text string
+---@field parts string[]
+---@field line integer
+---@field folds { first: integer, last: integer }[]
+
+---@param state fshttp.PrettyPrint
+---@param piece string
+local function emit(state, piece)
+    state.parts[#state.parts + 1] = piece
+    state.line = state.line + select(2, piece:gsub("\n", ""))
+end
+
+---@param state fshttp.PrettyPrint
+---@param first integer
+---@param stop integer the position after the token
+---@return integer
+local function emit_token(state, first, stop)
+    emit(state, state.text:sub(first, stop - 1))
+    return stop
+end
+
+local pretty_value
+
+---@param state fshttp.PrettyPrint
+---@param pos integer the position of the opening bracket
+---@param indent string
+---@param closing string
+---@param is_object boolean
+---@return integer
+local function pretty_container(state, pos, indent, closing, is_object)
+    local text = state.text
+    local opening = text:sub(pos, pos)
+    pos = skip_space(text, pos + 1)
+    if text:sub(pos, pos) == closing then
+        emit(state, opening .. closing)
+        return pos + 1
+    end
+    local first_line = state.line
+    local inner = indent .. "  "
+    emit(state, opening .. "\n")
+    while true do
+        emit(state, inner)
+        if is_object then
+            pos = skip_space(text, pos)
+            if text:sub(pos, pos) ~= '"' then
+                fail_pretty()
+            end
+            pos = skip_space(text, emit_token(state, pos, string_end(text, pos)))
+            if text:sub(pos, pos) ~= ":" then
+                fail_pretty()
+            end
+            emit(state, ": ")
+            pos = pos + 1
+        end
+        pos = skip_space(text, pretty_value(state, pos, inner))
+        local char = text:sub(pos, pos)
+        if char == closing then
+            emit(state, "\n" .. indent .. closing)
+            state.folds[#state.folds + 1] = { first = first_line, last = state.line }
+            return pos + 1
+        elseif char ~= "," then
+            fail_pretty()
+        end
+        emit(state, ",\n")
+        pos = pos + 1
+    end
+end
+
+---@param state fshttp.PrettyPrint
+---@param pos integer
+---@param indent string
+---@return integer
+pretty_value = function(state, pos, indent)
+    local text = state.text
+    pos = skip_space(text, pos)
+    local char = text:sub(pos, pos)
+    if char == "{" then
+        return pretty_container(state, pos, indent, "}", true)
+    elseif char == "[" then
+        return pretty_container(state, pos, indent, "]", false)
+    elseif char == '"' then
+        return emit_token(state, pos, string_end(text, pos))
+    end
+    local word = ({ t = "true", f = "false", n = "null" })[char]
+    if word then
+        if text:sub(pos, pos + #word - 1) ~= word then
+            fail_pretty()
+        end
+        return emit_token(state, pos, pos + #word)
+    elseif char == "-" or char:match("^%d$") then
+        local stop = select(2, text:find("^[%d%-%+%.eE]+", pos))
+        return emit_token(state, pos, stop + 1)
+    end
+    fail_pretty()
+    return pos
+end
+
+-- Copies each token as the text gives it, so each escape, each number, and the key order stay the
+-- same. Only the space between the tokens changes, to a two-space indent. Gives nil when `text` is
+-- not one JSON value. The folds give the lines of each object and each array that spans more than
+-- one line of the output.
+---@param text string
+---@return string? pretty
+---@return { first: integer, last: integer }[]? folds
+function M.pretty_print(text)
+    local state = { text = text, parts = {}, line = 1, folds = {} }
+    local ok, pos = pcall(pretty_value, state, 1, "")
+    if not ok then
+        if pos ~= not_one_value then
+            error(pos, 0)
+        end
+        return nil, nil
+    end
+    if skip_space(text, pos) <= #text then
+        return nil, nil
+    end
+    return table.concat(state.parts), state.folds
+end
+
 return M

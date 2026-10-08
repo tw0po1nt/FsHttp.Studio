@@ -44,7 +44,9 @@ describe("fshttp.response_view", function()
                 "  Content-Type: application/json",
                 "  Content-Length: 26",
                 "▾ Body  application/json · 26 B",
-                '{"probe":"ui-test-server"}',
+                "{",
+                '  "probe": "ui-test-server"',
+                "}",
             }, response_view.result(result()).lines)
         end)
 
@@ -52,7 +54,8 @@ describe("fshttp.response_view", function()
             assert.same({
                 { first = 1, last = 3, closed = true },
                 { first = 4, last = 6, closed = true },
-                { first = 7, last = 8, closed = false },
+                { first = 8, last = 10, closed = false },
+                { first = 7, last = 10, closed = false },
             }, response_view.result(result()).folds)
         end)
 

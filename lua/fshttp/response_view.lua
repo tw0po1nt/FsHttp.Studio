@@ -1,4 +1,5 @@
 -- The lines, the folds, the highlights, and the winbar of the Response buffer for each Run outcome.
+local json = require("fshttp.json")
 local refusals = require("fshttp.refusals")
 
 local M = {}
@@ -33,6 +34,15 @@ local M = {}
 ---@field first_col integer 0-based byte column
 ---@field last_col integer 0-based byte column after the last byte
 ---@field group string
+
+-- The highlights and the folds that a tree-sitter parser gives for the text of a body. Each line is
+-- 1-based in that text.
+---@class fshttp.BodySyntax
+---@field highlights fshttp.Highlight[]
+---@field folds { first: integer, last: integer }[]
+
+-- Gives nil when Neovim has no parser for the language.
+---@alias fshttp.BodySyntaxLookup fun(language: string, text: string): fshttp.BodySyntax?
 
 ---@class fshttp.ResponseView
 ---@field lines string[]
@@ -191,6 +201,52 @@ local function result_winbar(result)
     }) .. "%<" .. statusline({ { result.request.url, "FsHttpResponseUrl" } })
 end
 
+-- The tree-sitter language of a body type that gets highlights and folds.
+---@param content_type string the type with no parameters
+---@return string?
+local function body_language(content_type)
+    if content_type == "application/json" or content_type == "text/json" or content_type:match("%+json$") then
+        return "json"
+    elseif content_type == "text/html" or content_type == "application/xhtml+xml" then
+        return "html"
+    elseif content_type == "application/xml" or content_type == "text/xml" or content_type:match("%+xml$") then
+        return "xml"
+    end
+    return nil
+end
+
+-- With no parser, a JSON body shows pretty-printed, and each other body shows its exact bytes.
+---@param view fshttp.ResponseView
+---@param content_type string the type with no parameters
+---@param body string
+---@param body_syntax fshttp.BodySyntaxLookup?
+local function add_body(view, content_type, body, body_syntax)
+    local offset = #view.lines
+    local language = body_language(content_type)
+    local syntax = language and body_syntax and body_syntax(language, body)
+    local text, folds, highlights = body, {}, {}
+    if syntax then
+        folds, highlights = syntax.folds, syntax.highlights
+    elseif language == "json" then
+        local pretty, pretty_folds = json.pretty_print(body)
+        if pretty and pretty_folds then
+            text, folds = pretty, pretty_folds
+        end
+    end
+    add_text(view, text)
+    for _, fold in ipairs(folds) do
+        view.folds[#view.folds + 1] = { first = offset + fold.first, last = offset + fold.last, closed = false }
+    end
+    for _, highlight in ipairs(highlights) do
+        view.highlights[#view.highlights + 1] = {
+            line = offset + highlight.line,
+            first_col = highlight.first_col,
+            last_col = highlight.last_col,
+            group = highlight.group,
+        }
+    end
+end
+
 ---@param seconds integer
 ---@return fshttp.ResponseView
 function M.running(seconds)
@@ -200,8 +256,9 @@ function M.running(seconds)
 end
 
 ---@param result fshttp.RunResult
+---@param body_syntax fshttp.BodySyntaxLookup?
 ---@return fshttp.ResponseView
-function M.result(result)
+function M.result(result, body_syntax)
     local view = new_view()
     view.winbar = result_winbar(result)
 
@@ -239,7 +296,7 @@ function M.result(result)
     local body_detail = content_type == "" and size or (content_type .. " · " .. size)
     section(view, "Body", body_detail, false, function()
         if #result.body > 0 then
-            add_text(view, result.body)
+            add_body(view, content_type, result.body, body_syntax)
         end
     end)
     return view
