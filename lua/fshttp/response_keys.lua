@@ -14,8 +14,15 @@ M.keys = {
     { lhs = "g?", plug = "<Plug>(FsHttpHelp)", description = "List the active keys" },
 }
 
+-- Sets the local keys, or removes them when response_buffer.keys is false. Each <Plug> map stays.
 ---@param buf integer
 function M.attach(buf)
+    if not require("fshttp").config().response_buffer.keys then
+        for _, key in ipairs(M.keys) do
+            pcall(vim.keymap.del, "n", key.lhs, { buffer = buf })
+        end
+        return
+    end
     for _, key in ipairs(M.keys) do
         vim.keymap.set(
             "n",

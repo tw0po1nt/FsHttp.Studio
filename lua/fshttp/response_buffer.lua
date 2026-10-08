@@ -58,6 +58,7 @@ local function get_buf()
         if not vim.api.nvim_buf_is_loaded(buf) then
             vim.fn.bufload(buf)
         end
+        require("fshttp.response_keys").attach(buf)
         return buf
     end
     buf = vim.api.nvim_create_buf(false, true)
@@ -154,7 +155,11 @@ local function open_window()
             return
         end
     end
-    local win = vim.api.nvim_open_win(target, false, { split = "right", win = vim.api.nvim_get_current_win() })
+    local win = vim.api.nvim_open_win(
+        target,
+        false,
+        { split = require("fshttp").config().response_buffer.split, win = vim.api.nvim_get_current_win() }
+    )
     apply_to_window(win)
 end
 
