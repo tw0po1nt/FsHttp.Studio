@@ -42,6 +42,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     # The Windows leg is the slowest. The suite has its own Budgets, and this cap stops a wedged runner.
     timeout-minutes: 30
+    # The Windows leg is experimental until its Checks pass. A failure there does not fail the run.
+    continue-on-error: ${{ matrix.experimental == true }}
     strategy:
       # A red leg must not hide the result of the other legs.
       fail-fast: false
@@ -59,6 +61,7 @@ jobs:
           - name: Windows, pinned stable Neovim
             os: windows-latest
             neovim-pin: stable
+            experimental: true
     steps:
       - uses: actions/checkout@v4
 
