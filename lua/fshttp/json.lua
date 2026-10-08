@@ -316,7 +316,8 @@ local function fail_pretty()
     error(not_one_value, 0)
 end
 
--- Gives the position after the closing quote of the string at `pos`.
+-- Gives the position after the closing quote of the string at `pos`. It accepts only the strings
+-- that the renderer's JSON parser accepts, so the pretty-printed text matches the Golden fixture.
 local function string_end(text, pos)
     local i = pos + 1
     while true do

@@ -12,6 +12,8 @@ local M = {}
 local not_a_script_notice =
     ":FsHttp run runs a request from an F# script (.fsx). Open a script and put the cursor in a request."
 local wait_notice = "The FsHttp.Studio companion is starting. This Run starts when it is ready."
+local no_companion_notice =
+    "The FsHttp.Studio companion did not start. Set companion_path to the folder that holds Companion.dll."
 
 -- Only the result of the latest Run reaches the Response buffer.
 local generation = 0
@@ -100,7 +102,10 @@ end
 ---@param source string
 ---@param cursor_line integer
 local function on_located(blocks, buf, source, cursor_line)
-    if blocks == nil then
+    -- The user can close the Script while the locate or a Run that waits is in progress.
+    if not vim.api.nvim_buf_is_valid(buf) then
+        return
+    elseif blocks == nil then
         notify(refusals.companion_stopped.detail, vim.log.levels.WARN)
         return
     elseif blocks.tag ~= "blocks" then
@@ -113,7 +118,7 @@ local function on_located(blocks, buf, source, cursor_line)
     elseif target.kind == "notice" then
         notify(target.message, vim.log.levels[target.level])
     else
-        picker.open(blocks, buf, function(block_index, refused)
+        picker.open(blocks, source, function(block_index, refused)
             if refused then
                 local code = blocks.ranges[block_index + 1].refusal
                 local entry = refusals.codes[code] or refusals.codes[refusals.fallback_code]
@@ -130,60 +135,55 @@ local function buffer_source(buf)
     return table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n") .. "\n"
 end
 
--- The text and the cursor that a Run records while the companion starts. At most one Run waits.
----@type { buf: integer, source: string, cursor_line: integer }?
+-- The text and the cursor of a Run, recorded when the user gives :FsHttp run.
+---@class fshttp.RecordedRun
+---@field buf integer
+---@field source string
+---@field cursor_line integer
+
+---@param buf integer
+---@return fshttp.RecordedRun
+local function record(buf)
+    return { buf = buf, source = buffer_source(buf), cursor_line = vim.api.nvim_win_get_cursor(0)[1] }
+end
+
+-- At most one Run waits for the companion.
+---@type fshttp.RecordedRun?
 local pending_wait
 
--- Locates the buffer text again, so the Block index matches the text of the run envelope.
-local function locate_and_run(buf)
-    local source = buffer_source(buf)
-    local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
-    local sent = companion.locate(source, function(blocks)
-        on_located(blocks, buf, source, cursor_line)
+-- Each Run locates its text again, so the Block index matches the text of the run envelope.
+---@param recorded fshttp.RecordedRun
+local function locate_and_run(recorded)
+    local sent = companion.locate(recorded.source, function(blocks)
+        on_located(blocks, recorded.buf, recorded.source, recorded.cursor_line)
     end)
     if not sent then
         notify(refusals.companion_stopped.detail, vim.log.levels.WARN)
     end
 end
 
--- Runs the recorded text and cursor once the companion is ready.
----@param wait { buf: integer, source: string, cursor_line: integer }
-local function resume_wait(wait)
-    local sent = companion.locate(wait.source, function(blocks)
-        on_located(blocks, wait.buf, wait.source, wait.cursor_line)
-    end)
-    if not sent then
-        notify(refusals.companion_stopped.detail, vim.log.levels.WARN)
-    end
-end
-
--- The one listener that acts on a Run that waits for the companion. It no-ops while no Run waits.
+-- A state with no notice can still change to ready, so the Run keeps its wait.
 companion.on_state_change(function(state)
-    if pending_wait == nil then
+    local wait = pending_wait
+    if wait == nil then
         return
     end
-    local wait = pending_wait
-    pending_wait = nil
     if state == "ready" then
-        resume_wait(wait)
+        pending_wait = nil
+        locate_and_run(wait)
     elseif state == "stopped" then
+        pending_wait = nil
         notify(refusals.companion_stopped.detail, vim.log.levels.WARN)
-    else
-        -- A state that never becomes ready, for example no SDK: show its notice again.
-        local notice = companion.state_notice()
-        if notice then
-            notify(notice.message, notice.level)
-        end
+    elseif companion.state_notice() then
+        -- The companion showed the notice of this state when the state changed.
+        pending_wait = nil
     end
 end)
 
--- Records the text and cursor of a Run while the companion starts, so it runs when the companion
--- is ready. A new :FsHttp run replaces the wait.
+-- A new :FsHttp run replaces the Run that waits.
 ---@param buf integer
 local function begin_wait(buf)
-    local source = buffer_source(buf)
-    local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
-    pending_wait = { buf = buf, source = source, cursor_line = cursor_line }
+    pending_wait = record(buf)
     notify(wait_notice, vim.log.levels.INFO)
 end
 
@@ -199,7 +199,6 @@ local function handle_not_ready(buf)
     end
 end
 
--- Each Run locates the buffer text again, so the Block index matches the text of the run envelope.
 function M.at_cursor()
     local buf = vim.api.nvim_get_current_buf()
     if not locator.is_script(buf) then
@@ -209,7 +208,11 @@ function M.at_cursor()
     require("fshttp").start()
 
     local state = companion.state()
-    if state == "stopped" then
+    if state == nil then
+        -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/279): wait while the client downloads the Companion archive.
+        notify(no_companion_notice, vim.log.levels.WARN)
+        return
+    elseif state == "stopped" then
         notify(refusals.companion_stopped.detail, vim.log.levels.WARN)
         return
     elseif state ~= "ready" then
@@ -217,7 +220,7 @@ function M.at_cursor()
         return
     end
 
-    locate_and_run(buf)
+    locate_and_run(record(buf))
 end
 
 return M

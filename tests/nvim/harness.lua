@@ -258,16 +258,28 @@ function M.start_child(opts, client_version, with_lualine)
     return child
 end
 
--- A dotnet wrapper that sleeps before it execs the real dotnet, so the companion stays in the
--- starting state long enough for a Check to drive :FsHttp run while it starts.
+-- A dotnet wrapper that sleeps one time, so the companion stays in the starting state long enough
+-- for a Check to drive :FsHttp run while it starts. After the sleep, the companion goes to
+-- `end_state`: "ready" runs the real companion, "stopped" makes the companion exit, and
+-- "sdkNotFound" makes `--list-sdks` list no SDK.
 ---@param delay_s integer
+---@param end_state? "ready"|"stopped"|"sdkNotFound" default "ready"
 ---@return string path to an executable wrapper script
-function M.slow_dotnet(delay_s)
+function M.slow_dotnet(delay_s, end_state)
     local real = vim.fn.exepath("dotnet")
     assert(real ~= "", "dotnet is not on PATH in the runner")
+    local real_command = string.format('exec %s "$@"', real)
+    local sleep = string.format("sleep %d", delay_s)
+    -- Each end state gives the shell lines for `--list-sdks`, then the shell lines for the companion.
+    local scripts = {
+        ready = { real_command, sleep .. "\n" .. real_command },
+        stopped = { real_command, sleep .. "\nexit 1" },
+        sdkNotFound = { sleep .. "\nexit 0", real_command },
+    }
+    local script = assert(scripts[end_state or "ready"], "no wrapper for the end state " .. tostring(end_state))
     local path = vim.fn.tempname() .. "-slow-dotnet"
     local file = assert(io.open(path, "w"))
-    file:write(string.format('#!/bin/sh\nsleep %d\nexec %s "$@"\n', delay_s, real))
+    file:write(string.format('#!/bin/sh\nif [ "$1" = "--list-sdks" ]; then\n%s\nfi\n%s\n', script[1], script[2]))
     file:close()
     vim.uv.fs_chmod(path, 493)
     return path

@@ -227,6 +227,14 @@ local function body_language(content_type)
     return nil
 end
 
+-- The VSCode Response viewer shows an HTML body and an image body before its binary test.
+---@param content_type string the type with no parameters
+---@return boolean
+local function skips_binary_test(content_type)
+    -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/274): skip the binary test for an image body, and show the image.
+    return body_language(content_type) == "html"
+end
+
 -- With no parser, a JSON body shows pretty-printed, and each other body shows its exact bytes.
 ---@param view fshttp.ResponseView
 ---@param content_type string the type with no parameters
@@ -310,8 +318,7 @@ function M.result(result, body_syntax)
     local size = M.human_size(#result.body)
     local body_detail = content_type == "" and size or (content_type .. " · " .. size)
     section(view, "Body", body_detail, false, function()
-        -- As in VSCode, an HTML body skips the binary test.
-        if body_language(content_type) ~= "html" and binary_body.looks_binary(result.body) then
+        if not skips_binary_test(content_type) and binary_body.looks_binary(result.body) then
             add_hex_view(view, result.body, "")
         elseif #result.body > 0 then
             add_body(view, content_type, result.body, body_syntax)

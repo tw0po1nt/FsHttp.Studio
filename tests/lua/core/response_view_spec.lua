@@ -97,7 +97,7 @@ describe("fshttp.response_view", function()
             assert.equal(2, #view.folds)
         end)
 
-        it("shows the sent body and its size in the Request section", function()
+        it("shows the Captured body and its size in the Request section", function()
             local request = result().request
             request.method = "POST"
             request.body = { state = "captured", bytes = '{"posted":"request-section-fixture"}', reason = "" }
@@ -112,7 +112,7 @@ describe("fshttp.response_view", function()
             assert.same({ first = 1, last = 5, closed = true }, view.folds[1])
         end)
 
-        it("shows the reason for a sent body that the companion did not read", function()
+        it("shows the reason for a Captured body that the companion did not read", function()
             local request = result().request
             request.body = { state = "notCaptured", bytes = "", reason = "The body is a stream." }
             local view = response_view.result(result({ request = request }))
@@ -152,7 +152,7 @@ describe("fshttp.response_view", function()
             assert.same({ "a\tb\r", "\27[0m" }, { unpack(view.lines, 8) })
         end)
 
-        it("shows a binary sent body as the hex view in the Request section", function()
+        it("shows a binary Captured body as the hex view in the Request section", function()
             local request = result().request
             request.method = "POST"
             request.body = { state = "captured", bytes = "\0\1\2\255\0\128", reason = "" }

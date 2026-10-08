@@ -507,6 +507,8 @@ T["a pick on a refused Block shows its refusal, and no Run starts"] = function()
     restore_select(child)
 end
 
+local wait_notice = "The FsHttp.Studio companion is starting. This Run starts when it is ready."
+
 T["a Run that starts while the companion starts runs when it is ready"] = function()
     local opts = { companion_path = harness.companion_path(), dotnet_path = harness.slow_dotnet(2) }
     local child = harness.start_child(opts)
@@ -516,17 +518,104 @@ T["a Run that starts while the companion starts runs when it is ready"] = functi
     -- Run while the companion is still starting. The slow dotnet keeps it in that state.
     harness.run_at(child, 26)
 
-    expect_notice(
-        child,
-        0,
-        vim.log.levels.INFO,
-        "The FsHttp.Studio companion is starting. This Run starts when it is ready."
-    )
+    expect_notice(child, 0, vim.log.levels.INFO, wait_notice)
 
     -- When the companion becomes ready, the recorded Run starts and fills the Response buffer.
     eventually_response(child, "the probe body after the wait", function(snapshot)
         return only_window(snapshot) ~= nil and has_line(snapshot.lines, harness.json_probe_body_line)
     end)
+end
+
+-- Records the block_index of each run envelope that the client sends in the child. Only the latest
+-- Run reaches the Response buffer, so the buffer alone cannot show that an earlier Run never started.
+---@param child nvim_suite.Child
+local function install_run_spy(child)
+    harness.lua_get(
+        child,
+        [[(function()
+            local companion = require("fshttp.companion")
+            local real_run = companion.run
+            _G.fshttp_suite_run_indexes = {}
+            companion.run = function(run_envelope, callback)
+                table.insert(_G.fshttp_suite_run_indexes, run_envelope.block_index)
+                return real_run(run_envelope, callback)
+            end
+        end)()]]
+    )
+end
+
+T["a second Run while the companion starts replaces the Run that waits"] = function()
+    local opts = { companion_path = harness.companion_path(), dotnet_path = harness.slow_dotnet(2) }
+    local child = harness.start_child(opts)
+    harness.edit(child, harness.fixture("core-path.fsx"))
+    install_run_spy(child)
+
+    harness.run_at(child, 26)
+    harness.run_at(child, 28)
+
+    eventually_response(child, "the /status keys after the wait", function(snapshot)
+        return only_window(snapshot) ~= nil and has_text(snapshot.lines, '"slowSeen"')
+    end)
+    -- The locate of a replaced Run would be answered first, so its Run would show in the spy by now.
+    assert.same({ 1 }, harness.lua_get(child, "_G.fshttp_suite_run_indexes"))
+end
+
+T["a Run that waits ends with the stopped notice when the companion stops"] = function()
+    local opts = { companion_path = harness.companion_path(), dotnet_path = harness.slow_dotnet(2, "stopped") }
+    local child = harness.start_child(opts)
+    harness.edit(child, harness.fixture("core-path.fsx"))
+
+    harness.run_at(child, 26)
+
+    expect_notice(child, 0, vim.log.levels.INFO, wait_notice)
+    expect_notice(child, 0, vim.log.levels.WARN, refusals.companion_stopped.detail)
+    assert.equal(0, harness.response_buffer(child).count, "no Response buffer")
+end
+
+T["a Run that waits ends with one SDK notice when no SDK is found"] = function()
+    local opts = { companion_path = harness.companion_path(), dotnet_path = harness.slow_dotnet(2, "sdkNotFound") }
+    local child = harness.start_child(opts)
+    harness.edit(child, harness.fixture("core-path.fsx"))
+
+    harness.run_at(child, 26)
+
+    expect_notice(child, 0, vim.log.levels.INFO, wait_notice)
+    harness.expect_status(child, "the .NET SDK not found row", "FsHttp.Studio: .NET SDK not found")
+    -- The listener of the wait runs when the state changes, so its notice is in the list by now.
+    assert.equal(1, #harness.notices_at(child, vim.log.levels.WARN), vim.inspect(harness.notices(child)))
+    assert.equal(0, harness.response_buffer(child).count, "no Response buffer")
+end
+
+T["a Run that waits starts nothing when its Script closes"] = function()
+    local opts = { companion_path = harness.companion_path(), dotnet_path = harness.slow_dotnet(2) }
+    local child = harness.start_child(opts)
+    harness.edit(child, harness.fixture("core-path.fsx"))
+
+    harness.run_at(child, 26)
+    expect_notice(child, 0, vim.log.levels.INFO, wait_notice)
+    harness.cmd(child, "bwipeout!")
+
+    harness.eventually(harness.notice_deadline_ms, "the companion to become ready", function()
+        return harness.lua_get(child, [[require("fshttp.companion").state()]]) == "ready"
+    end)
+    harness.holds_for_settle("no Response buffer and no error", function()
+        return harness.response_buffer(child).count == 0 and harness.lua_get(child, "vim.v.errmsg") == ""
+    end)
+end
+
+T["with no companion_path, :FsHttp run gives a WARN notice and does not wait"] = function()
+    local child = harness.start_child({})
+    harness.edit(child, harness.fixture("core-path.fsx"))
+
+    harness.run_at(child, 26)
+
+    expect_notice(
+        child,
+        0,
+        vim.log.levels.WARN,
+        "The FsHttp.Studio companion did not start. Set companion_path to the folder that holds Companion.dll."
+    )
+    assert.same({}, harness.notices_at(child, vim.log.levels.INFO))
 end
 
 return T
