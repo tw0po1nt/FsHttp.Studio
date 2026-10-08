@@ -15,16 +15,10 @@ end
 ---@param child nvim_suite.Child
 ---@return nvim_suite.Notice[]
 local function warn_notices(child)
-    local warnings = {}
-    for _, notice in ipairs(harness.notices(child)) do
-        if notice.level == vim.log.levels.WARN then
-            warnings[#warnings + 1] = notice
-        end
-    end
-    return warnings
+    return harness.notices_at(child, vim.log.levels.WARN)
 end
 
-T["a companion of the plugin version gives no WARN notice"] = function()
+T["a companion of the client version gives no WARN notice"] = function()
     local child = harness.harness_setup_child()
 
     harness.holds_for_settle("no WARN notice in the child Neovim of Harness setup", function()

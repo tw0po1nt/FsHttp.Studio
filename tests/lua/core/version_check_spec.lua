@@ -3,11 +3,11 @@ local core_env = require("lua.core_env")
 describe("fshttp.version_check", function()
     local version_check = core_env.load("fshttp.version_check")
 
-    it("matches a companion version with a suffix to the plugin version", function()
+    it("matches a companion version with a suffix to the client version", function()
         assert.is_true(version_check.matches("0.3.0", "0.3.0-beta.2"))
     end)
 
-    it("matches a companion version that is equal to the plugin version", function()
+    it("matches a companion version that is equal to the client version", function()
         assert.is_true(version_check.matches("0.3.0", "0.3.0"))
     end)
 

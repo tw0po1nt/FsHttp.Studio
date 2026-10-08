@@ -53,18 +53,10 @@ T["a dotnet_path that names a missing file gives the WARN notice, and no compani
     local child = harness.start_child({ companion_path = harness.companion_path(), dotnet_path = missing })
     harness.edit(child, harness.fixture("harness-setup.fsx"))
 
-    ---@type nvim_suite.Notice?
-    local warning
     harness.eventually(harness.notice_deadline_ms, "a WARN notice", function()
-        for _, notice in ipairs(harness.notices(child)) do
-            if notice.level == vim.log.levels.WARN then
-                warning = notice
-                return true
-            end
-        end
-        return false
+        return #harness.notices_at(child, vim.log.levels.WARN) > 0
     end)
-    ---@cast warning nvim_suite.Notice
+    local warning = harness.notices_at(child, vim.log.levels.WARN)[1]
 
     local floor = companion_floor()
     assert.equal(true, warning.message:find(string.format(".NET %d SDK", floor), 1, true) ~= nil, warning.message)

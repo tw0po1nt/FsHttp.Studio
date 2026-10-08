@@ -236,14 +236,14 @@ local function guarded(child, subject, fn)
     return result
 end
 
--- Starts a child Neovim that loads the client through lazy.nvim with `opts`. With `plugin_version`,
+-- Starts a child Neovim that loads the client through lazy.nvim with `opts`. With `client_version`,
 -- the client in the child uses that version in place of the version that version.lua holds.
 ---@param opts table
----@param plugin_version? string
+---@param client_version? string
 ---@return nvim_suite.Child
-function M.start_child(opts, plugin_version)
+function M.start_child(opts, client_version)
     vim.env.NVIM_TEST_CLIENT_OPTS = vim.json.encode(opts)
-    vim.env.NVIM_TEST_PLUGIN_VERSION = plugin_version
+    vim.env.NVIM_TEST_CLIENT_VERSION = client_version
     local mini = MiniTest.new_child_neovim()
     mini.start({ "-u", child_init })
     local child = { mini = mini, job_id = mini.job.id, pid = vim.fn.jobpid(mini.job.id), stopped = false }
@@ -321,6 +321,20 @@ end
 ---@return nvim_suite.Notice[]
 function M.notices(child)
     return M.lua_get(child, "_G.fshttp_suite_notices")
+end
+
+-- Each notice that the client gave in the child at `level`, in the order the client gave them.
+---@param child nvim_suite.Child
+---@param level integer
+---@return nvim_suite.Notice[]
+function M.notices_at(child, level)
+    local found = {}
+    for _, notice in ipairs(M.notices(child)) do
+        if notice.level == level then
+            found[#found + 1] = notice
+        end
+    end
+    return found
 end
 
 -- Stops the child Neovim. A child that does not quit in time gets SIGKILL.

@@ -1,6 +1,7 @@
 -- Locates each Script again after a change, and paints the Block marks that the locate gives.
 local block_mark = require("fshttp.block_mark")
 local companion = require("fshttp.companion")
+local refusals = require("fshttp.refusals")
 
 local M = {}
 
@@ -12,6 +13,9 @@ local relocate_delay_ms = 300
 local located = {}
 ---@type table<integer, uv.uv_timer_t>
 local timers = {}
+-- The changedtick check of an answer covers each edit that comes while a locate waits.
+---@type table<integer, true>
+local waiting = {}
 local watching = false
 
 local function define_highlights()
@@ -26,17 +30,17 @@ local function is_script(buf)
     return vim.api.nvim_buf_is_loaded(buf) and vim.api.nvim_buf_get_name(buf):match("%.fsx$") ~= nil
 end
 
--- Sets the mark with `id` again in place, or adds a new mark when `id` is nil.
 ---@param buf integer
 ---@param row integer 0-based
 ---@param title string
+---@param runnable boolean
 ---@param id integer?
 ---@return integer id
-local function set_mark(buf, row, title, id)
+local function set_mark(buf, row, title, runnable, id)
     local indent = vim.api.nvim_buf_call(buf, function()
         return vim.fn.indent(row + 1)
     end)
-    local sign_highlight = title == block_mark.run_title and "FsHttpBlockMarkRun" or "FsHttpBlockMarkRefused"
+    local sign_highlight = runnable and "FsHttpBlockMarkRun" or "FsHttpBlockMarkRefused"
     return vim.api.nvim_buf_set_extmark(buf, namespace, row, 0, {
         id = id,
         virt_lines = { { { string.rep(" ", math.max(indent, 0)) .. title, "FsHttpBlockMark" } } },
@@ -68,7 +72,7 @@ local function paint(buf, marks)
     local on_block = {}
     local line_one_count = 0
     for _, mark in ipairs(marks) do
-        local id = set_mark(buf, mark.line - 1, mark.title)
+        local id = set_mark(buf, mark.line - 1, mark.title, mark.runnable)
         if mark.on_block then
             on_block[id] = true
         end
@@ -82,15 +86,14 @@ local function paint(buf, marks)
     end
 end
 
--- Each mark on a Block keeps the place that the edits moved it to. The line-1 mark of a Parse
--- failure goes, because it is on no Block.
+-- The line-1 mark of a Parse failure is on no Block, so the stopped paint removes it.
 ---@param buf integer
 local function paint_stopped(buf)
     local on_block = located[buf]
     for _, extmark in ipairs(vim.api.nvim_buf_get_extmarks(buf, namespace, 0, -1, { details = true })) do
         local id, row, details = extmark[1], extmark[2], extmark[4]
         if on_block[id] and details and not details.invalid then
-            set_mark(buf, row, block_mark.stopped_title, id)
+            set_mark(buf, row, refusals.companion_stopped_block_mark_title, false, id)
         else
             vim.api.nvim_buf_del_extmark(buf, namespace, id)
         end
@@ -101,12 +104,14 @@ local schedule_locate
 
 ---@param buf integer
 local function locate(buf)
-    if not is_script(buf) then
+    if not is_script(buf) or waiting[buf] then
         return
     end
     local changedtick = vim.api.nvim_buf_get_changedtick(buf)
     local source = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n") .. "\n"
-    companion.locate(source, function(blocks)
+    waiting[buf] = true
+    local sent = companion.locate(source, function(blocks)
+        waiting[buf] = nil
         if not blocks or blocks.tag ~= "blocks" or not is_script(buf) then
             return
         end
@@ -117,6 +122,9 @@ local function locate(buf)
         end
         paint(buf, block_mark.for_blocks(blocks))
     end)
+    if not sent then
+        waiting[buf] = nil
+    end
 end
 
 ---@param buf integer
@@ -161,7 +169,7 @@ local function on_state_change(state)
     end
 end
 
--- Starts the locates. Only the first call has an effect.
+-- Only the first call has an effect.
 function M.watch()
     if watching then
         return

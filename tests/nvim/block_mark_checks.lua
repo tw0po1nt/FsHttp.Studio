@@ -50,7 +50,7 @@ T["no-requests Block marks"]["a syntax error above the Blocks gives the line-1 m
     )
 end
 
-T["no-requests Block marks"]["a syntax error below the last Block keeps a Run mark on each Block"] = function()
+T["no-requests Block marks"]["a syntax error below the last Block keeps a Block mark with the run title on each Block"] = function()
     local child = harness.harness_setup_child()
     harness.edit(child, harness.ui_fixture("no-requests-below.fsx"))
 
@@ -61,7 +61,7 @@ T["no-requests Block marks"]["a syntax error below the last Block keeps a Run ma
     )
 end
 
-T["no-requests Block marks"]["a syntax error between two Blocks keeps one Run mark"] = function()
+T["no-requests Block marks"]["a syntax error between two Blocks keeps one Block mark with the run title"] = function()
     local child = harness.harness_setup_child()
     harness.edit(child, harness.ui_fixture("no-requests-between.fsx"))
 
@@ -96,13 +96,17 @@ end
 T["an edit locates the Script again after the pause"] = function()
     local child = harness.harness_setup_child()
     harness.edit(child, harness.fixture("block-marks.fsx"))
-    expect_block_marks(child, "a Run mark on each of the two Blocks", marks(mark(8, run_title), mark(10, run_title)))
+    expect_block_marks(
+        child,
+        "a Block mark with the run title on each of the two Blocks",
+        marks(mark(8, run_title), mark(10, run_title))
+    )
 
     harness.type_keys(child, "G", "o", "<CR>", 'http { GET "http://127.0.0.1:9/three" }', "<Esc>")
 
     expect_block_marks(
         child,
-        "a Run mark on the new Block too",
+        "a Block mark with the run title on the new Block too",
         marks(mark(8, run_title), mark(10, run_title), mark(12, run_title))
     )
     harness.cmd(child, "bwipeout!")
@@ -112,7 +116,11 @@ T["a stopped companion keeps each Block mark with the stopped title"] = function
     local known = harness.companion_pids()
     local child = harness.start_child({ companion_path = harness.companion_path() })
     harness.edit(child, harness.fixture("block-marks.fsx"))
-    expect_block_marks(child, "a Run mark on each of the two Blocks", marks(mark(8, run_title), mark(10, run_title)))
+    expect_block_marks(
+        child,
+        "a Block mark with the run title on each of the two Blocks",
+        marks(mark(8, run_title), mark(10, run_title))
+    )
     local companions = harness.new_companion_pids(known)
     assert.equal(1, #companions, "the new child Neovim started one companion")
 

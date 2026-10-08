@@ -10,12 +10,12 @@ describe("fshttp.block_mark", function()
 
     it("gives a Block that a Run can reach the run title on its first line", function()
         local marks = block_mark.for_blocks({ parse_failed = false, ranges = { range(10) } })
-        assert.same({ { line = 10, title = "▶ Run request", on_block = true } }, marks)
+        assert.same({ { line = 10, title = "▶ Run request", on_block = true, runnable = true } }, marks)
     end)
 
     it("gives a refused Block the Block mark title of its Refusal code", function()
         local marks = block_mark.for_blocks({ parse_failed = false, ranges = { range(9, "loopBody") } })
-        assert.same({ { line = 9, title = "⊘ Cannot run: inside a loop", on_block = true } }, marks)
+        assert.same({ { line = 9, title = "⊘ Cannot run: inside a loop", on_block = true, runnable = false } }, marks)
     end)
 
     it("gives an unknown Refusal code the title of the fallback code", function()
@@ -31,13 +31,18 @@ describe("fshttp.block_mark", function()
     it("gives a Parse failure with no Block one mark on line 1", function()
         local marks = block_mark.for_blocks({ parse_failed = true, ranges = {} })
         assert.same({
-            { line = 1, title = "⊘ No requests found: this script has a syntax error", on_block = false },
+            {
+                line = 1,
+                title = "⊘ No requests found: this script has a syntax error",
+                on_block = false,
+                runnable = false,
+            },
         }, marks)
     end)
 
     it("gives a Parse failure with a Block only the Block mark", function()
         local marks = block_mark.for_blocks({ parse_failed = true, ranges = { range(12) } })
-        assert.same({ { line = 12, title = "▶ Run request", on_block = true } }, marks)
+        assert.same({ { line = 12, title = "▶ Run request", on_block = true, runnable = true } }, marks)
     end)
 
     it("gives a script with no Block and no Parse failure no mark", function()
@@ -45,12 +50,12 @@ describe("fshttp.block_mark", function()
     end)
 
     it("gives a stopped companion the stopped title", function()
-        assert.equal("⊘ Cannot run: the companion stopped", block_mark.stopped_title)
+        assert.equal("⊘ Cannot run: the companion stopped", refusals.companion_stopped_block_mark_title)
     end)
 
     it("takes the glyph of a title from the text before its first space", function()
         assert.equal("▶", block_mark.glyph("▶ Run request"))
-        assert.equal("⊘", block_mark.glyph(block_mark.stopped_title))
+        assert.equal("⊘", block_mark.glyph(refusals.companion_stopped_block_mark_title))
         for code, refusal in pairs(refusals.codes) do
             assert.equal("⊘", block_mark.glyph(refusal.block_mark_title), code)
         end

@@ -192,8 +192,8 @@ Ticket: [How does the Neovim client get the companion and the .NET SDK?](https:/
   use.
 - In other plugin managers, the first `.fsx` buffer starts the download in the background, with an
   INFO notice.
-- When no release has the plugin version, no companion starts. An ERROR notice gives two fixes: pin
-  the plugin to a release, or set `companion_path`.
+- When no release has the client version, no companion starts. An ERROR notice gives two fixes: pin
+  the client to a release, or set `companion_path`.
 - The client downloads only the release that `version.lua` names. It builds no companion from
   source.
 - The client uses `dotnet_path`, or `dotnet` on PATH when that option is not set. It reads the SDK
@@ -222,7 +222,7 @@ Ticket: [Does the Neovim client check the version of a companion from companion_
 - The client removes the suffix from the companion version (all text from the first `-`) and
   compares `major.minor.patch` with `version.lua`. A `ready` with no `version` is a mismatch.
 - On a mismatch, the companion stays up and each Run goes ahead. One WARN notice names both
-  versions. It tells the user to set `companion_path` to a build of the plugin version, or to
+  versions. It tells the user to set `companion_path` to a build of the client version, or to
   remove the option. `:checkhealth fshttp` shows a WARN line with the same two versions.
 
 #### A6. How a user starts a Run
@@ -376,7 +376,7 @@ Ticket: [How does the Neovim client report the companion state?](https://github.
 |---|---|
 | The download is in progress | `downloading companion…` |
 | The download failed | `companion download failed` |
-| No release has the plugin version | `no companion for v<version>` |
+| No release has the client version | `no companion for v<version>` |
 | `companion_path` has no companion | `companion not found` |
 
 - `Protocol.State` keeps its four cases. VSCode never reaches a download state.
@@ -386,7 +386,7 @@ Ticket: [How does the Neovim client report the companion state?](https://github.
 |---|---|---|
 | The download starts | INFO | The download is in progress. |
 | The download failed | ERROR | The cause (curl, tar, or the checksum), and "Run :FsHttp restart to try again." |
-| No release has the plugin version | ERROR | The two fixes of A3. |
+| No release has the client version | ERROR | The two fixes of A3. |
 | The .NET SDK is not found | WARN | The SDK floor and the download URL. |
 | `companion_path` has no companion | ERROR | The path, the missing file, the two fixes, and `:FsHttp restart`. |
 | A version mismatch | WARN | The two versions and the two fixes of A5. |

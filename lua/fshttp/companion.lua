@@ -15,7 +15,7 @@ local sequence_ran = false
 local state
 ---@type fun(state: fshttp.CompanionState)[]
 local listeners = {}
--- The companion answers one frame at a time, so each answer belongs to the oldest request.
+-- The companion answers one frame at a time, so each answer belongs to the oldest locate.
 ---@type fun(answer: table?)[]
 local pending = {}
 
@@ -50,9 +50,9 @@ end
 -- On a version mismatch, the companion stays up and each Run goes ahead.
 ---@param companion_version string?
 local function check_version(companion_version)
-    local plugin_version = require("fshttp.version")
-    if not version_check.matches(plugin_version, companion_version) then
-        notify(version_check.mismatch_notice(plugin_version, companion_version), vim.log.levels.WARN)
+    local client_version = require("fshttp.version")
+    if not version_check.matches(client_version, companion_version) then
+        notify(version_check.mismatch_notice(client_version, companion_version), vim.log.levels.WARN)
     end
 end
 
@@ -64,10 +64,10 @@ local function set_state(new_state)
     end
 end
 
--- An answer that does not decode still ends the oldest request, so the next answer stays matched.
----@param payload string
-local function receive(payload)
-    local answer = envelope.decode(payload)
+-- An answer that does not decode still ends the oldest locate, so the next answer stays matched.
+---@param encoded string
+local function receive(encoded)
+    local answer = envelope.decode(encoded)
     if answer and answer.tag == "ready" then
         check_version(answer.version)
         set_state("ready")
@@ -96,11 +96,11 @@ local function spawn(dotnet, companion_dll)
     local ok, started = pcall(vim.system, { dotnet, companion_dll }, {
         stdin = true,
         stdout = function(_, chunk)
-            local payloads = chunk and parser:push(chunk) or {}
-            if #payloads > 0 then
+            local encoded_envelopes = chunk and parser:push(chunk) or {}
+            if #encoded_envelopes > 0 then
                 vim.schedule(function()
-                    for _, payload in ipairs(payloads) do
-                        receive(payload)
+                    for _, encoded in ipairs(encoded_envelopes) do
+                        receive(encoded)
                     end
                 end)
             end
@@ -121,17 +121,15 @@ function M.state()
     return state
 end
 
--- Calls `listener` on each change of the companion state.
 ---@param listener fun(state: fshttp.CompanionState)
 function M.on_state_change(listener)
     listeners[#listeners + 1] = listener
 end
 
--- Sends a locate envelope. The callback gets the blocks envelope, or nil when the companion stops
--- first. Returns false, and calls nothing, when the companion is not ready.
+-- The callback gets nil when the companion stops before it answers.
 ---@param source string
 ---@param callback fun(blocks: table?)
----@return boolean
+---@return boolean sent false when the companion is not ready, and then the callback never runs
 function M.locate(source, callback)
     if state ~= "ready" or not process then
         return false
