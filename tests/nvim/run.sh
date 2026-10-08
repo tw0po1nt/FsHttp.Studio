@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The one entry point of the Neovim suite. nvim-tests.yml and a local run both call this script.
+# The one entry point of the Neovim suite. CI and a local run both call this script.
 #
 # The script publishes the test HTTP server of the UI suite and the companion, and then runs the
 # suite through lazy.minit. Set NVIM_TEST_SKIP_BUILD=1 to use the two builds that are already in

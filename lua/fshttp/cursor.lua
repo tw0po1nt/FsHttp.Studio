@@ -1,4 +1,4 @@
--- The cursor rule that both Clients hold. The host holds the same rule as Protocol.blockAtCursor.
+-- The cursor rule that both Clients hold. The VSCode extension host holds the same rule.
 local M = {}
 
 -- Of the Blocks that hold the line, the Block with the latest start is the target. The column of

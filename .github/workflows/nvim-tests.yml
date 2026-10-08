@@ -1,4 +1,4 @@
-# Runs the Neovim suite and the Lua core suite. A local run uses the same tests/nvim/run.sh.
+# Runs the Neovim suite and the Lua core suite.
 name: Neovim tests
 
 on:

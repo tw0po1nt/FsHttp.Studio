@@ -1,6 +1,6 @@
 -- The init file of the child Neovim that the Neovim suite drives. lazy.minit loads the client as a
 -- lazy.nvim spec, with the opts that the Harness puts in NVIM_TEST_CLIENT_OPTS. The child inherits
--- the XDG paths of the runner, so it finds the lazy.nvim that tests/minit.lua installed.
+-- the XDG paths of the runner, so it finds the lazy.nvim that the runner installed.
 
 -- lazy.minit reads the script arguments from _G.arg, and Neovim sets _G.arg only for `nvim -l`.
 _G.arg = {}

@@ -22,7 +22,6 @@ steps=(
   "npm run smoke"
   "./scripts/check-lua-types.sh"
   "nvim -l tests/minit.lua --minitest"
-  # nvim-tests.yml runs the Neovim suite.
   "./tests/nvim/run.sh"
 )
 
