@@ -8,6 +8,7 @@ local T = MiniTest.new_set({ hooks = harness.hooks, n_retry = 1 })
 T["Harness self-check"] = require("nvim.self_check")
 T["start sequence"] = require("nvim.start_sequence_checks")
 T["Block marks"] = require("nvim.block_mark_checks")
+T["version check"] = require("nvim.version_check_checks")
 T["Harness watchdog"] = require("nvim.watchdog_checks")
 
 return T

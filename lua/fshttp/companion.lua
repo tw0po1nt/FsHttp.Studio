@@ -2,6 +2,7 @@
 local envelope = require("fshttp.envelope")
 local frame = require("fshttp.frame")
 local sdk = require("fshttp.sdk")
+local version_check = require("fshttp.version_check")
 
 local M = {}
 
@@ -46,6 +47,15 @@ local function report_no_sdk(floor, dotnet_path)
     notify(sdk.not_found_notice(floor, dotnet_path), vim.log.levels.WARN)
 end
 
+-- On a version mismatch, the companion stays up and each Run goes ahead.
+---@param companion_version string?
+local function check_version(companion_version)
+    local plugin_version = require("fshttp.version")
+    if not version_check.matches(plugin_version, companion_version) then
+        notify(version_check.mismatch_notice(plugin_version, companion_version), vim.log.levels.WARN)
+    end
+end
+
 ---@param new_state fshttp.CompanionState
 local function set_state(new_state)
     state = new_state
@@ -59,6 +69,7 @@ end
 local function receive(payload)
     local answer = envelope.decode(payload)
     if answer and answer.tag == "ready" then
+        check_version(answer.version)
         set_state("ready")
         return
     end

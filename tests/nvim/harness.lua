@@ -236,11 +236,14 @@ local function guarded(child, subject, fn)
     return result
 end
 
--- Starts a child Neovim that loads the client through lazy.nvim with `opts`.
+-- Starts a child Neovim that loads the client through lazy.nvim with `opts`. With `plugin_version`,
+-- the client in the child uses that version in place of the version that version.lua holds.
 ---@param opts table
+---@param plugin_version? string
 ---@return nvim_suite.Child
-function M.start_child(opts)
+function M.start_child(opts, plugin_version)
     vim.env.NVIM_TEST_CLIENT_OPTS = vim.json.encode(opts)
+    vim.env.NVIM_TEST_PLUGIN_VERSION = plugin_version
     local mini = MiniTest.new_child_neovim()
     mini.start({ "-u", child_init })
     local child = { mini = mini, job_id = mini.job.id, pid = vim.fn.jobpid(mini.job.id), stopped = false }
