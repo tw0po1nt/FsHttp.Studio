@@ -11,6 +11,9 @@ M.subcommands = {
     status = function()
         require("fshttp.status_line").echo()
     end,
+    yank = function(args)
+        require("fshttp.yank").yank(args[1] or "")
+    end,
 }
 
 ---@return string[]
@@ -40,7 +43,11 @@ end
 ---@param cmdline string
 ---@return string[]
 function M.complete(arg_lead, cmdline)
-    if cmdline:match("^%s*%S+%s+%S+%s") then
+    if cmdline:match("^%s*%S+%s+yank%s") then
+        return vim.tbl_filter(function(name)
+            return vim.startswith(name, arg_lead)
+        end, require("fshttp.yank").names())
+    elseif cmdline:match("^%s*%S+%s+%S+%s") then
         return {}
     end
     return vim.tbl_filter(function(name)

@@ -589,4 +589,73 @@ T["a Run that waits starts nothing when its Script closes"] = function()
     end)
 end
 
+T[":FsHttp yank and yr, yh, and yb put the copy payload in the register, and g? lists the keys"] = function()
+    local child = harness.harness_setup_child()
+    local base_url = harness.base_url()
+    open_script(child, harness.fixture("request-section.fsx"), { 27 })
+    harness.run_at(child, 28)
+    local snapshot = eventually_response(child, "the echoed body in the Response buffer", function(shown)
+        return only_window(shown) ~= nil and has_line(shown.lines, '  "echoed": "ui-test-server"')
+    end)
+
+    local function register(name)
+        return harness.lua_get(child, "vim.fn.getreg(...)", { name })
+    end
+
+    local function expect_info(count, message)
+        expect_notice(child, count, vim.log.levels.INFO, message)
+    end
+
+    local count = #harness.notices(child)
+    harness.cmd(child, "FsHttp yank body")
+    expect_info(count, 'Yanked the Body to register ".')
+    assert.equal('{"echoed":"ui-test-server"}', (register('"'):gsub("%s+", "")), "the raw body text")
+
+    harness.lua_get(child, "vim.api.nvim_set_current_win(...)", { assert(only_window(snapshot)).id })
+
+    count = #harness.notices(child)
+    harness.type_keys(child, '"ayr')
+    expect_info(count, "Yanked the Request to register a.")
+    local request = register("a")
+    local tail = '\n\n{"posted":"request-section-fixture"}'
+    assert.equal("POST " .. base_url .. "/echo", request:match("^[^\n]*"), request)
+    assert.equal(true, request:find("\nX-Fixture: request-section\n", 1, true) ~= nil, request)
+    assert.equal(tail, request:sub(-#tail), request)
+
+    count = #harness.notices(child)
+    harness.type_keys(child, '"byh')
+    expect_info(count, "Yanked the Response headers to register b.")
+    local headers = register("b")
+    assert.equal("200 OK", headers:match("^[^\n]*"), headers)
+    assert.equal(true, headers:find("\nContent-Type: ", 1, true) ~= nil, headers)
+
+    count = #harness.notices(child)
+    harness.type_keys(child, '"cyb')
+    expect_info(count, "Yanked the Body to register c.")
+    assert.equal(true, register("c"):find('"echoed"', 1, true) ~= nil, register("c"))
+
+    count = #harness.notices(child)
+    harness.type_keys(child, "g?")
+    expect_info(
+        count,
+        table.concat({
+            "Keys of the Response buffer:",
+            "yr  Yank the Request",
+            "yh  Yank the Response headers",
+            "yb  Yank the Body",
+            "g?  List the active keys",
+        }, "\n")
+    )
+end
+
+T["a yank before any Run gives a WARN notice, and an unknown name gives an ERROR notice"] = function()
+    local child = harness.start_child({})
+
+    harness.cmd(child, "FsHttp yank request")
+    expect_notice(child, 0, vim.log.levels.WARN, "The latest Run gave no response. Run a request first.")
+
+    harness.cmd(child, "FsHttp yank nothing")
+    expect_notice(child, 1, vim.log.levels.ERROR, ":FsHttp yank takes one of: request, headers, body.")
+end
+
 return T
