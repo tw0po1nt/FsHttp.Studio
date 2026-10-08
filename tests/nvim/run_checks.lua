@@ -303,6 +303,52 @@ T["the Request fold shows what a POST sent"] = function()
     assert.equal(true, has_line(request, '  {"posted":"request-section-fixture"}'), vim.inspect(request))
 end
 
+T["a binary body shows as the hex view, and a Captured body shows its hex view or its reason"] = function()
+    local child = harness.harness_setup_child()
+    open_script(child, harness.fixture("binary-body.fsx"), { 27, 29, 35 })
+
+    harness.run_at(child, 27)
+
+    local hex_view = {
+        "▾ Body  application/octet-stream · 20 B",
+        "Binary body: 20 B",
+        "00000000  00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f  ................",
+        "00000010  10 11 12 13                                      ....",
+    }
+    eventually_response(child, "the hex view of the /binary body in the open Body fold", function(snapshot)
+        local window = only_window(snapshot)
+        local lines = snapshot.lines or {}
+        return window ~= nil
+            and ends_with(window.winbar, "/binary")
+            and #window.closed_folds == 2
+            and vim.deep_equal(hex_view, { unpack(lines, #lines - #hex_view + 1) })
+    end)
+
+    harness.run_at(child, 29)
+
+    local captured = eventually_response(child, "the hex view of the sent bytes in the Request fold", function(snapshot)
+        local window = only_window(snapshot)
+        return window ~= nil
+            and has_line(snapshot.lines, '{"echoed":"ui-test-server"}')
+            and has_line(snapshot.lines, "  Binary body: 6 B")
+    end)
+    local fold = assert(only_window(captured)).closed_folds[1]
+    assert.equal("▸ Request  (6 B)  " .. (fold.last - fold.first) .. " lines", fold.text)
+    assert.same({
+        "  Binary body: 6 B",
+        "  00000000  00 01 02 ff 00 80                                ......",
+    }, { unpack(captured.lines, fold.last - 1, fold.last) })
+
+    harness.run_at(child, 35)
+
+    local not_captured = eventually_response(child, "the reason for the stream in the Request fold", function(snapshot)
+        return has_line(snapshot.lines, "  streamed body: not captured, so that the upload is unchanged")
+    end)
+    local request = assert(only_window(not_captured)).closed_folds[1]
+    assert.equal("▸ Request  " .. (request.last - request.first) .. " lines", request.text)
+    assert.equal("  streamed body: not captured, so that the upload is unchanged", not_captured.lines[request.last])
+end
+
 T["request_timeout_ms bounds the Run"] = function()
     local child = harness.harness_setup_child()
     local opts = { companion_path = harness.companion_path() }

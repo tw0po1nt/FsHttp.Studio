@@ -1,4 +1,5 @@
 -- The lines, the folds, the highlights, and the winbar of the Response buffer for each Run outcome.
+local binary_body = require("fshttp.binary_body")
 local json = require("fshttp.json")
 local refusals = require("fshttp.refusals")
 
@@ -172,6 +173,17 @@ local function header_rows(view, headers)
     end
 end
 
+-- The note and the hex dump of the VSCode Response viewer.
+---@param view fshttp.ResponseView
+---@param bytes string
+---@param indent string
+local function add_hex_view(view, bytes, indent)
+    add(view, { { indent }, { "Binary body: " .. M.human_size(#bytes), "FsHttpResponseDetail" } })
+    for _, line in ipairs(M.split_lines(binary_body.hex_dump(bytes))) do
+        add(view, { { indent .. line } })
+    end
+end
+
 ---@param text string
 ---@return string
 local function escape_statusline(text)
@@ -273,16 +285,19 @@ function M.result(result, body_syntax)
             { { "  " }, { request.method, "FsHttpResponseMethod" }, { " " }, { request.url, "FsHttpResponseUrl" } }
         )
         header_rows(view, request.headers)
-        local sent_body
         if request.body.state == "captured" then
-            sent_body = request.body.bytes
-        elseif request.body.state == "notCaptured" then
-            sent_body = request.body.reason
-        end
-        if sent_body then
             add(view, { { "" } })
-            for _, line in ipairs(M.split_lines(sent_body)) do
-                add(view, { { "  " .. line } })
+            if binary_body.looks_binary(request.body.bytes) then
+                add_hex_view(view, request.body.bytes, "  ")
+            else
+                for _, line in ipairs(M.split_lines(request.body.bytes)) do
+                    add(view, { { "  " .. line } })
+                end
+            end
+        elseif request.body.state == "notCaptured" then
+            add(view, { { "" } })
+            for _, line in ipairs(M.split_lines(request.body.reason)) do
+                add(view, { { "  " }, { line, "FsHttpResponseDetail" } })
             end
         end
     end)
@@ -295,7 +310,10 @@ function M.result(result, body_syntax)
     local size = M.human_size(#result.body)
     local body_detail = content_type == "" and size or (content_type .. " · " .. size)
     section(view, "Body", body_detail, false, function()
-        if #result.body > 0 then
+        -- As in VSCode, an HTML body skips the binary test.
+        if body_language(content_type) ~= "html" and binary_body.looks_binary(result.body) then
+            add_hex_view(view, result.body, "")
+        elseif #result.body > 0 then
             add_body(view, content_type, result.body, body_syntax)
         end
     end)

@@ -122,6 +122,50 @@ describe("fshttp.response_view", function()
                     unpack(view.lines, 1, 5),
                 }
             )
+            local reason_highlights = vim.tbl_filter(function(highlight)
+                return highlight.line == 5
+            end, view.highlights)
+            assert.same(
+                { { line = 5, first_col = 2, last_col = 2 + #"The body is a stream.", group = "FsHttpResponseDetail" } },
+                reason_highlights
+            )
+        end)
+
+        it("shows a binary body as the note and the hex dump of the VSCode Response viewer", function()
+            local body = "\0\1\2\3\4\5\6\7\8\9\10\11\12\13\14\15\16\17PK"
+            local view = response_view.result(result({ body = body, content_type = "application/octet-stream" }))
+            assert.same({
+                "▾ Body  application/octet-stream · 20 B",
+                "Binary body: 20 B",
+                "00000000  00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f  ................",
+                "00000010  10 11 50 4b                                      ..PK",
+            }, { unpack(view.lines, 7) })
+            assert.same({ first = 7, last = 10, closed = false }, view.folds[3])
+            assert.same(
+                { line = 8, first_col = 0, last_col = #"Binary body: 20 B", group = "FsHttpResponseDetail" },
+                view.highlights[#view.highlights]
+            )
+        end)
+
+        it("shows a body with no NUL byte and few control bytes as text", function()
+            local view = response_view.result(result({ body = "a\tb\r\n\27[0m", content_type = "text/plain" }))
+            assert.same({ "a\tb\r", "\27[0m" }, { unpack(view.lines, 8) })
+        end)
+
+        it("shows a binary sent body as the hex view in the Request section", function()
+            local request = result().request
+            request.method = "POST"
+            request.body = { state = "captured", bytes = "\0\1\2\255\0\128", reason = "" }
+            local view = response_view.result(result({ request = request }))
+            assert.same({
+                "▾ Request  (6 B)",
+                "  POST http://127.0.0.1:5000/json",
+                "  Accept: */*",
+                "",
+                "  Binary body: 6 B",
+                "  00000000  00 01 02 ff 00 80                                ......",
+            }, { unpack(view.lines, 1, 6) })
+            assert.same({ first = 1, last = 6, closed = true }, view.folds[1])
         end)
     end)
 
