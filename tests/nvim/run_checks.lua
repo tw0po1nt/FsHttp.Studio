@@ -478,7 +478,7 @@ T["the picker lists each located Block in source order, and a pick starts a Run"
 
     -- The stub picked the first Block, so its Run starts and fills the Response buffer.
     eventually_response(child, "the probe body after the picker pick", function(snapshot)
-        return only_window(snapshot) ~= nil and has_line(snapshot.lines, harness.json_probe_body)
+        return only_window(snapshot) ~= nil and has_line(snapshot.lines, harness.json_probe_body_line)
     end)
     restore_select(child)
 end
@@ -525,7 +525,7 @@ T["a Run that starts while the companion starts runs when it is ready"] = functi
 
     -- When the companion becomes ready, the recorded Run starts and fills the Response buffer.
     eventually_response(child, "the probe body after the wait", function(snapshot)
-        return only_window(snapshot) ~= nil and has_line(snapshot.lines, harness.json_probe_body)
+        return only_window(snapshot) ~= nil and has_line(snapshot.lines, harness.json_probe_body_line)
     end)
 end
 
