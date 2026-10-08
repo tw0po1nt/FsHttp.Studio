@@ -129,6 +129,11 @@ local function paint(view)
             hl_group = highlight.group,
         })
     end
+    for _, hint in ipairs(view.hints) do
+        vim.api.nvim_buf_set_extmark(target, namespace, hint.line - 1, 0, {
+            virt_lines = { { { hint.text, "FsHttpResponseDetail" } } },
+        })
+    end
     for _, win in ipairs(windows()) do
         apply_to_window(win)
     end

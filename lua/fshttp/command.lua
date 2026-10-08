@@ -8,6 +8,9 @@ M.subcommands = {
     run = function()
         require("fshttp.run").at_cursor()
     end,
+    open = function()
+        require("fshttp.open").open()
+    end,
     status = function()
         require("fshttp.status_line").echo()
     end,
