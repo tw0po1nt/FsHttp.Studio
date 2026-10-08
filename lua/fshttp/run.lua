@@ -63,7 +63,11 @@ local function view_for(outcome, decode_error, total_ms)
     elseif outcome.tag == "ok" then
         local result = to_result(outcome, total_ms)
         yank.remember(result)
-        return response_view.result(result, require("fshttp.body_syntax").parse)
+        return response_view.result(
+            result,
+            require("fshttp.body_syntax").parse,
+            require("fshttp.image_placement").unsupported_reason
+        )
     elseif outcome.tag == "compileError" then
         -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/276): move to a Compile error position with <CR>.
         return response_view.compile_error(outcome.diagnostics)

@@ -66,6 +66,12 @@ let downloadsVariable = "UI_TEST_SERVER_DOWNLOADS"
 
 let private downloadsPrefix = "/download/"
 
+/// Cross-process contract for `GET /image`: a PNG of 100 by 100 pixels. Match exactly in the image
+/// body Check of the Neovim suite.
+let imageBody =
+    Convert.FromBase64String
+        "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAAoUlEQVR42u3QMQ0AAAgDsAmb/yALC3w8TaqgmZajKJAlS5YsWbIUyJIlS5YsWQpkyZIlS5YsBbJkyZIlS5YCWbJkyZIlS4EsWbJkyZKlQJYsWbJkyVIgS5YsWbJkKZAlS5YsWbIUyJIlS5YsWQpkyZIlS5YsBbJkyZIlS5YCWbJkyZIlS4EsWbJkyZKlQJYsWbJkyVIgS5YsWbJkKZAl69sCV9fW0Q6QbmMAAAAASUVORK5CYII="
+
 let private catchAllBody = "ui-test-server:unknown"
 
 let private utf8 = Encoding.UTF8
@@ -174,6 +180,7 @@ type UiTestHttpServer() =
             | "GET", "/json" -> writeText ctx 200 "application/json" jsonProbeBody
             | "GET", "/notfound" -> writeText ctx 404 "text/plain" notFoundBody
             | "GET", "/binary" -> writeBytes ctx 200 "application/octet-stream" binaryBody
+            | "GET", "/image" -> writeBytes ctx 200 "image/png" imageBody
             | "GET", "/slow" -> handleSlow ctx
             | "GET", "/release" -> handleRelease ctx
             | "GET", "/status" -> handleStatus ctx
