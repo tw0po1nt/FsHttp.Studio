@@ -1,0 +1,68 @@
+# Runs the Neovim suite and the Lua core suite.
+name: Neovim tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/nvim-tests.yml'
+      - 'build.lua'
+      - 'lazy.lua'
+      - 'lua/**'
+      - 'plugin/**'
+      - 'tests/golden/**'
+      - 'tests/lua/**'
+      - 'tests/minit.lua'
+      - 'tests/nvim/**'
+      # The Neovim suite uses the test HTTP server of the UI suite.
+      - 'tests/ui.Tests/server/**'
+      - 'src/**'
+      - 'global.json'
+      - 'package.json'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A new push to a branch stops the run of the older push. A run on main always completes.
+concurrency:
+  group: nvim-tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  nvim-tests:
+    name: Neovim suites (Linux, pinned stable Neovim)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
+
+      - name: Read the stable Neovim pin
+        id: nvim-pin
+        run: echo "stable=$(jq -r .stable tests/nvim/neovim-pin.json)" >> "$GITHUB_OUTPUT"
+
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ steps.nvim-pin.outputs.stable }}
+
+      - name: Install the readline headers that hererocks needs to build Lua 5.1
+        run: sudo apt-get update && sudo apt-get install -y libreadline-dev
+
+      - name: Run the Lua core suite
+        run: nvim -l tests/minit.lua --minitest
+
+      # The suite has no retry. A flaky Check is a defect to fix.
+      - name: Run the Neovim suite
+        run: tests/nvim/run.sh

@@ -38,6 +38,7 @@ claude-session:	Delete the Claude-Session trailer. It links to a private session
 # Slop
 # ---------------------------------------------------------------------------
 \b(provenance|leverag(e|es|ed|ing)|utiliz(e|es|ed|ing)|utilis(e|es|ed|ing))\b	Write what the thing is.
+\boracles?\b	Name what the test compares against: the expected value, the fixture, or the spec.
 
 # ---------------------------------------------------------------------------
 # Inflated adjectives

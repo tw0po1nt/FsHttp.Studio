@@ -478,6 +478,8 @@ Ticket: [Which settings does the Neovim client have, and how does a user set the
   - the JSON pretty-printer
   - `Protocol.statusText` for each `State` and `ScriptView` case, with the counts 0, 1, 2, and -1
   - the cursor rule of spec 0017
+  - the SDK floor rule of A3: the floor from `Companion.runtimeconfig.json`, and the test of the
+    `dotnet --list-sdks` output against the floor
 
 ### Part D: the Release gate and CI
 

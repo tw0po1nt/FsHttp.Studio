@@ -66,13 +66,20 @@ jobs:
       # actually "bundles and runs", which the .NET Seam-B suite structurally can't cover.
       - run: npm run smoke
 
+      - name: Read the Neovim pins
+        id: nvim-pin
+        run: |
+          set -euo pipefail
+          echo "floor=$(jq -r .floor tests/nvim/neovim-pin.json)" >> "$GITHUB_OUTPUT"
+          echo "stable=$(jq -r .stable tests/nvim/neovim-pin.json)" >> "$GITHUB_OUTPUT"
+
       # The Neovim client supports Neovim 0.11 and later, so the type check uses the 0.11 API types.
-      - name: Install Neovim 0.11 for its API types
+      - name: Install Neovim ${{ steps.nvim-pin.outputs.floor }} for its API types
         id: nvim-types
         uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
-          version: v0.11.7
+          version: ${{ steps.nvim-pin.outputs.floor }}
 
       - name: Install lua-language-server
         run: |
@@ -90,7 +97,7 @@ jobs:
       - uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
-          version: stable
+          version: ${{ steps.nvim-pin.outputs.stable }}
 
       - name: Install the readline headers that hererocks needs to build Lua 5.1
         run: sudo apt-get update && sudo apt-get install -y libreadline-dev

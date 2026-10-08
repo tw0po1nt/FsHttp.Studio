@@ -1,0 +1,5 @@
+{
+  "//": "The Neovim versions that CI installs. floor is the oldest version that the Neovim client supports, and the Lua type check uses its API types. stable is the pinned stable release that the Neovim suite and the Lua core suite run on.",
+  "floor": "v0.11.7",
+  "stable": "v0.12.5"
+}

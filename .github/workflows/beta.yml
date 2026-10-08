@@ -131,11 +131,16 @@ jobs:
         if: steps.path.outputs.kind == 'beta'
         run: dotnet fsi scripts/generate-lua.fsx --check
 
+      - name: Read the stable Neovim pin
+        id: nvim-pin
+        if: steps.path.outputs.kind == 'beta'
+        run: echo "stable=$(jq -r .stable tests/nvim/neovim-pin.json)" >> "$GITHUB_OUTPUT"
+
       - uses: rhysd/action-setup-vim@v1
         if: steps.path.outputs.kind == 'beta'
         with:
           neovim: true
-          version: stable
+          version: ${{ steps.nvim-pin.outputs.stable }}
 
       - name: Install the readline headers that hererocks needs to build Lua 5.1
         if: steps.path.outputs.kind == 'beta'

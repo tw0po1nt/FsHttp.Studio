@@ -15,10 +15,6 @@ let private getSdkLabel = "Get the .NET SDK"
 [<Literal>]
 let private dotnetDownloadUrl = "https://aka.ms/dotnet/download"
 
-/// Reached only when the shipped `Companion.runtimeconfig.json` is missing or corrupt.
-[<Literal>]
-let private fallbackRequiredMajor = 10
-
 /// Reacts to a fulfilled JS promise without a promise CE. The single `showWarningMessage` that
 /// the SDK-not-found guidance raises uses it.
 [<Emit("$0.then($1)")>]
@@ -35,39 +31,16 @@ let private configuredDotnetPath () : string option =
     else
         Some path
 
-/// The major version of the SDK that a `dotnet --list-sdks` line names (`10.0.100 [/path]` →
-/// `10`). Returns `None` for a blank line, or for a line that this function cannot parse.
-let private tryParseSdkMajor (listSdksLine: string) : int option =
-    match listSdksLine.Trim().Split(' ') |> Array.tryHead with
-    | Some version when version <> "" ->
-        match version.Split('.') |> Array.tryHead |> Option.map System.Int32.TryParse with
-        | Some(true, major) -> Some major
-        | _ -> None
-    | _ -> None
-
-/// The major .NET version that the companion targets. It comes from the
-/// `Companion.runtimeconfig.json` that ships beside the DLL (`framework.version` "10.0.0" →
-/// 10). This is the single source of the SDK floor, so a change to the companion's target
-/// framework moves the floor with no other edits. Returns `None` when this function cannot read
-/// or parse the packaged file, which means a broken install.
-let private companionTargetMajor (runtimeConfigPath: string) : int option =
+/// `None` when the file is missing or does not parse, which means a broken install.
+let private companionFrameworkVersion (runtimeConfigPath: string) : string option =
     try
         let json: obj = JS.JSON.parse (Node.fs.readFileSync (runtimeConfigPath, "utf8"))
-        let version: string = emitJsExpr json "$0.runtimeOptions.framework.version"
 
-        match version.Split('.') |> Array.tryHead |> Option.map System.Int32.TryParse with
-        | Some(true, major) -> Some major
+        match emitJsExpr json "$0.runtimeOptions.framework.version": obj with
+        | :? string as version -> Some version
         | _ -> None
     with _ ->
         None
-
-/// True when `dotnet --list-sdks` reports at least one SDK with a major version ≥
-/// `requiredMajor`. That is the floor the companion needs for FSI's `#r "nuget:"` restore, and
-/// that restore needs a full SDK. The companion rolls forward onto any newer major
-/// version, so a match at the floor or above is genuinely runnable.
-let private hasSdkAtLeast (requiredMajor: int) (listSdksOutput: string) : bool =
-    listSdksOutput.Split('\n')
-    |> Array.exists (fun line -> tryParseSdkMajor line |> Option.exists (fun major -> major >= requiredMajor))
 
 let activate (context: ExtensionContext) =
     let item = window.createStatusBarItem (statusBarAlignmentLeft, 100.0)
@@ -96,8 +69,8 @@ let activate (context: ExtensionContext) =
     // The runtimeconfig beside the DLL is the one source of the SDK floor.
     let requiredMajor =
         Node.Path.join [| context.extensionPath; "dist"; "companion"; "Companion.runtimeconfig.json" |]
-        |> companionTargetMajor
-        |> Option.defaultValue fallbackRequiredMajor
+        |> companionFrameworkVersion
+        |> sdkFloor
 
     let onState state =
         StatusBar.setCompanionState state
@@ -141,7 +114,7 @@ let activate (context: ExtensionContext) =
         [| "--list-sdks" |],
         nonNull (box {| timeout = 10000 |}),
         (fun err stdout _stderr ->
-            if isNullish err && hasSdkAtLeast requiredMajor stdout then
+            if isNullish err && hasSdkAtFloor requiredMajor stdout then
                 startCompanion dotnetPath
             else
                 notifyNoSdk ())
