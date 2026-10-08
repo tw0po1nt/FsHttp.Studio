@@ -1,5 +1,6 @@
 local MiniTest = require("mini.test")
 local harness = require("nvim.harness")
+local refusals = require("fshttp.refusals")
 
 local one_fixture = harness.ui_fixture("status-bar-one.fsx")
 local many_fixture = harness.ui_fixture("status-bar-many.fsx")
@@ -8,6 +9,9 @@ local module_fixture = harness.ui_fixture("status-bar-module.fs")
 local other_fixture = harness.ui_fixture("status-bar-other.md")
 local above_fixture = harness.ui_fixture("no-requests-above.fsx")
 local between_fixture = harness.ui_fixture("no-requests-between.fsx")
+local slow_fixture = harness.fixture("slow.fsx")
+-- The line of the one Block in the slow fixture.
+local slow_block_line = 26
 
 ---@param text string
 ---@return string
@@ -95,33 +99,51 @@ T["the count follows the Active document with a second script open"] = function(
     harness.expect_status(child, "no requests found on the empty script again", empty_row)
 end
 
-T["companion death: status() gives nil in the Response buffer, and companion stopped on the script"] = function()
+T["companion death: the Response buffer shows the stopped text, and status() gives nil there"] = function()
     local known = harness.companion_pids()
     local child = harness.start_child({ companion_path = harness.companion_path() })
-    harness.edit(child, one_fixture)
+    harness.edit(child, slow_fixture)
     harness.expect_status(child, "1 request before the companion stops", one_row)
     local companions = harness.new_companion_pids(known)
     assert.equal(1, #companions, "the new child Neovim started one companion")
 
-    vim.uv.kill(companions[1], "sigkill")
-    harness.expect_status(child, "companion stopped on the script", stopped_row)
+    local ok, err = pcall(function()
+        harness.run_at(child, slow_block_line)
+        harness.eventually(harness.response_deadline_ms, "Running… in the Response buffer", function()
+            local lines = harness.response_buffer(child).lines or {}
+            return (lines[1] or ""):find("^Running…") ~= nil
+        end)
 
-    -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/270): start a Run first, assert the stopped text in the Response buffer, and use that buffer here.
-    harness.lua_get(
-        child,
-        [[(function()
-        vim.cmd.vnew()
-        vim.bo.buftype = "nofile"
-        vim.bo.filetype = "fshttp_response"
-    end)()]]
-    )
-    harness.expect_status(child, "nil while a buffer with the Response buffer filetype has focus", hidden)
+        vim.uv.kill(companions[1], "sigkill")
+        harness.eventually(harness.response_deadline_ms, "the stopped text in the Response buffer", function()
+            local lines = harness.response_buffer(child).lines or {}
+            return table.concat(lines, "\n"):find(refusals.companion_stopped.detail, 1, true) ~= nil
+                and (lines[1] or ""):find("^Running…") == nil
+        end)
+        harness.expect_status(child, "companion stopped on the script", stopped_row)
 
-    harness.cmd(child, "wincmd p")
-    harness.expect_status(child, "companion stopped on the script again", stopped_row)
-    harness.holds_for_settle("no notice for the start, the ready state, or the companion death", function()
-        return #harness.notices(child) == 0
+        harness.lua_get(
+            child,
+            [[(function()
+            for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+                if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "fshttp_response" then
+                    vim.api.nvim_set_current_win(win)
+                end
+            end
+        end)()]]
+        )
+        harness.expect_status(child, "nil while the Response buffer has focus", hidden)
+
+        harness.cmd(child, "wincmd p")
+        harness.expect_status(child, "companion stopped on the script again", stopped_row)
+        harness.holds_for_settle("no notice for the start, the ready state, the Run, or the companion death", function()
+            return #harness.notices(child) == 0
+        end)
     end)
+    harness.release_slow()
+    if not ok then
+        error(err, 0)
+    end
 end
 
 T["each change of the companion state or the script view fires the User autocmd"] = function()
