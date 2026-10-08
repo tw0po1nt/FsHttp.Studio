@@ -5,6 +5,7 @@ local refusals = require("fshttp.refusals")
 local picker = require("fshttp.picker")
 local response_buffer = require("fshttp.response_buffer")
 local response_view = require("fshttp.response_view")
+local yank = require("fshttp.yank")
 local run_target = require("fshttp.run_target")
 
 local M = {}
@@ -56,10 +57,13 @@ end
 ---@param total_ms number
 ---@return fshttp.ResponseView
 local function view_for(outcome, decode_error, total_ms)
+    yank.remember(nil)
     if outcome == nil then
         return response_view.message(decode_error or refusals.companion_stopped.detail)
     elseif outcome.tag == "ok" then
-        return response_view.result(to_result(outcome, total_ms), require("fshttp.body_syntax").parse)
+        local result = to_result(outcome, total_ms)
+        yank.remember(result)
+        return response_view.result(result, require("fshttp.body_syntax").parse)
     elseif outcome.tag == "compileError" then
         -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/276): move to a Compile error position with <CR>.
         return response_view.compile_error(outcome.diagnostics)

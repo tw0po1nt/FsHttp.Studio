@@ -63,6 +63,7 @@ local function get_buf()
     vim.api.nvim_buf_set_name(buf, "fshttp://response")
     vim.bo[buf].modifiable = false
     vim.bo[buf].filetype = M.filetype
+    require("fshttp.response_keys").attach(buf)
     return buf
 end
 
