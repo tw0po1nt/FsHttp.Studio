@@ -253,10 +253,12 @@ The outcome for each state:
 
 | State | Result |
 |---|---|
+| The current buffer is not a Script | An INFO notice: ":FsHttp run runs a request from an F# script (.fsx). Open a script and put the cursor in a request." No locate and no Run start. |
 | A refused target | A WARN notice with the detail from `Refusals`. No Run starts, and the Response buffer stays closed. |
 | A Parse failure and no block | A WARN notice: "No requests found: this script has a syntax error." |
 | No block and no Parse failure | An INFO notice: "This script has no request. Write an http { } block to run one." |
 | Companion stopped | The stopped sentence as a WARN notice. The client maps no cursor and opens no picker. |
+| A state that cannot become ready, for example no SDK | The A11 notice of that state again. No Run starts. |
 | A Refused Run from the run envelope | The Response buffer shows it, as spec 0003 Decision 6 states. |
 
 #### A7. Block marks
@@ -379,6 +381,9 @@ Ticket: [How does the Neovim client report the companion state?](https://github.
 | No release has the client version | `no companion for v<version>` |
 | `companion_path` has no companion | `companion not found` |
 
+- `:FsHttp status` in a buffer that is not F# echoes the companion state row. The ready state has
+  the row `companion ready`, and only this echo shows it.
+- Before the first Script starts the start sequence, the row is `companion not started`.
 - `Protocol.State` keeps its four cases. VSCode never reaches a download state.
 - Only a state that needs a fix raises a notice:
 

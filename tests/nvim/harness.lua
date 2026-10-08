@@ -14,6 +14,8 @@ M.companion_exists_deadline_ms = 30000
 M.companion_gone_deadline_ms = 15000
 M.notice_deadline_ms = 15000
 M.block_mark_deadline_ms = 15000
+M.status_line_text_deadline_ms = 15000
+M.response_deadline_ms = 30000
 
 -- A child Neovim that gives no answer to one request in this time is hung, and the Harness stops it.
 M.child_answer_deadline_ms = 10000
@@ -237,13 +239,16 @@ local function guarded(child, subject, fn)
 end
 
 -- Starts a child Neovim that loads the client through lazy.nvim with `opts`. With `client_version`,
--- the client in the child uses that version in place of the version that version.lua holds.
+-- the client in the child uses that version in place of the version that version.lua holds. With
+-- `with_lualine`, lazy.nvim also loads lualine.nvim in the child.
 ---@param opts table
 ---@param client_version? string
+---@param with_lualine? boolean
 ---@return nvim_suite.Child
-function M.start_child(opts, client_version)
+function M.start_child(opts, client_version, with_lualine)
     vim.env.NVIM_TEST_CLIENT_OPTS = vim.json.encode(opts)
     vim.env.NVIM_TEST_CLIENT_VERSION = client_version
+    vim.env.NVIM_TEST_LUALINE = with_lualine and "1" or nil
     local mini = MiniTest.new_child_neovim()
     mini.start({ "-u", child_init })
     local child = { mini = mini, job_id = mini.job.id, pid = vim.fn.jobpid(mini.job.id), stopped = false }
@@ -316,6 +321,155 @@ function M.block_marks(child)
     )
 end
 
+-- The text that status() gives for the Active document of the child. The text is "nil" when status()
+-- gives nil.
+---@param child nvim_suite.Child
+---@return string
+function M.status(child)
+    return M.lua_get(child, [[tostring(require("fshttp").status())]])
+end
+
+-- Edits `path` in the child, and gives the text of status() before the child reads an answer of
+-- the companion. The edit and the read are one request, so no answer can arrive between them.
+---@param child nvim_suite.Child
+---@param path string
+---@return string
+function M.edit_and_read_status(child, path)
+    return M.lua_get(
+        child,
+        [[(function(path)
+            vim.cmd.edit(vim.fn.fnameescape(path))
+            return tostring(require("fshttp").status())
+        end)(...)]],
+        { path }
+    )
+end
+
+-- Polls status() in the child until it gives `expected`.
+---@param child nvim_suite.Child
+---@param subject string
+---@param expected string
+function M.expect_status(child, subject, expected)
+    M.eventually_equal(M.status_line_text_deadline_ms, subject, expected, function()
+        return M.status(child)
+    end)
+end
+
+-- The text that `:FsHttp status` echoes in the child.
+---@param child nvim_suite.Child
+---@return string
+function M.fshttp_status_echo(child)
+    return M.lua_get(child, [[vim.api.nvim_exec2("FsHttp status", { output = true }).output]])
+end
+
+---@class nvim_suite.ClosedFold
+---@field first integer
+---@field last integer
+---@field text string the text that the closed fold shows
+
+---@class nvim_suite.ResponseWindow
+---@field id integer
+---@field col integer the screen column of the window
+---@field winbar string the winbar as the window shows it, or "" for no winbar
+---@field winbar_expression string the 'winbar' option
+---@field wrap boolean
+---@field linebreak boolean
+---@field breakindent boolean
+---@field closed_folds nvim_suite.ClosedFold[]
+
+---@class nvim_suite.ResponseBuffer
+---@field count integer the number of buffers with the fshttp_response filetype
+---@field buftype? string
+---@field lines? string[]
+---@field windows nvim_suite.ResponseWindow[] each window of the current tab page that shows the Response buffer
+---@field current_buffer_name string
+---@field current_col integer the screen column of the current window
+
+-- The Response buffer in the child, as the user sees it in the current tab page.
+---@param child nvim_suite.Child
+---@return nvim_suite.ResponseBuffer
+function M.response_buffer(child)
+    return M.lua_get(
+        child,
+        [[(function()
+            local found = {}
+            for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "fshttp_response" then
+                    found[#found + 1] = buf
+                end
+            end
+            local snapshot = {
+                count = #found,
+                windows = {},
+                current_buffer_name = vim.api.nvim_buf_get_name(0),
+                current_col = vim.api.nvim_win_get_position(0)[2],
+            }
+            local buf = found[1]
+            if not buf then
+                return snapshot
+            end
+            snapshot.buftype = vim.bo[buf].buftype
+            snapshot.lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+            for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+                if vim.api.nvim_win_get_buf(win) == buf then
+                    local expression = vim.wo[win].winbar
+                    local window = {
+                        id = win,
+                        col = vim.api.nvim_win_get_position(win)[2],
+                        winbar_expression = expression,
+                        winbar = expression == "" and ""
+                            or vim.api.nvim_eval_statusline(expression, { winid = win, use_winbar = true }).str,
+                        wrap = vim.wo[win].wrap,
+                        linebreak = vim.wo[win].linebreak,
+                        breakindent = vim.wo[win].breakindent,
+                        closed_folds = {},
+                    }
+                    vim.api.nvim_win_call(win, function()
+                        local line = 1
+                        local last_line = vim.api.nvim_buf_line_count(buf)
+                        while line <= last_line do
+                            if vim.fn.foldclosed(line) == line then
+                                local last = vim.fn.foldclosedend(line)
+                                window.closed_folds[#window.closed_folds + 1] =
+                                    { first = line, last = last, text = vim.fn.foldtextresult(line) }
+                                line = last + 1
+                            else
+                                line = line + 1
+                            end
+                        end
+                    end)
+                    snapshot.windows[#snapshot.windows + 1] = window
+                end
+            end
+            return snapshot
+        end)()]]
+    )
+end
+
+-- Puts the cursor on `line` of the current buffer in the child, and runs `:FsHttp run`.
+---@param child nvim_suite.Child
+---@param line integer
+function M.run_at(child, line)
+    M.cmd(child, string.format("call cursor(%d, 1)", line))
+    M.cmd(child, "FsHttp run")
+end
+
+-- Closes each window that shows the Response buffer in the child.
+---@param child nvim_suite.Child
+function M.close_response_windows(child)
+    M.lua_get(
+        child,
+        [[(function()
+            for _, win in ipairs(vim.api.nvim_list_wins()) do
+                local buf = vim.api.nvim_win_get_buf(win)
+                if vim.bo[buf].filetype == "fshttp_response" and #vim.api.nvim_list_wins() > 1 then
+                    vim.api.nvim_win_close(win, true)
+                end
+            end
+        end)()]]
+    )
+end
+
 -- Each notice that the client gave in the child, as { message, level }.
 ---@param child nvim_suite.Child
 ---@return nvim_suite.Notice[]
@@ -333,6 +487,19 @@ function M.notices_at(child, level)
         if notice.level == level then
             found[#found + 1] = notice
         end
+    end
+    return found
+end
+
+-- Each notice that the client gave in the child after the first `count` notices.
+---@param child nvim_suite.Child
+---@param count integer
+---@return nvim_suite.Notice[]
+function M.notices_after(child, count)
+    local all = M.notices(child)
+    local found = {}
+    for i = count + 1, #all do
+        found[#found + 1] = all[i]
     end
     return found
 end
@@ -436,6 +603,18 @@ local function read_sidecar()
         fail_harness_setup(string.format("the Sidecar at %s does not parse: %s", sidecar_path, text))
     end
     return sidecar.baseUrl, sidecar.deadUrl
+end
+
+-- The URL of the test HTTP server, with no trailing slash, as the fixtures compute it.
+---@return string
+function M.base_url()
+    local base_url = read_sidecar()
+    return (base_url:gsub("/$", ""))
+end
+
+-- Answers each request that waits on the /slow route of the test HTTP server.
+function M.release_slow()
+    run({ "curl", "-sS", "-m", "10", M.base_url() .. "/release" })
 end
 
 local function start_server()

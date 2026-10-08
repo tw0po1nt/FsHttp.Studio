@@ -18,15 +18,20 @@ local function warn_notices(child)
     return harness.notices_at(child, vim.log.levels.WARN)
 end
 
-T["a companion of the client version gives no WARN notice"] = function()
+T["a companion of the client version gives no version WARN notice"] = function()
     local child = harness.harness_setup_child()
 
-    harness.holds_for_settle("no WARN notice in the child Neovim of Harness setup", function()
-        return #warn_notices(child) == 0
+    harness.holds_for_settle("no version WARN notice in the child Neovim of Harness setup", function()
+        for _, notice in ipairs(warn_notices(child)) do
+            if notice.message:find("FsHttp.Studio is version", 1, true) then
+                return false
+            end
+        end
+        return true
     end)
 end
 
-T["a companion of a different version gives one WARN notice, and the companion stays up"] = function()
+T["a companion of a different version gives one WARN notice, the companion stays up, and a Run succeeds"] = function()
     local known = harness.companion_pids()
     local child = harness.start_child({ companion_path = harness.companion_path() }, "9.9.9")
     harness.edit(child, harness.fixture("harness-setup.fsx"))
@@ -48,7 +53,16 @@ T["a companion of a different version gives one WARN notice, and the companion s
     harness.holds_for_settle("one WARN notice and a live companion", function()
         return #warn_notices(child) == 1 and harness.process_exists(companion)
     end)
-    -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/270): assert a successful Run on a version mismatch.
+
+    harness.edit(child, harness.fixture("core-path.fsx"))
+    harness.eventually(harness.block_mark_deadline_ms, "a Block mark on the first Block", function()
+        return harness.block_marks(child):find("^26: ") ~= nil
+    end)
+    harness.run_at(child, 26)
+
+    harness.eventually(harness.response_deadline_ms, "a successful Run in the Response buffer", function()
+        return vim.tbl_contains(harness.response_buffer(child).lines or {}, harness.json_probe_body)
+    end)
 end
 
 return T

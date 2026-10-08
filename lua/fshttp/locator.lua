@@ -5,6 +5,10 @@ local refusals = require("fshttp.refusals")
 
 local M = {}
 
+---@class fshttp.LocateAnswer
+---@field blocks integer the number of located Blocks
+---@field parse_failed boolean
+
 local namespace = vim.api.nvim_create_namespace("fshttp.block_mark")
 local relocate_delay_ms = 300
 
@@ -16,6 +20,11 @@ local timers = {}
 -- The changedtick check of an answer covers each edit that comes while a locate waits.
 ---@type table<integer, true>
 local waiting = {}
+-- The answer of the last locate for each Script. A Script with no entry waits for a locate.
+---@type table<integer, fshttp.LocateAnswer>
+local answers = {}
+---@type fun(buf: integer)[]
+local listeners = {}
 local watching = false
 
 local function define_highlights()
@@ -26,7 +35,7 @@ end
 
 ---@param buf integer
 ---@return boolean
-local function is_script(buf)
+function M.is_script(buf)
     return vim.api.nvim_buf_is_loaded(buf) and vim.api.nvim_buf_get_name(buf):match("%.fsx$") ~= nil
 end
 
@@ -100,11 +109,23 @@ local function paint_stopped(buf)
     end
 end
 
+---@param buf integer
+---@param answer fshttp.LocateAnswer?
+local function set_answer(buf, answer)
+    if vim.deep_equal(answers[buf], answer) then
+        return
+    end
+    answers[buf] = answer
+    for _, listener in ipairs(listeners) do
+        listener(buf)
+    end
+end
+
 local schedule_locate
 
 ---@param buf integer
 local function locate(buf)
-    if not is_script(buf) or waiting[buf] then
+    if not M.is_script(buf) or waiting[buf] then
         return
     end
     local changedtick = vim.api.nvim_buf_get_changedtick(buf)
@@ -112,7 +133,7 @@ local function locate(buf)
     waiting[buf] = true
     local sent = companion.locate(source, function(blocks)
         waiting[buf] = nil
-        if not blocks or blocks.tag ~= "blocks" or not is_script(buf) then
+        if not blocks or blocks.tag ~= "blocks" or not M.is_script(buf) then
             return
         end
         -- The ranges belong to older text, and their lines can be wrong for the text now.
@@ -121,6 +142,7 @@ local function locate(buf)
             return
         end
         paint(buf, block_mark.for_blocks(blocks))
+        set_answer(buf, { blocks = #blocks.ranges, parse_failed = blocks.parse_failed })
     end)
     if not sent then
         waiting[buf] = nil
@@ -152,6 +174,7 @@ local function forget(buf)
         timers[buf] = nil
     end
     located[buf] = nil
+    set_answer(buf, nil)
 end
 
 ---@param state fshttp.CompanionState
@@ -169,6 +192,19 @@ local function on_state_change(state)
     end
 end
 
+-- Returns the answer of the last locate for a Script, or nil while the Script waits for a locate.
+---@param buf integer
+---@return fshttp.LocateAnswer?
+function M.answer(buf)
+    return answers[buf]
+end
+
+-- The listener runs when the answer for a Script changes, and when a Script starts to wait again.
+---@param listener fun(buf: integer)
+function M.on_answer_change(listener)
+    listeners[#listeners + 1] = listener
+end
+
 -- Only the first call has an effect.
 function M.watch()
     if watching then
@@ -183,6 +219,7 @@ function M.watch()
         group = group,
         pattern = "*.fsx",
         callback = function(args)
+            set_answer(args.buf, nil)
             locate(args.buf)
         end,
     })

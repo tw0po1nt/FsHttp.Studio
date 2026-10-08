@@ -6,17 +6,25 @@ local version_check = require("fshttp.version_check")
 
 local M = {}
 
----@alias fshttp.CompanionState "starting"|"ready"|"stopped"
+-- Only Neovim has the download states and "companionNotFound".
+---@alias fshttp.CompanionState "starting"|"ready"|"sdkNotFound"|"stopped"|"downloading"|"downloadFailed"|"noRelease"|"companionNotFound"
+
+---@class fshttp.StateNotice
+---@field message string
+---@field level integer
 
 ---@type vim.SystemObj?
 local process
 local sequence_ran = false
 ---@type fshttp.CompanionState?
 local state
+-- A state that never becomes ready keeps its notice, so that a Run in that state can show the fix again.
+---@type fshttp.StateNotice?
+local state_notice
 ---@type fun(state: fshttp.CompanionState)[]
 local listeners = {}
--- The companion answers one frame at a time, so each answer belongs to the oldest locate.
----@type fun(answer: table?)[]
+-- The companion answers one frame at a time, so each answer belongs to the oldest sent envelope.
+---@type fun(answer: table?, decode_error: string?)[]
 local pending = {}
 
 local list_sdks_timeout_ms = 10000
@@ -41,10 +49,28 @@ local function read_file(path)
     return text
 end
 
+---@param new_state fshttp.CompanionState
+---@param notice fshttp.StateNotice? the notice that the change to `new_state` raised
+local function set_state(new_state, notice)
+    if state == new_state then
+        return
+    end
+    state = new_state
+    state_notice = notice
+    for _, listener in ipairs(listeners) do
+        listener(new_state)
+    end
+end
+
+-- The callback of `dotnet --list-sdks` is a fast event, so the state change waits for the main loop.
 ---@param floor integer
 ---@param dotnet_path string?
 local function report_no_sdk(floor, dotnet_path)
-    notify(sdk.not_found_notice(floor, dotnet_path), vim.log.levels.WARN)
+    local notice = { message = sdk.not_found_notice(floor, dotnet_path), level = vim.log.levels.WARN }
+    notify(notice.message, notice.level)
+    vim.schedule(function()
+        set_state("sdkNotFound", notice)
+    end)
 end
 
 -- On a version mismatch, the companion stays up and each Run goes ahead.
@@ -56,18 +82,10 @@ local function check_version(companion_version)
     end
 end
 
----@param new_state fshttp.CompanionState
-local function set_state(new_state)
-    state = new_state
-    for _, listener in ipairs(listeners) do
-        listener(new_state)
-    end
-end
-
--- An answer that does not decode still ends the oldest locate, so the next answer stays matched.
+-- An answer that does not decode still ends the oldest sent envelope, so the next answer stays matched.
 ---@param encoded string
 local function receive(encoded)
-    local answer = envelope.decode(encoded)
+    local answer, decode_error = envelope.decode(encoded)
     if answer and answer.tag == "ready" then
         check_version(answer.version)
         set_state("ready")
@@ -75,7 +93,7 @@ local function receive(encoded)
     end
     local callback = table.remove(pending, 1)
     if callback then
-        callback(answer)
+        callback(answer, decode_error)
     end
 end
 
@@ -109,10 +127,10 @@ local function spawn(dotnet, companion_dll)
         stderr = function() end,
     }, vim.schedule_wrap(on_exit))
     if not ok then
+        set_state("stopped")
         return
     end
     process = started
-    set_state("starting")
     started:write(frame.encode(envelope.encode({ tag = "hello" })))
 end
 
@@ -121,9 +139,27 @@ function M.state()
     return state
 end
 
+---@return fshttp.StateNotice? notice nil when the current state raised no notice
+function M.state_notice()
+    return state_notice
+end
+
 ---@param listener fun(state: fshttp.CompanionState)
 function M.on_state_change(listener)
     listeners[#listeners + 1] = listener
+end
+
+---@param outgoing table an envelope
+---@param callback fun(answer: table?, decode_error: string?)
+---@return boolean sent
+local function send(outgoing, callback)
+    if state ~= "ready" or not process then
+        return false
+    end
+    pending[#pending + 1] = callback
+    -- A write to a companion that just exited fails. The exit then abandons the callback.
+    pcall(process.write, process, frame.encode(envelope.encode(outgoing)))
+    return true
 end
 
 -- The callback gets nil when the companion stops before it answers.
@@ -131,13 +167,15 @@ end
 ---@param callback fun(blocks: table?)
 ---@return boolean sent false when the companion is not ready, and then the callback never runs
 function M.locate(source, callback)
-    if state ~= "ready" or not process then
-        return false
-    end
-    pending[#pending + 1] = callback
-    -- A write to a companion that just exited fails. The exit then abandons the callback.
-    pcall(process.write, process, frame.encode(envelope.encode({ tag = "locate", source = source })))
-    return true
+    return send({ tag = "locate", source = source }, callback)
+end
+
+-- The callback gets nil and no decode error when the companion stops before it answers.
+---@param run_envelope table
+---@param callback fun(outcome: table?, decode_error: string?)
+---@return boolean sent false when the companion is not ready, and then the callback never runs
+function M.run(run_envelope, callback)
+    return send(run_envelope, callback)
 end
 
 -- Runs the start sequence once for each Neovim instance: get the companion, check the SDK floor,
@@ -155,6 +193,7 @@ function M.start(config)
         return
     end
 
+    set_state("starting")
     vim.api.nvim_create_autocmd("VimLeavePre", {
         group = vim.api.nvim_create_augroup("fshttp.companion", { clear = true }),
         callback = M.stop,

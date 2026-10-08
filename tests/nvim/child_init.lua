@@ -23,8 +23,12 @@ end
 
 vim.opt.rtp:prepend(vim.fn.stdpath("data") .. "/lazy/lazy.nvim")
 
-require("lazy.minit").setup({
-    spec = {
-        { dir = vim.uv.cwd(), opts = vim.json.decode(vim.env.NVIM_TEST_CLIENT_OPTS or "{}") },
-    },
-})
+local spec = {
+    { dir = vim.uv.cwd(), opts = vim.json.decode(vim.env.NVIM_TEST_CLIENT_OPTS or "{}") },
+}
+-- A Check sets NVIM_TEST_LUALINE to load lualine.nvim. The runner of the suite installed it.
+if vim.env.NVIM_TEST_LUALINE == "1" then
+    spec[#spec + 1] = { "nvim-lualine/lualine.nvim" }
+end
+
+require("lazy.minit").setup({ spec = spec })

@@ -114,8 +114,8 @@ starts at the first Check, so it leaves out Harness setup, as in the UI suite.
 
 **A Beta runs the Lua core suite only.** A Beta does not run the Neovim suite.
 
-**The version mismatch Check proves no Run.** The Neovim client cannot start a Run yet. The Check
-asserts the WARN notice and a companion that stays up.
+**A user with no lualine sees no companion state until the user runs a command.** `:FsHttp status`
+shows the state. No Check drives a statusline other than lualine.
 
 ### What the Neovim suite covers today
 
@@ -126,5 +126,23 @@ asserts the WARN notice and a companion that stays up.
 - The start sequence: a second Script starts no second companion. `VimLeavePre` stops the
   companion. A `dotnet_path` that names a missing file gives the WARN notice, and no companion
   starts.
-- The version check: a companion of the client version gives no WARN notice. A companion of a
-  different version gives one WARN notice that names both versions, and the companion stays up.
+- The version check: a companion of the client version gives no version WARN notice. A companion
+  of a different version gives one WARN notice that names both versions, the companion stays up,
+  and a Run succeeds.
+- `:FsHttp run`: the command completes `run`, and `<Plug>(FsHttpRun)` has no key. A Run fills the
+  Response buffer in a split on the right, and the next Run replaces it in the same window. After
+  the user closes that window, the next Run opens it again. The Request and Response headers folds
+  start closed, and the winbar cuts the start of the URL in a narrow split. A 404 shows as a
+  response, and a Dead port shows as a Runtime error. A Run of the loop Block gives the WARN notice
+  and opens no Response buffer. A cross-block Refused Run shows the refused text, and the Script
+  gets no diagnostic. The Request fold shows what a POST sent. `request_timeout_ms` bounds a Run.
+  The two no-Block notices show, and a stopped companion gives the stopped WARN notice.
+- The Status line text: `status()` gives the rows of the UI suite Status line text Checks for clean
+  scripts, an `.fs` module, scripts with a Parse failure, a buffer that is not F#, a buffer switch,
+  and a second open script. A companion death during a Run shows the stopped text in the Response
+  buffer. Then `status()` gives nil while the Response buffer has focus, and `companion stopped`
+  on the script. No notice shows. Each change fires the `User` autocmd, and so does a switch to a
+  buffer that is not F#. `:FsHttp status` echoes the row, or the companion state row in a buffer
+  that is not F#. The lualine entry shows the row, and `status_line.lualine = false` removes it. A
+  `dotnet_path` that names a missing file gives the `.NET SDK not found` row. In that state,
+  `:FsHttp run` shows the WARN notice of the SDK again.
