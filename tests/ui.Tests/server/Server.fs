@@ -44,6 +44,9 @@ let notFoundBody = "ui-test-server:notfound"
 /// response body region instead.
 let echoAckBody = """{"echoed":"ui-test-server"}"""
 
+/// Cross-process contract for `GET /binary`. Match exactly in the binary body Check.
+let binaryBody = Array.init 20 byte
+
 let private catchAllBody = "ui-test-server:unknown"
 
 let private utf8 = Encoding.UTF8
@@ -80,13 +83,15 @@ type UiTestHttpServer() =
     do listener.Prefixes.Add(prefix)
     do listener.Start()
 
-    let writeText (ctx: HttpListenerContext) status contentType (text: string) =
-        let bytes = utf8.GetBytes text
+    let writeBytes (ctx: HttpListenerContext) status contentType (bytes: byte[]) =
         ctx.Response.StatusCode <- status
         ctx.Response.ContentType <- contentType
         ctx.Response.ContentLength64 <- int64 bytes.Length
         ctx.Response.OutputStream.Write(bytes, 0, bytes.Length)
         ctx.Response.OutputStream.Close()
+
+    let writeText (ctx: HttpListenerContext) status contentType (text: string) =
+        writeBytes ctx status contentType (utf8.GetBytes text)
 
     let handleSlow (ctx: HttpListenerContext) =
         Interlocked.Increment &slowSeen |> ignore
@@ -130,6 +135,7 @@ type UiTestHttpServer() =
             match ctx.Request.HttpMethod, path with
             | "GET", "/json" -> writeText ctx 200 "application/json" jsonProbeBody
             | "GET", "/notfound" -> writeText ctx 404 "text/plain" notFoundBody
+            | "GET", "/binary" -> writeBytes ctx 200 "application/octet-stream" binaryBody
             | "GET", "/slow" -> handleSlow ctx
             | "GET", "/release" -> handleRelease ctx
             | "GET", "/status" -> handleStatus ctx

@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <Compile Include="RendererTests.fs" />
+    <Compile Include="../GoldenFixture.fs" Link="GoldenFixture.fs" />
+    <Compile Include="BinaryGoldenTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
