@@ -589,19 +589,111 @@ T["a Run that waits starts nothing when its Script closes"] = function()
     end)
 end
 
-T["with no companion_path, :FsHttp run gives a WARN notice and does not wait"] = function()
-    local child = harness.start_child({})
-    harness.edit(child, harness.fixture("core-path.fsx"))
+T[":FsHttp yank and yr, yh, and yb put the Copy text in the register, and g? lists the keys"] = function()
+    local child = harness.harness_setup_child()
+    local base_url = harness.base_url()
+    open_script(child, harness.fixture("request-section.fsx"), { 27 })
+    harness.run_at(child, 28)
+    local snapshot = eventually_response(child, "the echoed body in the Response buffer", function(shown)
+        return only_window(shown) ~= nil and has_line(shown.lines, '  "echoed": "ui-test-server"')
+    end)
 
-    harness.run_at(child, 26)
+    local function register(name)
+        return harness.lua_get(child, "vim.fn.getreg(...)", { name })
+    end
 
+    local function expect_info(count, message)
+        expect_notice(child, count, vim.log.levels.INFO, message)
+    end
+
+    local count = #harness.notices(child)
+    harness.cmd(child, "FsHttp yank body")
+    expect_info(count, 'Yanked the Body to register ".')
+    local body = register('"')
+    assert.equal('{"echoed":"ui-test-server"}', (body:gsub("%s+", "")), "the raw body text")
+
+    count = #harness.notices(child)
+    harness.cmd(child, "FsHttp yank body d")
+    expect_info(count, "Yanked the Body to register d.")
+    assert.equal(body, register("d"), "the register argument gets the same Body text")
+
+    harness.lua_get(child, "vim.api.nvim_set_current_win(...)", { assert(only_window(snapshot)).id })
+
+    count = #harness.notices(child)
+    harness.type_keys(child, '"ayr')
+    expect_info(count, "Yanked the Request to register a.")
+    local request = register("a")
+    local tail = '\n\n{"posted":"request-section-fixture"}'
+    assert.equal("POST " .. base_url .. "/echo", request:match("^[^\n]*"), request)
+    assert.equal(true, request:find("\nX-Fixture: request-section\n", 1, true) ~= nil, request)
+    assert.equal(tail, request:sub(-#tail), request)
+
+    count = #harness.notices(child)
+    harness.type_keys(child, '"byh')
+    expect_info(count, "Yanked the Response headers to register b.")
+    local headers = register("b")
+    assert.equal("200 OK", headers:match("^[^\n]*"), headers)
+    assert.equal(true, headers:find("\nContent-Type: ", 1, true) ~= nil, headers)
+
+    count = #harness.notices(child)
+    harness.type_keys(child, '"cyb')
+    expect_info(count, "Yanked the Body to register c.")
+    assert.equal(true, register("c"):find('"echoed"', 1, true) ~= nil, register("c"))
+
+    count = #harness.notices(child)
+    harness.type_keys(child, "g?")
+    expect_info(
+        count,
+        table.concat({
+            "Keys of the Response buffer:",
+            "yr  Yank the Request",
+            "yh  Yank the Response headers",
+            "yb  Yank the Body",
+            "g?  List the active keys",
+        }, "\n")
+    )
+end
+
+T["a yank to + with no clipboard provider gives the ERROR notice that names the failure"] = function()
+    local child = harness.harness_setup_child()
+    open_script(child, harness.fixture("request-section.fsx"), { 27 })
+    harness.run_at(child, 28)
+    local snapshot = eventually_response(child, "the echoed body in the Response buffer", function(shown)
+        return only_window(shown) ~= nil and has_line(shown.lines, '  "echoed": "ui-test-server"')
+    end)
+    harness.lua_get(child, "vim.api.nvim_set_current_win(...)", { assert(only_window(snapshot)).id })
+    -- A runner with pbcopy, xclip, or wl-clipboard has a provider, so the Check turns it off.
+    harness.lua_get(
+        child,
+        [[(function()
+        _G.fshttp_suite_clipboard_provider = vim.g.loaded_clipboard_provider
+        vim.g.loaded_clipboard_provider = 1
+    end)()]]
+    )
+
+    local count = #harness.notices(child)
+    harness.type_keys(child, '"+yr')
     expect_notice(
         child,
-        0,
-        vim.log.levels.WARN,
-        "The FsHttp.Studio companion did not start. Set companion_path to the folder that holds Companion.dll."
+        count,
+        vim.log.levels.ERROR,
+        "Could not yank the Request to register +. "
+            .. "Neovim has no clipboard provider. Install one, such as pbcopy, xclip, or wl-clipboard."
     )
-    assert.same({}, harness.notices_at(child, vim.log.levels.INFO))
+    harness.lua_get(child, "(function() vim.g.loaded_clipboard_provider = _G.fshttp_suite_clipboard_provider end)()")
+end
+
+T["a yank before any Run gives a WARN notice, and an unknown name or register gives an ERROR notice"] = function()
+    local child = harness.start_child({})
+
+    harness.cmd(child, "FsHttp yank request")
+    expect_notice(child, 0, vim.log.levels.WARN, "The latest Run gave no response. Run a Block first.")
+
+    harness.cmd(child, "FsHttp yank nothing")
+    expect_notice(child, 1, vim.log.levels.ERROR, ":FsHttp yank takes one of: request, headers, body.")
+
+    harness.cmd(child, "FsHttp yank body ab")
+    expect_notice(child, 2, vim.log.levels.ERROR, ":FsHttp yank takes one register name, such as + or a. It got ab.")
 end
 
 return T

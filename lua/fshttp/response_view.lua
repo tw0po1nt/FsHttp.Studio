@@ -1,5 +1,6 @@
 -- The lines, the folds, the highlights, and the winbar of the Response buffer for each Run outcome.
 local binary_body = require("fshttp.binary_body")
+local image_body = require("fshttp.image_body")
 local json = require("fshttp.json")
 local refusals = require("fshttp.refusals")
 
@@ -45,11 +46,21 @@ local M = {}
 -- Gives nil when Neovim has no parser for the language.
 ---@alias fshttp.BodySyntaxLookup fun(language: string, text: string): fshttp.BodySyntax?
 
+-- Gives nil when the client can show an image, and the reason when it cannot.
+---@alias fshttp.ImageSupport fun(content_type: string): string?
+
+-- An image body that the client places below `line`.
+---@class fshttp.ImageBody
+---@field line integer 1-based line of the pixel size
+---@field content_type string the type with no parameters
+---@field bytes string
+
 ---@class fshttp.ResponseView
 ---@field lines string[]
 ---@field winbar string a statusline expression, or "" for no winbar
 ---@field folds fshttp.Fold[]
 ---@field highlights fshttp.Highlight[]
+---@field image fshttp.ImageBody? set when the client can show the image body
 
 local open_glyph = "▾"
 local closed_glyph = "▸"
@@ -231,8 +242,7 @@ end
 ---@param content_type string the type with no parameters
 ---@return boolean
 local function skips_binary_test(content_type)
-    -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/274): skip the binary test for an image body, and show the image.
-    return body_language(content_type) == "html"
+    return body_language(content_type) == "html" or image_body.is_image(content_type)
 end
 
 -- With no parser, a JSON body shows pretty-printed, and each other body shows its exact bytes.
@@ -275,10 +285,30 @@ function M.running(seconds)
     return view
 end
 
+-- The pixel size of an image body, with the reason when no image can show. The view asks the client
+-- for the reason, and keeps the image for the client to place when there is none. With no lookup,
+-- the view reports that snacks.nvim is missing.
+---@param view fshttp.ResponseView
+---@param content_type string the type with no parameters
+---@param body string
+---@param image_support fshttp.ImageSupport?
+local function add_image(view, content_type, body, image_support)
+    ---@type string?
+    local reason = image_body.snacks_missing_reason
+    if image_support then
+        reason = image_support(content_type)
+    end
+    local line = add(view, { { image_body.size_line(body, reason), "FsHttpResponseDetail" } })
+    if not reason then
+        view.image = { line = line, content_type = content_type, bytes = body }
+    end
+end
+
 ---@param result fshttp.RunResult
 ---@param body_syntax fshttp.BodySyntaxLookup?
+---@param image_support fshttp.ImageSupport?
 ---@return fshttp.ResponseView
-function M.result(result, body_syntax)
+function M.result(result, body_syntax, image_support)
     local view = new_view()
     view.winbar = result_winbar(result)
 
@@ -318,7 +348,9 @@ function M.result(result, body_syntax)
     local size = M.human_size(#result.body)
     local body_detail = content_type == "" and size or (content_type .. " · " .. size)
     section(view, "Body", body_detail, false, function()
-        if not skips_binary_test(content_type) and binary_body.looks_binary(result.body) then
+        if image_body.is_image(content_type) and #result.body > 0 then
+            add_image(view, content_type, result.body, image_support)
+        elseif not skips_binary_test(content_type) and binary_body.looks_binary(result.body) then
             add_hex_view(view, result.body, "")
         elseif #result.body > 0 then
             add_body(view, content_type, result.body, body_syntax)

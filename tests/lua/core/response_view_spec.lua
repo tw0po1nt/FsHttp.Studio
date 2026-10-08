@@ -147,6 +147,33 @@ describe("fshttp.response_view", function()
             )
         end)
 
+        describe("with an image body", function()
+            local png = "\137PNG\r\n\26\n\0\0\0\13IHDR\0\0\0\100\0\0\0\100" .. string.rep("\0", 10)
+            local image = result({ body = png, content_type = "image/png" })
+
+            it("shows the pixel size in place of the hex dump, and keeps the image to place", function()
+                local view = response_view.result(image, nil, function()
+                    return nil
+                end)
+                assert.same({ "100×100 px" }, { unpack(view.lines, 8) })
+                assert.same({ line = 8, content_type = "image/png", bytes = png }, view.image)
+            end)
+
+            it("adds the reason, and keeps no image to place", function()
+                local view = response_view.result(image, nil, function()
+                    return "the terminal does not support images"
+                end)
+                assert.same({ "100×100 px  the terminal does not support images" }, { unpack(view.lines, 8) })
+                assert.is_nil(view.image)
+            end)
+
+            it("reports that snacks.nvim is missing when the client gives no lookup", function()
+                local view = response_view.result(image)
+                assert.same({ "100×100 px  snacks.nvim is not installed" }, { unpack(view.lines, 8) })
+                assert.is_nil(view.image)
+            end)
+        end)
+
         it("shows a body with no NUL byte and few control bytes as text", function()
             local view = response_view.result(result({ body = "a\tb\r\n\27[0m", content_type = "text/plain" }))
             assert.same({ "a\tb\r", "\27[0m" }, { unpack(view.lines, 8) })

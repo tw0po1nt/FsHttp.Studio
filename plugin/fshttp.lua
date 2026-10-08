@@ -17,6 +17,16 @@ vim.keymap.set("n", "<Plug>(FsHttpRun)", function()
     require("fshttp.command").subcommands.run({})
 end, { desc = "FsHttp.Studio: run the request at the cursor" })
 
+for name, plug in pairs({ request = "Request", headers = "Headers", body = "Body" }) do
+    vim.keymap.set("n", "<Plug>(FsHttpYank" .. plug .. ")", function()
+        require("fshttp.yank").yank(name)
+    end, { desc = "FsHttp.Studio: yank the " .. name })
+end
+
+vim.keymap.set("n", "<Plug>(FsHttpHelp)", function()
+    require("fshttp.response_keys").help()
+end, { desc = "FsHttp.Studio: list the keys of the Response buffer" })
+
 local group = vim.api.nvim_create_augroup("fshttp", { clear = true })
 
 vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {

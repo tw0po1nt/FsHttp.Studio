@@ -5,6 +5,7 @@ local refusals = require("fshttp.refusals")
 local picker = require("fshttp.picker")
 local response_buffer = require("fshttp.response_buffer")
 local response_view = require("fshttp.response_view")
+local yank = require("fshttp.yank")
 local run_target = require("fshttp.run_target")
 
 local M = {}
@@ -12,8 +13,6 @@ local M = {}
 local not_a_script_notice =
     ":FsHttp run runs a request from an F# script (.fsx). Open a script and put the cursor in a request."
 local wait_notice = "The FsHttp.Studio companion is starting. This Run starts when it is ready."
-local no_companion_notice =
-    "The FsHttp.Studio companion did not start. Set companion_path to the folder that holds Companion.dll."
 
 -- Only the result of the latest Run reaches the Response buffer.
 local generation = 0
@@ -56,10 +55,17 @@ end
 ---@param total_ms number
 ---@return fshttp.ResponseView
 local function view_for(outcome, decode_error, total_ms)
+    yank.remember(nil)
     if outcome == nil then
         return response_view.message(decode_error or refusals.companion_stopped.detail)
     elseif outcome.tag == "ok" then
-        return response_view.result(to_result(outcome, total_ms), require("fshttp.body_syntax").parse)
+        local result = to_result(outcome, total_ms)
+        yank.remember(result)
+        return response_view.result(
+            result,
+            require("fshttp.body_syntax").parse,
+            require("fshttp.image_placement").unsupported_reason
+        )
     elseif outcome.tag == "compileError" then
         -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/276): move to a Compile error position with <CR>.
         return response_view.compile_error(outcome.diagnostics)
@@ -207,12 +213,9 @@ function M.at_cursor()
     end
     require("fshttp").start()
 
-    local state = companion.state()
-    if state == nil then
-        -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/279): wait while the client downloads the Companion archive.
-        notify(no_companion_notice, vim.log.levels.WARN)
-        return
-    elseif state == "stopped" then
+    -- Each path of the start sequence sets a state before start() returns.
+    local state = companion.state() --[[@as fshttp.CompanionState]]
+    if state == "stopped" then
         notify(refusals.companion_stopped.detail, vim.log.levels.WARN)
         return
     elseif state ~= "ready" then

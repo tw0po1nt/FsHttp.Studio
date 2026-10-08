@@ -340,8 +340,10 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
 
 #### A10. Yank
 
-- `:FsHttp yank request|headers|body|curl` puts the payload in `v:register`. Thus `"+` reaches the
-  system clipboard.
+- `:FsHttp yank request|headers|body|curl [register]` puts the payload in the register that the
+  argument names. With no register argument, the command uses `v:register`. In an Ex command,
+  `v:register` is the default register, so `:FsHttp yank body +` reaches the system clipboard. A
+  key with a register, such as `"+yb`, reaches it through `v:register`.
 - The `request`, `headers`, and `body` payloads are the payloads of spec 0013. The `curl` payload
   is the Curl command of spec 0016.
 - The Response buffer maps these local keys:
@@ -356,6 +358,8 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
 | `g?` | List the active keys | `<Plug>(FsHttpHelp)` |
 
 - A notice confirms each yank, or names the clipboard failure.
+- A yank of a Body of zero bytes writes no register, and an INFO notice states that nothing was
+  yanked. This follows the rule of spec 0013 that such a Body has no copy button.
 
 #### A11. Companion state
 

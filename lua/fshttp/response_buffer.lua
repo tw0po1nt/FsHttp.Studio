@@ -1,4 +1,5 @@
 -- The one Response buffer, and the window that shows it.
+local image_placement = require("fshttp.image_placement")
 local response_view = require("fshttp.response_view")
 
 local M = {}
@@ -63,6 +64,7 @@ local function get_buf()
     vim.api.nvim_buf_set_name(buf, "fshttp://response")
     vim.bo[buf].modifiable = false
     vim.bo[buf].filetype = M.filetype
+    require("fshttp.response_keys").attach(buf)
     return buf
 end
 
@@ -112,6 +114,7 @@ end
 ---@param view fshttp.ResponseView
 local function paint(view)
     ensure_highlights()
+    image_placement.clear()
     local target = get_buf()
     current_view = view
     levels = response_view.fold_levels(#view.lines, view.folds)
@@ -128,6 +131,9 @@ local function paint(view)
     end
     for _, win in ipairs(windows()) do
         apply_to_window(win)
+    end
+    if view.image then
+        image_placement.place(target, view.image)
     end
 end
 
