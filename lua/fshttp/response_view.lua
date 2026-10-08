@@ -2,6 +2,7 @@
 local binary_body = require("fshttp.binary_body")
 local image_body = require("fshttp.image_body")
 local json = require("fshttp.json")
+local open_rule = require("fshttp.open_rule")
 local refusals = require("fshttp.refusals")
 
 local M = {}
@@ -60,6 +61,7 @@ local M = {}
 ---@field winbar string a statusline expression, or "" for no winbar
 ---@field folds fshttp.Fold[]
 ---@field highlights fshttp.Highlight[]
+---@field hints { line: integer, text: string }[] a virtual line below each 1-based line
 ---@field image fshttp.ImageBody? set when the client can show the image body
 
 local open_glyph = "▾"
@@ -67,7 +69,7 @@ local closed_glyph = "▸"
 
 ---@return fshttp.ResponseView
 local function new_view()
-    return { lines = {}, winbar = "", folds = {}, highlights = {} }
+    return { lines = {}, winbar = "", folds = {}, highlights = {}, hints = {} }
 end
 
 -- Each "\n" ends a line, so the joined lines give the text again byte for byte.
@@ -230,7 +232,7 @@ end
 local function body_language(content_type)
     if content_type == "application/json" or content_type == "text/json" or content_type:match("%+json$") then
         return "json"
-    elseif content_type == "text/html" or content_type == "application/xhtml+xml" then
+    elseif open_rule.is_html(content_type) then
         return "html"
     elseif content_type == "application/xml" or content_type == "text/xml" or content_type:match("%+xml$") then
         return "xml"
@@ -348,6 +350,10 @@ function M.result(result, body_syntax, image_support)
     local size = M.human_size(#result.body)
     local body_detail = content_type == "" and size or (content_type .. " · " .. size)
     section(view, "Body", body_detail, false, function()
+        local hint = #result.body > 0 and open_rule.hint(content_type)
+        if hint then
+            view.hints[#view.hints + 1] = { line = #view.lines, text = hint }
+        end
         if image_body.is_image(content_type) and #result.body > 0 then
             add_image(view, content_type, result.body, image_support)
         elseif not skips_binary_test(content_type) and binary_body.looks_binary(result.body) then

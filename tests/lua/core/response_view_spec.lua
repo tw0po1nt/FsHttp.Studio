@@ -147,6 +147,26 @@ describe("fshttp.response_view", function()
             )
         end)
 
+        describe("with an HTML body", function()
+            it("puts the open hint below the Body header", function()
+                local view = response_view.result(result({ body = "<p>hi</p>", content_type = "text/html" }))
+                assert.same({
+                    {
+                        line = 7,
+                        text = ":FsHttp open  shows the rendered page in the browser, with scripts blocked",
+                    },
+                }, view.hints)
+            end)
+
+            it("adds no hint for an empty body", function()
+                assert.same({}, response_view.result(result({ body = "", content_type = "text/html" })).hints)
+            end)
+        end)
+
+        it("adds no hint for a JSON body", function()
+            assert.same({}, response_view.result(result()).hints)
+        end)
+
         describe("with an image body", function()
             local png = "\137PNG\r\n\26\n\0\0\0\13IHDR\0\0\0\100\0\0\0\100" .. string.rep("\0", 10)
             local image = result({ body = png, content_type = "image/png" })
@@ -171,6 +191,11 @@ describe("fshttp.response_view", function()
                 local view = response_view.result(image)
                 assert.same({ "100×100 px  snacks.nvim is not installed" }, { unpack(view.lines, 8) })
                 assert.is_nil(view.image)
+            end)
+
+            it("puts the open hint below the Body header", function()
+                local view = response_view.result(image)
+                assert.same({ { line = 7, text = ":FsHttp open  shows the image in the system viewer" } }, view.hints)
             end)
         end)
 
