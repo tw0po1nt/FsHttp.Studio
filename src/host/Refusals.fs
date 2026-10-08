@@ -123,6 +123,13 @@ let staleBlockIndex (client: Client) : Refusal =
 let noBlocksParseFailure: string =
     "No requests found: this script has a syntax error."
 
+/// The line-1 lens title for a script with a parse failure and no Block. A lens title ends with no
+/// period, so it drops the period of the sentence.
+let noBlocksParseFailureLensTitle: string = glyph + noBlocksParseFailure.TrimEnd '.'
+
+/// The CodeLens title for a Block that a Run can reach.
+let runLensTitle: string = "▶ Run request"
+
 /// The sentence for a script with no Block and no parse failure.
 let noBlocksEmpty: string =
     "This script has no request. Write an http { } block to run one."

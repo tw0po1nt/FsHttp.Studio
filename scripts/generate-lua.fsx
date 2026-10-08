@@ -53,12 +53,14 @@ let refusalsLua () =
 
     line "    },"
     line (sprintf "    fallback_code = %s," (quote Refusals.fallbackCode))
+    line (sprintf "    run_block_mark_title = %s," (quote Refusals.runLensTitle))
     line (sprintf "    stale_block_index = %s," (refusal (Refusals.staleBlockIndex Refusals.Neovim)))
     line (sprintf "    unbound_block_value = %s," (refusal (Refusals.unboundBlockValue "{name}")))
 
     line (sprintf "    companion_stopped = %s," (refusal Refusals.companionStopped))
     line (sprintf "    companion_stopped_block_mark_title = %s," (quote Refusals.companionStoppedLensTitle))
     line (sprintf "    no_blocks_parse_failure = %s," (quote Refusals.noBlocksParseFailure))
+    line (sprintf "    no_blocks_parse_failure_block_mark_title = %s," (quote Refusals.noBlocksParseFailureLensTitle))
     line (sprintf "    no_blocks_empty = %s," (quote Refusals.noBlocksEmpty))
     line "}"
     sb.ToString()

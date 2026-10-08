@@ -94,7 +94,7 @@ let private lensAt (document: TextDocument) (i: int) (r: BlockRange) (title: str
 let private buildCodeLens (document: TextDocument) (i: int) (r: BlockRange) : CodeLens =
     match r.Refusal with
     | Some code -> lensAt document i r (Refusals.lensTitle code) explainCommandId
-    | None -> lensAt document i r "▶ Run request" commandId
+    | None -> lensAt document i r Refusals.runLensTitle commandId
 
 /// An empty command id makes VSCode paint the title as plain text, so a click runs nothing.
 let private plainTextLens (title: string) : CodeLens =

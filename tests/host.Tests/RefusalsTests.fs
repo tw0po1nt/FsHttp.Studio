@@ -76,6 +76,22 @@ let lensTitleTests =
                   (lensTitle "loopBody")
                   "⊘ Cannot run: inside a loop"
                   "the lens shows the glyph and the sentence"
+          }
+
+          test "the lens of a block that can run carries the run triangle" {
+              Expect.equal runLensTitle "▶ Run request" "the Run request CodeLens title"
+          }
+
+          test "the no-requests lens title is the parse failure sentence behind the refusal glyph" {
+              Expect.equal
+                  noBlocksParseFailureLensTitle
+                  "⊘ No requests found: this script has a syntax error"
+                  "the line-1 lens title"
+
+              Expect.equal
+                  (noBlocksParseFailureLensTitle + ".")
+                  ("⊘ " + noBlocksParseFailure)
+                  "the lens and the notice share one sentence"
           } ]
 
 [<Tests>]
