@@ -60,6 +60,12 @@ let nestedJsonBody =
 /// Cross-process contract for `GET /binary`. Match exactly in the binary body Check.
 let binaryBody = Array.init 20 byte
 
+/// The environment variable that names the folder behind `GET /download/<path>`. The Neovim suite
+/// puts the Companion archive and its checksum file there.
+let downloadsVariable = "UI_TEST_SERVER_DOWNLOADS"
+
+let private downloadsPrefix = "/download/"
+
 let private catchAllBody = "ui-test-server:unknown"
 
 let private utf8 = Encoding.UTF8
@@ -138,6 +144,25 @@ type UiTestHttpServer() =
 
         writeText ctx 200 "application/json" body
 
+    /// Serves a file from the downloads folder. A path with `..` or a missing file gets a 404.
+    let handleDownload (ctx: HttpListenerContext) (path: string) =
+        let root =
+            Environment.GetEnvironmentVariable downloadsVariable
+            |> Option.ofObj
+            |> Option.defaultValue ""
+
+        let relative = Uri.UnescapeDataString(path.Substring downloadsPrefix.Length)
+
+        if root = "" || relative.Contains ".." || Path.IsPathRooted relative then
+            writeText ctx 404 "text/plain" catchAllBody
+        else
+            let file = Path.Combine(root, relative)
+
+            if File.Exists file then
+                writeBytes ctx 200 "application/octet-stream" (File.ReadAllBytes file)
+            else
+                writeText ctx 404 "text/plain" catchAllBody
+
     let dispatch (ctx: HttpListenerContext) =
         try
             let path =
@@ -152,6 +177,7 @@ type UiTestHttpServer() =
             | "GET", "/slow" -> handleSlow ctx
             | "GET", "/release" -> handleRelease ctx
             | "GET", "/status" -> handleStatus ctx
+            | "GET", p when p.StartsWith downloadsPrefix -> handleDownload ctx p
             | "GET", "/nested-json" -> writeText ctx 200 "application/json" nestedJsonBody
             // The posted body is read to completion and dropped. Draining it keeps the connection
             // reusable; not echoing it is what makes the request-section check a real claim.

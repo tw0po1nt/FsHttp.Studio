@@ -13,6 +13,7 @@ on:
       - 'tests/golden/**'
       - 'tests/lua/**'
       - 'tests/minit.lua'
+      - 'scripts/pack-companion.sh'
       - 'tests/nvim/**'
       # The Neovim suite uses the test HTTP server of the UI suite.
       - 'tests/ui.Tests/server/**'

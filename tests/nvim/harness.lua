@@ -72,6 +72,12 @@ function M.companion_path()
     return required_env("NVIM_TEST_COMPANION_PATH", "the companion")
 end
 
+-- The folder that tests/nvim/run.sh packed the Companion archive into.
+---@return string
+function M.archive_dir()
+    return required_env("NVIM_TEST_ARCHIVE_DIR", "the Companion archive from scripts/pack-companion.sh")
+end
+
 ---@param name string
 ---@return string
 function M.fixture(name)
@@ -646,10 +652,47 @@ function M.release_slow()
     run({ "curl", "-sS", "-m", "10", M.base_url() .. "/release" })
 end
 
+-- The folder behind /download/ on the test HTTP server. It stands in for the GitHub releases.
+local downloads_dir = vim.fn.tempname() .. "-downloads"
+
+-- Puts the Companion archive and its .sha256 file where a client of `version` looks for the release
+-- v<version>. With `corrupt_checksum`, the .sha256 file names a hash that matches no archive.
+---@param version string
+---@param corrupt_checksum? boolean
+function M.publish_release(version, corrupt_checksum)
+    local folder = string.format("%s/v%s", downloads_dir, version)
+    vim.fn.mkdir(folder, "p")
+    local archive = vim.fn.glob(M.archive_dir() .. "/fshttp-studio-companion-*.tar.gz")
+    assert(archive ~= "", "no Companion archive in " .. M.archive_dir())
+    local name = string.format("fshttp-studio-companion-%s.tar.gz", version)
+    assert(vim.uv.fs_copyfile(archive, folder .. "/" .. name))
+    if corrupt_checksum then
+        local file = assert(io.open(folder .. "/" .. name .. ".sha256", "wb"))
+        file:write(string.rep("0", 64) .. "  " .. name .. "\n")
+        file:close()
+    else
+        assert(vim.uv.fs_copyfile(archive .. ".sha256", folder .. "/" .. name .. ".sha256"))
+    end
+end
+
+-- The folder that holds one folder for each downloaded version, as the child sees it.
+---@param child nvim_suite.Child
+---@return string
+function M.download_root(child)
+    return M.lua_get(child, [[require("fshttp.download").root()]])
+end
+
 local function start_server()
+    vim.fn.delete(downloads_dir, "rf")
+    vim.fn.mkdir(downloads_dir, "p")
     local server_bin = required_env("NVIM_TEST_SERVER", "the test HTTP server")
     os.remove(sidecar_path)
-    local ok, started = pcall(vim.system, { server_bin }, { cwd = suite_dir, stdout = false, stderr = false })
+    local ok, started = pcall(vim.system, { server_bin }, {
+        cwd = suite_dir,
+        env = { UI_TEST_SERVER_DOWNLOADS = downloads_dir },
+        stdout = false,
+        stderr = false,
+    })
     if not ok then
         fail_harness_setup(string.format("the test HTTP server at %s did not start: %s", server_bin, started))
     end
@@ -663,6 +706,8 @@ local function start_server()
     end)
 
     local base_url, dead_url = read_sidecar()
+    -- Each child Neovim downloads from the test HTTP server, and none reaches GitHub.
+    vim.env.FSHTTP_STUDIO_DOWNLOAD_BASE_URL = (base_url:gsub("/$", "")) .. "/download"
     local health = run({ "curl", "-sS", "-m", "10", base_url .. "/json" })
     local body = health and health.stdout or ""
     if body ~= M.json_probe_body then
@@ -684,6 +729,7 @@ local function stop_server()
         server:wait(5000)
     end
     os.remove(sidecar_path)
+    vim.fn.delete(downloads_dir, "rf")
 end
 
 ---@param caption string

@@ -589,19 +589,4 @@ T["a Run that waits starts nothing when its Script closes"] = function()
     end)
 end
 
-T["with no companion_path, :FsHttp run gives a WARN notice and does not wait"] = function()
-    local child = harness.start_child({})
-    harness.edit(child, harness.fixture("core-path.fsx"))
-
-    harness.run_at(child, 26)
-
-    expect_notice(
-        child,
-        0,
-        vim.log.levels.WARN,
-        "The FsHttp.Studio companion did not start. Set companion_path to the folder that holds Companion.dll."
-    )
-    assert.same({}, harness.notices_at(child, vim.log.levels.INFO))
-end
-
 return T

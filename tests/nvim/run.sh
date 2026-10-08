@@ -10,6 +10,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SERVER_OUT="$ROOT/out/ui-test-server"
 COMPANION_OUT="$ROOT/out/nvim-tests/companion"
+ARCHIVE_OUT="$ROOT/out/nvim-tests/archive"
 JSON_PARSER_OUT="$ROOT/out/nvim-tests/tree-sitter-json"
 # tree-sitter-json v0.24.8. A pinned commit keeps an upstream change out of the suite.
 TREE_SITTER_JSON_COMMIT="ee35a6ebefcef0c5c416c0d1ccec7370cfca5a24"
@@ -45,6 +46,9 @@ else
   dotnet publish "$ROOT/src/companion/Companion.fsproj" -c Release -o "$COMPANION_OUT"
 fi
 
+echo "==> pack the Companion archive"
+"$ROOT/scripts/pack-companion.sh" "$ARCHIVE_OUT" "$COMPANION_OUT"
+
 if [[ -n "${NVIM_TEST_JSON_PARSER:-}" ]]; then
   echo "==> tree-sitter JSON parser ($NVIM_TEST_JSON_PARSER)"
 elif [[ "${NVIM_TEST_SKIP_BUILD:-}" == "1" ]]; then
@@ -62,6 +66,7 @@ fi
 
 export NVIM_TEST_SERVER="$SERVER_OUT/UiTestServer"
 export NVIM_TEST_COMPANION_PATH="$COMPANION_OUT"
+export NVIM_TEST_ARCHIVE_DIR="$ARCHIVE_OUT"
 export NVIM_TEST_JSON_PARSER
 
 echo "==> run the Neovim suite"
