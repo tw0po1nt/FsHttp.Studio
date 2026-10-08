@@ -53,6 +53,13 @@ runs:
       if: runner.os == 'Windows'
       uses: ilammy/msvc-dev-cmd@v1
 
+    # Git for Windows ships a GNU `link` in /usr/bin. The bash steps put it ahead of the MSVC
+    # `link.exe`, so hererocks calls the wrong tool and its Lua 5.1 build fails.
+    - name: Remove the GNU link that hides the MSVC linker
+      if: runner.os == 'Windows'
+      shell: bash
+      run: rm -f /usr/bin/link
+
     - name: Run the Lua core suite
       shell: bash
       run: nvim -l tests/minit.lua --minitest
