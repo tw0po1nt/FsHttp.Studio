@@ -209,7 +209,6 @@ function M.at_cursor()
 
     local state = companion.state()
     if state == nil then
-        -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/279): wait while the client downloads the Companion archive.
         notify(no_companion_notice, vim.log.levels.WARN)
         return
     elseif state == "stopped" then

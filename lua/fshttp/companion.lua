@@ -1,4 +1,6 @@
 -- The start sequence and the stop of the one companion of this Neovim instance.
+local download = require("fshttp.download")
+local download_rule = require("fshttp.download_rule")
 local envelope = require("fshttp.envelope")
 local frame = require("fshttp.frame")
 local sdk = require("fshttp.sdk")
@@ -16,6 +18,8 @@ local M = {}
 ---@type vim.SystemObj?
 local process
 local sequence_ran = false
+-- Only a companion from companion_path gets the version check, because a downloaded companion is the version of the client.
+local check_companion_version = false
 ---@type fshttp.CompanionState?
 local state
 -- A state that never becomes ready keeps its notice, so that a Run in that state can show the fix again.
@@ -87,7 +91,9 @@ end
 local function receive(encoded)
     local answer, decode_error = envelope.decode(encoded)
     if answer and answer.tag == "ready" then
-        check_version(answer.version)
+        if check_companion_version then
+            check_version(answer.version)
+        end
         set_state("ready")
         return
     end
@@ -178,26 +184,11 @@ function M.run(run_envelope, callback)
     return send(run_envelope, callback)
 end
 
--- Runs the start sequence once for each Neovim instance: get the companion, check the SDK floor,
--- and start the companion.
+-- Checks the SDK floor of the companion in `folder`, and starts the companion.
 ---@param config fshttp.Config
-function M.start(config)
-    if sequence_ran then
-        return
-    end
-    sequence_ran = true
-
-    local folder = config.companion_path
-    if folder == nil then
-        -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/279): download the Companion archive.
-        return
-    end
-
+---@param folder string
+local function check_sdk_and_spawn(config, folder)
     set_state("starting")
-    vim.api.nvim_create_autocmd("VimLeavePre", {
-        group = vim.api.nvim_create_augroup("fshttp.companion", { clear = true }),
-        callback = M.stop,
-    })
 
     local floor = sdk.floor(read_file(vim.fs.joinpath(folder, "Companion.runtimeconfig.json")))
     local dotnet = sdk.dotnet_command(config.dotnet_path)
@@ -219,6 +210,70 @@ function M.start(config)
     local ok = pcall(vim.system, list_sdks, { text = true, timeout = list_sdks_timeout_ms }, on_list_sdks)
     if not ok then
         report_no_sdk(floor, config.dotnet_path)
+    end
+end
+
+-- A state that needs a fix raises its notice one time and keeps it for a later Run.
+---@param new_state fshttp.CompanionState
+---@param message string
+---@param level integer
+local function fail_start(new_state, message, level)
+    local notice = { message = message, level = level }
+    notify(notice.message, notice.level)
+    set_state(new_state, notice)
+end
+
+-- Downloads the Companion archive of the client version, and then checks the SDK and starts the companion.
+---@param config fshttp.Config
+local function download_and_spawn(config)
+    local version = require("fshttp.version")
+    local folder = download.folder(version)
+    if download.is_installed(folder) then
+        check_sdk_and_spawn(config, folder)
+        return
+    end
+
+    -- The state has no kept notice, so a Run in this state waits for the companion.
+    set_state("downloading")
+    notify(download_rule.downloading_notice(version), vim.log.levels.INFO)
+    download.fetch(version, function(result)
+        if result.ok then
+            check_sdk_and_spawn(config, result.folder)
+        elseif result.kind == "noRelease" then
+            fail_start("noRelease", download_rule.no_release_notice(version), vim.log.levels.ERROR)
+        else
+            fail_start(
+                "downloadFailed",
+                download_rule.failed_notice(result.cause, result.detail or ""),
+                vim.log.levels.ERROR
+            )
+        end
+    end)
+end
+
+-- Runs the start sequence once for each Neovim instance: get the companion, check the SDK floor,
+-- and start the companion.
+---@param config fshttp.Config
+function M.start(config)
+    if sequence_ran then
+        return
+    end
+    sequence_ran = true
+
+    vim.api.nvim_create_autocmd("VimLeavePre", {
+        group = vim.api.nvim_create_augroup("fshttp.companion", { clear = true }),
+        callback = M.stop,
+    })
+
+    local folder = config.companion_path
+    if folder == nil then
+        check_companion_version = false
+        download_and_spawn(config)
+    elseif download.is_installed(folder) then
+        check_companion_version = true
+        check_sdk_and_spawn(config, folder)
+    else
+        fail_start("companionNotFound", download_rule.not_found_notice(folder), vim.log.levels.ERROR)
     end
 end
 
