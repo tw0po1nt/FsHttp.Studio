@@ -216,6 +216,23 @@ describe("fshttp.response_view", function()
         assert.same({ "Compile error:", "(12,5) The value 'x' is not defined." }, view.lines)
     end)
 
+    it("removes the trailing spaces from each line of a Compile error", function()
+        local view = response_view.compile_error({
+            { message = "First line   \n  second line  ", range = { start_line = 3, start_col = 0 } },
+        })
+        assert.same({ "Compile error:", "(3,1) First line", "  second line" }, view.lines)
+    end)
+
+    it("gives a Compile error the winbar that names the <CR> jump, and the position of each (line,col) line", function()
+        local view = response_view.compile_error({
+            { message = "one\ntwo", range = { start_line = 12, start_col = 4 } },
+            { message = "three", range = { start_line = 20, start_col = 0 } },
+        })
+        local plain = view.winbar:gsub("%%#[^#]*#", ""):gsub("%%%*", "")
+        assert.equal("Compile error  <CR> on a (line,col) moves to it in the script", plain)
+        assert.same({ [2] = { line = 12, col = 4 }, [4] = { line = 20, col = 0 } }, view.positions)
+    end)
+
     it("shows a Refused Run for a value that another Block binds with its title and its detail", function()
         local view = response_view.refused("unboundBlockValue", "dexId")
         local detail = refusals.unbound_block_value.detail:gsub("{name}", "dexId")
