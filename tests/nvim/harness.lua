@@ -14,6 +14,7 @@ M.companion_exists_deadline_ms = 30000
 M.companion_gone_deadline_ms = 15000
 M.notice_deadline_ms = 15000
 M.block_mark_deadline_ms = 15000
+M.status_line_text_deadline_ms = 15000
 
 -- A child Neovim that gives no answer to one request in this time is hung, and the Harness stops it.
 M.child_answer_deadline_ms = 10000
@@ -237,13 +238,16 @@ local function guarded(child, subject, fn)
 end
 
 -- Starts a child Neovim that loads the client through lazy.nvim with `opts`. With `client_version`,
--- the client in the child uses that version in place of the version that version.lua holds.
+-- the client in the child uses that version in place of the version that version.lua holds. With
+-- `with_lualine`, lazy.nvim also loads lualine.nvim in the child.
 ---@param opts table
 ---@param client_version? string
+---@param with_lualine? boolean
 ---@return nvim_suite.Child
-function M.start_child(opts, client_version)
+function M.start_child(opts, client_version, with_lualine)
     vim.env.NVIM_TEST_CLIENT_OPTS = vim.json.encode(opts)
     vim.env.NVIM_TEST_CLIENT_VERSION = client_version
+    vim.env.NVIM_TEST_LUALINE = with_lualine and "1" or nil
     local mini = MiniTest.new_child_neovim()
     mini.start({ "-u", child_init })
     local child = { mini = mini, job_id = mini.job.id, pid = vim.fn.jobpid(mini.job.id), stopped = false }
@@ -314,6 +318,47 @@ function M.block_marks(child)
             return table.concat(lines, "\n")
         end)()]]
     )
+end
+
+-- The text that status() gives for the Active document of the child. The text is "nil" when status()
+-- gives nil.
+---@param child nvim_suite.Child
+---@return string
+function M.status(child)
+    return M.lua_get(child, [[tostring(require("fshttp").status())]])
+end
+
+-- Edits `path` in the child, and gives the text of status() before the child reads an answer of
+-- the companion. The edit and the read are one request, so no answer can arrive between them.
+---@param child nvim_suite.Child
+---@param path string
+---@return string
+function M.edit_and_read_status(child, path)
+    return M.lua_get(
+        child,
+        [[(function(path)
+            vim.cmd.edit(vim.fn.fnameescape(path))
+            return tostring(require("fshttp").status())
+        end)(...)]],
+        { path }
+    )
+end
+
+-- Polls status() in the child until it gives `expected`.
+---@param child nvim_suite.Child
+---@param subject string
+---@param expected string
+function M.expect_status(child, subject, expected)
+    M.eventually_equal(M.status_line_text_deadline_ms, subject, expected, function()
+        return M.status(child)
+    end)
+end
+
+-- The text that `:FsHttp status` echoes in the child.
+---@param child nvim_suite.Child
+---@return string
+function M.fshttp_status_echo(child)
+    return M.lua_get(child, [[vim.api.nvim_exec2("FsHttp status", { output = true }).output]])
 end
 
 -- Each notice that the client gave in the child, as { message, level }.

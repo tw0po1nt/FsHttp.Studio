@@ -47,7 +47,7 @@ T["VimLeavePre stops the companion"] = function()
     assert.equal(2, harness.lua_get(child, "1 + 1"), "the child Neovim still answers")
 end
 
-T["a dotnet_path that names a missing file gives the WARN notice, and no companion starts"] = function()
+T["a dotnet_path that names a missing file gives the WARN notice and the .NET SDK not found row, and no companion starts"] = function()
     local known = harness.companion_pids()
     local missing = harness.fixture("missing/dotnet")
     local child = harness.start_child({ companion_path = harness.companion_path(), dotnet_path = missing })
@@ -62,6 +62,7 @@ T["a dotnet_path that names a missing file gives the WARN notice, and no compani
     assert.equal(true, warning.message:find(string.format(".NET %d SDK", floor), 1, true) ~= nil, warning.message)
     assert.equal(true, warning.message:find("https://aka.ms/dotnet/download", 1, true) ~= nil, warning.message)
     assert.equal(true, warning.message:find("dotnet_path (" .. missing .. ")", 1, true) ~= nil, warning.message)
+    harness.expect_status(child, "the .NET SDK not found row", "FsHttp.Studio: .NET SDK not found")
 
     harness.holds_for_settle("no new companion", function()
         return #harness.new_companion_pids(known) == 0

@@ -6,7 +6,8 @@ local version_check = require("fshttp.version_check")
 
 local M = {}
 
----@alias fshttp.CompanionState "starting"|"ready"|"stopped"
+-- Only Neovim has the download states and "companionNotFound".
+---@alias fshttp.CompanionState "starting"|"ready"|"sdkNotFound"|"stopped"|"downloading"|"downloadFailed"|"noRelease"|"companionNotFound"
 
 ---@type vim.SystemObj?
 local process
@@ -41,10 +42,25 @@ local function read_file(path)
     return text
 end
 
+---@param new_state fshttp.CompanionState
+local function set_state(new_state)
+    if state == new_state then
+        return
+    end
+    state = new_state
+    for _, listener in ipairs(listeners) do
+        listener(new_state)
+    end
+end
+
+-- The callback of `dotnet --list-sdks` is a fast event, so the state change waits for the main loop.
 ---@param floor integer
 ---@param dotnet_path string?
 local function report_no_sdk(floor, dotnet_path)
     notify(sdk.not_found_notice(floor, dotnet_path), vim.log.levels.WARN)
+    vim.schedule(function()
+        set_state("sdkNotFound")
+    end)
 end
 
 -- On a version mismatch, the companion stays up and each Run goes ahead.
@@ -53,14 +69,6 @@ local function check_version(companion_version)
     local client_version = require("fshttp.version")
     if not version_check.matches(client_version, companion_version) then
         notify(version_check.mismatch_notice(client_version, companion_version), vim.log.levels.WARN)
-    end
-end
-
----@param new_state fshttp.CompanionState
-local function set_state(new_state)
-    state = new_state
-    for _, listener in ipairs(listeners) do
-        listener(new_state)
     end
 end
 
@@ -109,10 +117,10 @@ local function spawn(dotnet, companion_dll)
         stderr = function() end,
     }, vim.schedule_wrap(on_exit))
     if not ok then
+        set_state("stopped")
         return
     end
     process = started
-    set_state("starting")
     started:write(frame.encode(envelope.encode({ tag = "hello" })))
 end
 
@@ -155,6 +163,7 @@ function M.start(config)
         return
     end
 
+    set_state("starting")
     vim.api.nvim_create_autocmd("VimLeavePre", {
         group = vim.api.nvim_create_augroup("fshttp.companion", { clear = true }),
         callback = M.stop,

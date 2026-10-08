@@ -16,6 +16,11 @@ local timers = {}
 -- The changedtick check of an answer covers each edit that comes while a locate waits.
 ---@type table<integer, true>
 local waiting = {}
+-- The answer of the last locate for each Script. A Script with no entry waits for a locate.
+---@type table<integer, { blocks: integer, parse_failed: boolean }>
+local answers = {}
+---@type fun(buf: integer)[]
+local listeners = {}
 local watching = false
 
 local function define_highlights()
@@ -100,6 +105,18 @@ local function paint_stopped(buf)
     end
 end
 
+---@param buf integer
+---@param answer { blocks: integer, parse_failed: boolean }?
+local function set_answer(buf, answer)
+    if vim.deep_equal(answers[buf], answer) then
+        return
+    end
+    answers[buf] = answer
+    for _, listener in ipairs(listeners) do
+        listener(buf)
+    end
+end
+
 local schedule_locate
 
 ---@param buf integer
@@ -121,6 +138,7 @@ local function locate(buf)
             return
         end
         paint(buf, block_mark.for_blocks(blocks))
+        set_answer(buf, { blocks = #blocks.ranges, parse_failed = blocks.parse_failed })
     end)
     if not sent then
         waiting[buf] = nil
@@ -152,6 +170,7 @@ local function forget(buf)
         timers[buf] = nil
     end
     located[buf] = nil
+    set_answer(buf, nil)
 end
 
 ---@param state fshttp.CompanionState
@@ -169,6 +188,19 @@ local function on_state_change(state)
     end
 end
 
+-- Returns the answer of the last locate for a Script, or nil while the Script waits for a locate.
+---@param buf integer
+---@return { blocks: integer, parse_failed: boolean }?
+function M.answer(buf)
+    return answers[buf]
+end
+
+-- The listener runs when the answer for a Script changes, and when a Script starts to wait again.
+---@param listener fun(buf: integer)
+function M.on_answer_change(listener)
+    listeners[#listeners + 1] = listener
+end
+
 -- Only the first call has an effect.
 function M.watch()
     if watching then
@@ -183,6 +215,7 @@ function M.watch()
         group = group,
         pattern = "*.fsx",
         callback = function(args)
+            set_answer(args.buf, nil)
             locate(args.buf)
         end,
     })

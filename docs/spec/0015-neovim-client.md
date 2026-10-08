@@ -379,6 +379,9 @@ Ticket: [How does the Neovim client report the companion state?](https://github.
 | No release has the client version | `no companion for v<version>` |
 | `companion_path` has no companion | `companion not found` |
 
+- `:FsHttp status` in a buffer that is not F# echoes the companion state row. The ready state has
+  the row `companion ready`, and only this echo shows it.
+- Before the first Script starts the start sequence, the row is `companion not started`.
 - `Protocol.State` keeps its four cases. VSCode never reaches a download state.
 - Only a state that needs a fix raises a notice:
 

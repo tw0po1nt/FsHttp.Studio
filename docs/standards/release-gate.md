@@ -117,6 +117,14 @@ starts at the first Check, so it leaves out Harness setup, as in the UI suite.
 **The version mismatch Check proves no Run.** The Neovim client cannot start a Run yet. The Check
 asserts the WARN notice and a companion that stays up.
 
+**The companion death Check of the Status line text uses a stand-in for the Response buffer.** The
+Neovim client has no Response buffer yet. The Check opens a scratch buffer with the filetype
+`fshttp_response`, and asserts that `status()` gives nil while that buffer has focus. No Check
+asserts the stopped text in the Response buffer.
+
+**A user with no lualine sees no companion state until the user runs a command.** `:FsHttp status`
+shows the state. No Check drives a statusline other than lualine.
+
 ### What the Neovim suite covers today
 
 - The Harness: a child Neovim that loads the client through lazy.nvim, the test HTTP server with
@@ -128,3 +136,9 @@ asserts the WARN notice and a companion that stays up.
   starts.
 - The version check: a companion of the client version gives no WARN notice. A companion of a
   different version gives one WARN notice that names both versions, and the companion stays up.
+- The Status line text: `status()` gives the rows of the UI suite status bar Checks for clean
+  scripts, an `.fs` module, syntax-error scripts, a buffer that is not F#, a buffer switch, and a
+  second open script. A companion death gives `companion stopped` and no notice. Each change fires
+  the `User` autocmd. `:FsHttp status` echoes the row, or the companion state row in a buffer that
+  is not F#. The lualine entry shows the row, and `status_line.lualine = false` removes it. A
+  `dotnet_path` that names a missing file gives the `.NET SDK not found` row.
