@@ -13,6 +13,9 @@ end
 vim.fn.system({ "git", "-C", lazy_path, "checkout", "--quiet", lazy_commit })
 assert(vim.v.shell_error == 0, "git checkout of lazy.nvim " .. lazy_commit .. " failed")
 vim.opt.rtp:prepend(lazy_path)
+-- The child Neovim of the Neovim suite cannot derive this path: stdpath("data") ends in nvim-data on
+-- Windows, and the clone above is in a nvim folder.
+vim.env.NVIM_TEST_LAZY_PATH = lazy_path
 
 -- The child Neovim of the lualine Check runs offline, so the runner installs lualine.nvim for it.
 local lualine_commit = "221ce6b2d999187044529f49da6554a92f740a96"
