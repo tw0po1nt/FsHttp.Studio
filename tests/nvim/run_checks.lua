@@ -329,7 +329,7 @@ T["a binary body shows as the hex view, and a Captured body shows its hex view o
     local captured = eventually_response(child, "the hex view of the sent bytes in the Request fold", function(snapshot)
         local window = only_window(snapshot)
         return window ~= nil
-            and has_line(snapshot.lines, '{"echoed":"ui-test-server"}')
+            and has_line(snapshot.lines, '  "echoed": "ui-test-server"')
             and has_line(snapshot.lines, "  Binary body: 6 B")
     end)
     local fold = assert(only_window(captured)).closed_folds[1]
