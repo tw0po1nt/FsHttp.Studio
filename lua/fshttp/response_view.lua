@@ -294,7 +294,7 @@ end
 ---@param image_support fshttp.ImageSupport?
 local function add_image(view, content_type, body, image_support)
     ---@type string?
-    local reason = "snacks.nvim is not installed"
+    local reason = image_body.snacks_missing_reason
     if image_support then
         reason = image_support(content_type)
     end

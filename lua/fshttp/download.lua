@@ -3,13 +3,6 @@ local rule = require("fshttp.download_rule")
 
 local M = {}
 
----@class fshttp.DownloadResult
----@field ok boolean
----@field folder? string the folder that holds the companion, when ok
----@field kind? "noRelease"|"failed" the failure, when not ok
----@field cause? fshttp.DownloadCause the failed step, for the kind "failed"
----@field detail? string
-
 local curl_timeout_s = 600
 local connect_timeout_s = 20
 local blocking_timeout_ms = 15 * 60 * 1000
@@ -142,18 +135,19 @@ function M.fetch(version, callback)
     ---@param cause fshttp.DownloadCause
     ---@param detail string
     local function fail(cause, detail)
-        finish(callback, work, { ok = false, kind = "failed", cause = cause, detail = detail })
+        finish(callback, work, { kind = "failed", cause = cause, detail = detail })
     end
 
     local function install()
-        if M.is_installed(target) then
-            -- Another Neovim instance finished the same download first.
-            finish(callback, work, { ok = true, folder = target })
-        elseif not vim.uv.fs_rename(unpacked, target) then
-            fail("tar", "could not move the unpacked files to " .. target)
-        else
+        -- Another Neovim instance can finish the same download first, before the rename or during it.
+        local renamed = not M.is_installed(target) and vim.uv.fs_rename(unpacked, target)
+        if renamed then
             delete_older_versions(version)
-            finish(callback, work, { ok = true, folder = target })
+        end
+        if renamed or M.is_installed(target) then
+            finish(callback, work, { kind = "installed", folder = target })
+        else
+            fail("tar", "could not move the unpacked files to " .. target)
         end
     end
 
@@ -204,7 +198,7 @@ function M.fetch(version, callback)
         if status == "ok" then
             fetch_checksum()
         elseif status == "notFound" then
-            finish(callback, work, { ok = false, kind = "noRelease" })
+            finish(callback, work, { kind = "noRelease" })
         else
             fail("curl", detail or "")
         end
@@ -222,7 +216,7 @@ function M.build(companion_path)
     local version = require("fshttp.version")
     local folder = M.folder(version)
     if M.is_installed(folder) then
-        return true, string.format("FsHttp.Studio has the companion for v%s at %s.", version, folder)
+        return true, rule.installed_message(version, folder)
     end
     ---@type fshttp.DownloadResult?
     local outcome
@@ -234,12 +228,10 @@ function M.build(companion_path)
     end, 50)
     if outcome == nil then
         return false, rule.failed_notice("curl", "the download did not finish in time")
-    elseif outcome.ok then
-        return true, string.format("FsHttp.Studio downloaded the companion for v%s to %s.", version, outcome.folder)
-    elseif outcome.kind == "noRelease" then
-        return false, rule.no_release_notice(version)
+    elseif outcome.kind == "installed" then
+        return true, rule.downloaded_message(version, outcome.folder)
     end
-    return false, rule.failed_notice(outcome.cause, outcome.detail or "")
+    return false, rule.failure_notice(outcome, version)
 end
 
 return M

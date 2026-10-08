@@ -76,6 +76,20 @@ end
 
 ---@alias fshttp.DownloadCause "curl"|"tar"|"checksum"
 
+---@class fshttp.Installed
+---@field kind "installed"
+---@field folder string the folder that holds the companion
+
+---@class fshttp.NoRelease
+---@field kind "noRelease"
+
+---@class fshttp.DownloadFailed
+---@field kind "failed"
+---@field cause fshttp.DownloadCause the failed step
+---@field detail string
+
+---@alias fshttp.DownloadResult fshttp.Installed|fshttp.NoRelease|fshttp.DownloadFailed
+
 ---@param cause fshttp.DownloadCause
 ---@param detail string
 ---@return string
@@ -102,6 +116,17 @@ function M.no_release_notice(version)
     )
 end
 
+---@param result fshttp.NoRelease|fshttp.DownloadFailed
+---@param version string
+---@return string
+function M.failure_notice(result, version)
+    if result.kind == "noRelease" then
+        return M.no_release_notice(version)
+    end
+    ---@cast result fshttp.DownloadFailed
+    return M.failed_notice(result.cause, result.detail)
+end
+
 ---@param folder string the companion_path option
 ---@return string
 function M.not_found_notice(folder)
@@ -117,6 +142,20 @@ end
 ---@return string
 function M.in_use_message(folder)
     return string.format("FsHttp.Studio downloads no companion, because companion_path is in use (%s).", folder)
+end
+
+---@param version string
+---@param folder string
+---@return string
+function M.installed_message(version, folder)
+    return string.format("FsHttp.Studio has the companion for v%s at %s.", version, folder)
+end
+
+---@param version string
+---@param folder string
+---@return string
+function M.downloaded_message(version, folder)
+    return string.format("FsHttp.Studio downloaded the companion for v%s to %s.", version, folder)
 end
 
 return M

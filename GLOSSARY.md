@@ -86,6 +86,10 @@ _Avoid_: request payload, buffered body, recorded body.
 The shell text that a Client builds from the request as sent. In a POSIX shell, it sends the same method, URL, headers, and body bytes as the Run. A Captured body that the companion did not read gives no Curl command, because that command would send a different request.
 _Avoid_: curl snippet, curl export, cURL.
 
+**Copy text**:
+The text that a copy button of the Response viewer puts on the clipboard. A yank from the Response buffer puts the same text in a register. The Renderer core defines it for the Request, the Response headers, and the Body. The Lua core ports that rule, and a Golden fixture holds both to the same bytes. A Body of zero bytes has no copy text.
+_Avoid_: copy payload, clipboard text.
+
 **Refusal code**:
 The companion's verdict that neither route reaches a block, named by the block's *shape*: `loopBody`, `innerBinding`, `insideAnotherRequest`, and nine more. `BlockLocator.classify` decides it from the untyped syntax tree, and the code is all that crosses the wire. The Client owns every user-facing title and notice, keyed by the code. A code is a position's shape: nothing is wrong with a block in a loop.
 _Avoid_: refusal reason, error code, refusal family (the families that group the codes stay internal to the companion).

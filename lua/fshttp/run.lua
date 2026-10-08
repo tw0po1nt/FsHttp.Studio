@@ -13,8 +13,6 @@ local M = {}
 local not_a_script_notice =
     ":FsHttp run runs a request from an F# script (.fsx). Open a script and put the cursor in a request."
 local wait_notice = "The FsHttp.Studio companion is starting. This Run starts when it is ready."
-local no_companion_notice =
-    "The FsHttp.Studio companion did not start. Set companion_path to the folder that holds Companion.dll."
 
 -- Only the result of the latest Run reaches the Response buffer.
 local generation = 0
@@ -215,11 +213,9 @@ function M.at_cursor()
     end
     require("fshttp").start()
 
-    local state = companion.state()
-    if state == nil then
-        notify(no_companion_notice, vim.log.levels.WARN)
-        return
-    elseif state == "stopped" then
+    -- Each path of the start sequence sets a state before start() returns.
+    local state = companion.state() --[[@as fshttp.CompanionState]]
+    if state == "stopped" then
         notify(refusals.companion_stopped.detail, vim.log.levels.WARN)
         return
     elseif state ~= "ready" then

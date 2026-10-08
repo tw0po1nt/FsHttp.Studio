@@ -85,6 +85,36 @@ let private cases =
               [ "Content-Type", "text/plain; charset=utf-8" ]
               (utf8 "café → 日本\r\nsecond line\n")
               getRequest }
+      { Name = "a Latin-1 request body and a Latin-1 response body"
+        Env =
+          response
+              200
+              "OK"
+              [ "Content-Type", "text/plain; charset=iso-8859-1" ]
+              [| 99uy; 97uy; 102uy; 0xE9uy |]
+              { Method = "POST"
+                Url = "https://api.example.com/latin"
+                Headers = [ "Content-Type", "text/plain; charset=iso-8859-1" ]
+                ContentType = "text/plain"
+                Body = Captured [| 110uy; 0xE4uy; 0x69uy; 0x76uy; 0x65uy |] } }
+      { Name = "a truncated sequence, a surrogate, and a sequence that the body ends inside"
+        Env =
+          response
+              200
+              "OK"
+              [ "Content-Type", "text/plain; charset=utf-8" ]
+              [| 97uy
+                 0xE6uy
+                 0x97uy
+                 98uy
+                 0xEDuy
+                 0xA0uy
+                 0x80uy
+                 99uy
+                 0xF0uy
+                 0x9Fuy
+                 0x98uy |]
+              getRequest }
       { Name = "an HTML body"
         Env =
           response
@@ -131,11 +161,11 @@ let private fixture () =
 [<Tests>]
 let tests =
     testList
-        "copy payload Golden fixtures"
-        [ test "the copy payload matches its Golden fixture" {
+        "Copy text Golden fixtures"
+        [ test "the Copy text matches its Golden fixture" {
               GoldenFixture.verify (Path.Combine("copy", "copy-text.json")) (fixture ())
           }
 
           test "an unknown key has nothing to copy" {
-              Expect.equal (copyText (List.head cases).Env "nothing") None "only the three copy keys give a payload"
+              Expect.equal (copyText (List.head cases).Env "nothing") None "only the three copy keys give a Copy text"
           } ]

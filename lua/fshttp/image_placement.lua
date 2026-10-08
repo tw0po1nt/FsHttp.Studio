@@ -22,7 +22,7 @@ end
 function M.unsupported_reason(content_type)
     local module = snacks()
     if not module then
-        return "snacks.nvim is not installed"
+        return image_body.snacks_missing_reason
     end
     local image = module.image
     if type(image) ~= "table" or type(image.placement) ~= "table" or type(image.placement.new) ~= "function" then

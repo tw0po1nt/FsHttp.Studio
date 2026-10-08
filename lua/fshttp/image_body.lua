@@ -2,6 +2,8 @@
 -- suite can load it.
 local M = {}
 
+M.snacks_missing_reason = "snacks.nvim is not installed"
+
 -- The extension that snacks.nvim needs to open the file of each common image type.
 local extensions = {
     ["image/png"] = "png",

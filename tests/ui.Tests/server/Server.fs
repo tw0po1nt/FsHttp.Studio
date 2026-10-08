@@ -150,7 +150,6 @@ type UiTestHttpServer() =
 
         writeText ctx 200 "application/json" body
 
-    /// Serves a file from the downloads folder. A path with `..` or a missing file gets a 404.
     let handleDownload (ctx: HttpListenerContext) (path: string) =
         let root =
             Environment.GetEnvironmentVariable downloadsVariable

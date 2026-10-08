@@ -55,6 +55,33 @@ T["a clean first start downloads, verifies, and unpacks the archive, checks the 
     assert.equal(0, #harness.notices_at(child, vim.log.levels.WARN), "a downloaded companion gets no version check")
 end
 
+T["a rename that fails because another Neovim installed the same version first still starts the companion"] = function()
+    harness.publish_release("9.9.6")
+    local child, root = child_with_empty_root("9.9.6")
+    -- The stub stands in for the other instance: it installs the version folder, and then the rename fails.
+    harness.lua_get(
+        child,
+        [[(function()
+            local target = require("fshttp.download").folder(require("fshttp.version"))
+            local rename = vim.uv.fs_rename
+            vim.uv.fs_rename = function(from, to)
+                if to ~= target then
+                    return rename(from, to)
+                end
+                assert(rename(from, to))
+                return nil, "ENOTEMPTY: directory not empty"
+            end
+        end)()]]
+    )
+    harness.edit(child, fixture)
+
+    harness.eventually_equal(harness.companion_exists_deadline_ms, "the companion state", "ready", function()
+        return harness.lua_get(child, [[require("fshttp.companion").state()]])
+    end)
+    assert.equal(1, vim.fn.filereadable(root .. "/9.9.6/Companion.dll"))
+    assert.equal(0, #harness.notices_at(child, vim.log.levels.ERROR), "no ERROR notice")
+end
+
 T["a bad checksum starts no companion, gives the ERROR notice, and shows companion download failed"] = function()
     harness.publish_release("9.9.2", true)
     local child, root = child_with_empty_root("9.9.2")

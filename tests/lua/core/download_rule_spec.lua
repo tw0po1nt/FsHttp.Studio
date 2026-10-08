@@ -40,4 +40,12 @@ describe("fshttp.download_rule", function()
         assert.is_false(rule.checksum_matches(string.rep("0", 64) .. "  a\n", hash .. "  b\n"))
         assert.is_false(rule.checksum_matches("", ""))
     end)
+
+    it("gives the no-release notice or the failed notice for a failed download", function()
+        assert.equal(rule.no_release_notice("0.2.0"), rule.failure_notice({ kind = "noRelease" }, "0.2.0"))
+        assert.equal(
+            rule.failed_notice("checksum", "no match"),
+            rule.failure_notice({ kind = "failed", cause = "checksum", detail = "no match" }, "0.2.0")
+        )
+    end)
 end)

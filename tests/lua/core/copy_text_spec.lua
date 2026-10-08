@@ -15,8 +15,8 @@ local function to_bytes(numbers)
     return table.concat(chars)
 end
 
-describe("fshttp.copy_payload", function()
-    local copy_payload = core_env.load("fshttp.copy_payload")
+describe("fshttp.copy_text", function()
+    local copy_text = core_env.load("fshttp.copy_text")
     local json = core_env.load("fshttp.json")
     local bytes = read("tests/golden/copy/copy-text.json")
     local golden_fixture = json.decode(bytes)
@@ -55,16 +55,16 @@ describe("fshttp.copy_payload", function()
         return text
     end
 
-    it("gives each case the payloads of the Golden fixture", function()
+    it("gives each case the Copy text of the Golden fixture", function()
         for _, case in ipairs(golden_fixture.cases) do
             local result = result_of(case)
-            assert.equal(case.requestText, copy_payload.request(result), case.name .. ": request")
-            assert.equal(case.responseHeadersText, copy_payload.headers(result), case.name .. ": headers")
-            assert.equal(case.responseBodyText, nullable(copy_payload.body(result)), case.name .. ": body")
+            assert.equal(case.requestText, copy_text.request(result), case.name .. ": request")
+            assert.equal(case.responseHeadersText, copy_text.headers(result), case.name .. ": headers")
+            assert.equal(case.responseBodyText, nullable(copy_text.body(result)), case.name .. ": body")
         end
     end)
 
-    it("writes the copy payload Golden fixture byte for byte", function()
+    it("writes the Copy text Golden fixture byte for byte", function()
         local cases = {}
         for i, case in ipairs(golden_fixture.cases) do
             local result = result_of(case)
@@ -74,9 +74,9 @@ describe("fshttp.copy_payload", function()
                 { "name", case.name },
                 { "reason", case.reason },
                 { "request", case.request },
-                { "requestText", copy_payload.request(result) },
-                { "responseBodyText", nullable(copy_payload.body(result)) },
-                { "responseHeadersText", copy_payload.headers(result) },
+                { "requestText", copy_text.request(result) },
+                { "responseBodyText", nullable(copy_text.body(result)) },
+                { "responseHeadersText", copy_text.headers(result) },
                 { "status", case.status },
             })
         end

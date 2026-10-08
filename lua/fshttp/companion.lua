@@ -237,16 +237,12 @@ local function download_and_spawn(config)
     set_state("downloading")
     notify(download_rule.downloading_notice(version), vim.log.levels.INFO)
     download.fetch(version, function(result)
-        if result.ok then
+        if result.kind == "installed" then
             check_sdk_and_spawn(config, result.folder)
-        elseif result.kind == "noRelease" then
-            fail_start("noRelease", download_rule.no_release_notice(version), vim.log.levels.ERROR)
         else
-            fail_start(
-                "downloadFailed",
-                download_rule.failed_notice(result.cause, result.detail or ""),
-                vim.log.levels.ERROR
-            )
+            ---@type fshttp.CompanionState
+            local new_state = result.kind == "noRelease" and "noRelease" or "downloadFailed"
+            fail_start(new_state, download_rule.failure_notice(result, version), vim.log.levels.ERROR)
         end
     end)
 end
@@ -266,11 +262,10 @@ function M.start(config)
     })
 
     local folder = config.companion_path
+    check_companion_version = folder ~= nil
     if folder == nil then
-        check_companion_version = false
         download_and_spawn(config)
     elseif download.is_installed(folder) then
-        check_companion_version = true
         check_sdk_and_spawn(config, folder)
     else
         fail_start("companionNotFound", download_rule.not_found_notice(folder), vim.log.levels.ERROR)
