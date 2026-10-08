@@ -2,7 +2,9 @@ vim.env.LAZY_STDPATH = ".tests"
 
 -- lazy.nvim v11.17.5. A clone of the default branch would let an upstream change alter the suite.
 local lazy_commit = "85c7ff3711b730b4030d03144f6db6375044ae82"
-local lazy_path = vim.fn.fnamemodify(".tests/data/nvim/lazy/lazy.nvim", ":p")
+-- ":p" appends a separator once the folder exists. A trailing backslash would escape the comma that
+-- joins the entries of runtimepath on Windows, so the separator is removed.
+local lazy_path = vim.fn.fnamemodify(".tests/data/nvim/lazy/lazy.nvim", ":p"):gsub("[/\\]+$", "")
 
 if not vim.uv.fs_stat(lazy_path) then
     vim.fn.system({ "git", "clone", "--filter=blob:none", "https://github.com/folke/lazy.nvim.git", lazy_path })
