@@ -870,7 +870,7 @@ local function run_harness_setup()
             child,
             [[(function()
                 for _, plugin in pairs(require("lazy.core.config").plugins) do
-                    if plugin.dir == vim.uv.cwd() and plugin._.loaded then
+                    if vim.fs.normalize(plugin.dir) == vim.fs.normalize(vim.uv.cwd()) and plugin._.loaded then
                         return vim.g.loaded_fshttp == true
                     end
                 end
