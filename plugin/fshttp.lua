@@ -3,8 +3,8 @@ if vim.g.loaded_fshttp then
 end
 vim.g.loaded_fshttp = true
 
-vim.api.nvim_create_user_command("FsHttp", function(args)
-    require("fshttp.command").run(args.fargs)
+vim.api.nvim_create_user_command("FsHttp", function(opts)
+    require("fshttp.command").dispatch(opts)
 end, {
     nargs = "+",
     desc = "FsHttp.Studio",
@@ -12,6 +12,10 @@ end, {
         return require("fshttp.command").complete(arg_lead, cmdline)
     end,
 })
+
+vim.keymap.set("n", "<Plug>(FsHttpRun)", function()
+    require("fshttp.command").subcommands.run({})
+end, { desc = "FsHttp.Studio: run the request at the cursor" })
 
 local group = vim.api.nvim_create_augroup("fshttp", { clear = true })
 

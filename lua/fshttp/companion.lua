@@ -16,8 +16,8 @@ local sequence_ran = false
 local state
 ---@type fun(state: fshttp.CompanionState)[]
 local listeners = {}
--- The companion answers one frame at a time, so each answer belongs to the oldest locate.
----@type fun(answer: table?)[]
+-- The companion answers one frame at a time, so each answer belongs to the oldest request.
+---@type fun(answer: table?, decode_error: string?)[]
 local pending = {}
 
 local list_sdks_timeout_ms = 10000
@@ -72,10 +72,10 @@ local function check_version(companion_version)
     end
 end
 
--- An answer that does not decode still ends the oldest locate, so the next answer stays matched.
+-- An answer that does not decode still ends the oldest request, so the next answer stays matched.
 ---@param encoded string
 local function receive(encoded)
-    local answer = envelope.decode(encoded)
+    local answer, decode_error = envelope.decode(encoded)
     if answer and answer.tag == "ready" then
         check_version(answer.version)
         set_state("ready")
@@ -83,7 +83,7 @@ local function receive(encoded)
     end
     local callback = table.remove(pending, 1)
     if callback then
-        callback(answer)
+        callback(answer, decode_error)
     end
 end
 
@@ -134,18 +134,33 @@ function M.on_state_change(listener)
     listeners[#listeners + 1] = listener
 end
 
--- The callback gets nil when the companion stops before it answers.
----@param source string
----@param callback fun(blocks: table?)
----@return boolean sent false when the companion is not ready, and then the callback never runs
-function M.locate(source, callback)
+---@param request table an envelope
+---@param callback fun(answer: table?, decode_error: string?)
+---@return boolean sent
+local function send(request, callback)
     if state ~= "ready" or not process then
         return false
     end
     pending[#pending + 1] = callback
     -- A write to a companion that just exited fails. The exit then abandons the callback.
-    pcall(process.write, process, frame.encode(envelope.encode({ tag = "locate", source = source })))
+    pcall(process.write, process, frame.encode(envelope.encode(request)))
     return true
+end
+
+-- The callback gets nil when the companion stops before it answers.
+---@param source string
+---@param callback fun(blocks: table?)
+---@return boolean sent false when the companion is not ready, and then the callback never runs
+function M.locate(source, callback)
+    return send({ tag = "locate", source = source }, callback)
+end
+
+-- The callback gets nil and no decode error when the companion stops before it answers.
+---@param run_envelope table
+---@param callback fun(outcome: table?, decode_error: string?)
+---@return boolean sent false when the companion is not ready, and then the callback never runs
+function M.run(run_envelope, callback)
+    return send(run_envelope, callback)
 end
 
 -- Runs the start sequence once for each Neovim instance: get the companion, check the SDK floor,

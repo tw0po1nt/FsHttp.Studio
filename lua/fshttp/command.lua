@@ -1,8 +1,13 @@
--- The :FsHttp command. Each subcommand is one entry of the table below.
+-- The :FsHttp command. Each subcommand is one entry of M.subcommands.
 local M = {}
 
----@type table<string, fun(args: string[])>
-local subcommands = {
+---@alias fshttp.Subcommand fun(args: string[])
+
+---@type table<string, fshttp.Subcommand>
+M.subcommands = {
+    run = function()
+        require("fshttp.run").at_cursor()
+    end,
     status = function()
         require("fshttp.status_line").echo()
     end,
@@ -10,35 +15,32 @@ local subcommands = {
 
 ---@return string[]
 local function names()
-    local found = vim.tbl_keys(subcommands)
-    table.sort(found)
-    return found
+    local list = vim.tbl_keys(M.subcommands)
+    table.sort(list)
+    return list
 end
 
----@param fargs string[] the subcommand name, then its arguments
-function M.run(fargs)
-    local subcommand = subcommands[fargs[1]]
+---@param opts vim.api.keyset.create_user_command.command_args
+function M.dispatch(opts)
+    local name = opts.fargs[1]
+    local subcommand = M.subcommands[name]
     if not subcommand then
         vim.notify(
-            string.format(
-                "FsHttp.Studio has no subcommand '%s'. The subcommands are: %s.",
-                fargs[1] or "",
-                table.concat(names(), ", ")
-            ),
+            string.format(":FsHttp has no subcommand %s. The subcommands are: %s.", name, table.concat(names(), ", ")),
             vim.log.levels.ERROR,
             { title = "FsHttp.Studio" }
         )
         return
     end
-    subcommand(vim.list_slice(fargs, 2))
+    subcommand(vim.list_slice(opts.fargs, 2))
 end
 
--- Completes the subcommand name, which is the first argument.
+-- Completes the subcommand name only.
 ---@param arg_lead string
 ---@param cmdline string
 ---@return string[]
 function M.complete(arg_lead, cmdline)
-    if #vim.split(vim.trim(cmdline), "%s+") > (arg_lead == "" and 1 or 2) then
+    if cmdline:match("^%s*%S+%s+%S+%s") then
         return {}
     end
     return vim.tbl_filter(function(name)
