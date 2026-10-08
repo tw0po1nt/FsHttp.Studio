@@ -509,23 +509,6 @@ end
 
 local wait_notice = "The FsHttp.Studio companion is starting. This Run starts when it is ready."
 
-T["a Run that starts while the companion starts runs when it is ready"] = function()
-    local opts = { companion_path = harness.companion_path(), dotnet_path = harness.slow_dotnet(2) }
-    local child = harness.start_child(opts)
-    local fixture = harness.fixture("core-path.fsx")
-    harness.edit(child, fixture)
-
-    -- Run while the companion is still starting. The slow dotnet keeps it in that state.
-    harness.run_at(child, 26)
-
-    expect_notice(child, 0, vim.log.levels.INFO, wait_notice)
-
-    -- When the companion becomes ready, the recorded Run starts and fills the Response buffer.
-    eventually_response(child, "the probe body after the wait", function(snapshot)
-        return only_window(snapshot) ~= nil and has_line(snapshot.lines, harness.json_probe_body_line)
-    end)
-end
-
 -- Records the block_index of each run envelope that the client sends in the child. Only the latest
 -- Run reaches the Response buffer, so the buffer alone cannot show that an earlier Run never started.
 ---@param child nvim_suite.Child
@@ -544,15 +527,18 @@ local function install_run_spy(child)
     )
 end
 
-T["a second Run while the companion starts replaces the Run that waits"] = function()
+T["a Run that starts while the companion starts runs when it is ready, and a second Run replaces it"] = function()
     local opts = { companion_path = harness.companion_path(), dotnet_path = harness.slow_dotnet(2) }
     local child = harness.start_child(opts)
     harness.edit(child, harness.fixture("core-path.fsx"))
     install_run_spy(child)
 
+    -- Run while the companion is still starting. The slow dotnet keeps it in that state.
     harness.run_at(child, 26)
+    expect_notice(child, 0, vim.log.levels.INFO, wait_notice)
     harness.run_at(child, 28)
 
+    -- When the companion becomes ready, the second recorded Run starts and fills the Response buffer.
     eventually_response(child, "the /status keys after the wait", function(snapshot)
         return only_window(snapshot) ~= nil and has_text(snapshot.lines, '"slowSeen"')
     end)

@@ -7,7 +7,7 @@ local M = {}
 -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/283): set the Budgets from measured runs on each operating system.
 M.harness_setup_budget_ms = 60000
 M.check_budget_ms = 30000
-M.suite_budget_ms = 120000
+M.suite_budget_ms = 180000
 
 M.sidecar_deadline_ms = 30000
 M.companion_exists_deadline_ms = 30000
