@@ -15,10 +15,12 @@ return {
         unaddressable = { block_mark_title = "⊘ Cannot run in this position", title = "Cannot run in this position", detail = "FsHttp.Studio cannot address a request in this position. To run this request, move it to its own let binding, at the top level of the script or of a module." },
     },
     fallback_code = "unaddressable",
+    run_block_mark_title = "▶ Run request",
     stale_block_index = { title = "Cannot run: the script changed", detail = "This request moved or was removed after you started the Run. FsHttp.Studio cannot find it at the position it had when the Run started. To run this request, run :FsHttp run again." },
     unbound_block_value = { title = "Cannot run: depends on another request", detail = "This request uses `{name}`, which another request in this script binds. One Run evaluates one request, so `{name}` has no value. FsHttp.Studio cannot run a request that depends on another request." },
     companion_stopped = { title = "Cannot run: the companion stopped", detail = "The FsHttp.Studio companion stopped. Reload the window to start it again." },
     companion_stopped_block_mark_title = "⊘ Cannot run: the companion stopped",
     no_blocks_parse_failure = "No requests found: this script has a syntax error.",
+    no_blocks_parse_failure_block_mark_title = "⊘ No requests found: this script has a syntax error",
     no_blocks_empty = "This script has no request. Write an http { } block to run one.",
 }

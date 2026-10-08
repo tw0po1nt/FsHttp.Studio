@@ -114,6 +114,9 @@ starts at the first Check, so it leaves out Harness setup, as in the UI suite.
 
 **A Beta runs the Lua core suite only.** A Beta does not run the Neovim suite.
 
+**The version mismatch Check proves no Run.** The Neovim client cannot start a Run yet. The Check
+asserts the WARN notice and a companion that stays up.
+
 ### What the Neovim suite covers today
 
 - The Harness: a child Neovim that loads the client through lazy.nvim, the test HTTP server with
@@ -123,3 +126,5 @@ starts at the first Check, so it leaves out Harness setup, as in the UI suite.
 - The start sequence: a second Script starts no second companion. `VimLeavePre` stops the
   companion. A `dotnet_path` that names a missing file gives the WARN notice, and no companion
   starts.
+- The version check: a companion of the client version gives no WARN notice. A companion of a
+  different version gives one WARN notice that names both versions, and the companion stays up.

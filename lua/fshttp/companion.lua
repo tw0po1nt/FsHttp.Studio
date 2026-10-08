@@ -2,12 +2,22 @@
 local envelope = require("fshttp.envelope")
 local frame = require("fshttp.frame")
 local sdk = require("fshttp.sdk")
+local version_check = require("fshttp.version_check")
 
 local M = {}
+
+---@alias fshttp.CompanionState "starting"|"ready"|"stopped"
 
 ---@type vim.SystemObj?
 local process
 local sequence_ran = false
+---@type fshttp.CompanionState?
+local state
+---@type fun(state: fshttp.CompanionState)[]
+local listeners = {}
+-- The companion answers one frame at a time, so each answer belongs to the oldest locate.
+---@type fun(answer: table?)[]
+local pending = {}
 
 local list_sdks_timeout_ms = 10000
 
@@ -37,23 +47,97 @@ local function report_no_sdk(floor, dotnet_path)
     notify(sdk.not_found_notice(floor, dotnet_path), vim.log.levels.WARN)
 end
 
+-- On a version mismatch, the companion stays up and each Run goes ahead.
+---@param companion_version string?
+local function check_version(companion_version)
+    local client_version = require("fshttp.version")
+    if not version_check.matches(client_version, companion_version) then
+        notify(version_check.mismatch_notice(client_version, companion_version), vim.log.levels.WARN)
+    end
+end
+
+---@param new_state fshttp.CompanionState
+local function set_state(new_state)
+    state = new_state
+    for _, listener in ipairs(listeners) do
+        listener(new_state)
+    end
+end
+
+-- An answer that does not decode still ends the oldest locate, so the next answer stays matched.
+---@param encoded string
+local function receive(encoded)
+    local answer = envelope.decode(encoded)
+    if answer and answer.tag == "ready" then
+        check_version(answer.version)
+        set_state("ready")
+        return
+    end
+    local callback = table.remove(pending, 1)
+    if callback then
+        callback(answer)
+    end
+end
+
+local function on_exit()
+    process = nil
+    local abandoned = pending
+    pending = {}
+    set_state("stopped")
+    for _, callback in ipairs(abandoned) do
+        callback(nil)
+    end
+end
+
 ---@param dotnet string
 ---@param companion_dll string
 local function spawn(dotnet, companion_dll)
+    local parser = frame.parser()
     local ok, started = pcall(vim.system, { dotnet, companion_dll }, {
         stdin = true,
-        -- A full stdout pipe blocks the companion, so the client reads stdout and ignores it.
-        stdout = function() end,
+        stdout = function(_, chunk)
+            local encoded_envelopes = chunk and parser:push(chunk) or {}
+            if #encoded_envelopes > 0 then
+                vim.schedule(function()
+                    for _, encoded in ipairs(encoded_envelopes) do
+                        receive(encoded)
+                    end
+                end)
+            end
+        end,
         -- The companion writes its own log to stderr. The client shows no part of it.
         stderr = function() end,
-    }, function()
-        process = nil
-    end)
+    }, vim.schedule_wrap(on_exit))
     if not ok then
         return
     end
     process = started
+    set_state("starting")
     started:write(frame.encode(envelope.encode({ tag = "hello" })))
+end
+
+---@return fshttp.CompanionState? state nil before the start sequence starts a companion
+function M.state()
+    return state
+end
+
+---@param listener fun(state: fshttp.CompanionState)
+function M.on_state_change(listener)
+    listeners[#listeners + 1] = listener
+end
+
+-- The callback gets nil when the companion stops before it answers.
+---@param source string
+---@param callback fun(blocks: table?)
+---@return boolean sent false when the companion is not ready, and then the callback never runs
+function M.locate(source, callback)
+    if state ~= "ready" or not process then
+        return false
+    end
+    pending[#pending + 1] = callback
+    -- A write to a companion that just exited fails. The exit then abandons the callback.
+    pcall(process.write, process, frame.encode(envelope.encode({ tag = "locate", source = source })))
+    return true
 end
 
 -- Runs the start sequence once for each Neovim instance: get the companion, check the SDK floor,

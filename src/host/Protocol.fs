@@ -53,7 +53,7 @@ let statusText (state: State) (view: ScriptView) : string option =
 /// zero reads as zero, as it does in `statusText` above.
 let noRequestsLensTitle (view: ScriptView) : string option =
     match view with
-    | Script(n, true) when n <= 0 -> Some "⊘ No requests found: this script has a syntax error"
+    | Script(n, true) when n <= 0 -> Some Refusals.noBlocksParseFailureLensTitle
     | _ -> None
 
 /// An omitted property decides `false`, so an old companion that never sends it cannot light the

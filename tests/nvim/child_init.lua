@@ -16,6 +16,11 @@ vim.notify = function(message, level)
     notices[#notices + 1] = { message = message, level = level }
 end
 
+-- A Check sets NVIM_TEST_CLIENT_VERSION to make the client version different from the companion version.
+if vim.env.NVIM_TEST_CLIENT_VERSION then
+    package.loaded["fshttp.version"] = vim.env.NVIM_TEST_CLIENT_VERSION
+end
+
 vim.opt.rtp:prepend(vim.fn.stdpath("data") .. "/lazy/lazy.nvim")
 
 require("lazy.minit").setup({
