@@ -1,5 +1,4 @@
-/// Each F# suite that writes a Golden fixture links this file. The Lua core suite reads the same
-/// folder.
+/// The Lua core suite reads each Golden fixture that these F# suites write.
 module GoldenFixture
 
 open System
@@ -20,8 +19,6 @@ let private firstDifference (expected: byte[]) (actual: byte[]) =
     |> Seq.tryFindIndex (fun (e, a) -> e <> a)
     |> Option.defaultValue (min expected.Length actual.Length)
 
-/// Compares `actual` with the committed Golden fixture at `relativePath` under `folder`, and
-/// fails on a difference. With `UPDATE_GOLDEN_FIXTURES=1`, it writes `actual` to the Golden fixture.
 let verify (relativePath: string) (actual: byte[]) =
     let path = Path.Combine(folder, relativePath)
 
@@ -35,7 +32,7 @@ let verify (relativePath: string) (actual: byte[]) =
 
         if expected <> actual then
             failtestf
-                "The output differs from the Golden fixture %s at byte %d.\nExpected:\n%s\nActual:\n%s\nRun the tests with %s=1 to write the fixture again."
+                "The output differs from the Golden fixture %s at byte %d.\nExpected:\n%s\nActual:\n%s\nRun the tests with %s=1 to write the Golden fixtures again."
                 relativePath
                 (firstDifference expected actual)
                 (Encoding.UTF8.GetString expected)

@@ -110,6 +110,18 @@ strip_lua='
         closing = ""
         continue
       }
+      if (quote != "") {
+        j = i
+        while (j <= n && substr(line, j, 1) != quote) {
+          if (substr(line, j, 1) == "\\") j++
+          j++
+        }
+        out = out " " substr(line, i, j - i)
+        if (j > n) break
+        quote = ""
+        i = j + 1
+        continue
+      }
       rest = substr(line, i)
       if (substr(rest, 1, 2) == "--") {
         rest = substr(rest, 3)
@@ -128,13 +140,8 @@ strip_lua='
       }
       c = substr(rest, 1, 1)
       if (c == "\"" || c == "\047") {
-        j = i + 1
-        while (j <= n && substr(line, j, 1) != c) {
-          if (substr(line, j, 1) == "\\") j++
-          j++
-        }
-        out = out " " substr(line, i + 1, j - i - 1)
-        i = j + 1
+        quote = c
+        i++
         continue
       }
       i++

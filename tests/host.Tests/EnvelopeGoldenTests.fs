@@ -1,24 +1,22 @@
 module Extension.Tests.EnvelopeGoldenTests
 
-// The companion's own encoder writes each envelope, so each Golden fixture holds the bytes that
-// cross the wire. The Lua client must decode and encode these same bytes.
+// Each Golden fixture holds the companion's own bytes, which the Lua client must decode and encode.
 
 open System.IO
 open System.Text
 open System.Text.Json
 open Expecto
+open Microsoft.FSharp.Reflection
 open Companion.BlockLocator
 open Companion.BlockRunner
+open Companion.Envelope
 open Companion.RequestCapture
-
-let private encode = Companion.Envelope.encode
 
 let private respond (request: byte[]) : byte[] =
     use doc = JsonDocument.Parse request
     encode (Companion.RequestHandler.respond doc)
 
-// The text holds each character class that the encoder escapes, and UTF-8 of two, three, and four
-// bytes.
+// The text holds each character class that the encoder escapes, and UTF-8 of two to four bytes.
 let private escapes =
     "\"quoted\" \\ <tag> & 'single' + `tick` \t\n\r\b\f\u0001\u007f é → 😀"
 
@@ -28,6 +26,12 @@ let private script =
 let private hello = encode {| tag = "hello" |}
 
 let private locate = encode {| tag = "locate"; source = script |}
+
+// An incomplete binding below the last Block makes the parse fail, and the parse keeps each Block.
+let private locateParseFailed =
+    encode
+        {| tag = "locate"
+           source = script + "\nlet c =\n" |}
 
 // The second Block sits in a loop body, so the companion refuses it before it evaluates code.
 let private run =
@@ -103,9 +107,10 @@ let private compileError =
 /// `frames.bin` holds the frame of each envelope Golden fixture in this order.
 let private goldenFixtures =
     [ "hello", hello
-      "ready", encode (Companion.RequestHandler.ready "1.2.3-beta.4")
+      "ready", encode (Companion.RequestHandler.ready (Some "1.2.3-beta.4"))
       "locate", locate
       "blocks", respond locate
+      "blocks-parse-failed", respond locateParseFailed
       "run", run
       "refused", respond run
       "refused-unbound-block-value", encode (outcomeToWire (Refused("unboundBlockValue", Some "dexId")))
@@ -120,13 +125,18 @@ let private frames () =
     use stream = new MemoryStream()
 
     for _, payload in goldenFixtures do
-        Companion.Envelope.writeFrame stream payload
+        writeFrame stream payload
 
     stream.ToArray()
 
 let private tagOf (payload: byte[]) =
     use doc = JsonDocument.Parse payload
     doc.RootElement.GetProperty("tag").GetString()
+
+let private runOutcomeTags =
+    FSharpType.GetUnionCases typeof<RunOutcome>
+    |> Array.map (fun case -> string (System.Char.ToLowerInvariant case.Name[0]) + case.Name.Substring 1)
+    |> Set.ofArray
 
 [<Tests>]
 let tests =
@@ -144,20 +154,10 @@ let tests =
           test "the Golden fixtures cover each envelope tag" {
               let tags = goldenFixtures |> List.map (snd >> tagOf) |> Set.ofList
 
-              Expect.equal
-                  tags
-                  (set
-                      [ "hello"
-                        "ready"
-                        "locate"
-                        "blocks"
-                        "run"
-                        "ok"
-                        "compileError"
-                        "runtimeError"
-                        "refused"
-                        "error" ])
-                  "each tag needs a Golden fixture"
+              let expected =
+                  runOutcomeTags + set [ "hello"; "ready"; "locate"; "blocks"; "run"; "error" ]
+
+              Expect.equal tags expected "each tag needs a Golden fixture"
           }
 
           test "the blocks Golden fixture holds a Block that a Run can reach and a refused Block" {
@@ -167,6 +167,12 @@ let tests =
               Expect.equal (ranges.GetArrayLength()) 2 "the script holds two Blocks"
               Expect.isFalse (fst (ranges.[0].TryGetProperty "refusal")) "the first Block is reachable"
               Expect.equal (ranges.[1].GetProperty("refusal").GetString()) "loopBody" "the second Block is in a loop"
+          }
+
+          test "the blocks-parse-failed Golden fixture holds a failed parse and each Block" {
+              use doc = JsonDocument.Parse(respond locateParseFailed)
+              Expect.isTrue (doc.RootElement.GetProperty("parseFailed").GetBoolean()) "the parse fails"
+              Expect.equal (doc.RootElement.GetProperty("ranges").GetArrayLength()) 2 "each Block survives"
           }
 
           test "the refused Golden fixture is the companion's answer to the run Golden fixture" {

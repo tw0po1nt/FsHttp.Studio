@@ -18,7 +18,6 @@
   <PropertyGroup>
     <PackageJsonText>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../package.json'))</PackageJsonText>
     <PackageJsonVersion>$([System.Text.RegularExpressions.Regex]::Match($(PackageJsonText), '"version"\s*:\s*"([^"]+)"').Groups[1].Value)</PackageJsonVersion>
-    <Version>$(PackageJsonVersion)</Version>
     <InformationalVersion>$(PackageJsonVersion)</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>

@@ -67,7 +67,8 @@ strip_fsharp='
 
 # A Lua line contributes the text of each comment and each string literal. A
 # long comment or a long string can span lines, so `closing` holds the bracket
-# that ends it, such as "]]" or "]==]".
+# that ends it, such as "]]" or "]==]". A quoted string spans lines after a
+# trailing "\" or "\z", so `quote` holds its open quote character.
 strip_lua='
   {
     line = $0
@@ -81,6 +82,18 @@ strip_lua='
         out = out " " substr(line, i, j - 1)
         i += j - 1 + length(closing)
         closing = ""
+        continue
+      }
+      if (quote != "") {
+        j = i
+        while (j <= n && substr(line, j, 1) != quote) {
+          if (substr(line, j, 1) == "\\") j++
+          j++
+        }
+        out = out " " substr(line, i, j - i)
+        if (j > n) break
+        quote = ""
+        i = j + 1
         continue
       }
       rest = substr(line, i)
@@ -101,13 +114,8 @@ strip_lua='
       }
       c = substr(rest, 1, 1)
       if (c == "\"" || c == "\047") {
-        j = i + 1
-        while (j <= n && substr(line, j, 1) != c) {
-          if (substr(line, j, 1) == "\\") j++
-          j++
-        }
-        out = out " " substr(line, i + 1, j - i - 1)
-        i = j + 1
+        quote = c
+        i++
         continue
       }
       i++

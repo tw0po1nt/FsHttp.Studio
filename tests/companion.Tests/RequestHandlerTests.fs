@@ -102,6 +102,13 @@ let tests =
                   "a Client compares this version with its own"
           }
 
+          test "a ready with no version carries no version field" {
+              let response = JsonDocument.Parse(JsonSerializer.Serialize(ready None)).RootElement
+
+              Expect.equal (response.GetProperty("tag").GetString()) "ready" "the tag is ready"
+              Expect.isFalse (fst (response.TryGetProperty "version")) "a Client reads an absent version as nil"
+          }
+
           test "unknown request tag returns an error envelope" {
               let response = respondTo (JsonSerializer.Serialize {| tag = "not-a-real-tag" |})
               Expect.equal (response.GetProperty("tag").GetString()) "error" "unknown tag should be an error"

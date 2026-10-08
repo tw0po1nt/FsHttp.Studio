@@ -11,7 +11,6 @@ let writeFrame (out: Stream) (payload: byte[]) =
     out.Write(payload, 0, payload.Length)
     out.Flush()
 
-/// The companion writes each envelope with this encoder, and the Golden fixtures hold its bytes.
 let encode (envelope: obj) : byte[] =
     JsonSerializer.SerializeToUtf8Bytes envelope
 

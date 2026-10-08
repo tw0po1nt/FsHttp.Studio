@@ -29,10 +29,13 @@ let private runResponse (source: string) (blockIndex: int) (scriptFileName: stri
 /// The build sets the informational version to the package version, with no source revision.
 let companionVersion =
     match Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>() with
-    | null -> ""
-    | attribute -> attribute.InformationalVersion
+    | null -> None
+    | attribute -> Some attribute.InformationalVersion
 
-let ready (version: string) : obj = {| tag = "ready"; version = version |}
+let ready (version: string option) : obj =
+    match version with
+    | Some version -> {| tag = "ready"; version = version |}
+    | None -> {| tag = "ready" |}
 
 /// Handles one decoded request payload. Returns the response object that the caller
 /// serializes onto the frame channel.

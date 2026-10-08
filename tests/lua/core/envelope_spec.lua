@@ -20,31 +20,10 @@ local function golden_fixture_names()
     return names
 end
 
--- frames.bin holds the frame of each envelope Golden fixture in this order.
-local frame_order = {
-    "hello",
-    "ready",
-    "locate",
-    "blocks",
-    "run",
-    "refused",
-    "refused-unbound-block-value",
-    "ok",
-    "ok-http-error-response",
-    "ok-not-captured",
-    "compile-error",
-    "runtime-error",
-    "error",
-}
-
 local escapes = "\"quoted\" \\ <tag> & 'single' + `tick` \t\n\r\b\f\1\127 é → 😀"
 
 describe("fshttp.envelope", function()
     local envelope = core_env.load("fshttp.envelope")
-
-    it("finds each envelope Golden fixture", function()
-        assert.equal(#frame_order, #golden_fixture_names())
-    end)
 
     it("decodes and encodes each envelope Golden fixture byte for byte", function()
         for _, name in ipairs(golden_fixture_names()) do
@@ -134,18 +113,22 @@ end)
 describe("fshttp.frame", function()
     local frame = core_env.load("fshttp.frame")
     local stream = read("frames.bin")
+    local payloads = frame.parser():push(stream)
 
-    local function payloads()
-        local list = {}
-        for i, name in ipairs(frame_order) do
-            list[i] = read(name .. ".json")
+    it("finds the frame of each envelope Golden fixture in frames.bin", function()
+        local golden_fixtures = {}
+        for i, name in ipairs(golden_fixture_names()) do
+            golden_fixtures[i] = read(name)
         end
-        return list
-    end
+        local framed = vim.deepcopy(payloads)
+        table.sort(golden_fixtures)
+        table.sort(framed)
+        assert.same(golden_fixtures, framed)
+    end)
 
     it("encodes each envelope Golden fixture to the frames that the companion writes", function()
         local frames = {}
-        for i, payload in ipairs(payloads()) do
+        for i, payload in ipairs(payloads) do
             frames[i] = frame.encode(payload)
         end
         assert.equal(stream, table.concat(frames))
@@ -160,7 +143,7 @@ describe("fshttp.frame", function()
                     parsed[#parsed + 1] = payload
                 end
             end
-            assert.same(payloads(), parsed, "chunk size " .. size)
+            assert.same(payloads, parsed, "chunk size " .. size)
         end
     end)
 
