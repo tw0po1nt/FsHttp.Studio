@@ -110,7 +110,7 @@ local function section_line_count(lines, title)
     return (last or #lines) - first
 end
 
-T["the command"] = function()
+T["the command completes run, and <Plug>(FsHttpRun) has no key"] = function()
     local child = harness.harness_setup_child()
 
     local completion = harness.lua_get(child, [[vim.fn.getcompletion("FsHttp ", "cmdline")]])
@@ -185,6 +185,31 @@ T[":FsHttp run fills the Response buffer, and the next Run replaces it in the sa
     assert.equal(true, ends_with(narrow.winbar, "/status"), narrow.winbar)
     assert.equal(false, narrow.winbar:find(base_url, 1, true) ~= nil, "the start of the URL is cut: " .. narrow.winbar)
     harness.cmd(child, "wincmd =")
+end
+
+T["a closed Response window opens again on the next Run"] = function()
+    local child = harness.harness_setup_child()
+    local fixture = harness.fixture("core-path.fsx")
+    open_script(child, fixture, { 26, 28 })
+    harness.run_at(child, 26)
+    eventually_response(child, "the probe body in one Response window", function(snapshot)
+        return only_window(snapshot) ~= nil and has_line(snapshot.lines, harness.json_probe_body)
+    end)
+
+    harness.close_response_windows(child)
+    assert.equal(0, #harness.response_buffer(child).windows, "the Response window is closed")
+    harness.run_at(child, 28)
+
+    local reopened = eventually_response(child, "the /status keys in one Response window", function(snapshot)
+        return only_window(snapshot) ~= nil and has_text(snapshot.lines, '"slowSeen"')
+    end)
+    assert.equal(1, reopened.count, "one Response buffer")
+    assert.equal(fixture, reopened.current_buffer_name, "the cursor stays in the Script")
+    assert.equal(
+        true,
+        assert(only_window(reopened)).col > reopened.current_col,
+        "the split is on the right of the Script"
+    )
 end
 
 T["a 404 shows as a response, and a Dead port shows as a Runtime error"] = function()
@@ -301,7 +326,7 @@ T["request_timeout_ms bounds the Run"] = function()
     end
 end
 
-T["the no-requests notices"] = function()
+T["the no-Block notices"] = function()
     local child = harness.harness_setup_child()
     harness.close_response_windows(child)
 
@@ -334,6 +359,22 @@ T["a stopped companion gives the stopped WARN notice and no Run"] = function()
     harness.run_at(child, 8)
 
     expect_notice(child, 0, vim.log.levels.WARN, refusals.companion_stopped.detail)
+    harness.holds_for_settle("no Response buffer", function()
+        return harness.response_buffer(child).count == 0
+    end)
+end
+
+T["a missing .NET SDK gives the SDK WARN notice again and no Run"] = function()
+    local missing = harness.fixture("missing/dotnet")
+    local child = harness.start_child({ companion_path = harness.companion_path(), dotnet_path = missing })
+    harness.edit(child, harness.fixture("block-marks.fsx"))
+    harness.expect_status(child, "the .NET SDK not found row", "FsHttp.Studio: .NET SDK not found")
+    local warning = assert(harness.notices_at(child, vim.log.levels.WARN)[1], "the WARN notice of the SDK")
+    local count = #harness.notices(child)
+
+    harness.run_at(child, 8)
+
+    expect_notice(child, count, vim.log.levels.WARN, warning.message)
     harness.holds_for_settle("no Response buffer", function()
         return harness.response_buffer(child).count == 0
     end)

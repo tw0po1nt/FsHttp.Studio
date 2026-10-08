@@ -5,6 +5,10 @@ local refusals = require("fshttp.refusals")
 
 local M = {}
 
+---@class fshttp.LocateAnswer
+---@field blocks integer the number of located Blocks
+---@field parse_failed boolean
+
 local namespace = vim.api.nvim_create_namespace("fshttp.block_mark")
 local relocate_delay_ms = 300
 
@@ -17,7 +21,7 @@ local timers = {}
 ---@type table<integer, true>
 local waiting = {}
 -- The answer of the last locate for each Script. A Script with no entry waits for a locate.
----@type table<integer, { blocks: integer, parse_failed: boolean }>
+---@type table<integer, fshttp.LocateAnswer>
 local answers = {}
 ---@type fun(buf: integer)[]
 local listeners = {}
@@ -31,7 +35,7 @@ end
 
 ---@param buf integer
 ---@return boolean
-local function is_script(buf)
+function M.is_script(buf)
     return vim.api.nvim_buf_is_loaded(buf) and vim.api.nvim_buf_get_name(buf):match("%.fsx$") ~= nil
 end
 
@@ -106,7 +110,7 @@ local function paint_stopped(buf)
 end
 
 ---@param buf integer
----@param answer { blocks: integer, parse_failed: boolean }?
+---@param answer fshttp.LocateAnswer?
 local function set_answer(buf, answer)
     if vim.deep_equal(answers[buf], answer) then
         return
@@ -121,7 +125,7 @@ local schedule_locate
 
 ---@param buf integer
 local function locate(buf)
-    if not is_script(buf) or waiting[buf] then
+    if not M.is_script(buf) or waiting[buf] then
         return
     end
     local changedtick = vim.api.nvim_buf_get_changedtick(buf)
@@ -129,7 +133,7 @@ local function locate(buf)
     waiting[buf] = true
     local sent = companion.locate(source, function(blocks)
         waiting[buf] = nil
-        if not blocks or blocks.tag ~= "blocks" or not is_script(buf) then
+        if not blocks or blocks.tag ~= "blocks" or not M.is_script(buf) then
             return
         end
         -- The ranges belong to older text, and their lines can be wrong for the text now.
@@ -190,7 +194,7 @@ end
 
 -- Returns the answer of the last locate for a Script, or nil while the Script waits for a locate.
 ---@param buf integer
----@return { blocks: integer, parse_failed: boolean }?
+---@return fshttp.LocateAnswer?
 function M.answer(buf)
     return answers[buf]
 end

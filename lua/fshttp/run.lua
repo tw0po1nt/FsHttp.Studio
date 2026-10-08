@@ -1,5 +1,6 @@
 -- `:FsHttp run`: a Run of the Block at the cursor, with its result in the Response buffer.
 local companion = require("fshttp.companion")
+local locator = require("fshttp.locator")
 local refusals = require("fshttp.refusals")
 local response_buffer = require("fshttp.response_buffer")
 local response_view = require("fshttp.response_view")
@@ -21,24 +22,18 @@ local function notify(message, level)
     vim.notify(message, level, { title = "FsHttp.Studio" })
 end
 
----@param buf integer
----@return boolean
-local function is_script(buf)
-    return vim.api.nvim_buf_get_name(buf):match("%.fsx$") ~= nil
-end
-
----@param ok table a decoded ok envelope
+---@param ok_envelope table a decoded ok envelope
 ---@param total_ms number
 ---@return fshttp.RunResult
-local function to_result(ok, total_ms)
-    local request = ok.request
+local function to_result(ok_envelope, total_ms)
+    local request = ok_envelope.request
     return {
-        status = ok.status,
-        reason = ok.reason,
-        headers = ok.headers,
-        content_type = ok.content_type,
-        body = vim.base64.decode(ok.body_base64),
-        request_ms = ok.request_ms,
+        status = ok_envelope.status,
+        reason = ok_envelope.reason,
+        headers = ok_envelope.headers,
+        content_type = ok_envelope.content_type,
+        body = vim.base64.decode(ok_envelope.body_base64),
+        request_ms = ok_envelope.request_ms,
         total_ms = total_ms,
         request = {
             method = request.method,
@@ -126,7 +121,7 @@ end
 -- Each Run locates the buffer text again, so the Block index matches the text of the run envelope.
 function M.at_cursor()
     local buf = vim.api.nvim_get_current_buf()
-    if not is_script(buf) then
+    if not locator.is_script(buf) then
         notify(not_a_script_notice, vim.log.levels.INFO)
         return
     end
@@ -137,8 +132,13 @@ function M.at_cursor()
         notify(refusals.companion_stopped.detail, vim.log.levels.WARN)
         return
     elseif state ~= "ready" then
-        -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/271): wait for the companion, then start the Run.
-        notify(not_ready_notice, vim.log.levels.INFO)
+        local notice = companion.state_notice()
+        if notice then
+            notify(notice.message, notice.level)
+        else
+            -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/271): wait for the companion, then start the Run.
+            notify(not_ready_notice, vim.log.levels.INFO)
+        end
         return
     end
 

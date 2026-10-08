@@ -9,14 +9,21 @@ local M = {}
 -- Only Neovim has the download states and "companionNotFound".
 ---@alias fshttp.CompanionState "starting"|"ready"|"sdkNotFound"|"stopped"|"downloading"|"downloadFailed"|"noRelease"|"companionNotFound"
 
+---@class fshttp.StateNotice
+---@field message string
+---@field level integer
+
 ---@type vim.SystemObj?
 local process
 local sequence_ran = false
 ---@type fshttp.CompanionState?
 local state
+-- A state that never becomes ready keeps its notice, so that a Run in that state can show the fix again.
+---@type fshttp.StateNotice?
+local state_notice
 ---@type fun(state: fshttp.CompanionState)[]
 local listeners = {}
--- The companion answers one frame at a time, so each answer belongs to the oldest request.
+-- The companion answers one frame at a time, so each answer belongs to the oldest sent envelope.
 ---@type fun(answer: table?, decode_error: string?)[]
 local pending = {}
 
@@ -43,11 +50,13 @@ local function read_file(path)
 end
 
 ---@param new_state fshttp.CompanionState
-local function set_state(new_state)
+---@param notice fshttp.StateNotice? the notice that the change to `new_state` raised
+local function set_state(new_state, notice)
     if state == new_state then
         return
     end
     state = new_state
+    state_notice = notice
     for _, listener in ipairs(listeners) do
         listener(new_state)
     end
@@ -57,9 +66,10 @@ end
 ---@param floor integer
 ---@param dotnet_path string?
 local function report_no_sdk(floor, dotnet_path)
-    notify(sdk.not_found_notice(floor, dotnet_path), vim.log.levels.WARN)
+    local notice = { message = sdk.not_found_notice(floor, dotnet_path), level = vim.log.levels.WARN }
+    notify(notice.message, notice.level)
     vim.schedule(function()
-        set_state("sdkNotFound")
+        set_state("sdkNotFound", notice)
     end)
 end
 
@@ -72,7 +82,7 @@ local function check_version(companion_version)
     end
 end
 
--- An answer that does not decode still ends the oldest request, so the next answer stays matched.
+-- An answer that does not decode still ends the oldest sent envelope, so the next answer stays matched.
 ---@param encoded string
 local function receive(encoded)
     local answer, decode_error = envelope.decode(encoded)
@@ -129,21 +139,26 @@ function M.state()
     return state
 end
 
+---@return fshttp.StateNotice? notice nil when the current state raised no notice
+function M.state_notice()
+    return state_notice
+end
+
 ---@param listener fun(state: fshttp.CompanionState)
 function M.on_state_change(listener)
     listeners[#listeners + 1] = listener
 end
 
----@param request table an envelope
+---@param outgoing table an envelope
 ---@param callback fun(answer: table?, decode_error: string?)
 ---@return boolean sent
-local function send(request, callback)
+local function send(outgoing, callback)
     if state ~= "ready" or not process then
         return false
     end
     pending[#pending + 1] = callback
     -- A write to a companion that just exited fails. The exit then abandons the callback.
-    pcall(process.write, process, frame.encode(envelope.encode(request)))
+    pcall(process.write, process, frame.encode(envelope.encode(outgoing)))
     return true
 end
 

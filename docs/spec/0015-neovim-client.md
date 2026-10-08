@@ -253,10 +253,12 @@ The outcome for each state:
 
 | State | Result |
 |---|---|
+| The current buffer is not a Script | An INFO notice: ":FsHttp run runs a request from an F# script (.fsx). Open a script and put the cursor in a request." No locate and no Run start. |
 | A refused target | A WARN notice with the detail from `Refusals`. No Run starts, and the Response buffer stays closed. |
 | A Parse failure and no block | A WARN notice: "No requests found: this script has a syntax error." |
 | No block and no Parse failure | An INFO notice: "This script has no request. Write an http { } block to run one." |
 | Companion stopped | The stopped sentence as a WARN notice. The client maps no cursor and opens no picker. |
+| A state that cannot become ready, for example no SDK | The A11 notice of that state again. No Run starts. |
 | A Refused Run from the run envelope | The Response buffer shows it, as spec 0003 Decision 6 states. |
 
 #### A7. Block marks

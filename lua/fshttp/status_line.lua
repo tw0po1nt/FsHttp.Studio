@@ -8,13 +8,16 @@ local M = {}
 M.event = "FsHttpStatusLineTextChanged"
 
 local watching = false
+-- The row of the current buffer at the last User autocmd.
+---@type string?
+local last_row
 
 ---@param buf integer
 ---@return fshttp.ScriptView
 local function script_view(buf)
     if vim.bo[buf].filetype ~= "fsharp" then
         return { kind = "noFSharpDocument" }
-    elseif not vim.api.nvim_buf_get_name(buf):match("%.fsx$") then
+    elseif not locator.is_script(buf) then
         return { kind = "notAScript" }
     end
     local answer = locator.answer(buf)
@@ -38,8 +41,17 @@ function M.echo()
 end
 
 local function changed()
+    last_row = M.row(vim.api.nvim_get_current_buf())
     vim.api.nvim_exec_autocmds("User", { pattern = M.event, modeline = false })
     vim.cmd.redrawstatus({ bang = true })
+end
+
+-- A buffer switch can change the script view with no change of a locate answer, for example a switch
+-- to a buffer that is not a Script.
+local function current_buffer_changed()
+    if M.row(vim.api.nvim_get_current_buf()) ~= last_row then
+        changed()
+    end
 end
 
 -- Only the first call has an effect.
@@ -50,6 +62,10 @@ function M.watch()
     watching = true
     companion.on_state_change(changed)
     locator.on_answer_change(changed)
+    vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "FileType" }, {
+        group = vim.api.nvim_create_augroup("fshttp.status_line", { clear = true }),
+        callback = current_buffer_changed,
+    })
 end
 
 return M

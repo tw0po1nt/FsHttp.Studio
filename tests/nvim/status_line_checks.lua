@@ -28,7 +28,7 @@ local stopped_row = row("companion stopped")
 
 local T = MiniTest.new_set()
 
-T["clean scripts report one, many, and zero requests"] = function()
+T["clean scripts give the rows for one, many, and zero Blocks"] = function()
     local child = harness.harness_setup_child()
 
     harness.edit(child, one_fixture)
@@ -49,7 +49,7 @@ T["an .fs module gives not an .fsx script"] = function()
     harness.expect_status(child, "not an .fsx script on an .fs module", row("not an .fsx script"))
 end
 
-T["syntax-error scripts report total loss and partial loss"] = function()
+T["Parse failure scripts give the total loss and partial loss rows"] = function()
     local child = harness.harness_setup_child()
 
     harness.edit(child, above_fixture)
@@ -174,10 +174,20 @@ T["each change of the companion state or the script view fires the User autocmd"
 
     vim.uv.kill(companions[1], "sigkill")
 
+    local stopped_rows = ready_rows .. "\n" .. stopped_row
     harness.eventually_equal(
         harness.status_line_text_deadline_ms,
         "the stopped row after the companion death",
-        ready_rows .. "\n" .. stopped_row,
+        stopped_rows,
+        rows
+    )
+
+    harness.edit(child, other_fixture)
+
+    harness.eventually_equal(
+        harness.status_line_text_deadline_ms,
+        "nil after the switch to a buffer that is not F#",
+        stopped_rows .. "\n" .. hidden,
         rows
     )
 end

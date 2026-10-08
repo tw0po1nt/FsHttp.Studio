@@ -257,6 +257,8 @@ function M.runtime_error(message)
     return view
 end
 
+-- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/276): remove the trailing spaces, and add the
+-- Compile error winbar and the <CR> jump.
 -- The text of the Compile error of the VSCode Response viewer.
 ---@param diagnostics { message: string, range: { start_line: integer, start_col: integer } }[]
 ---@return fshttp.ResponseView
