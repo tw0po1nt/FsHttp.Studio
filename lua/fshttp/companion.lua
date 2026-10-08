@@ -5,12 +5,8 @@ local sdk = require("fshttp.sdk")
 
 local M = {}
 
----@alias fshttp.CompanionState "starting" | "ready" | "sdk_not_found" | "stopped"
-
 ---@type vim.SystemObj?
 local process
----@type fshttp.CompanionState?
-local state
 local sequence_ran = false
 
 local list_sdks_timeout_ms = 10000
@@ -38,35 +34,22 @@ end
 ---@param floor integer
 ---@param dotnet_path string?
 local function report_no_sdk(floor, dotnet_path)
-    state = "sdk_not_found"
     notify(sdk.not_found_notice(floor, dotnet_path), vim.log.levels.WARN)
 end
 
 ---@param dotnet string
 ---@param companion_dll string
 local function spawn(dotnet, companion_dll)
-    local parser = frame.parser()
     local ok, started = pcall(vim.system, { dotnet, companion_dll }, {
         stdin = true,
-        stdout = function(_, chunk)
-            if not chunk then
-                return
-            end
-            for _, payload in ipairs(parser:push(chunk)) do
-                local decoded = envelope.decode(payload)
-                if decoded and decoded.tag == "ready" then
-                    state = "ready"
-                end
-            end
-        end,
+        -- A full stdout pipe blocks the companion, so the client reads stdout and ignores it.
+        stdout = function() end,
         -- The companion writes its own log to stderr. The client shows no part of it.
         stderr = function() end,
     }, function()
-        state = "stopped"
         process = nil
     end)
     if not ok then
-        state = "stopped"
         return
     end
     process = started
@@ -93,7 +76,6 @@ function M.start(config)
         callback = M.stop,
     })
 
-    state = "starting"
     local floor = sdk.floor(read_file(vim.fs.joinpath(folder, "Companion.runtimeconfig.json")))
     local dotnet = sdk.dotnet_command(config.dotnet_path)
     local companion_dll = vim.fs.joinpath(folder, "Companion.dll")
@@ -124,11 +106,6 @@ function M.stop()
         process:kill("sigterm")
         process = nil
     end
-end
-
----@return fshttp.CompanionState?
-function M.state()
-    return state
 end
 
 return M
