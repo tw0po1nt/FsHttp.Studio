@@ -380,4 +380,107 @@ T["a missing .NET SDK gives the SDK WARN notice again and no Run"] = function()
     end)
 end
 
+-- Installs a vim.ui.select stub in the child. It records the items it is given and picks the item
+-- at _G.fshttp_suite_pick_index (default the first). A Check reads _G.fshttp_suite_select.items.
+local function install_select_stub(child)
+    harness.lua_get(
+        child,
+        [[(function()
+            _G.fshttp_suite_real_select = vim.ui.select
+            _G.fshttp_suite_select = { items = nil }
+            _G.fshttp_suite_pick_index = 1
+            vim.ui.select = function(items, opts, callback)
+                _G.fshttp_suite_select = { items = items, opts = opts }
+                local idx = _G.fshttp_suite_pick_index
+                if idx < 1 or idx > #items then return end
+                callback(items[idx], idx)
+            end
+        end)()]]
+    )
+end
+
+local function restore_select(child)
+    harness.lua_get(child, "(function() vim.ui.select = _G.fshttp_suite_real_select end)()")
+end
+
+---@param child nvim_suite.Child
+---@return string[]? items the items that vim.ui.select was given, nil when it was not called
+local function select_items(child)
+    local select = harness.lua_get(child, "_G.fshttp_suite_select")
+    return select and select.items or nil
+end
+
+T["the picker lists each located Block in source order, and a pick starts a Run"] = function()
+    local child = harness.harness_setup_child()
+    widen_screen(child)
+    local fixture = harness.fixture("core-path.fsx")
+    open_script(child, fixture, { 26, 28 })
+    install_select_stub(child)
+
+    -- The cursor is outside every Block, so the picker opens.
+    harness.run_at(child, 1)
+
+    harness.eventually(harness.notice_deadline_ms, "the picker to open", function()
+        return select_items(child) ~= nil
+    end)
+    local json_line = 'http { GET $"' .. "{baseUrl}" .. '/json" }'
+    local status_line = 'http { GET $"' .. "{baseUrl}" .. '/status" }'
+    assert.same({
+        "▶ 26: " .. json_line,
+        "▶ 28: " .. status_line,
+    }, select_items(child))
+
+    -- The stub picked the first Block, so its Run starts and fills the Response buffer.
+    eventually_response(child, "the probe body after the picker pick", function(snapshot)
+        return only_window(snapshot) ~= nil and has_line(snapshot.lines, harness.json_probe_body)
+    end)
+    restore_select(child)
+end
+
+T["a pick on a refused Block shows its refusal, and no Run starts"] = function()
+    local child = harness.harness_setup_child()
+    harness.close_response_windows(child)
+    open_script(child, harness.ui_fixture("loop-lens.fsx"), { 10 })
+    install_select_stub(child)
+
+    local count = #harness.notices(child)
+
+    -- The cursor is outside the one Block, so the picker opens with it.
+    harness.run_at(child, 1)
+
+    harness.eventually(harness.notice_deadline_ms, "the picker to open", function()
+        return select_items(child) ~= nil
+    end)
+    assert.same({ '⊘ 10: http { GET "http://127.0.0.1:9/" }' }, select_items(child))
+
+    -- Picking the refused Block shows its refusal and starts no Run.
+    expect_notice(child, count, vim.log.levels.WARN, refusals.codes.loopBody.detail)
+    harness.holds_for_settle("no Response buffer window", function()
+        return #harness.response_buffer(child).windows == 0
+    end)
+    restore_select(child)
+end
+
+T["a Run that starts while the companion starts runs when it is ready"] = function()
+    local opts = { companion_path = harness.companion_path(), dotnet_path = harness.slow_dotnet(2) }
+    local child = harness.start_child(opts)
+    local fixture = harness.fixture("core-path.fsx")
+    harness.edit(child, fixture)
+
+    -- Run while the companion is still starting. The slow dotnet keeps it in that state.
+    harness.run_at(child, 26)
+
+    expect_notice(
+        child,
+        0,
+        vim.log.levels.INFO,
+        "The FsHttp.Studio companion is starting. This Run starts when it is ready."
+    )
+
+    -- When the companion becomes ready, the recorded Run starts and fills the Response buffer.
+    eventually_response(child, "the probe body after the wait", function(snapshot)
+        return only_window(snapshot) ~= nil and has_line(snapshot.lines, harness.json_probe_body)
+    end)
+end
+
 return T

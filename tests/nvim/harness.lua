@@ -256,6 +256,21 @@ function M.start_child(opts, client_version, with_lualine)
     return child
 end
 
+-- A dotnet wrapper that sleeps before it execs the real dotnet, so the companion stays in the
+-- starting state long enough for a Check to drive :FsHttp run while it starts.
+---@param delay_s integer
+---@return string path to an executable wrapper script
+function M.slow_dotnet(delay_s)
+    local real = vim.fn.exepath("dotnet")
+    assert(real ~= "", "dotnet is not on PATH in the runner")
+    local path = vim.fn.tempname() .. "-slow-dotnet"
+    local file = assert(io.open(path, "w"))
+    file:write(string.format('#!/bin/sh\nsleep %d\nexec %s "$@"\n', delay_s, real))
+    file:close()
+    vim.uv.fs_chmod(path, 493)
+    return path
+end
+
 ---@param child nvim_suite.Child
 ---@param expression string
 ---@param args? any[]
