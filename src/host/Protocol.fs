@@ -73,6 +73,17 @@ type BlockRange =
         Refusal: string option
     }
 
+/// The cursor rule that both Clients hold. `cursorLine` uses FCS numbering, as `BlockRange` does.
+/// The result is the `blockIndex` of the run envelope, or `None` when the cursor is outside every
+/// Block. Of the Blocks that hold the line, the Block with the latest start is the target.
+let blockAtCursor (cursorLine: int) (ranges: BlockRange list) : int option =
+    let holds (r: BlockRange) =
+        r.StartLine <= cursorLine && cursorLine <= r.EndLine
+
+    match ranges |> List.indexed |> List.filter (snd >> holds) with
+    | [] -> None
+    | holding -> holding |> List.maxBy (fun (_, r) -> r.StartLine, r.StartCol) |> fst |> Some
+
 type Diagnostic = { Message: string; Range: BlockRange }
 
 /// Blank must not mean "no body", "captured bytes", and "we chose not to read it" at once.

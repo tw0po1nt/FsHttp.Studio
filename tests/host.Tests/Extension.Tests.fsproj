@@ -12,6 +12,7 @@
     <Compile Include="RefusalsTests.fs" />
     <Compile Include="../GoldenFixture.fs" Link="GoldenFixture.fs" />
     <Compile Include="EnvelopeGoldenTests.fs" />
+    <Compile Include="CursorRuleGoldenTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
