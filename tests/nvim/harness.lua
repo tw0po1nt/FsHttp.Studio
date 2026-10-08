@@ -5,7 +5,7 @@ local MiniTest = require("mini.test")
 local M = {}
 
 -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/283): set the Budgets from measured runs on each operating system.
-M.setup_budget_ms = 60000
+M.harness_setup_budget_ms = 60000
 M.check_budget_ms = 30000
 M.suite_budget_ms = 120000
 
@@ -42,7 +42,7 @@ local function now()
 end
 
 ---@param cause string
-local function fail_setup(cause)
+local function fail_harness_setup(cause)
     error("Harness setup failed: " .. cause, 0)
 end
 
@@ -52,7 +52,9 @@ end
 local function required_env(name, purpose)
     local value = vim.env[name]
     if value == nil or value == "" then
-        fail_setup(string.format("%s is not set, so the Harness cannot find %s. Run tests/nvim/run.sh.", name, purpose))
+        fail_harness_setup(
+            string.format("%s is not set, so the Harness cannot find %s. Run tests/nvim/run.sh.", name, purpose)
+        )
     end
     ---@cast value string
     return value
@@ -162,10 +164,19 @@ end
 ---@field pid integer
 ---@field stopped boolean
 
+---@class nvim_suite.Notice
+---@field message string
+---@field level integer
+
+---@class nvim_suite.BudgetRow
+---@field name string
+---@field elapsed_ms number
+---@field budget_ms number
+
 ---@type nvim_suite.Child[]
 local children = {}
 ---@type nvim_suite.Child?
-local setup_child
+local harness_setup_child
 
 -- Runs `fn` with a watchdog. When the child gives no answer in time, the watchdog kills the child
 -- process. The blocked request then returns an error, and the runner continues to the next Check.
@@ -212,15 +223,6 @@ function M.start_child(opts)
 end
 
 ---@param child nvim_suite.Child
----@param code string
----@param args? any[]
-function M.lua(child, code, args)
-    return guarded(child, "a Lua request", function()
-        return child.mini.lua(code, args)
-    end)
-end
-
----@param child nvim_suite.Child
 ---@param expression string
 ---@param args? any[]
 function M.lua_get(child, expression, args)
@@ -245,7 +247,7 @@ end
 
 -- Each notice that the client gave in the child, as { message, level }.
 ---@param child nvim_suite.Child
----@return { message: string, level: integer }[]
+---@return nvim_suite.Notice[]
 function M.notices(child)
     return M.lua_get(child, "_G.fshttp_suite_notices")
 end
@@ -294,15 +296,15 @@ end
 
 local proven_live = nothing_proven()
 ---@type integer[]
-local setup_companions = {}
+local harness_setup_companions = {}
 ---@type vim.SystemObj?
 local server
-local setup_elapsed_ms = 0
+local harness_setup_elapsed_ms = 0
 ---@type number?
 local suite_start_ms
 ---@type number?
 local check_start_ms
----@type { name: string, elapsed_ms: number, budget_ms: number }[]
+---@type nvim_suite.BudgetRow[]
 local check_rows = {}
 local timing_table_emitted = false
 
@@ -328,25 +330,25 @@ end
 
 -- The child Neovim that Harness setup started. It holds the fixture and the companion.
 ---@return nvim_suite.Child
-function M.setup_child()
-    return assert(setup_child, "Harness setup started no child Neovim")
+function M.harness_setup_child()
+    return assert(harness_setup_child, "Harness setup started no child Neovim")
 end
 
 -- The companion pids that the child Neovim of Harness setup started.
 ---@return integer[]
-function M.setup_companion_pids()
-    return vim.deepcopy(setup_companions)
+function M.harness_setup_companion_pids()
+    return vim.deepcopy(harness_setup_companions)
 end
 
 ---@return string base_url, string dead_url
 local function read_sidecar()
     local text = read_file(sidecar_path)
     if not text then
-        fail_setup("the Sidecar is missing at " .. sidecar_path)
+        fail_harness_setup("the Sidecar is missing at " .. sidecar_path)
     end
     local ok, sidecar = pcall(vim.json.decode, text)
     if not ok or type(sidecar) ~= "table" or type(sidecar.baseUrl) ~= "string" or type(sidecar.deadUrl) ~= "string" then
-        fail_setup(string.format("the Sidecar at %s does not parse: %s", sidecar_path, text))
+        fail_harness_setup(string.format("the Sidecar at %s does not parse: %s", sidecar_path, text))
     end
     return sidecar.baseUrl, sidecar.deadUrl
 end
@@ -356,12 +358,12 @@ local function start_server()
     os.remove(sidecar_path)
     local ok, started = pcall(vim.system, { server_bin }, { cwd = suite_dir, stdout = false, stderr = false })
     if not ok then
-        fail_setup(string.format("the test HTTP server at %s did not start: %s", server_bin, started))
+        fail_harness_setup(string.format("the test HTTP server at %s did not start: %s", server_bin, started))
     end
     server = started
     M.eventually(M.sidecar_deadline_ms, "the test HTTP server to write the Sidecar", function()
         if started:is_closing() then
-            fail_setup("the test HTTP server stopped before it wrote the Sidecar")
+            fail_harness_setup("the test HTTP server stopped before it wrote the Sidecar")
         end
         local text = read_file(sidecar_path)
         return text ~= nil and pcall(vim.json.decode, text)
@@ -371,13 +373,15 @@ local function start_server()
     local health = run({ "curl", "-sS", "-m", "10", base_url .. "/json" })
     local body = health and health.stdout or ""
     if body ~= M.json_probe_body then
-        fail_setup(
+        fail_harness_setup(
             string.format("the healthcheck at %s/json got %q, and expected %s", base_url, body, M.json_probe_body)
         )
     end
     local probe = run({ "curl", "-sS", "-m", "10", dead_url })
     if not probe or probe.code ~= curl_could_not_connect then
-        fail_setup(string.format("the Dead port at %s accepted a connection, so the Sidecar can be stale", dead_url))
+        fail_harness_setup(
+            string.format("the Dead port at %s accepted a connection, so the Sidecar can be stale", dead_url)
+        )
     end
 end
 
@@ -390,7 +394,7 @@ local function stop_server()
 end
 
 ---@param caption string
----@param rows { name: string, elapsed_ms: number, budget_ms: number }[]
+---@param rows nvim_suite.BudgetRow[]
 local function emit_timing_table(caption, rows)
     local lines = { "#### " .. caption, "", "| Phase | Elapsed | Budget |", "| --- | ---: | ---: |" }
     for _, row in ipairs(rows) do
@@ -409,7 +413,7 @@ local function emit_timing_table(caption, rows)
     timing_table_emitted = true
 end
 
----@param row { name: string, elapsed_ms: number, budget_ms: number }
+---@param row nvim_suite.BudgetRow
 local function assert_budget(row)
     if row.elapsed_ms > row.budget_ms then
         error(
@@ -424,8 +428,8 @@ local function assert_budget(row)
     end
 end
 
-local function setup_row()
-    return { name = "Harness setup", elapsed_ms = setup_elapsed_ms, budget_ms = M.setup_budget_ms }
+local function harness_setup_row()
+    return { name = "Harness setup", elapsed_ms = harness_setup_elapsed_ms, budget_ms = M.harness_setup_budget_ms }
 end
 
 local function suite_row()
@@ -433,7 +437,7 @@ local function suite_row()
     return { name = "Suite", elapsed_ms = elapsed, budget_ms = M.suite_budget_ms }
 end
 
-local function run_setup()
+local function run_harness_setup()
     local start = now()
     proven_live = nothing_proven()
     local known_companions = M.companion_pids()
@@ -443,9 +447,9 @@ local function run_setup()
         proven_live.server_live = true
 
         local child = M.start_child({ companion_path = M.companion_path() })
-        setup_child = child
+        harness_setup_child = child
         if M.lua_get(child, "1 + 1") ~= 2 then
-            fail_setup("the child Neovim gave a wrong answer over RPC")
+            fail_harness_setup("the child Neovim gave a wrong answer over RPC")
         end
         proven_live.child_answers = true
 
@@ -461,27 +465,27 @@ local function run_setup()
             end)()]]
         )
         if not loaded then
-            fail_setup("lazy.nvim did not load the client in the child Neovim")
+            fail_harness_setup("lazy.nvim did not load the client in the child Neovim")
         end
         proven_live.client_loaded = true
 
-        local fixture = M.fixture("setup.fsx")
+        local fixture = M.fixture("harness-setup.fsx")
         M.edit(child, fixture)
         local open = M.lua_get(child, "{ vim.api.nvim_buf_get_name(0), vim.bo.filetype }")
         if open[1] ~= fixture or open[2] ~= "fsharp" then
-            fail_setup(string.format("the fixture did not open as F#: the buffer is %s (%s)", open[1], open[2]))
+            fail_harness_setup(string.format("the fixture did not open as F#: the buffer is %s (%s)", open[1], open[2]))
         end
         proven_live.fixture_open = true
 
         M.eventually(M.companion_exists_deadline_ms, "a companion process to exist", function()
             return #M.new_companion_pids(known_companions) > 0
         end)
-        setup_companions = M.new_companion_pids(known_companions)
+        harness_setup_companions = M.new_companion_pids(known_companions)
         proven_live.companion_exists = true
     end)
 
-    setup_elapsed_ms = now() - start
-    emit_timing_table("Harness setup", { setup_row() })
+    harness_setup_elapsed_ms = now() - start
+    emit_timing_table("Harness setup", { harness_setup_row() })
     if not ok then
         error(err, 0)
     end
@@ -497,7 +501,7 @@ local function current_check_name()
 end
 
 M.hooks = {
-    pre_once = run_setup,
+    pre_once = run_harness_setup,
     pre_case = function()
         suite_start_ms = suite_start_ms or now()
         check_start_ms = now()
@@ -509,11 +513,11 @@ M.hooks = {
         local elapsed = check_start_ms and (now() - check_start_ms) or 0
         check_start_ms = nil
         for _, child in ipairs(children) do
-            if child ~= setup_child then
+            if child ~= harness_setup_child then
                 M.stop_child(child)
             end
         end
-        kill_companions(setup_companions)
+        kill_companions(harness_setup_companions)
         local row = { name = current_check_name(), elapsed_ms = elapsed, budget_ms = M.check_budget_ms }
         check_rows[#check_rows + 1] = row
         assert_budget(row)
@@ -525,11 +529,11 @@ M.hooks = {
         kill_companions({})
         stop_server()
 
-        local rows = { setup_row() }
+        local rows = { harness_setup_row() }
         vim.list_extend(rows, check_rows)
         rows[#rows + 1] = suite_row()
         emit_timing_table("Neovim suite timings", rows)
-        assert_budget(setup_row())
+        assert_budget(harness_setup_row())
         assert_budget(suite_row())
     end,
 }

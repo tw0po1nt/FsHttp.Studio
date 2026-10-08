@@ -19,8 +19,8 @@ local function companion_floor()
 end
 
 T["a second Script buffer starts no second companion"] = function()
-    local child = harness.setup_child()
-    local expected = pid_list(harness.setup_companion_pids())
+    local child = harness.harness_setup_child()
+    local expected = pid_list(harness.harness_setup_companion_pids())
 
     harness.edit(child, harness.fixture("second.fsx"))
     assert.equal(harness.fixture("second.fsx"), harness.lua_get(child, "vim.api.nvim_buf_get_name(0)"))
@@ -33,7 +33,7 @@ end
 T["VimLeavePre stops the companion"] = function()
     local known = harness.companion_pids()
     local child = harness.start_child({ companion_path = harness.companion_path() })
-    harness.edit(child, harness.fixture("setup.fsx"))
+    harness.edit(child, harness.fixture("harness-setup.fsx"))
     harness.eventually(harness.companion_exists_deadline_ms, "the companion of the new child Neovim", function()
         return #harness.new_companion_pids(known) == 1
     end)
@@ -51,9 +51,9 @@ T["a dotnet_path that names a missing file gives the WARN notice, and no compani
     local known = harness.companion_pids()
     local missing = harness.fixture("missing/dotnet")
     local child = harness.start_child({ companion_path = harness.companion_path(), dotnet_path = missing })
-    harness.edit(child, harness.fixture("setup.fsx"))
+    harness.edit(child, harness.fixture("harness-setup.fsx"))
 
-    ---@type { message: string, level: integer }?
+    ---@type nvim_suite.Notice?
     local warning
     harness.eventually(harness.notice_deadline_ms, "a WARN notice", function()
         for _, notice in ipairs(harness.notices(child)) do
@@ -64,7 +64,7 @@ T["a dotnet_path that names a missing file gives the WARN notice, and no compani
         end
         return false
     end)
-    ---@cast warning { message: string, level: integer }
+    ---@cast warning nvim_suite.Notice
 
     local floor = companion_floor()
     assert.equal(true, warning.message:find(string.format(".NET %d SDK", floor), 1, true) ~= nil, warning.message)
