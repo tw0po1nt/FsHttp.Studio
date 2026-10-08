@@ -67,7 +67,6 @@ local function view_for(outcome, decode_error, total_ms)
             require("fshttp.image_placement").unsupported_reason
         )
     elseif outcome.tag == "compileError" then
-        -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/276): move to a Compile error position with <CR>.
         return response_view.compile_error(outcome.diagnostics)
     elseif outcome.tag == "runtimeError" then
         return response_view.runtime_error(outcome.message)
@@ -85,6 +84,7 @@ end
 local function start_run(buf, source, block_index)
     generation = generation + 1
     local this_run = generation
+    require("fshttp.jump").remember(buf)
     response_buffer.show_running()
     local options = require("fshttp").config()
     local run_envelope =

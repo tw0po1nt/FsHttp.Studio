@@ -63,6 +63,11 @@ local M = {}
 ---@field highlights fshttp.Highlight[]
 ---@field hints { line: integer, text: string }[] a virtual line below each 1-based line
 ---@field image fshttp.ImageBody? set when the client can show the image body
+---@field positions table<integer, fshttp.ScriptPosition>? the position of each `(line,col)` line, by 1-based line
+
+---@class fshttp.ScriptPosition
+---@field line integer 1-based
+---@field col integer 0-based
 
 local open_glyph = "▾"
 local closed_glyph = "▸"
@@ -377,17 +382,24 @@ function M.runtime_error(message)
     return view
 end
 
--- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/276): remove the trailing spaces, and add the
--- Compile error winbar and the <CR> jump.
--- The text of the Compile error of the VSCode Response viewer.
+-- The text of the Compile error of the VSCode Response viewer, with no trailing spaces. The view
+-- maps each `(line,col)` line to its position in the script.
 ---@param diagnostics { message: string, range: { start_line: integer, start_col: integer } }[]
 ---@return fshttp.ResponseView
 function M.compile_error(diagnostics)
     local view = new_view()
+    view.winbar = statusline({
+        { "Compile error", "FsHttpResponseError" },
+        { "  <CR> on a (line,col) moves to it in the script", "FsHttpResponseDetail" },
+    })
     add(view, { { "Compile error:", "FsHttpResponseError" } })
+    view.positions = {}
     for _, diagnostic in ipairs(diagnostics) do
         local position = string.format("(%d,%d)", diagnostic.range.start_line, diagnostic.range.start_col + 1)
-        add_text(view, position .. " " .. diagnostic.message)
+        view.positions[#view.lines + 1] = { line = diagnostic.range.start_line, col = diagnostic.range.start_col }
+        for _, line in ipairs(M.split_lines(position .. " " .. diagnostic.message)) do
+            add(view, { { (line:gsub(" +$", "")) } })
+        end
     end
     return view
 end

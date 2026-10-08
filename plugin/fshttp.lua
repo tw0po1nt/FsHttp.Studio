@@ -23,6 +23,10 @@ for name, plug in pairs({ request = "Request", headers = "Headers", body = "Body
     end, { desc = "FsHttp.Studio: yank the " .. name })
 end
 
+vim.keymap.set("n", "<Plug>(FsHttpJump)", function()
+    require("fshttp.jump").jump()
+end, { desc = "FsHttp.Studio: move to a Compile error position in the script" })
+
 vim.keymap.set("n", "<Plug>(FsHttpHelp)", function()
     require("fshttp.response_keys").help()
 end, { desc = "FsHttp.Studio: list the keys of the Response buffer" })

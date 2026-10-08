@@ -194,6 +194,13 @@ function M.show(view)
     paint(view)
 end
 
+-- The script position of a line of a Compile error.
+---@param lnum integer
+---@return fshttp.ScriptPosition?
+function M.position_at(lnum)
+    return current_view and current_view.positions and current_view.positions[lnum]
+end
+
 ---@param lnum integer
 ---@return string
 function M.fold_level(lnum)
