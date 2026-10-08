@@ -3,7 +3,8 @@
 # and then the Neovim suite of .github/workflows/nvim-tests.yml. Thus a green
 # local run predicts a green CI run. The last line is
 # `verify: green` or `verify: red`, and the feedback skills read that line.
-# Change this script and ci.yml together.
+# When you change a step in ci.yml or nvim-tests.yml, make the same change in
+# this script.
 set -uo pipefail
 
 cd "$(git rev-parse --show-toplevel)"

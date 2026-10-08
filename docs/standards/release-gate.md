@@ -107,12 +107,19 @@ ships uncaught.
 `out/nvim-tests/companion`. No Check downloads or verifies a Companion archive.
 
 **The Budgets come from local runs.** The values are 60 s for Harness setup, 30 s for each Check,
-and 120 s for the suite. No measured run on each operating system set them.
+and 120 s for the suite. No measured run on each operating system set them. The suite Budget
+starts at the first Check, so it leaves out Harness setup, as in the UI suite.
+
+**The suites test lazy.nvim only.** The `vim.pack` route gets no Check.
+
+**A Beta runs the Lua core suite only.** A Beta does not run the Neovim suite.
 
 ### What the Neovim suite covers today
 
 - The Harness: a child Neovim that loads the client through lazy.nvim, the test HTTP server with
-  its Sidecar, Proven-live setup, Budgets, and the setup self-check.
+  its Sidecar, Harness setup to Proven-live, Budgets, and the Proven-live self-check.
+- The Harness watchdog: a hung child Neovim stops, a new child Neovim answers, and the next Check
+  finds no frozen companion.
 - The start sequence: a second Script starts no second companion. `VimLeavePre` stops the
   companion. A `dotnet_path` that names a missing file gives the WARN notice, and no companion
   starts.

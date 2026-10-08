@@ -50,14 +50,14 @@ build fails on errors that a Fable-only loop never shows.
 | `./tests/nvim/run.sh` | The Neovim suite passes. The script publishes the test HTTP server and the companion, and then drives a child Neovim against them. `NVIM_TEST_SKIP_BUILD=1` uses the builds that are already in `out/`. |
 | `./tests/ui.Tests/run.sh` | The UI suite, which is the release gate. See `docs/standards/release-gate.md`. |
 
-`./scripts/verify.sh` runs the CI steps in the order that `.github/workflows/ci.yml` runs them:
-the banned-patterns check, then each command above except `npm run compile`, the Neovim suite,
-and the UI suite. Then it runs the Neovim suite.
+`./scripts/verify.sh` first runs the steps of `.github/workflows/ci.yml` in the same order: the
+banned-patterns check, then each command above except `npm run compile`, the Neovim suite, and the
+UI suite. Then it runs the Neovim suite, as `nvim-tests.yml` does.
 Its last line is `verify: green` or `verify: red`, and the feedback skills use it as the gate.
 The script leaves out `npm run compile`, because `npm run package` runs it. The script leaves out
 the UI suite, because `ci.yml` leaves it out. `ui-tests.yml` runs the UI suite separately.
-`nvim-tests.yml` runs the Neovim suite, and the script runs it too, because it needs only Neovim
-and the .NET SDK. When you change a step in `ci.yml`, make the same change in the script.
+The script runs the Neovim suite because that suite needs only Neovim and the .NET SDK.
+When you change a step in `ci.yml` or `nvim-tests.yml`, make the same change in the script.
 
 `package.json` holds the individual `build:*` scripts that `compile` composes. Use one of those
 scripts only when you rebuild a single side.
