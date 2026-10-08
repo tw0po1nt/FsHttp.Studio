@@ -19,7 +19,9 @@ mini.test and luassert into `.tests/` on each run. On Linux, install the readlin
 (`libreadline-dev` on Debian and Ubuntu). hererocks builds Lua 5.1 for luassert, and that build
 stops without them.
 
-The Neovim suite needs the same Neovim and network access, the .NET SDK, `curl`, and `pgrep`.
+The Neovim suite needs the same Neovim and network access, the .NET SDK, `curl`, `pgrep`, and a C
+compiler on `PATH` as `cc`. `tests/nvim/run.sh` builds the tree-sitter JSON parser with `cc`. To use
+a JSON parser that is already built, set `NVIM_TEST_JSON_PARSER` to the path of its library.
 `tests/nvim/neovim-pin.json` holds the Neovim versions that CI installs: `floor` for the Lua type
 check, and `stable` for the two Neovim suites.
 

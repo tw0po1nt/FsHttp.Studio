@@ -7,7 +7,7 @@ local M = {}
 -- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/283): set the Budgets from measured runs on each operating system.
 M.harness_setup_budget_ms = 60000
 M.check_budget_ms = 30000
-M.suite_budget_ms = 120000
+M.suite_budget_ms = 180000
 
 M.sidecar_deadline_ms = 30000
 M.companion_exists_deadline_ms = 30000
@@ -27,6 +27,8 @@ M.poll_interval_ms = 100
 
 -- Cross-process contract for `GET /json`. It must match `UiTestServer.Server.jsonProbeBody`.
 M.json_probe_body = '{"probe":"ui-test-server"}'
+-- The child Neovim has no JSON parser, so the Body shows the probe body pretty-printed. This is one line of it.
+M.json_probe_body_line = '  "probe": "ui-test-server"'
 
 local root = vim.uv.cwd()
 local suite_dir = root .. "/tests/nvim"
@@ -254,6 +256,33 @@ function M.start_child(opts, client_version, with_lualine)
     local child = { mini = mini, job_id = mini.job.id, pid = vim.fn.jobpid(mini.job.id), stopped = false }
     children[#children + 1] = child
     return child
+end
+
+-- A dotnet wrapper that sleeps one time, so the companion stays in the starting state long enough
+-- for a Check to drive :FsHttp run while it starts. After the sleep, the companion goes to
+-- `end_state`: "ready" runs the real companion, "stopped" makes the companion exit, and
+-- "sdkNotFound" makes `--list-sdks` list no SDK.
+---@param delay_s integer
+---@param end_state? "ready"|"stopped"|"sdkNotFound" default "ready"
+---@return string path to an executable wrapper script
+function M.slow_dotnet(delay_s, end_state)
+    local real = vim.fn.exepath("dotnet")
+    assert(real ~= "", "dotnet is not on PATH in the runner")
+    local real_command = string.format('exec %s "$@"', real)
+    local sleep = string.format("sleep %d", delay_s)
+    -- Each end state gives the shell lines for `--list-sdks`, then the shell lines for the companion.
+    local scripts = {
+        ready = { real_command, sleep .. "\n" .. real_command },
+        stopped = { real_command, sleep .. "\nexit 1" },
+        sdkNotFound = { sleep .. "\nexit 0", real_command },
+    }
+    local script = assert(scripts[end_state or "ready"], "no wrapper for the end state " .. tostring(end_state))
+    local path = vim.fn.tempname() .. "-slow-dotnet"
+    local file = assert(io.open(path, "w"))
+    file:write(string.format('#!/bin/sh\nif [ "$1" = "--list-sdks" ]; then\n%s\nfi\n%s\n', script[1], script[2]))
+    file:close()
+    vim.uv.fs_chmod(path, 493)
+    return path
 end
 
 ---@param child nvim_suite.Child

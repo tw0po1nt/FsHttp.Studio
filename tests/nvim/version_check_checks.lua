@@ -61,7 +61,7 @@ T["a companion of a different version gives one WARN notice, the companion stays
     harness.run_at(child, 26)
 
     harness.eventually(harness.response_deadline_ms, "a successful Run in the Response buffer", function()
-        return vim.tbl_contains(harness.response_buffer(child).lines or {}, harness.json_probe_body)
+        return vim.tbl_contains(harness.response_buffer(child).lines or {}, harness.json_probe_body_line)
     end)
 end
 

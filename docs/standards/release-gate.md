@@ -106,9 +106,11 @@ ships uncaught.
 **The suite gets the companion from `companion_path`.** The suite publishes the companion into
 `out/nvim-tests/companion`. No Check downloads or verifies a Companion archive.
 
-**The Budgets come from local runs.** The values are 60 s for Harness setup, 30 s for each Check,
-and 120 s for the suite. No measured run on each operating system set them. The suite Budget
-starts at the first Check, so it leaves out Harness setup, as in the UI suite.
+**The Budgets come from local runs and one Linux CI run.** The values are 60 s for Harness setup,
+30 s for each Check, and 180 s for the suite. The suite took 128.7 s on the Linux leg of CI, and
+the suite Budget adds a margin for the Checks that the open Neovim client issues add. No measured
+run on macOS or Windows set the Budgets. The suite Budget starts at the first Check, so it leaves
+out Harness setup, as in the UI suite.
 
 **The suites test lazy.nvim only.** The `vim.pack` route gets no Check.
 

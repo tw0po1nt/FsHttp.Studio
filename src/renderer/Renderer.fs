@@ -101,7 +101,7 @@ let private toBase64 (bytes: byte[]) : string = Convert.ToBase64String bytes
 /// A body "looks binary" when it carries a NUL byte, or a large fraction of non-text control
 /// bytes. That is the signal that a decode as text gives noise, so the hex fallback wins. This
 /// check excludes tab, newline, and carriage return, so ordinary text never reads as binary.
-let private looksBinary (bytes: byte[]) : bool =
+let looksBinary (bytes: byte[]) : bool =
     if bytes.Length = 0 then
         false
     else
@@ -126,7 +126,7 @@ let private renderHtml (bytes: byte[]) : Node =
 let private renderText (bytes: byte[]) : Node =
     el "pre" [ "class", "response-text" ] [ Node.Text(decodeText bytes) ]
 
-let private hexDump (bytes: byte[]) : string =
+let hexDump (bytes: byte[]) : string =
     let maxBytes = min bytes.Length 256
     let lines = ResizeArray<string>()
     let mutable offset = 0

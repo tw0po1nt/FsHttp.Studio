@@ -215,3 +215,73 @@ let tryParse (text: string) : JsonValue option =
         if cursor.Pos = text.Length then Some value else None
     with _ ->
         None
+
+let private rawToken (c: Cursor) (read: Cursor -> unit) : string =
+    let start = c.Pos
+    read c
+    c.Text.Substring(start, c.Pos - start)
+
+let private rawString (c: Cursor) : string = rawToken c (parseString >> ignore)
+
+let rec private prettyValue (c: Cursor) (indent: string) : string =
+    skipWhitespace c
+
+    match peek c with
+    | None -> fail c "unexpected end of input"
+    | Some '{' ->
+        prettyContainer c indent '{' '}' (fun inner ->
+            skipWhitespace c
+            let key = rawString c
+            skipWhitespace c
+            expect c ':'
+            key + ": " + prettyValue c inner)
+    | Some '[' -> prettyContainer c indent '[' ']' (prettyValue c)
+    | Some '"' -> rawString c
+    | Some 't' -> rawToken c (fun c -> literal c "true")
+    | Some 'f' -> rawToken c (fun c -> literal c "false")
+    | Some 'n' -> rawToken c (fun c -> literal c "null")
+    | Some ch when ch = '-' || (ch >= '0' && ch <= '9') -> rawToken c (parseNumber >> ignore)
+    | Some ch -> fail c (sprintf "unexpected character '%c'" ch)
+
+and private prettyContainer (c: Cursor) (indent: string) (opening: char) (closing: char) (entry: string -> string) =
+    expect c opening
+    skipWhitespace c
+
+    if peek c = Some closing then
+        c.Pos <- c.Pos + 1
+        string opening + string closing
+    else
+        let inner = indent + "  "
+        let entries = ResizeArray<string>()
+        let mutable more = true
+
+        while more do
+            entries.Add(inner + entry inner)
+            skipWhitespace c
+
+            match peek c with
+            | Some ',' -> c.Pos <- c.Pos + 1
+            | Some ch when ch = closing ->
+                c.Pos <- c.Pos + 1
+                more <- false
+            | _ -> fail c (sprintf "expected ',' or '%c'" closing)
+
+        string opening
+        + "\n"
+        + String.concat ",\n" entries
+        + "\n"
+        + indent
+        + string closing
+
+/// Copies each token as the text gives it, so each escape, each number, and the key order stay the
+/// same. Only the space between the tokens changes, to a two-space indent. Returns `None` when
+/// `text` is not one JSON value.
+let tryPrettyPrint (text: string) : string option =
+    try
+        let cursor = { Text = text; Pos = 0 }
+        let pretty = prettyValue cursor ""
+        skipWhitespace cursor
+
+        if cursor.Pos = text.Length then Some pretty else None
+    with _ ->
+        None
