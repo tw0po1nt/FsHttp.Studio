@@ -15,7 +15,7 @@ local function companion_path_option()
         end
     end)
     if ok and type(path) == "string" then
-        return path
+        return vim.fs.normalize(path)
     end
     return require("fshttp").config().companion_path
 end
