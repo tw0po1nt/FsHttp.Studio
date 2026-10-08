@@ -13,8 +13,10 @@ function M.setup(opts)
     config = { companion_path = opts.companion_path, dotnet_path = opts.dotnet_path }
 end
 
--- Runs the start sequence of the companion. Only the first call has an effect.
+-- Starts the locates of each Script, and runs the start sequence of the companion. Only the first
+-- call has an effect.
 function M.start()
+    require("fshttp.locator").watch()
     require("fshttp.companion").start(config)
 end
 

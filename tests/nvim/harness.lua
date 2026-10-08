@@ -13,6 +13,7 @@ M.sidecar_deadline_ms = 30000
 M.companion_exists_deadline_ms = 30000
 M.companion_gone_deadline_ms = 15000
 M.notice_deadline_ms = 15000
+M.block_mark_deadline_ms = 15000
 
 -- A child Neovim that gives no answer to one request in this time is hung, and the Harness stops it.
 M.child_answer_deadline_ms = 10000
@@ -28,6 +29,7 @@ M.json_probe_body = '{"probe":"ui-test-server"}'
 local root = vim.uv.cwd()
 local suite_dir = root .. "/tests/nvim"
 local fixtures_dir = suite_dir .. "/fixtures"
+local ui_fixtures_dir = root .. "/tests/ui.Tests/fixtures"
 local sidecar_path = fixtures_dir .. "/sidecar.json"
 local child_init = suite_dir .. "/child_init.lua"
 
@@ -72,6 +74,13 @@ function M.fixture(name)
     return fixtures_dir .. "/" .. name
 end
 
+-- A fixture of the UI suite. A ported Check opens the same Script as the UI suite Check.
+---@param name string
+---@return string
+function M.ui_fixture(name)
+    return ui_fixtures_dir .. "/" .. name
+end
+
 ---@param path string
 ---@return string?
 local function read_file(path)
@@ -106,6 +115,23 @@ function M.eventually(timeout_ms, subject, predicate)
             error(string.format("Timed out after %d ms waiting for %s", timeout_ms, subject), 0)
         end
         vim.wait(M.poll_interval_ms)
+    end
+end
+
+-- Polls `read` until it returns `expected`, or fails with the last observed value when
+-- `timeout_ms` passes.
+---@param timeout_ms integer
+---@param subject string
+---@param expected string
+---@param read fun(): string
+function M.eventually_equal(timeout_ms, subject, expected, read)
+    local observed
+    local ok, err = pcall(M.eventually, timeout_ms, subject, function()
+        observed = read()
+        return observed == expected
+    end)
+    if not ok then
+        error(string.format("%s\nexpected:\n%s\nobserved:\n%s", err, expected, tostring(observed)), 0)
     end
 end
 
@@ -243,6 +269,48 @@ end
 ---@param path string
 function M.edit(child, path)
     M.cmd(child, "edit " .. vim.fn.fnameescape(path))
+end
+
+---@param child nvim_suite.Child
+---@param ... string
+function M.type_keys(child, ...)
+    local keys = { ... }
+    return guarded(child, "the keys " .. table.concat(keys), function()
+        return child.mini.type_keys(unpack(keys))
+    end)
+end
+
+-- The Block marks of the current buffer in the child, one line for each mark in line order:
+-- "<line>: <virtual line> [<sign>]". The text is empty when the buffer has no Block mark.
+---@param child nvim_suite.Child
+---@return string
+function M.block_marks(child)
+    return M.lua_get(
+        child,
+        [[(function()
+            local namespace = vim.api.nvim_get_namespaces()["fshttp.block_mark"]
+            if not namespace then
+                return ""
+            end
+            local lines = {}
+            for _, extmark in ipairs(vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, { details = true })) do
+                local details = extmark[4]
+                if not details.invalid then
+                    local text = {}
+                    for _, chunk in ipairs((details.virt_lines or {})[1] or {}) do
+                        text[#text + 1] = chunk[1]
+                    end
+                    lines[#lines + 1] = string.format(
+                        "%d: %s [%s]",
+                        extmark[2] + 1,
+                        vim.trim(table.concat(text)),
+                        vim.trim(details.sign_text or "")
+                    )
+                end
+            end
+            return table.concat(lines, "\n")
+        end)()]]
+    )
 end
 
 -- Each notice that the client gave in the child, as { message, level }.
