@@ -38,9 +38,7 @@ T["response_buffer.images = false gives the fallback line with the option as the
         response_buffer = { images = false },
     })
     harness.edit(child, image_fixture)
-    harness.eventually(harness.block_mark_deadline_ms, "a Block mark on line " .. image_block_line, function()
-        return harness.block_marks(child):find("^" .. image_block_line .. ": ") ~= nil
-    end)
+    harness.await_block_mark(child, image_block_line)
 
     harness.run_at(child, image_block_line)
 

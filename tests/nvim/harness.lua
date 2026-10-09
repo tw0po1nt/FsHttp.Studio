@@ -322,44 +322,48 @@ function M.slow_dotnet(delay_s, end_state)
         sdkNotFound = { { "sleep", "exit0" }, { "real" } },
     }
     local plan = assert(steps[end_state or "ready"], "no wrapper for the end state " .. tostring(end_state))
-    local path = vim.fn.tempname() .. "-slow-dotnet"
-    local lines
+    -- The shell of each system: the steps, the lines before the `--list-sdks` steps, the line
+    -- between the two step lists, the file extension, and the line ending.
+    local shell
     if is_windows then
         -- ping waits with no console. timeout fails when stdin is not a console.
-        local commands = {
-            sleep = { string.format("ping -n %d 127.0.0.1 >nul", delay_s + 1) },
-            real = { string.format('"%s" %%*', real), "exit /b %errorlevel%" },
-            exit0 = { "exit /b 0" },
-            exit1 = { "exit /b 1" },
+        shell = {
+            commands = {
+                sleep = { string.format("ping -n %d 127.0.0.1 >nul", delay_s + 1) },
+                real = { string.format('"%s" %%*', real), "exit /b %errorlevel%" },
+                exit0 = { "exit /b 0" },
+                exit1 = { "exit /b 1" },
+            },
+            head = { "@echo off", 'if "%1"=="--list-sdks" goto sdks', "goto companion", ":sdks" },
+            middle = ":companion",
+            extension = ".cmd",
+            newline = "\r\n",
         }
-        lines = { "@echo off", 'if "%1"=="--list-sdks" goto sdks', "goto companion", ":sdks" }
-        for _, step in ipairs(plan[1]) do
-            vim.list_extend(lines, commands[step])
-        end
-        lines[#lines + 1] = ":companion"
-        for _, step in ipairs(plan[2]) do
-            vim.list_extend(lines, commands[step])
-        end
-        path = path .. ".cmd"
     else
-        local commands = {
-            sleep = { string.format("sleep %d", delay_s) },
-            real = { string.format('exec %s "$@"', real) },
-            exit0 = { "exit 0" },
-            exit1 = { "exit 1" },
+        shell = {
+            commands = {
+                sleep = { string.format("sleep %d", delay_s) },
+                real = { string.format('exec %s "$@"', real) },
+                exit0 = { "exit 0" },
+                exit1 = { "exit 1" },
+            },
+            head = { "#!/bin/sh", 'if [ "$1" = "--list-sdks" ]; then' },
+            middle = "fi",
+            extension = "",
+            newline = "\n",
         }
-        lines = { "#!/bin/sh", 'if [ "$1" = "--list-sdks" ]; then' }
-        for _, step in ipairs(plan[1]) do
-            vim.list_extend(lines, commands[step])
-        end
-        lines[#lines + 1] = "fi"
-        for _, step in ipairs(plan[2]) do
-            vim.list_extend(lines, commands[step])
-        end
     end
-    local newline = is_windows and "\r\n" or "\n"
+    local lines = vim.list_extend({}, shell.head)
+    for _, step in ipairs(plan[1]) do
+        vim.list_extend(lines, shell.commands[step])
+    end
+    lines[#lines + 1] = shell.middle
+    for _, step in ipairs(plan[2]) do
+        vim.list_extend(lines, shell.commands[step])
+    end
+    local path = vim.fn.tempname() .. "-slow-dotnet" .. shell.extension
     local file = assert(io.open(path, "wb"))
-    file:write(table.concat(lines, newline) .. newline)
+    file:write(table.concat(lines, shell.newline) .. shell.newline)
     file:close()
     vim.uv.fs_chmod(path, 493)
     return path
@@ -428,6 +432,16 @@ function M.block_marks(child)
             return table.concat(lines, "\n")
         end)()]]
     )
+end
+
+-- Waits until the current buffer of the child has a Block mark on `line`. The mark can be at any
+-- position in the list of Block marks.
+---@param child nvim_suite.Child
+---@param line integer
+function M.await_block_mark(child, line)
+    M.eventually(M.block_mark_deadline_ms, "a Block mark on line " .. line, function()
+        return ("\n" .. M.block_marks(child)):find("\n" .. line .. ": ", 1, true) ~= nil
+    end)
 end
 
 -- The text that status() gives for the Active document of the child. The text is "nil" when status()

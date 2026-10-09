@@ -103,9 +103,7 @@ end
 ---@return nvim_suite.ResponseBody
 local function run_json_block(child, expected_lines)
     harness.edit(child, fixture)
-    harness.eventually(harness.block_mark_deadline_ms, "a Block mark on line " .. block_line, function()
-        return harness.block_marks(child):find("^" .. block_line .. ": ") ~= nil
-    end)
+    harness.await_block_mark(child, block_line)
 
     harness.run_at(child, block_line)
 

@@ -70,9 +70,7 @@ end
 ---@param expected string
 local function run_image_block(child, expected)
     harness.edit(child, fixture)
-    harness.eventually(harness.block_mark_deadline_ms, "a Block mark on line " .. block_line, function()
-        return harness.block_marks(child):find("^" .. block_line .. ": ") ~= nil
-    end)
+    harness.await_block_mark(child, block_line)
 
     harness.run_at(child, block_line)
 
