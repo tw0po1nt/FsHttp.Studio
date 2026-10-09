@@ -3,7 +3,6 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
-    <!-- Match the companion's assembly identity so the two projects agree on one FSharp.Core. -->
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   </PropertyGroup>
 
@@ -24,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FSharp.Core" Version="10.1.204" />
+    <PackageReference Include="FSharp.Core" Version="$(FSharpCoreVersion)" />
     <!-- Expecto is the idiomatic F# test framework; YoloDev.Expecto.TestSdk adapts it to
          the VSTest runner so `dotnet test` discovers the [<Tests>] suites unchanged. -->
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
