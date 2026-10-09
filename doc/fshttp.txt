@@ -20,7 +20,7 @@ CONTENTS                                                     *fshttp-contents*
 
 A Script is a `.fsx` file. A Block is one `http { }` expression in a Script.
 A Run evaluates the Script from the first line to the end of one Block, and
-shows the result. The other Blocks do not run.
+shows the result. The Run skips each other Block.
 
 The companion is a .NET process that parses each Script and runs each Block.
 The client starts one companion when you open the first Script. With no
@@ -32,17 +32,22 @@ Each Block gets a Block mark: a virtual line above the Block, and a sign. The
 Block mark shows `▶ Run request` when a Run can reach the Block. It shows
 `⊘ Cannot run: ...` with the reason when a Run cannot reach the Block.
 
+The Active document is the buffer that you look at. It can be a Script, the
+Response buffer, or another buffer.
+
 A Run shows its result in the Response buffer. The client keeps one Response
 buffer, and opens it in a split. The cursor stays in the Script. The buffer
 has three folds: Request, Response headers, and Body. The winbar shows the
 status code, the times, the size, the method, and the URL.
 
-The Body shows by its Content-Type:
-- JSON, XML, and HTML get highlights and folds from their tree-sitter
-  parsers. With no JSON parser, a JSON body shows pretty-printed.
-- An image shows through snacks.nvim, when the terminal can show images.
-- A binary body shows as a hex view.
-- Other bodies show as text.
+The client shows the Body by its Content-Type:
+- The client gives a JSON, XML, or HTML body highlights and folds from its
+  tree-sitter parser. With no JSON parser, the client pretty-prints a JSON
+  body.
+- The client shows an image through snacks.nvim, when the terminal can show
+  images.
+- The client shows a binary body as a hex view.
+- The client shows each other body as text.
 
 A Compile error shows each error with its position. Press <CR> on a
 `(line,col)` line to move to that position in the Script or the Loaded file.
@@ -80,7 +85,9 @@ Optional:
     inside another Block, the inner Block is the target.
 
     When the cursor is outside each Block, a picker lists each Block of the
-    Script. Pick one to run it.
+    Script, the refused Blocks too. A pick on a Block that a Run can reach
+    starts a Run. A pick on a refused Block shows its refusal, and no Run
+    starts.
 
     While the companion starts, the Run waits, and starts when the companion
     is ready. A new `:FsHttp run` replaces the Run that waits.
@@ -88,13 +95,14 @@ Optional:
                                                                 *:FsHttp-open*
 :FsHttp open
     Open the Body of the last Run in the system application. An HTML body
-    opens in the browser, and its scripts do not run. An image body opens in
-    the image viewer. The client writes the Body to a temporary file, so the
-    file does not change on the next Run.
+    opens in the browser. The client adds a Content-Security-Policy to the
+    page, which blocks each script of the page. An image body opens in the
+    image viewer. The client writes the Body to a temporary file, so the file
+    does not change on the next Run.
 
                                                               *:FsHttp-status*
 :FsHttp status
-    Echo the Status line text of the current buffer. In a buffer that is not
+    Echo the Status line text of the Active document. In a buffer that is not
     F#, echo the state of the companion.
 
                                                                 *:FsHttp-yank*
@@ -155,9 +163,9 @@ The Response buffer maps these local keys. Set
 5. Options                                                    *fshttp-options*
 
 Give the options to `require("fshttp").setup()`. lazy.nvim calls `setup()`
-with the `opts` of the plugin spec. With no `setup()` call, the client uses
-the defaults. Each `setup()` call replaces the options with the defaults and
-the new values. The defaults: >lua
+with the `opts` of the lazy.nvim spec of the client. With no `setup()` call,
+the client uses the defaults. Each `setup()` call replaces the options with
+the defaults and the new values. The defaults: >lua
     require("fshttp").setup({
         dotnet_path = nil,
         companion_path = nil,
@@ -193,8 +201,10 @@ companion_path ~
 request_timeout_ms ~
     number (default: 30000)
     The bound of each Run in milliseconds. It includes the connection, the
-    request, and the download of the response. 0 sets no bound. A change
-    applies to the next Run.
+    request, and the download of the response. The restore of the
+    `#r "nuget:"` packages occurs before the bound starts. A Block that sets
+    its own timeout keeps it. 0 sets no bound. A change applies to the next
+    Run.
 
                                               *fshttp-block_mark.virtual_line*
 block_mark.virtual_line ~
@@ -239,9 +249,9 @@ require("fshttp").setup({opts})
 
                                                              *fshttp.status()*
 require("fshttp").status()
-    Return the Status line text of the current buffer, or nil when the buffer
-    does not have the `fsharp` filetype. The text reports the state of the
-    companion and the Blocks of the Script.
+    Return the Status line text of the Active document, or nil when the
+    Active document does not have the `fsharp` filetype. The text reports the
+    state of the companion and the Blocks of the Script.
 
                                                               *fshttp-lualine*
 With lazy.nvim and lualine.nvim, the client adds |fshttp.status()| to the
@@ -258,15 +268,49 @@ from your statusline, and draw the statusline again on this event: >lua
 <
                                                            *fshttp-highlights*
 The client links each highlight group to a default group. Set a group to
-change its colors. The groups of the Block marks:
-    FsHttpBlockMark          The virtual line of a Block mark.
-    FsHttpBlockMarkRun       The sign of a Block that a Run can reach.
-    FsHttpBlockMarkRefused   The sign of a Block that a Run cannot reach.
+change its colors. Each entry gives the group, its default link, and its use.
+
+The groups of the Block marks:
+    FsHttpBlockMark              LspCodeLens
+        The virtual line of a Block mark.
+    FsHttpBlockMarkRun           DiagnosticOk
+        The sign of a Block that a Run can reach.
+    FsHttpBlockMarkRefused       DiagnosticWarn
+        The sign of a Block that a Run cannot reach.
+
+The groups of the Response buffer:
+    FsHttpResponseSection        Title
+        The title of each fold: Request, Response headers, and Body.
+    FsHttpResponseDetail         Comment
+        Secondary text, such as the detail beside a fold title, the total
+        time and the size in the winbar, and the hint lines.
+    FsHttpResponseHeaderName     Identifier
+        The name of each header.
+    FsHttpResponseMethod         Keyword
+        The method in the winbar and in the Request fold.
+    FsHttpResponseUrl            Underlined
+        The URL in the winbar and in the Request fold.
+    FsHttpResponseTime           Number
+        The request time in the winbar.
+    FsHttpResponseError          DiagnosticError
+        The title of a Runtime error or a Compile error.
+    FsHttpResponseRefused        Title
+        The title of a Refused Run.
+    FsHttpResponseStatus2xx      DiagnosticOk
+        A status code from 200 to 299 in the winbar.
+    FsHttpResponseStatus3xx      DiagnosticInfo
+        A status code from 300 to 399 in the winbar.
+    FsHttpResponseStatus4xx      DiagnosticWarn
+        A status code from 400 to 499 in the winbar.
+    FsHttpResponseStatus5xx      DiagnosticError
+        A status code from 500 to 599 in the winbar.
+    FsHttpResponseStatusOther    Comment
+        Each other status code in the winbar.
 
 ==============================================================================
 7. Health check                                                *fshttp-health*
 
-Run `:checkhealth fshttp` to see these sections:
+Type `:checkhealth fshttp` to see these sections:
 
 Required items ~
     The .NET SDK and its floor, the companion with its version and its
@@ -276,7 +320,9 @@ Required items ~
 Optional items ~
     snacks.nvim with a terminal that can show images, and the `json`, `xml`,
     and `html` tree-sitter parsers. Each missing item is a WARN that names
-    what degrades. A missing optional item stops no Run.
+    what degrades. A missing optional item stops no Run. With
+    |fshttp-response_buffer.images| set to false, the image item is OK, and
+    it states that images are turned off.
 
 Companion ~
     The state of the companion, and the result of the version check.

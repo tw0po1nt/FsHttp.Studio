@@ -178,3 +178,5 @@ shows the state. No Check drives a statusline other than lualine.
   `:FsHttp run` shows the WARN notice of the SDK again.
 - `:help fshttp`: `:helptags` finds no duplicate tag, and `:help fshttp` opens `doc/fshttp.txt`.
   Each `:FsHttp` subcommand, each option key, and each `<Plug>(FsHttp…)` map has a help tag.
+  The defaults block and the default line of each option give the defaults of the client. Each
+  highlight group has a line with its default link.
