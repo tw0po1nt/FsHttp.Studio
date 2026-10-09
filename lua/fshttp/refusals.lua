@@ -1,5 +1,5 @@
 -- Generated from src/host/Refusals.fs by scripts/generate-lua.fsx. Do not edit by hand.
-return {
+local M = {
     codes = {
         loopBody = { block_mark_title = "⊘ Cannot run: inside a loop", title = "Cannot run: inside a loop", detail = "FsHttp.Studio cannot run a request inside a loop. A loop body describes many requests, and one Run sends one request. To run this request, bind it to a name outside the loop, then run that binding." },
         ifBranch = { block_mark_title = "⊘ Cannot run: inside an if branch", title = "Cannot run: inside an if branch", detail = "FsHttp.Studio cannot run a request inside an if branch. The script chooses the branch when it runs, so FsHttp.Studio cannot tell which request you want. To run this request, bind it to a name outside the if, then run that binding." },
@@ -24,3 +24,11 @@ return {
     no_blocks_parse_failure_block_mark_title = "⊘ No requests found: this script has a syntax error",
     no_blocks_empty = "This script has no request. Write an http { } block to run one.",
 }
+
+---@param code string
+---@return { block_mark_title: string, title: string, detail: string }
+function M.entry(code)
+    return M.codes[code] or M.codes[M.fallback_code]
+end
+
+return M

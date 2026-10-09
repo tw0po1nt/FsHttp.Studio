@@ -406,7 +406,7 @@ local function refusal_for(code, name)
     elseif code == "staleBlockIndex" and not name then
         return refusals.stale_block_index
     end
-    return refusals.codes[code] or refusals.codes[refusals.fallback_code]
+    return refusals.entry(code)
 end
 
 ---@param code string

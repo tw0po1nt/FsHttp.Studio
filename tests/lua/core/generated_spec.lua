@@ -48,6 +48,14 @@ describe("fshttp.refusals", function()
         end
         assert.is_table(refusals.codes[refusals.fallback_code])
     end)
+
+    it("gives the entry of a catalog code", function()
+        assert.equal(refusals.codes.loopBody, refusals.entry("loopBody"))
+    end)
+
+    it("gives the entry of the fallback code for an unknown code", function()
+        assert.equal(refusals.codes[refusals.fallback_code], refusals.entry("notACode"))
+    end)
 end)
 
 describe("fshttp.version", function()
