@@ -462,7 +462,8 @@ end
 
 T["a Compile error in a Loaded file that no longer exists gives a WARN notice, and <CR> keeps the cursor"] = function()
     local child = harness.harness_setup_child()
-    local directory = vim.fn.tempname()
+    -- The Windows temp path has an 8.3 short name, which FSI expands in the path of a Loaded file.
+    local directory = string.format("%s/out/nvim-tests/loaded-file-%d", vim.uv.cwd(), vim.uv.hrtime())
     vim.fn.mkdir(directory .. "/loaded", "p")
     for _, name in ipairs({ "loaded-file-error.fsx", "loaded/broken.fsx" }) do
         vim.fn.writefile(vim.fn.readfile(harness.ui_fixture(name), "b"), directory .. "/" .. name, "b")
@@ -475,7 +476,6 @@ T["a Compile error in a Loaded file that no longer exists gives a WARN notice, a
         vim.fn.delete(directory .. "/loaded/broken.fsx")
         local count = #harness.notices(child)
         press_enter_on(child, window, position_line)
-        -- The directory can have another name in the notice, such as /private/var for /var on macOS.
         expect_warn_notice_around(child, count, "The loaded file ", "/loaded/broken.fsx does not exist.")
         assert.equal(window, harness.lua_get(child, "vim.api.nvim_get_current_win()"))
         assert.same({ position_line, 0 }, harness.lua_get(child, "vim.api.nvim_win_get_cursor(0)"))
