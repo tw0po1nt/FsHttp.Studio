@@ -13,6 +13,14 @@ runs:
     - shell: bash
       run: ./scripts/check-banned-patterns.sh
 
+    # original-awk is the BSD awk on Linux. tests/strippers/run.sh fails in CI
+    # when BSD awk, mawk, or gawk is missing.
+    - name: Install the awks for the stripper tests
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y original-awk mawk gawk
+
     - name: Test the prose strippers
       shell: bash
       run: ./tests/strippers/run.sh

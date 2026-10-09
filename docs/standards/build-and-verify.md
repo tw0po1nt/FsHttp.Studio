@@ -14,6 +14,10 @@ npm ci
 The Lua guardrails need StyLua and lua-language-server on `PATH`. CI pins StyLua 2.5.2 and
 lua-language-server 3.19.1. On macOS, `brew install stylua lua-language-server` installs both.
 
+The stripper tests use BSD awk, mawk, and gawk. On macOS, `awk` is the BSD awk, and
+`brew install mawk gawk` installs the other two. On Debian and Ubuntu, install `original-awk`,
+`mawk`, and `gawk`. Outside CI, the tests use the awks that they find.
+
 The Lua core suite needs Neovim on `PATH`. It also needs network access, because lazy.nvim fetches
 mini.test and luassert into `.tests/` on each run. On Linux, install the readline headers
 (`libreadline-dev` on Debian and Ubuntu). hererocks builds Lua 5.1 for luassert, and that build
@@ -46,7 +50,7 @@ build fails on errors that a Fable-only loop never shows.
 
 | Command | What it proves |
 | --- | --- |
-| `./tests/strippers/run.sh` | Each prose stripper in `scripts/strippers/` gives the expected text under each awk on `PATH`: BSD awk, mawk, and gawk. |
+| `./tests/strippers/run.sh` | `strip_hash.awk` gives the same expected text under BSD awk, mawk, and gawk. CI installs all three, and the run fails in CI when one is missing. |
 | `dotnet test FsHttp.Studio.slnx --no-build` | The unit suites pass. |
 | `dotnet fantomas --check .` | The formatting matches. Tooling owns layout. See `docs/standards/coding-standards.md`. |
 | `dotnet fsi scripts/generate-lua.fsx --check` | The committed files in `lua/fshttp/` match `Refusals.fs` and `package.json`. Without `--check`, the script writes the files again. |

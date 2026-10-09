@@ -1,14 +1,29 @@
 #!/usr/bin/env bash
-# Runs each case of a stripper in scripts/strippers/ under each awk on PATH:
-# BSD awk, mawk, and gawk. The strippers must give the same result under each.
+# Runs each case of a stripper in scripts/strippers/ under BSD awk, mawk, and
+# gawk. The stripper must give the same result under each. In CI, the run fails
+# when one of the three is missing. Elsewhere, the run uses the awks that it finds.
 set -uo pipefail
 
 strippers="$(cd "$(dirname "$0")/../../scripts/strippers" && pwd)"
 
+# The BSD awk is `awk` on macOS and `original-awk` on Linux. On Linux, `awk` is
+# a link to mawk or gawk, so its version line identifies the BSD awk.
 awks=()
-for candidate in awk mawk gawk; do
+for candidate in original-awk awk; do
+  if command -v "$candidate" > /dev/null && "$candidate" --version 2> /dev/null | grep -q '^awk version'; then
+    awks+=("$candidate")
+    break
+  fi
+done
+for candidate in mawk gawk; do
   command -v "$candidate" > /dev/null && awks+=("$candidate")
 done
+
+if [ -n "${CI:-}" ] && [ ${#awks[@]} -lt 3 ]; then
+  echo "strippers: CI needs BSD awk, mawk, and gawk. Found: ${awks[*]}"
+  echo "strippers: red"
+  exit 1
+fi
 
 failed=0
 passed=0
@@ -84,8 +99,20 @@ check strip_hash "an escaped # starts no comment" \
   'echo \#b' \
   ''
 check strip_hash "a quote resets at the end of a line" \
-  $'  It\'s a block scalar.\n# A comment.' \
+  $'  A \'block scalar.\n# A comment.' \
   $'\n A comment.'
+check strip_hash "an apostrophe in a plain YAML value starts no quote" \
+  "name: Don't go # A comment." \
+  ' A comment.'
+check strip_hash "a # in a single-quoted value after = starts no comment" \
+  "x='#' # A comment." \
+  ' A comment.'
+check strip_hash "an escaped quote does not end a \$'...' string" \
+  "echo \$'a\\' # b' # A comment." \
+  ' A comment.'
+check strip_hash "an escape in a single-quoted string does not skip the close quote" \
+  "echo 'a\\' # A comment." \
+  ' A comment.'
 
 if [ "$failed" -ne 0 ]; then
   echo "strippers: red"
