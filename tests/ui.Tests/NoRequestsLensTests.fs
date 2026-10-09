@@ -43,7 +43,7 @@ let private tryNoRequestsLensIsPlainText () =
 
 /// Damage above every block: exactly one line-1 lens, no Run lens, plain text rather than a
 /// command, and a click that opens nothing.
-let private syntaxErrorAbovePaintsLine1Lens =
+let private parseFailureAbovePaintsLine1Lens =
     async {
         do!
             Harness.eventually
@@ -81,7 +81,7 @@ let private syntaxErrorAbovePaintsLine1Lens =
     }
 
 /// Damage below every block: each Run lens stays, and the line-1 lens does not appear.
-let private syntaxErrorBelowKeepsRunLenses =
+let private parseFailureBelowKeepsRunLenses =
     async {
         do! Checks.openFixtureAsSoleTab belowFixture
 
@@ -93,7 +93,7 @@ let private syntaxErrorBelowKeepsRunLenses =
     }
 
 /// Damage between two blocks: one Run lens stays, and the line-1 lens does not appear.
-let private syntaxErrorBetweenKeepsOneRunLens =
+let private parseFailureBetweenKeepsOneRunLens =
     async {
         do! Checks.openFixtureAsSoleTab betweenFixture
 
@@ -143,7 +143,7 @@ let private cleanEmptyScriptPaintsNoLens =
 let tests =
     testList
         "no-requests lens"
-        [ testCaseAsync "a Parse failure above the Blocks paints the line-1 lens only" syntaxErrorAbovePaintsLine1Lens
-          testCaseAsync "a Parse failure below the last Block keeps Run lenses" syntaxErrorBelowKeepsRunLenses
-          testCaseAsync "a Parse failure between two Blocks keeps one Run lens" syntaxErrorBetweenKeepsOneRunLens
-          testCaseAsync "clean script with no blocks paints no lens" cleanEmptyScriptPaintsNoLens ]
+        [ testCaseAsync "a Parse failure above the Blocks paints the line-1 lens only" parseFailureAbovePaintsLine1Lens
+          testCaseAsync "a Parse failure below the last Block keeps Run lenses" parseFailureBelowKeepsRunLenses
+          testCaseAsync "a Parse failure between two Blocks keeps one Run lens" parseFailureBetweenKeepsOneRunLens
+          testCaseAsync "clean script with no Blocks paints no lens" cleanEmptyScriptPaintsNoLens ]

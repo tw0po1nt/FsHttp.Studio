@@ -39,7 +39,7 @@ local T = MiniTest.new_set()
 
 T["no-requests Block marks"] = MiniTest.new_set()
 
-T["no-requests Block marks"]["a syntax error above the Blocks gives the line-1 mark only"] = function()
+T["no-requests Block marks"]["a Parse failure above the Blocks gives the line-1 mark only"] = function()
     local child = harness.harness_setup_child()
     harness.edit(child, harness.ui_fixture("no-requests-above.fsx"))
 
@@ -50,7 +50,7 @@ T["no-requests Block marks"]["a syntax error above the Blocks gives the line-1 m
     )
 end
 
-T["no-requests Block marks"]["a syntax error below the last Block keeps a Block mark with the run title on each Block"] = function()
+T["no-requests Block marks"]["a Parse failure below the last Block keeps a Block mark with the run title on each Block"] = function()
     local child = harness.harness_setup_child()
     harness.edit(child, harness.ui_fixture("no-requests-below.fsx"))
 
@@ -61,7 +61,7 @@ T["no-requests Block marks"]["a syntax error below the last Block keeps a Block 
     )
 end
 
-T["no-requests Block marks"]["a syntax error between two Blocks keeps one Block mark with the run title"] = function()
+T["no-requests Block marks"]["a Parse failure between two Blocks keeps one Block mark with the run title"] = function()
     local child = harness.harness_setup_child()
     harness.edit(child, harness.ui_fixture("no-requests-between.fsx"))
 
