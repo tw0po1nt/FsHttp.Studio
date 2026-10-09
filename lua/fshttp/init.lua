@@ -8,6 +8,7 @@ local M = {}
 ---@field response_buffer? { split?: "right"|"left"|"below"|"above", images?: boolean, keys?: boolean }
 ---@field status_line? { lualine?: boolean } lualine = false removes the lualine entry.
 
+local notify = require("fshttp.notify").notify
 local options = require("fshttp.options")
 
 ---@type fshttp.Config
@@ -26,7 +27,7 @@ function M.setup(opts)
         end
     end
     for _, problem in ipairs(problems) do
-        vim.notify(problem.message, levels[problem.level], { title = "FsHttp.Studio" })
+        notify(problem.message, levels[problem.level])
     end
     local changed = options.changed_paths(config, new)
     config = new
@@ -34,13 +35,12 @@ function M.setup(opts)
     local companion = package.loaded["fshttp.companion"]
     local state = companion and companion.state()
     if #changed > 0 and (state == "starting" or state == "ready") then
-        vim.notify(
+        notify(
             string.format(
                 "FsHttp.Studio: a companion runs, and %s changed. Run :FsHttp restart to use the new value.",
                 table.concat(changed, " and ")
             ),
-            vim.log.levels.INFO,
-            { title = "FsHttp.Studio" }
+            vim.log.levels.INFO
         )
     end
     if package.loaded["fshttp.locator"] then

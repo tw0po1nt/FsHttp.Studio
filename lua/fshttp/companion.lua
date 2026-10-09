@@ -2,6 +2,7 @@ local download = require("fshttp.download")
 local download_rule = require("fshttp.download_rule")
 local envelope = require("fshttp.envelope")
 local frame = require("fshttp.frame")
+local notify_scheduled = require("fshttp.notify").notify_scheduled
 local sdk = require("fshttp.sdk")
 local version_check = require("fshttp.version_check")
 
@@ -36,14 +37,6 @@ local pending = {}
 
 local list_sdks_timeout_ms = 10000
 
----@param message string
----@param level integer
-local function notify(message, level)
-    vim.schedule(function()
-        vim.notify(message, level, { title = "FsHttp.Studio" })
-    end)
-end
-
 ---@param path string
 ---@return string?
 local function read_file(path)
@@ -74,7 +67,7 @@ end
 ---@param dotnet_path string?
 local function report_no_sdk(floor, dotnet_path)
     local notice = { message = sdk.not_found_notice(floor, dotnet_path), level = vim.log.levels.WARN }
-    notify(notice.message, notice.level)
+    notify_scheduled(notice.message, notice.level)
     vim.schedule(function()
         set_state("sdkNotFound", notice)
     end)
@@ -85,7 +78,7 @@ local function check_version(ready_version)
     local client_version = require("fshttp.version")
     if not version_check.matches(client_version, ready_version) then
         version_mismatch_notice = version_check.mismatch_notice(client_version, ready_version)
-        notify(version_mismatch_notice, vim.log.levels.WARN)
+        notify_scheduled(version_mismatch_notice, vim.log.levels.WARN)
     end
 end
 
@@ -271,7 +264,7 @@ end
 ---@param level integer
 local function fail_start(new_state, message, level)
     local notice = { message = message, level = level }
-    notify(notice.message, notice.level)
+    notify_scheduled(notice.message, notice.level)
     set_state(new_state, notice)
 end
 
@@ -286,7 +279,7 @@ local function download_and_spawn(config)
 
     -- The state has no kept notice, so a Run in this state waits for the companion.
     set_state("downloading")
-    notify(download_rule.downloading_notice(version), vim.log.levels.INFO)
+    notify_scheduled(download_rule.downloading_notice(version), vim.log.levels.INFO)
     download.fetch(version, function(result)
         if result.kind == "installed" then
             check_sdk_and_spawn(config, result.folder)

@@ -1,4 +1,5 @@
 local image_body = require("fshttp.image_body")
+local notify = require("fshttp.notify").notify
 
 local M = {}
 
@@ -57,7 +58,7 @@ function M.place(buf, image)
     local file = vim.fn.tempname() .. "." .. image_body.extension(image.content_type)
     local handle, open_error = io.open(file, "wb")
     if not handle then
-        vim.notify("FsHttp.Studio: cannot write the image: " .. tostring(open_error), vim.log.levels.WARN)
+        notify("FsHttp.Studio: cannot write the image: " .. tostring(open_error), vim.log.levels.WARN)
         return
     end
     handle:write(image.bytes)
@@ -70,7 +71,7 @@ function M.place(buf, image)
     if ok then
         current.placement = placement
     else
-        vim.notify("FsHttp.Studio: snacks.nvim could not show the image: " .. tostring(placement), vim.log.levels.WARN)
+        notify("FsHttp.Studio: snacks.nvim could not show the image: " .. tostring(placement), vim.log.levels.WARN)
     end
 end
 

@@ -1,5 +1,6 @@
 local companion = require("fshttp.companion")
 local locator = require("fshttp.locator")
+local notify = require("fshttp.notify").notify
 local refusals = require("fshttp.refusals")
 local picker = require("fshttp.picker")
 local response_buffer = require("fshttp.response_buffer")
@@ -15,12 +16,6 @@ local wait_notice = "The FsHttp.Studio companion is starting. This Run starts wh
 
 -- Only the result of the latest Run reaches the Response buffer.
 local generation = 0
-
----@param message string
----@param level integer
-local function notify(message, level)
-    vim.notify(message, level, { title = "FsHttp.Studio" })
-end
 
 ---@param ok_envelope table a decoded ok envelope
 ---@param total_ms number

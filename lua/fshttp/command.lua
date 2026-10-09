@@ -1,3 +1,5 @@
+local notify = require("fshttp.notify").notify
+
 local M = {}
 
 ---@alias fshttp.Subcommand fun(args: string[])
@@ -30,10 +32,9 @@ function M.dispatch(opts)
     local name = opts.fargs[1]
     local subcommand = M.subcommands[name]
     if not subcommand then
-        vim.notify(
+        notify(
             string.format(":FsHttp has no subcommand %s. The subcommands are: %s.", name, table.concat(names(), ", ")),
-            vim.log.levels.ERROR,
-            { title = "FsHttp.Studio" }
+            vim.log.levels.ERROR
         )
         return
     end

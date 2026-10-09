@@ -1,3 +1,5 @@
+local notify = require("fshttp.notify").notify
+
 local M = {}
 
 ---@type integer?
@@ -28,15 +30,14 @@ function M.jump()
         return
     end
     if not script_buf or not vim.api.nvim_buf_is_valid(script_buf) then
-        vim.notify("The script of the Run is closed.", vim.log.levels.WARN, { title = "FsHttp.Studio" })
+        notify("The script of the Run is closed.", vim.log.levels.WARN)
         return
     end
     -- The envelope has no file name, so a loaded-file position in the script's line range lands in the script.
     if position.line > vim.api.nvim_buf_line_count(script_buf) then
-        vim.notify(
+        notify(
             "The position is past the end of the script. The Compile error can be in a loaded file.",
-            vim.log.levels.WARN,
-            { title = "FsHttp.Studio" }
+            vim.log.levels.WARN
         )
         return
     end
