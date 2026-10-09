@@ -8,9 +8,8 @@ name: Release
 #
 #   build    runs the guardrails, packages the .vsix and the Companion archive, writes a .sha256
 #            file for each, and uploads the four files as workflow artifacts.
-#   gates    the UI suite job and the three Neovim legs download those artifacts and drive them.
-#            The Neovim legs also run the Lua core suite. These suites are the Release gate. The
-#            experimental Windows leg runs in its own job, and it does not gate the release.
+#   gates    the UI suite job and the four Neovim legs download those artifacts and drive them.
+#            The Neovim legs also run the Lua core suite. These suites are the Release gate.
 #   publish  needs each gate to be green, and attaches the same four files to the draft Release.
 #
 # The force input skips each suite for an emergency release, and the run logs the skip. The
@@ -165,12 +164,12 @@ jobs:
     needs: build
     if: ${{ !inputs.force }}
     runs-on: ${{ matrix.os }}
-    # The suite has its own Budgets. This cap stops a wedged runner.
+    # The Windows leg is the slowest. The suite has its own Budgets, and this cap stops a wedged runner.
     timeout-minutes: 30
     strategy:
       # A red leg must not hide the result of the other legs.
       fail-fast: false
-      # The legs of nvim-tests.yml, less the Windows leg, which has its own job.
+      # The legs of nvim-tests.yml.
       matrix:
         include:
           - name: Linux, Neovim 0.11
@@ -182,7 +181,10 @@ jobs:
           - name: macOS, pinned stable Neovim
             os: macos-latest
             neovim-pin: stable
-    steps: &nvim-suite-steps
+          - name: Windows, pinned stable Neovim
+            os: windows-latest
+            neovim-pin: stable
+    steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
@@ -206,25 +208,6 @@ jobs:
         with:
           neovim-pin: ${{ matrix.neovim-pin }}
           companion-archive: out/release/fshttp-studio-companion-${{ needs.build.outputs.version }}.tar.gz
-
-  # The Windows leg is experimental until its Checks pass, as in nvim-tests.yml. The publish job
-  # does not need this job, so a red Windows leg cannot refuse a draft Release.
-  nvim-suite-windows:
-    name: Neovim suites (${{ matrix.name }})
-    needs: build
-    if: ${{ !inputs.force }}
-    runs-on: ${{ matrix.os }}
-    # The Windows leg is the slowest. The suite has its own Budgets, and this cap stops a wedged runner.
-    timeout-minutes: 30
-    continue-on-error: true
-    # A matrix of one leg gives the shared steps the same matrix values as the nvim-suites job.
-    strategy:
-      matrix:
-        include:
-          - name: Windows, pinned stable Neovim
-            os: windows-latest
-            neovim-pin: stable
-    steps: *nvim-suite-steps
 
   publish:
     name: Publish the draft Release

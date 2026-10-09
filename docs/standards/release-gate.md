@@ -8,10 +8,9 @@ gate is the UI suite, the Neovim suite, and the Lua core suite. A green Actions 
 
 `release.yml` has three stages. The build job runs the guardrails of `ci.yml`. Then it packages the
 `.vsix` and the Companion archive, writes a `.sha256` file for each, and uploads the four files as
-workflow artifacts. The UI suite job downloads the `.vsix` and drives it. The three Neovim legs
+workflow artifacts. The UI suite job downloads the `.vsix` and drives it. The four Neovim legs
 download the Companion archive. Each leg runs the Lua core suite and the Neovim suite against that
-archive. The experimental Windows leg runs the same steps in its own job, and it does not gate the
-release. The publish job needs each gate to be green, and attaches the same four files to the draft
+archive. The publish job needs each gate to be green, and attaches the same four files to the draft
 Release.
 
 The `force` input skips each suite, and the run log shows a warning for the skip. The guardrails
@@ -120,11 +119,6 @@ dispatches `nvim-tests.yml` against the pin branch.
 `tests/nvim/neovim-pin.json`) and the pinned stable version (`stable`). A defect that occurs only on
 another version ships uncaught. Neovim 0.11 runs on Linux only.
 
-**The Windows leg cannot fail the run.** The Windows leg runs with `continue-on-error` until its
-Checks pass, and #306 tracks that work. In `release.yml`, the Windows leg has its own job, and the
-publish job does not need that job. Thus a red Windows leg cannot refuse a draft Release. A defect
-that occurs only on Windows ships uncaught.
-
 **The suite gets the companion from `companion_path`.** A release run unpacks the Companion
 archive that it ships, and each Check that sets `companion_path` uses that folder. A run in
 `nvim-tests.yml` publishes the companion from the checkout.
@@ -137,13 +131,13 @@ defect in the release URL, or in the redirect of GitHub, ships uncaught.
 stub in place of snacks.nvim. The stub records each image placement and the bytes of the image
 file. A defect that occurs only in the drawn image ships uncaught.
 
-**The Budgets come from local runs and from one CI run on Linux and on macOS.** The values are 60 s
-for Harness setup and 30 s for each Check on each system. The suite Budget is 180 s on Linux and
-240 s on macOS. The suite took 128.7 s on the first Linux run and 173.3 s on the first macOS run.
-Each suite Budget adds a margin of about 40% for the Checks that the open Neovim client issues add.
-`harness.lua` has one row of Budgets for each operating system. The Windows row copies the Linux
-row, because no passing run on Windows has set it yet. Each leg writes its timing table to the job
-summary. The suite Budget starts at the first Check, so it leaves out Harness setup, as in the UI
+**The suite Budgets come from few CI runs.** The values are 60 s for Harness setup and 30 s for
+each Check on each system. The suite Budget is the slowest measured suite of the system plus about
+40%. The slowest Linux suite took 181.6 s, so the Linux Budget is 255 s. The slowest macOS suite
+took 189.7 s, so the macOS Budget is 265 s. These values come from 12 runs of `nvim-tests.yml` on
+2026-10-09. The Windows suite took 223.1 s on the first passing run, so the Windows Budget is 315 s.
+One run is a small sample, so a slow Windows runner can exceed that Budget. `harness.lua` has one
+row of Budgets for each operating system. Each leg writes its timing table to the job summary. The suite Budget starts at the first Check, so it leaves out Harness setup, as in the UI
 suite.
 
 **The suites test lazy.nvim only.** The `vim.pack` route gets no Check.
