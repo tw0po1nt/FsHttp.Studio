@@ -1,4 +1,5 @@
 local copy_text = require("fshttp.copy_text")
+local notify = require("fshttp.notify").notify
 
 local M = {}
 
@@ -13,12 +14,6 @@ end
 ---@return fshttp.RunResult?
 function M.latest()
     return latest
-end
-
----@param message string
----@param level integer
-local function notify(message, level)
-    vim.notify(message, level, { title = "FsHttp.Studio" })
 end
 
 ---@class fshttp.YankKind

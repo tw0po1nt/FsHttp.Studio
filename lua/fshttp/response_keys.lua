@@ -1,3 +1,5 @@
+local notify = require("fshttp.notify").notify
+
 local M = {}
 
 ---@class fshttp.ResponseKey
@@ -49,11 +51,11 @@ end
 function M.help()
     local lines = M.active_lines(vim.api.nvim_get_current_buf())
     if #lines == 0 then
-        vim.notify("The current buffer is not the Response buffer.", vim.log.levels.INFO, { title = "FsHttp.Studio" })
+        notify("The current buffer is not the Response buffer.", vim.log.levels.INFO)
         return
     end
     table.insert(lines, 1, "Keys of the Response buffer:")
-    vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "FsHttp.Studio" })
+    notify(table.concat(lines, "\n"), vim.log.levels.INFO)
 end
 
 return M

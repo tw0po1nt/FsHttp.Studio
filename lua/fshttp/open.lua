@@ -1,13 +1,8 @@
+local notify = require("fshttp.notify").notify
 local open_rule = require("fshttp.open_rule")
 local response_view = require("fshttp.response_view")
 
 local M = {}
-
----@param message string
----@param level integer
-local function notify(message, level)
-    vim.notify(message, level, { title = "FsHttp.Studio" })
-end
 
 function M.open()
     local result = require("fshttp.yank").latest()
