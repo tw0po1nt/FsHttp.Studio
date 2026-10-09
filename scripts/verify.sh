@@ -20,6 +20,7 @@ steps=(
   "npm ci"
   "npm run package"
   "./scripts/check-vsix-holds-no-lua.sh"
+  "./scripts/check-vsix-holds-only-shipped-files.sh"
   "npm run smoke"
   "./scripts/check-lua-types.sh"
   "nvim -l tests/minit.lua --minitest"
