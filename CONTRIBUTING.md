@@ -39,6 +39,8 @@ rejects, so a clean Fable build does not prove that the solution compiles.
   `docs/spec/`, and the issue keeps a short summary and a link.
 - Before you publish a release, read `docs/standards/release-gate.md`. It states what the UI suite
   covers and what it does not.
+- Before you edit `README.md`, or write a ticket that changes it, read
+  `docs/standards/release-gate.md`. The README on `main` describes the latest release.
 - Before you explore the codebase, read `GLOSSARY.md` and the ADRs in `docs/adr/` that touch your
   area. `GLOSSARY.md` is the project glossary, and a name in your change uses its terms.
 

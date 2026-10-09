@@ -2,7 +2,8 @@
 
 This document states what the suites of the Release gate cover and what they do not. The Release
 gate is the UI suite, the Neovim suite, and the Lua core suite. A green Actions run of
-`release.yml` is the record of what was verified.
+`release.yml` is the record of what was verified. The document also states when the README
+changes.
 
 ## How a release runs the gate
 
@@ -19,8 +20,22 @@ always run.
 ## Prerequisites
 
 - Before you publish a release, merge or close each open pin-update pull request.
+- Before you tag a release, merge the README ticket of its milestone.
 - Before you publish the draft Release, replace the **Clients changed** line of its notes. Name the
   Client that changed: the VSCode extension, the Neovim client, or both.
+
+## The README follows the release
+
+The README on `main` describes the latest release. GitHub shows the README of `main` to each
+visitor, so install text for an unreleased version sends a visitor to a build that does not exist
+yet. The Marketplace listing shows the README of the published `.vsix`, so that copy changes only
+at a release.
+
+- Each milestone has one README ticket. That ticket updates the README for each change that the
+  milestone ships, and it merges before the release tag.
+- A feature ticket puts its README text in the README ticket of its milestone.
+- The Vim help file `doc/fshttp.txt` follows `main`. Only a user who installs from `main` reads it,
+  and that user runs the code that it describes.
 
 ## Honest gaps
 
