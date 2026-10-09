@@ -89,7 +89,7 @@ type UiTestHttpServer() =
     let mutable slowSeen = 0
     let mutable slowWaiting = 0
 
-    // Both ephemeral ports are held bound at the same time, then released, so the OS cannot hand
+    // Both ephemeral ports stay bound at the same time, then released, so the OS cannot hand
     // the dead port back as the live one. A sidecar whose deadUrl points at the live server would
     // fail the harness's dead-port probe with a misleading reason.
     let allocatePorts () =

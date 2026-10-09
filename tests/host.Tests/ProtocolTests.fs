@@ -359,7 +359,7 @@ let parseFailedOrDefaultTests =
 
 /// The guard on which `locate` response reaches the status bar. It lives here because the
 /// UI suite cannot drive it: a second visible script does not locate again on demand, so a check
-/// that opened one held whether the guard was there or not.
+/// that opened one passed whether the guard was there or not.
 [<Tests>]
 let mirrorsActiveDocumentTests =
     testList
@@ -379,5 +379,5 @@ let mirrorsActiveDocumentTests =
           }
 
           test "no active text editor drops every response" {
-              Expect.isFalse (mirrorsActiveDocument None "/w/one.fsx") "the viewer holds focus"
+              Expect.isFalse (mirrorsActiveDocument None "/w/one.fsx") "the viewer has focus"
           } ]

@@ -164,7 +164,7 @@ local function add_text(view, text, group)
     end
 end
 
--- A section is a title line and the lines below it. A fold holds the section when it has a line
+-- A section is a title line and the lines below it. A fold contains the section when it has a line
 -- below the title.
 ---@param view fshttp.ResponseView
 ---@param title string

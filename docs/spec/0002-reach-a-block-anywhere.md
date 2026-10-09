@@ -179,7 +179,7 @@ original width. Each line and each untouched column keeps its position.
 
 **Hazard 1, a sibling whose span contains the target.** `let a, b = http { }, http { }` gives both
 blocks one statement span. Today's filter compares block ranges, so a Run on `b` blanks the
-statement that holds `b`, and deletes the block that the user clicked. **Never blank a span that
+statement that contains `b`, and deletes the block that the user clicked. **Never blank a span that
 contains the target.** A sibling that stays intact is safe, because it does not send.
 
 **Hazard 2, the blank span is too large.** Today the span is the nearest `SynModule` declaration.
@@ -187,7 +187,7 @@ For a block in a class member, that declaration is the **whole type definition**
 different block then deletes the type. The code above the target that names that type stops
 compiling.
 
-Blank the smallest enclosing statement that can hold an expression. This needs one split:
+Blank the smallest enclosing statement that can contain an expression. This needs one split:
 
 - A **module-level** binding blanks its whole declaration. This keeps the value-leakage protection
   in Decision 4.
@@ -459,7 +459,7 @@ Drive `BlockRunner.run` with `.fsx` source and a block index, which is the seam 
    `Ok`, and assert that the server counted one request.
 2. **Case 12 sends one request.** The script pipes the block to `Request.send`. Assert the count is
    1 rather than 2. This is the isolation guard that the boundary must not lose.
-3. **Nothing after the block runs.** A module holds a block, and then a raw `HttpClient` call to a
+3. **Nothing after the block runs.** A module contains a block, and then a raw `HttpClient` call to a
    second path in the same module, below the block. Run the block. Assert that the second path was
    not requested. This is the test for the boundary in Decision 1.
 4. **The clicked block survives a shared statement span.** `let a, b = http { }, http { }`. Both are
@@ -467,7 +467,7 @@ Drive `BlockRunner.run` with `.fsx` source and a block index, which is the seam 
    expression, where the other block's blank span contains the target. Assert that the target's Run
    does not fail with *"is not defined"* against its own name.
 5. **A class-member block does not break a different block's Run.** The script has a type with a
-   member that holds a block, and a runnable block above it that names the type. Run the block above.
+   member that contains a block, and a runnable block above it that names the type. Run the block above.
    Assert `Ok`.
 6. **A `private` binding runs.** `let private secret = http { }`. Assert `Ok`. Add a block in a
    `module private`. Assert `Ok`.
@@ -533,7 +533,7 @@ It also proved three negatives that shorten this work:
 - **Text slicing is dead.** No block in 32 routed to it, which includes case 12, the last reason to
   keep it.
 - **No `#line` directives are necessary.**
-- **The boundary holds at each nesting depth.** The side-effect probe never fired.
+- **The boundary is correct at each nesting depth.** The side-effect probe never fired.
 
 The prototype is at `.local/wayfinder/v0.2/prototypes/004-run-plan/` on the map owner's machine.
 That directory is not in the repository. `RunPlan.fs` is the reference implementation of Decisions 1

@@ -3,7 +3,7 @@
 Spec 4 of 7 for the UI test suite that retires `docs/manual-check.md`. This one adds the check named
 **loop lens refuses with toast**.
 
-Decisions come from a wayfinder map held locally (`.local/wayfinder/ui-tests/`, gitignored). The map
+Decisions come from a wayfinder map kept locally (`.local/wayfinder/ui-tests/`, gitignored). The map
 is not a GitHub issue, so this spec restates every decision it depends on rather than linking to one.
 
 **Blocked by** #146 (the harness and its setup) and spec 2 (the core path). **Not blocked by #144.**
@@ -33,7 +33,7 @@ does a refusal whose toast never appears. Every existing suite stays green throu
 
 ## Solution
 
-One check in the UI suite, named **loop lens refuses with toast**, over one checked-in fixture holding
+One check in the UI suite, named **loop lens refuses with toast**, over one checked-in fixture that contains
 a block inside a `for` loop.
 
 The check asserts the refusal lens's rendered title in the workbench. It clicks the lens, and
@@ -88,7 +88,7 @@ product's own string and not a copy.
 
 ### The fixture
 
-One new checked-in fixture under the suite's `fixtures/` directory, owned by this check alone. It holds
+One new checked-in fixture under the suite's `fixtures/` directory, owned by this check alone. It contains
 a block inside a `for` loop, which is the `loopBody` refusal shape, and nothing else that a Run could reach.
 
 **The fixture reads no sidecar and needs no live server.** A refused block is never evaluated: no
@@ -138,7 +138,7 @@ rendered yet". It also makes this check depend on what the previous check left b
 In order, every wait through `eventually`:
 
 1. Close the response viewer if it is open. Assert it is gone.
-2. Open the fixture. Assert that the block inside the loop renders the **refusal lens**, holding the glyph plus
+2. Open the fixture. Assert that the block inside the loop renders the **refusal lens**, with the glyph plus
    the shipped `loopBody` title, within the lens-appearance deadline.
 3. Assert that the same block offers no `▶ Run request` lens.
 4. Click the refusal lens, find-and-click inside one retry.
@@ -186,9 +186,9 @@ network.
 - A real click, on a real lens.
 
 The refusal catalog's own unit coverage stays in `host.Tests` and is not duplicated here. This check
-proves the *rendering and wiring* of what that catalog holds, for one refusal code.
+proves the *rendering and wiring* of what that catalog contains, for one refusal code.
 
-**One code rather than twelve.** The check drives the `loopBody` refusal only. The catalog holds twelve
+**One code rather than twelve.** The check drives the `loopBody` refusal only. The catalog has twelve
 codes. Enumerating them through a driven UI would prove one mapping twelve times, at twelve times
 the cost. The mapping from code to words is already unit-tested. What is untested is that *a*
 refusal renders, and that *a* click toasts. One code establishes both.

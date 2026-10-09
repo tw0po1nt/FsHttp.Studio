@@ -56,7 +56,7 @@ let private tryDeadPortRenderedAsRuntimeError () =
         && dom.StatusCodeText = "")
 
 /// Inherits the warm companion and the open viewer from the core-path check, and takes over the
-/// fixture column for its own fixture. `ExTester.openFixtureAsSoleTab` holds what that
+/// fixture column for its own fixture. `ExTester.openFixtureAsSoleTab` states what that
 /// discards. Runs both outcomes and leaves the viewer showing the runtime error.
 let private runOutcomesRenderHonestly =
     async {

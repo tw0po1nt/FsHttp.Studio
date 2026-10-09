@@ -13,7 +13,7 @@
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   </PropertyGroup>
 
-  <!-- package.json holds the one version of both Clients and the companion. The companion sends it
+  <!-- package.json sets the one version of both Clients and the companion. The companion sends it
        in `ready`. -->
   <PropertyGroup>
     <PackageJsonText>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../package.json'))</PackageJsonText>

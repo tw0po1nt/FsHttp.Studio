@@ -62,7 +62,7 @@ jobs:
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # The Beta counter is the number of existing v<version>-beta.* tags, plus
-      # one. package.json holds the target release version for the whole cycle,
+      # one. package.json sets the target release version for the whole cycle,
       # and no Beta version is ever committed. See ADR-0008.
       - name: Resolve the version to stamp
         id: version
@@ -173,7 +173,7 @@ jobs:
           sha256sum "$VSIX" > "$VSIX.sha256"
           cat "$VSIX.sha256"
 
-      # The archive holds the companion that the .vsix holds. pack-companion.sh
+      # The archive contains the companion that the .vsix contains. pack-companion.sh
       # reads the stamped version from package.json, and writes the .sha256 file.
       - name: Pack the Companion archive
         run: |

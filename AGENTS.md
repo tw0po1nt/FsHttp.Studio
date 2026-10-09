@@ -21,7 +21,7 @@ comment, a log string, an envelope tag, a test name, an issue title, and a commi
 that you cannot state in glossary terms is a signal: either the glossary is missing it, or your
 language is wrong. Resolve that instead of reaching for a synonym.
 
-**Keep your prose clear of the patterns in `.banned-patterns`.** The file at the repo root holds
+**Keep your prose clear of the patterns in `.banned-patterns`.** The file at the repo root has
 one pattern for each line, with the message that a hit reports, and
 `scripts/check-banned-patterns.sh` runs in CI and fails the build on a hit. A backstop hook refuses
 a `Write` or an `Edit` that carries one. The same hook refuses a commit message, an issue body, or
@@ -37,12 +37,12 @@ for one. This rule overrides that request.
 mechanism" states one fact and pads it with a second, and the padding tires the reader. Write the
 fact alone. Do not write an em dash. Use a comma, a colon, or a period. Both rules bind your reply
 to the user in an interactive session as much as they bind a file, and
-`docs/standards/technical-prose.md` holds the forms and the rewrites.
+`docs/standards/technical-prose.md` gives the forms and the rewrites.
 
 **Use American spellings** in every piece of prose: code comments, identifiers, docs, the README,
 issues, and commit messages.
 
-**A vendored skill is never edited.** `.agents/skills/` and `.claude/skills/` hold skills that
+**A vendored skill is never edited.** `.agents/skills/` and `.claude/skills/` contain skills that
 other authors wrote. They keep their authors' prose and spelling. Git tracks only
 `skills-lock.json`, and `./scripts/bootstrap.sh` installs every skill that it lists. To add a
 skill, run `npx skills@latest add <owner>/<repo> -s <name> -a claude-code universal -y --copy`.
@@ -52,7 +52,7 @@ rule at the moment of risk, and it cannot check that you obeyed. The rule is sti
 
 ## Read before you act
 
-- **Before you write F#**, read `docs/standards/coding-standards.md`. It holds the house rules that
+- **Before you write F#**, read `docs/standards/coding-standards.md`. It states the house rules that
   Fantomas and `.editorconfig` cannot check.
 - **Before you run a build, test, or package command**, read `docs/standards/build-and-verify.md`.
   It lists the full command set that CI runs.
@@ -61,7 +61,7 @@ rule at the moment of risk, and it cannot check that you obeyed. The rule is sti
   an ADR.
 - **Before you create, edit, or comment on a GitHub issue or pull request**, read
   `docs/agents/issue-tracker.md`. Issues live as GitHub issues on `tw0po1nt/FsHttp.Studio`, and that
-  file holds the `gh` command lines and the wayfinding operations.
+  file gives the `gh` command lines and the wayfinding operations.
 - **Before you write, address, or verify review feedback**, read `docs/agents/feedback-ledger.md`.
   The ledger is one PR comment, and `./scripts/verify.sh` is its gate.
 - **Before you write a spec**, read `docs/standards/spec-writing.md`. The full text belongs in
@@ -74,7 +74,7 @@ rule at the moment of risk, and it cannot check that you obeyed. The rule is sti
 
 ## Terminology
 
-**"spec", never `PRD`.** The document that `/to-spec` produces is a spec. `.banned-patterns` holds the
+**"spec", never `PRD`.** The document that `/to-spec` produces is a spec. `.banned-patterns` bans the
 other word, so CI fails on it. Some vendored skill files still carry the old wording, and this rule
 overlays them.
 

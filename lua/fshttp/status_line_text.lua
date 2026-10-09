@@ -1,4 +1,4 @@
--- The rows of the Status line text. The VSCode extension host holds the same rows.
+-- The rows of the Status line text. The VSCode extension host has the same rows.
 local M = {}
 
 M.prefix = "FsHttp.Studio: "

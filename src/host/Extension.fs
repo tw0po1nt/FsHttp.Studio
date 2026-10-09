@@ -44,7 +44,7 @@ let private companionFrameworkVersion (runtimeConfigPath: string) : string optio
 
 let activate (context: ExtensionContext) =
     let item = window.createStatusBarItem (statusBarAlignmentLeft, 100.0)
-    // `StatusBar` discards a write until it holds the item.
+    // `StatusBar` discards a write until it has the item.
     StatusBar.register item
     context.subscriptions.Add(box item)
 

@@ -21,7 +21,7 @@ refuses a version that has no Beta, and a `force` input releases a change that n
 
 ## The Beta version is synthesized
 
-`package.json` holds the **target release version** for the whole cycle. `beta.yml` counts the
+`package.json` sets the **target release version** for the whole cycle. `beta.yml` counts the
 existing `v<version>-beta.*` tags, adds one, and stamps `npm version --no-git-tag-version` into the
 checkout only. Nothing is committed, and nothing is pushed.
 

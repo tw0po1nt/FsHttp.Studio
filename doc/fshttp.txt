@@ -1,6 +1,6 @@
 *fshttp.txt*  Run one FsHttp request from an F# script
 
-The Neovim client of FsHttp.Studio. This file will hold the commands, the
+The Neovim client of FsHttp.Studio. This file will contain the commands, the
 options, and the health check.
 
  vim:tw=78:ft=help:norl:

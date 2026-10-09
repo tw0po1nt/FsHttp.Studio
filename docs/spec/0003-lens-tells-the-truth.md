@@ -125,7 +125,7 @@ local binding. They share one code. The remaining eleven map one to one.
 | `needsArguments` | F2 | `⊘ Cannot run: this function needs arguments` | `derivedName` gives `TakesArguments` |
 | `classMember` | F2 | `⊘ Cannot run: inside a class member` | `SynMemberDefn`, `SynTypeDefn` parent |
 | `innerBinding` | F3 | `⊘ Cannot run: inside a local binding` | non-module binding, `LetOrUse` |
-| `lambdaValue` | F3 | `⊘ Cannot run: this binding holds a function` | `SynExpr.Lambda` |
+| `lambdaValue` | F3 | `⊘ Cannot run: this binding is a function` | `SynExpr.Lambda` |
 | `noNameToCall` | F3 | `⊘ Cannot run: this binding has no name` | `derivedName` gives `NoName` |
 | `tupleBinding` | F5 | `⊘ Cannot run: this binding binds two or more values` | `SynExpr.Tuple` |
 | `insideAnotherRequest` | F5 | `⊘ Cannot run: inside another request` | Refer to Decision 3 |
@@ -243,7 +243,7 @@ Match on `ErrorNumber` rather than on the message text, which is localized. Extr
 the diagnostic's own range against the Setup text rather than by a parse of the message.
 
 **Precedence.** Apply this test to the Setup interaction's error diagnostics before the compile-error
-path builds its list. When the diagnostics hold both a blanked-name FS0039 and an unrelated error,
+path builds its list. When the diagnostics contain both a blanked-name FS0039 and an unrelated error,
 report the compile error. A refusal claims the Run only when the missing binding is the whole story.
 
 **Refuse the whole Run.** Do not evaluate the invocation after this test matches.
@@ -269,7 +269,7 @@ this command needs.
 Remove the `contributes.commands` entry for `fshttpStudio.runBlock` from `package.json`. The lens
 click does not need it, and the palette cannot supply the two arguments that the handler expects.
 
-`contributes.commands` then holds no commands. Remove the empty key.
+`contributes.commands` then has no commands. Remove the empty key.
 
 We considered a `menus.commandPalette` guard with `when: false`, which keeps the declaration. It adds
 a second contributes block to hide an entry that has no reason to exist. We also considered making
@@ -294,7 +294,7 @@ them, beside the `▶ Run request` title.
 | `needsArguments` | FsHttp.Studio cannot run a request in a function that takes arguments, because it has no values to supply. To run this request, move it to a binding that takes no arguments. |
 | `classMember` | FsHttp.Studio cannot run a request in a class member, because it has no instance of the class. To run this request, move it to a module-level binding. |
 | `innerBinding` | FsHttp.Studio cannot run a request in a local binding. A local binding is not in scope after the script runs. To run this request, move it to a module-level binding. |
-| `lambdaValue` | This binding holds a function rather than a request. FsHttp.Studio sends the request only when your code calls the function. To run this request, bind it directly to a name. |
+| `lambdaValue` | This binding is a function rather than a request. FsHttp.Studio sends the request only when your code calls the function. To run this request, bind it directly to a name. |
 | `noNameToCall` | The pattern of this binding gives FsHttp.Studio no name to call. To run this request, bind it to a simple name. |
 | `tupleBinding` | This binding binds two or more values, so its value is not the request alone. To run this request, give it its own let binding. |
 | `insideAnotherRequest` | This request is inside another request. FsHttp.Studio can run the outer request only. To run this request, move it to its own binding. |
@@ -313,7 +313,7 @@ response viewer must show a heading for each `refused` notice.
 Each other code uses its lens title from Decision 2 as this heading. The lens shows that title
 after the `⊘ ` glyph. The response viewer shows the title alone.
 
-Rules that these strings hold, and that a later edit must hold:
+Rules that these strings obey, and that a later edit must obey:
 
 - No contractions, active voice, and American spellings, per `AGENTS.md` and the controlled-language
   skill.
@@ -350,7 +350,7 @@ Use the `/domain-modeling` skill, which owns this file.
 Drive `BlockLocator.locateBlocks` and assert each block's refusal code. This is the same parse and
 fold that the reach spec's Seam 1 uses, so extend that fixture set rather than adding a project.
 
-Assert one case for each of the twelve codes. The reach spec's corpora already hold ten of the
+Assert one case for each of the twelve codes. The reach spec's corpora already contain ten of the
 positions. Add a fixture for `noNameToCall` and one for `insideAnotherRequest`.
 
 Assert that a supported position carries **no** code.

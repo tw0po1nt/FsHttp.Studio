@@ -49,7 +49,7 @@ T["the live state line is OK when the companion is ready"] = function()
     assert.equal("OK", item_with(items, "Companion", "FsHttp.Studio: companion ready").level)
 end
 
--- The child of Harness setup can hold the snacks.nvim stub of an image Check, so this Check starts its own child.
+-- The child of Harness setup can have the snacks.nvim stub of an image Check, so this Check starts its own child.
 T["no snacks.nvim gives a WARN that names what degrades"] = function()
     local child = harness.start_child({ companion_path = harness.companion_path() })
     assert.equal(false, harness.lua_get(child, [[(pcall(require, "snacks"))]]), "the child Neovim has no snacks.nvim")

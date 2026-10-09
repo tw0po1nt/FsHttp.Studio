@@ -130,7 +130,7 @@ The companion runs on the **.NET 10 SDK or newer**. FsHttp.Studio detects `dotne
 
 A Run is bounded by `fshttpStudio.requestTimeoutMs` (30 seconds by default), which covers the connection, the request, and the response download. A stall past that bound fails loudly instead of hanging. Set it to `0` to wait as long as `HttpClient` allows.
 
-[`docs/adr/`](./docs/adr/) records the architectural decisions and their trade-offs. [`GLOSSARY.md`](./GLOSSARY.md) holds the domain vocabulary.
+[`docs/adr/`](./docs/adr/) records the architectural decisions and their trade-offs. [`GLOSSARY.md`](./GLOSSARY.md) defines the domain vocabulary.
 
 ## Future improvements
 

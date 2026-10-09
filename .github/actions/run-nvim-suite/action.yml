@@ -40,7 +40,7 @@ runs:
         set -euo pipefail
         VERSION="$(jq -r --arg key "$PIN_KEY" '.[$key] // empty' tests/nvim/neovim-pin.json)"
         if [ -z "$VERSION" ]; then
-          echo "::error::tests/nvim/neovim-pin.json holds no version for the key $PIN_KEY."
+          echo "::error::tests/nvim/neovim-pin.json has no version for the key $PIN_KEY."
           exit 1
         fi
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"

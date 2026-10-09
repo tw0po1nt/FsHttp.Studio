@@ -2,9 +2,9 @@
 
 Spec for v0.3 shared feature 2 of 3. VSCode gets the palette command "FsHttp.Studio: Run request at
 cursor". The map [FsHttp.Studio v0.3: Neovim support and shared features](https://github.com/tw0po1nt/FsHttp.Studio/issues/239)
-holds the decisions, and the ticket
+records the decisions, and the ticket
 [How does Run request at cursor work in VSCode?](https://github.com/tw0po1nt/FsHttp.Studio/issues/257)
-holds the detail.
+records the detail.
 
 ## Problem Statement
 

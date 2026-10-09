@@ -11,7 +11,7 @@ open System.IO
 /// it. Asserted as rendered, and reused as the partial title a click matches on.
 let lensTitle = "▶ Run request"
 
-/// The line-1 lens when the script failed to parse and holds no block. Named here beside
+/// The line-1 lens when the script failed to parse and contains no block. Named here beside
 /// `lensTitle` so a check reads the two together, and derived from the product in `ExTester`,
 /// whose lens harvest has to recognize the same span. Two copies of a shipped sentence drift
 /// apart, so this one is derived rather than retyped.
@@ -26,12 +26,12 @@ let private fixturePath (fileName: string) =
 
 /// The one way this suite counts the lines of a document, so a reading taken from disk and a
 /// reading taken from the editor are comparable. Line endings are normalized and a trailing
-/// newline is dropped: a file that ends in a newline and the editor's copy of that file hold the
+/// newline is dropped: a file that ends in a newline and the editor's copy of that file have the
 /// same lines, and an off-by-one here would fail every fixture.
 let private lineCount (text: string) =
     text.Replace("\r\n", "\n").TrimEnd('\n').Split('\n').Length
 
-/// The fixture's size as the workspace holds it, or `None` when the file cannot be read. The suite
+/// The fixture's size as the workspace has it, or `None` when the file cannot be read. The suite
 /// runs in Node, so it reads the workspace directly rather than asking the editor about it. This is
 /// the size a correctly loaded buffer has.
 let private fixtureLineCountOnDisk (fileName: string) =
@@ -63,7 +63,7 @@ let describeTitles (titles: string[]) =
 let describeReadFailure (reason: string) =
     sprintf "no reading at all: the CodeLens query raised: %s" reason
 
-/// True when the editor holds the fixture once, measured in lines against the file on disk.
+/// True when the editor contains the fixture once, measured in lines against the file on disk.
 ///
 /// VSCode from 1.123.0 loads every file of a folder workspace twice, and `extester.config.json`
 /// pins the editor below that version for exactly this reason. The tab of a doubled document
@@ -97,13 +97,13 @@ let private tryFixtureLoadedOnce (fileName: string) =
                         )
     }
 
-/// Opens a fixture as the sole tab in the fixture column, and returns once the column holds it and
+/// Opens a fixture as the sole tab in the fixture column, and returns once the column contains it and
 /// nothing else.
 ///
 /// The open runs once and is not polled. Every wait after it is a read or an idempotent command,
 /// so a poll cannot open the same fixture a second time.
 ///
-/// A column that already holds exactly this tab is left alone, so a check may call this against a
+/// A column that already contains exactly this tab is left alone, so a check may call this against a
 /// fixture the previous check opened without paying the reopen.
 let openFixtureAsSoleTab (tabTitle: string) =
     async {
@@ -118,7 +118,7 @@ let openFixtureAsSoleTab (tabTitle: string) =
         do!
             Harness.eventually
                 Harness.LensAppearanceDeadlineMs
-                (sprintf "the fixture column to hold %s and nothing else" tabTitle)
+                (sprintf "the fixture column to contain %s and nothing else" tabTitle)
                 (fun () -> ExTester.tryCloseOtherTabsInFixtureColumn tabTitle)
 
         do!
@@ -130,7 +130,7 @@ let openFixtureAsSoleTab (tabTitle: string) =
 
 /// Exactly one lens per block, each carrying the Run request title. The count is exact, because a
 /// provider that over-detects and stacks an extra lens is as wrong as one that finds only the
-/// first block. Those two defects time out identically, so a poll that does not hold
+/// first block. Those two defects time out identically, so a poll that fails
 /// reports the titles it read and the log names which one occurred without a screenshot.
 let tryRunRequestLensAboveEachBlock (blockCount: int) (fileName: string) =
     async {
@@ -144,7 +144,7 @@ let tryRunRequestLensAboveEachBlock (blockCount: int) (fileName: string) =
                 return Harness.Holds
             else
                 // The disk size and the editor layout are read only on the failing path. Together
-                // they say whether a doubled count comes from a document that holds the file twice
+                // they say whether a doubled count comes from a document that contains the file twice
                 // or from lens elements the editor kept from the tab it showed before.
                 let! layout = ExTester.describeLensLayout ()
 
@@ -188,7 +188,7 @@ let tryNoRunRequestLens () =
 let statusBarText (body: string) = "FsHttp.Studio: " + body
 
 /// The account a status poll gives of the reading it took. Written once, because the three status
-/// polls below differ only in which reading holds, and a second copy of these sentences would let
+/// polls below differ only in which reading is true, and a second copy of these sentences would let
 /// two timeouts describe the same workbench in different words.
 let private describeStatus (status: ExTester.FsHttpStatus) =
     match status with
@@ -250,7 +250,7 @@ let openFixtureKeepingOthers (tabTitle: string) =
     }
 
 /// Reads the viewer's DOM and applies `holds` to it. A frame that cannot be entered yet is a
-/// normal poll result, so it reads as "does not hold" rather than an exception.
+/// normal poll result, so it reads as "not true" rather than an exception.
 let viewerSatisfies (holds: ExTester.ResponseViewerDom -> bool) =
     async {
         match! ExTester.tryReadResponseViewer () with
@@ -260,7 +260,7 @@ let viewerSatisfies (holds: ExTester.ResponseViewerDom -> bool) =
 
 // --- the echo fixture ---------------------------------------------------------------------
 
-/// The fixture that POSTs a header and a body to `/echo`, and the single block it holds. Two
+/// The fixture that POSTs a header and a body to `/echo`, and the single block it contains. Two
 /// checks drive it: the Request section reads what was sent, and the copy buttons put it on the
 /// clipboard. Named here so neither can drift onto a different fixture than the other.
 let echoFixtureFileName = "request-section.fsx"

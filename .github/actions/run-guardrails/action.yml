@@ -58,10 +58,10 @@ runs:
       run: npm run package
 
     - shell: bash
-      run: ./scripts/check-vsix-holds-no-lua.sh
+      run: ./scripts/check-vsix-has-no-lua.sh
 
     - shell: bash
-      run: ./scripts/check-vsix-holds-only-shipped-files.sh
+      run: ./scripts/check-vsix-has-only-shipped-files.sh
 
     # Runs the bundled renderer under node. The .NET tests cannot prove that the bundle runs.
     - shell: bash

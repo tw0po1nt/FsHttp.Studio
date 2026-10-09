@@ -74,7 +74,7 @@ jobs:
       # `npm run package` publishes into dist/companion.
       - uses: ./.github/actions/run-guardrails
 
-      # The Companion archive holds the companion that `npm run package` published into the .vsix,
+      # The Companion archive contains the companion that `npm run package` published into the .vsix,
       # so both Clients ship the same companion. pack-companion.sh writes the archive and its
       # .sha256 file.
       #

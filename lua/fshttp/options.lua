@@ -10,7 +10,7 @@ local M = {}
 ---@field response_buffer { split: "right"|"left"|"below"|"above", images: boolean, keys: boolean }
 ---@field status_line { lualine: boolean }
 
--- The options that hold a file path. setup() normalizes each one, and a change to one needs a
+-- The options that contain a file path. setup() normalizes each one, and a change to one needs a
 -- restart of the companion.
 M.path_options = { "dotnet_path", "companion_path" }
 

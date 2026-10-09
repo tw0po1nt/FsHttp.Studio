@@ -28,7 +28,7 @@ describe("fshttp.run_target", function()
         }, run_target.for_cursor(blocks({}), 1))
     end)
 
-    it("gives a Run of the Block that holds the cursor", function()
+    it("gives a Run of the Block that contains the cursor", function()
         local target = run_target.for_cursor(blocks({ range(3, 5), range(8, 10) }), 9)
         assert.same({ kind = "run", block_index = 1 }, target)
     end)

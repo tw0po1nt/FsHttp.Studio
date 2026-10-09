@@ -2,7 +2,7 @@
 
 The Neovim client lives in this repo, at the root: `lua/`, `plugin/`, `doc/`, `build.lua`, and
 `lazy.lua` sit beside `package.json`. lazy.nvim loads the repo root, so a LazyVim user writes
-`{ "tw0po1nt/FsHttp.Studio" }` and adds no runtimepath code. `package.json` holds one version for
+`{ "tw0po1nt/FsHttp.Studio" }` and adds no runtimepath code. `package.json` sets one version for
 the VSCode extension, the Neovim client, and the companion. Each version gets one tag
 `v<version>` and one GitHub Release, which carries the `.vsix` and the Companion archive.
 
@@ -25,7 +25,7 @@ where lazy.nvim loads a plugin and reads `build.lua` with no user code.
 
 A fix to one Client ships as a new version of both Clients, and waits on the gates of both
 ([ADR-0009](0009-ui-suite-gates-the-release.md)). `.vscodeignore` excludes the Lua paths, and a
-guardrail checks that the `.vsix` holds no Lua file. Each user's plugin spec names this repo, so a
+guardrail checks that the `.vsix` contains no Lua file. Each user's plugin spec names this repo, so a
 later move is expensive.
 
 See [docs/spec/0015](../spec/0015-neovim-client.md), decision A2.

@@ -65,10 +65,32 @@ project. We chose esbuild.
 Use a comma, a colon, or a period. An em dash breaks a sentence in a way that a reader must
 re-parse, and a page of them reads as one long aside.
 
-## The pattern list holds both rules
+## Use a plain verb in place of `hold`
 
-`.banned-patterns` at the repo root holds the antithesis forms and the em dash. Both run in CI, and
-the `PreToolUse` hook refuses a `Write` or an `Edit` that carries either one.
+`hold`, `holds`, `held`, and `holding` give a file, a type, or a value the act of a person. A
+plainer verb states the same fact, and the reader does less work. Use the verb that names the real
+relation:
+
+| Do not write | Write |
+| --- | --- |
+| `Directory.Build.props holds the version.` | `Directory.Build.props sets the version.` |
+| `The record holds a status line and a body.` | `The record has a status line and a body.` |
+| `The folder holds one archive for each version.` | `The folder contains one archive for each version.` |
+| `The cache holds the last result.` | `The cache stores the last result.` |
+| `The table holds the commands that CI runs.` | `The table lists the commands that CI runs.` |
+| `The comment holds the reason.` | `The comment gives the reason.` |
+| `The rule holds at each depth.` | `The rule is true at each depth.` |
+| `the Blocks that hold the line` | `the Blocks that contain the line` |
+| `The process keeps holding the request.` | `The process keeps the request open.` |
+
+`.banned-patterns` bans each form, because a pattern cannot tell one sense from another. When the
+word is part of a name in code, such as a file name or an identifier, write that name in backticks.
+
+## The pattern list bans each form
+
+`.banned-patterns` at the repo root lists the antithesis forms, the em dash, and the forms of
+`hold`. Each one runs in CI, and the `PreToolUse` hook refuses a `Write` or an `Edit` that carries
+one of them.
 
 ## Why this rule is strict
 

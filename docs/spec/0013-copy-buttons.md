@@ -18,7 +18,7 @@ The workaround is a manual selection with the mouse, and the panel defeats it in
    grid. A selection over it produces the name and the value separated by the newlines that the
    grid layout puts there rather than by a colon.
 3. **A large body is a scroll.** A user must drag through a scrolling region to select a body that
-   the panel already holds complete in memory.
+   the panel already has complete in memory.
 
 **Nothing at all can be copied from the Request section**, which #99 adds. That section is the
 answer to "did it send what I wrote", and the most common next action after reading it is to show
@@ -89,7 +89,7 @@ There are three keys, and no others:
 | `response-headers` | The response headers section |
 | `response-body` | The response body |
 
-**Why the key and not the payload.** An attribute that holds the payload puts a full copy of the
+**Why the key and not the payload.** An attribute that contains the payload puts a full copy of the
 body in the DOM. A 1 MB response body then costs 1 MB of markup, and the header block appears
 twice. The key costs a few bytes, and it keeps one authority for the payload.
 
@@ -362,7 +362,7 @@ Decision 1 put it in a pure function.
 
 ### 11. Two measured facts that the reader needs
 
-**VSCode grants the webview clipboard access, and the ticket's premise holds.** Measured in
+**VSCode grants the webview clipboard access, and the ticket's premise is true.** Measured in
 VSCodium's own webview shell,
 `out/vs/workbench/contrib/webview/browser/pre/index.html`, at the point where it builds the inner
 frame:

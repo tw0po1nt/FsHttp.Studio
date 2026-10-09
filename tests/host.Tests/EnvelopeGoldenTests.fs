@@ -1,6 +1,6 @@
 module Extension.Tests.EnvelopeGoldenTests
 
-// Each Golden fixture holds the companion's own bytes, which the Lua client must decode and encode.
+// Each Golden fixture contains the companion's own bytes, which the Lua client must decode and encode.
 
 open System.IO
 open System.Text
@@ -16,7 +16,7 @@ let private respond (request: byte[]) : byte[] =
     use doc = JsonDocument.Parse request
     encode (Companion.RequestHandler.respond doc)
 
-// The text holds each character class that the encoder escapes, and UTF-8 of two to four bytes.
+// The text contains each character class that the encoder escapes, and UTF-8 of two to four bytes.
 let private escapes =
     "\"quoted\" \\ <tag> & 'single' + `tick` \t\n\r\b\f\u0001\u007f é → 😀"
 
@@ -104,7 +104,7 @@ let private compileError =
                 EndLine = 9
                 EndCol = 1 } } ]
 
-/// `frames.bin` holds the frame of each envelope Golden fixture in this order.
+/// `frames.bin` contains the frame of each envelope Golden fixture in this order.
 let private goldenFixtures =
     [ "hello", hello
       "ready", encode (Companion.RequestHandler.ready (Some "1.2.3-beta.4"))
@@ -147,7 +147,7 @@ let tests =
                   GoldenFixture.verify (Path.Combine("envelope", name + ".json")) payload
               }
 
-          test "frames.bin holds the frame of each envelope Golden fixture" {
+          test "frames.bin contains the frame of each envelope Golden fixture" {
               GoldenFixture.verify (Path.Combine("envelope", "frames.bin")) (frames ())
           }
 
@@ -160,16 +160,16 @@ let tests =
               Expect.equal tags expected "each tag needs a Golden fixture"
           }
 
-          test "the blocks Golden fixture holds a Block that a Run can reach and a refused Block" {
+          test "the blocks Golden fixture contains a Block that a Run can reach and a refused Block" {
               use doc = JsonDocument.Parse(respond locate)
               let ranges = doc.RootElement.GetProperty "ranges"
 
-              Expect.equal (ranges.GetArrayLength()) 2 "the script holds two Blocks"
+              Expect.equal (ranges.GetArrayLength()) 2 "the script has two Blocks"
               Expect.isFalse (fst (ranges.[0].TryGetProperty "refusal")) "the first Block is reachable"
               Expect.equal (ranges.[1].GetProperty("refusal").GetString()) "loopBody" "the second Block is in a loop"
           }
 
-          test "the blocks-parse-failed Golden fixture holds a failed parse and each Block" {
+          test "the blocks-parse-failed Golden fixture contains a failed parse and each Block" {
               use doc = JsonDocument.Parse(respond locateParseFailed)
               Expect.isTrue (doc.RootElement.GetProperty("parseFailed").GetBoolean()) "the parse fails"
               Expect.equal (doc.RootElement.GetProperty("ranges").GetArrayLength()) 2 "each Block survives"

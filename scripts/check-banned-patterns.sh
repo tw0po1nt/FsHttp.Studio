@@ -2,7 +2,7 @@
 # Fails when a banned pattern reaches the prose of this repo. The pattern list is
 # `.banned-patterns` at the repo root, and AGENTS.md states the rule.
 #
-# Each list line holds an extended regular expression, a tab, and the message to
+# Each list line has an extended regular expression, a tab, and the message to
 # report. The check reads these sources:
 #
 #   - Markdown files.
@@ -17,7 +17,7 @@
 #
 # `--text <label> <file>` checks one file of text as Markdown, and reports each
 # hit under <label>. CI uses this mode for the text of a pull request: the
-# title, the body, and the commit messages. No tracked file holds that text.
+# title, the body, and the commit messages. No tracked file contains that text.
 #
 # The strippers are the awk files in scripts/strippers/. The hook at
 # .claude/hooks/banned-patterns-check.sh runs the same files.
@@ -42,7 +42,7 @@ while IFS=$'\t' read -r pattern message; do
 done < .banned-patterns
 
 if [ ${#patterns[@]} -eq 0 ]; then
-  echo "check-banned-patterns: .banned-patterns holds no pattern. Nothing to check."
+  echo "check-banned-patterns: .banned-patterns has no pattern. Nothing to check."
   exit 0
 fi
 

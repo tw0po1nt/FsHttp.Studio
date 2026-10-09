@@ -34,7 +34,7 @@ describe("fshttp.download_rule", function()
         assert.equal(hash, rule.parse_hash(output))
     end)
 
-    it("gives no hash for text that holds none", function()
+    it("gives no hash for text that contains none", function()
         assert.is_nil(rule.parse_hash("<html>Not Found</html>"))
     end)
 

@@ -38,7 +38,7 @@ let private tryKilledCompanionsGone (killed: int[]) =
     async { return killed |> Array.forall (fun pid -> not (Proc.isAlive pid)) }
 
 /// The shipped stopped message is present, and `Running…` is gone. The text comes from
-/// `Refusals`, so this holds the routing and not the wording: the viewer shows the stopped
+/// `Refusals`, so this checks the routing and not the wording: the viewer shows the stopped
 /// sentence rather than the runtime-error text or a bare failure. `RefusalsTests` pins the words.
 let private tryStoppedMessageRendered () =
     Checks.viewerSatisfies (fun dom ->
@@ -50,7 +50,7 @@ let private tryStoppedMessageRendered () =
 ///
 /// This reads the editor rather than the provider. The provider already returned the correct list
 /// under the earlier rule, and the editor kept the stale `▶ Run request` lens anyway, which is
-/// the defect this claim exists to hold shut. An exact count also catches the opposite failure,
+/// the defect this claim exists to keep shut. An exact count also catches the opposite failure,
 /// where the stopped title lands beside the lens it was meant to replace.
 let private tryStoppedLensAboveEachBlock () =
     Checks.tryOnlyLensTitle blockCount Refusals.companionStoppedLensTitle
@@ -123,14 +123,14 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
                 "the stopped companion title on the lens above each of the two blocks"
                 tryStoppedLensAboveEachBlock
 
-        // The viewer took focus when the Run opened it, and has held it since, so no text editor
+        // The viewer took focus when the Run opened it, and has kept it since, so no text editor
         // is active. That is the other hiding case, and the only place in the suite that
         // reaches it without contriving one: the item is hidden even though the companion has
         // just died and has something to say.
         do!
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
-                "the FsHttp.Studio status item hidden while the viewer holds focus"
+                "the FsHttp.Studio status item hidden while the viewer has focus"
                 Checks.tryStatusBarHidden
 
         // Restore the fixture column, so an F# document is active again and the companion's own
@@ -157,7 +157,7 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
         //
         // The workbench element alone is too weak a tell. It appears, and the reload then replaces
         // it, so a poll that waits for the element can return between those two moments. The
-        // status bar reading holds only once the workbench is the one the reload settled on.
+        // status bar reading is true only once the workbench is the one the reload settled on.
         do!
             Harness.eventually
                 Harness.PostReloadRecoveryDeadlineMs

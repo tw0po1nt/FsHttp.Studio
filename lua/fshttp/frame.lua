@@ -14,7 +14,7 @@ end
 local Parser = {}
 Parser.__index = Parser
 
--- Joins the held chunks only when a whole length or a whole frame is present. Thus the parser copies
+-- Joins the stored chunks only when a whole length or a whole frame is present. Thus the parser copies
 -- a large frame once, whatever the number of chunks.
 local function flatten(parser)
     if #parser.chunks > 1 then

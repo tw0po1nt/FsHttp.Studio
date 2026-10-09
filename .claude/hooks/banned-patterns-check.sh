@@ -27,7 +27,7 @@ if [ "$tool_name" = "Bash" ]; then
   cwd="$(jq -r '.cwd // empty' <<<"$input")"
   pending="$command"
   # A body file follows `--body-file`, `--file`, `-F`, or `body=@`. The name
-  # `-` means stdin, and the command text already holds a heredoc.
+  # `-` means stdin, and the command text already contains a heredoc.
   while IFS= read -r body_file; do
     body_file="${body_file#\"}"; body_file="${body_file%\"}"
     body_file="${body_file#\'}"; body_file="${body_file%\'}"
@@ -76,7 +76,7 @@ done < "$root/.banned-patterns"
 [ ${#patterns[@]} -eq 0 ] && exit 0
 
 # Run the strippers that scripts/check-banned-patterns.sh runs, so the hook and CI
-# agree on what counts as prose. The name of each stripper file holds the `kind`
+# agree on what counts as prose. The name of each stripper file contains the `kind`
 # that it strips.
 stripped="$(printf '%s\n' "$pending" | awk -f "$root/scripts/strippers/strip_$kind.awk")"
 

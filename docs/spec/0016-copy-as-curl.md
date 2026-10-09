@@ -2,9 +2,9 @@
 
 Spec for v0.3 shared feature 1 of 3. Each Client builds a Curl command from the request as sent.
 The map [FsHttp.Studio v0.3: Neovim support and shared features](https://github.com/tw0po1nt/FsHttp.Studio/issues/239)
-holds the decisions, and the ticket
+records the decisions, and the ticket
 [How does copy as curl turn each request as sent into a curl command?](https://github.com/tw0po1nt/FsHttp.Studio/issues/256)
-holds the detail.
+records the detail.
 
 ## Problem Statement
 
@@ -40,7 +40,7 @@ URL, the headers, and the Captured body. No setting is added.
 5. As a script author, I want one argument on each line, so that I can read and edit the command.
 6. As a script author who edits the body of the command, I want no `Content-Length` header in it, so that curl computes the length again.
 7. As a script author with a body and no `Content-Type`, I want the command to send no `Content-Type`, so that curl does not add a form type.
-8. As a script author with a URL that holds brackets or braces, I want the command to send the URL as it is, so that curl does not read a glob.
+8. As a script author with a URL that contains brackets or braces, I want the command to send the URL as it is, so that curl does not read a glob.
 9. As a script author on Git Bash or WSL, I want the command to work in my shell, so that I can use it on Windows.
 10. As a VSCode user, I want the Copy as curl button beside the Request copy button, so that I find it where I copy the request.
 11. As a Neovim user, I want `:FsHttp yank curl` and `yc`, so that I can yank the command from the keyboard.
@@ -59,7 +59,7 @@ URL, the headers, and the Captured body. No setting is added.
 
 ### 2. The term
 
-`GLOSSARY.md` holds the term **Curl command**: the shell text that a Client builds from the request
+`GLOSSARY.md` defines the term **Curl command**: the shell text that a Client builds from the request
 as sent.
 
 ### 3. The body, for each state of the Captured body
@@ -71,7 +71,7 @@ as sent.
 | Each other set of captured bytes | `printf '%s' '<base64>' \| base64 -d \| curl ... --data-binary @-` |
 | Not read by the companion | No Curl command. |
 
-- A body is safe to paste when it is valid UTF-8 and holds no control byte except tab and LF. The
+- A body is safe to paste when it is valid UTF-8 and contains no control byte except tab and LF. The
   rule is strict, so it gives the same result in both Clients. The display heuristic `looksBinary`
   does not decide it.
 - The inline form uses `--data-raw`, because `--data-binary` and `--data` read a file when the body
@@ -86,7 +86,7 @@ as sent.
   when the method of the Run differs from that default.
 - HEAD uses `--head`, because `-X HEAD` makes curl wait for a body.
 - Each other case uses `-X <METHOD>`. A GET with a body is one example.
-- A URL that holds `[`, `]`, `{`, or `}` gets `--globoff`.
+- A URL that contains `[`, `]`, `{`, or `}` gets `--globoff`.
 
 ### 5. Headers
 

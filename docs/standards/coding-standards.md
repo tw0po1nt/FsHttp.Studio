@@ -41,7 +41,7 @@ spec path, no ADR number, no file path, no URL, and no issue or PR number such a
 `ticket #17`. A citation makes the reader open a second document to learn what the line in front of
 them means, and the reader pays that cost on every pass. State the constraint itself, because the
 constraint is the thing the reader needs. A tracker number carries the further defect that the
-tracker renumbers its items. `git blame`, the commit message, and the pull request hold the history,
+tracker renumbers its items. `git blame`, the commit message, and the pull request keep the history,
 and a test name states the behavior under test rather than the ticket that asked for it.
 
 A **`TODO`** is the one exception, because it points at work that does not exist yet, so no fact on

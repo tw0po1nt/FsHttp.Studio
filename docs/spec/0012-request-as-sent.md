@@ -108,7 +108,7 @@ because `Content-Type` and `Content-Length` read back fine, and the bytes are go
 
 ### 3. FsHttp's own `request` domain record is not the way out
 
-The `Response` record also carries `request : FsHttp.Domain.Request`, which holds the body before it
+The `Response` record also carries `request : FsHttp.Domain.Request`, which has the body before it
 is sent. Reading it is rejected, because it is exactly the version-fragile reflection ADR-0002
 exists to forbid. Measured:
 
@@ -231,7 +231,7 @@ Measured on 13.2.0 and 15.0.3: **the `HttpRequestMessage` the transformer receiv
 instance that appears on `Response.requestMessage`**, and the transformer fires exactly once per
 request. So the capture stores into a
 `ConditionalWeakTable<HttpRequestMessage, CapturedBody>`, and `extractResponse` looks the body up by
-the `requestMessage` it already holds. Exact, and the weak table cannot leak.
+the `requestMessage` it already has. Exact, and the weak table cannot leak.
 
 A lookup that misses yields the "not captured" state of Decision 8 rather than an error. The method,
 URL, and headers do not depend on the capture at all, so a miss degrades to a Request section that
@@ -444,7 +444,7 @@ The renderer is pure, so these are canned-envelope assertions in the existing su
     each block sent: scheme, host, port, and path. Both blocks of its fixture compute their URL, as
     `GET $"{baseUrl}/json"`. A status line built from the block's own source text renders
     `{baseUrl}/json`, which carries neither host nor port. The claim therefore fails on the deleted
-    path and holds on this one. The same check already asserts that the viewer renders the response.
+    path and passes on this one. The same check already asserts that the viewer renders the response.
 
 This check replaces the hand check that this spec first asked for. The suite already opened that
 fixture, clicked that lens, and read that status line. It asserted a path segment, which both the

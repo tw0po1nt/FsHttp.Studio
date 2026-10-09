@@ -2,11 +2,11 @@
 Status: accepted
 ---
 
-# Standards live in `docs/standards/`, and `docs/agents/` holds only the paths a vendored skill pins
+# Standards live in `docs/standards/`, and `docs/agents/` contains only the paths a vendored skill pins
 
-`docs/standards/` holds the rules that bind every contributor: `build-and-verify.md`,
+`docs/standards/` contains the rules that bind every contributor: `build-and-verify.md`,
 `coding-standards.md`, `release-gate.md`, `spec-writing.md`, `technical-prose.md`, and
-`ui-screenshots.md`. `docs/agents/` holds `issue-tracker.md` and `domain.md`. `AGENTS.md` routes an
+`ui-screenshots.md`. `docs/agents/` contains `issue-tracker.md` and `domain.md`. `AGENTS.md` routes an
 agent into both directories, and `CONTRIBUTING.md` routes a person into `docs/standards/`. Both
 routers point at one set of files, so no rule has two homes.
 
@@ -18,7 +18,7 @@ and this repository has no other contributor documentation.
 A rename of the whole directory was not available. `code-review/SKILL.md` reads
 `docs/agents/issue-tracker.md` by path, and `setup-matt-pocock-skills/SKILL.md` writes
 `docs/agents/issue-tracker.md` and `docs/agents/domain.md` by name. Both skills are vendored, and
-`AGENTS.md` forbids an edit to a vendored file. The two pinned files are also the two that hold
+`AGENTS.md` forbids an edit to a vendored file. The two pinned files are also the two that contain
 agent mechanics: `gh` command lines and skill wiring. Ownership and audience agree here, so the
 pinned paths give the line its shape.
 

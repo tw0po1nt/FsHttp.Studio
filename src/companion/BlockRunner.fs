@@ -281,7 +281,7 @@ let private unitArgSuffix = " ()"
 /// `Outer.getSnorlax ()`.
 ///
 /// The split is on the `" ()"` *suffix* rather than on the first space. A binding's own name can
-/// itself hold a space, because `BlockLocator` spells ``let ``get pikachu`` = …``'s name back
+/// itself contain a space, because `BlockLocator` spells ``let ``get pikachu`` = …``'s name back
 /// with its backticks, and splitting such a name at its first space would emit
 /// `Outer.``get pikachu```
 /// as two juxtaposed terms, which reads as a function application and does not compile.
@@ -898,7 +898,7 @@ type LoadedVersion =
 
 /// Pure routing decision for one pin against the state that a package is already loaded in.
 /// `None` means that this process has not loaded the package yet. The rule is "route to a
-/// worker unless we can *prove* that the requested load matches what the ALC already holds":
+/// worker unless we can *prove* that the requested load matches what the ALC already contains":
 ///
 /// - A version-less pin against a version-less load is the same latest version, because nuget
 ///   resolves `#r "nuget: pkg"` to one version per process. It is therefore safe in-process.
@@ -945,7 +945,7 @@ type private RunRoute =
 /// The request loop is serial today, and the lock keeps it correct when that changes.
 ///
 /// The reservation happens *before* the evaluation runs rather than after a successful load.
-/// This is deliberate. The map is a conservative over-approximation of what the shared ALC can hold.
+/// This is deliberate. The map is a conservative over-approximation of what the shared ALC can contain.
 /// A Run that reaches the in-process path can resolve its `#r "nuget:"` into that ALC, and the
 /// resolved assembly then outlives the session even when the evaluation compile-errors or
 /// throws. An over-mark of a Run that never loaded only over-routes a *later* Run to a safe,

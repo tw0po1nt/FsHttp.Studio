@@ -248,7 +248,7 @@ T["a Compile error shows as text, <CR> and <Plug>(FsHttpJump) move to its positi
     open_script(child, fixture, { 14 })
     harness.lua_get(child, [[vim.api.nvim_buf_set_lines(0, 11, 12, false, { 'let probe : int = "not an int"' })]])
 
-    -- The Block mark of the Block is the one sign that the Script holds. A Compile error adds no more.
+    -- The Block mark of the Block is the one sign that the Script has. A Compile error adds no more.
     local function script_marks()
         return harness.lua_get(
             child,

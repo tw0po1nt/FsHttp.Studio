@@ -1,6 +1,6 @@
 module Extension.Tests.CursorRuleGoldenTests
 
-// The companion locates each Block of the script, so the Golden fixture holds the ranges that a Client gets.
+// The companion locates each Block of the script, so the Golden fixture contains the ranges that a Client gets.
 
 open System
 open System.IO
@@ -56,7 +56,7 @@ let private cases =
       "the last line of a Block inside another Block", 15, Some 2
       "a line of an outer Block below its inner Block", 16, Some 1
       "the last line of an outer Block", 18, Some 1
-      "one line that holds a Block inside another Block", 20, Some 4
+      "one line that contains a Block inside another Block", 20, Some 4
       "a line below every Block", 21, None ]
 
 let private goldenFixture () =
@@ -80,7 +80,7 @@ let tests =
         "Cursor rule Golden fixture"
         [ test "the script parses, and the companion locates five Blocks" {
               Expect.isFalse located.ParseFailed "the parse succeeds"
-              Expect.hasLength ranges 5 "the script holds five Blocks"
+              Expect.hasLength ranges 5 "the script has five Blocks"
 
               Expect.equal
                   (ranges |> List.map _.Refusal)

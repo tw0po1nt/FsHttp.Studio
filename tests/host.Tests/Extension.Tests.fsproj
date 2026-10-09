@@ -28,7 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/host/Extension.fsproj" />
-    <!-- The envelope Golden fixtures hold the bytes of the companion's own encoder. -->
+    <!-- The envelope Golden fixtures contain the bytes of the companion's own encoder. -->
     <ProjectReference Include="../../src/companion/Companion.fsproj" />
   </ItemGroup>
 

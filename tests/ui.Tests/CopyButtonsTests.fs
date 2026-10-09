@@ -32,7 +32,7 @@ let private tryCollapsedButtonsAndSpacing () =
                 && surface.ShellMarginsPx[2] = 0.
     }
 
-/// A successful copy click: label `Copied`, the write was granted and `holds` against the text it
+/// A successful copy click: label `Copied`, the write was granted and `holds` is true for the text it
 /// was handed, and neither collapsible section changed its open state from before the click.
 let private tryCopySucceeded (key: string) (requestWasOpen: bool) (headersWereOpen: bool) (holds: string -> bool) =
     async {

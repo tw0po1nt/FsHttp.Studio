@@ -30,7 +30,7 @@ rejects, so a clean Fable build does not prove that the solution compiles.
 
 ## Read before you act
 
-- Before you write F#, read `docs/standards/coding-standards.md`. It holds the house rules that
+- Before you write F#, read `docs/standards/coding-standards.md`. It states the house rules that
   Fantomas and `.editorconfig` cannot check.
 - Before you open a pull request that changes `src/renderer/`, `src/webview/`, or
   `src/host/ResponseViewer.fs`, read `docs/standards/ui-screenshots.md`. A pull request that

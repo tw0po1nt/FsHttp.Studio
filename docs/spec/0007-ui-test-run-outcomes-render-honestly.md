@@ -3,7 +3,7 @@
 Spec 3 of 7 for the UI test suite that retires `docs/manual-check.md`. This one adds the check named
 **Run outcomes render honestly**.
 
-Decisions come from a wayfinder map held locally (`.local/wayfinder/ui-tests/`, gitignored). The map
+Decisions come from a wayfinder map kept locally (`.local/wayfinder/ui-tests/`, gitignored). The map
 is not a GitHub issue, so this spec restates every decision it depends on rather than linking to one.
 
 **Blocked by** #146 (the harness and its setup), the core path check (spec 2), and #144
@@ -28,7 +28,7 @@ outcomes. That reasoning was reviewed and rejected.
 status is 404. It does not prove that a real 404 travels the whole wire. That wire runs from a real server,
 through the companion, across the envelope boundary, through the extension host, over
 `postMessage`, and into a live webview. At the end of it, the 404 must render as a *response* and
-not as a *failure*. The same holds for the connection-refused render. That is exactly the distinction the suite's fidelity floor was written to
+not as a *failure*. The same is true for the connection-refused render. That is exactly the distinction the suite's fidelity floor was written to
 make: response viewer content in the webview DOM rather than a viewer-update object.
 
 Two further facts make the old bucket wrong rather than merely debatable:
@@ -46,7 +46,7 @@ Confusing them is a plausible regression, and a user-visible one.
 
 ## Solution
 
-One check in the UI suite, named **Run outcomes render honestly**, over one checked-in fixture holding
+One check in the UI suite, named **Run outcomes render honestly**, over one checked-in fixture that contains
 two blocks.
 
 The check runs the 404 block and asserts in the webview DOM that the viewer shows the status code and
@@ -104,7 +104,7 @@ that the release gate states no false gap.
 
 ### The fixture
 
-One new checked-in fixture under the suite's `fixtures/` directory, owned by this check alone, holding
+One new checked-in fixture under the suite's `fixtures/` directory, owned by this check alone, that contains
 **two blocks**. It reads the sidecar beside itself for **both** of its fields:
 
 ```json
@@ -163,7 +163,7 @@ difference from a 200 is a class and a number rather than a different shape of r
 
 So step 4 asserts all three of:
 
-- The response render is present, holding a status line plus a body region.
+- The response render is present, with a status line plus a body region.
 - The body is rendered by its content type rather than as a plain-text error dump.
 - No runtime-error text is present.
 

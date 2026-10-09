@@ -33,9 +33,9 @@ function M.download_tools(sysname)
     return { "curl", "tar", download_rule.checksum_tool(sysname) }
 end
 
-M.companion_path_fix = "Set companion_path to a folder that holds a build of the companion."
+M.companion_path_fix = "Set companion_path to a folder that contains a build of the companion."
 
----@param dotnet string the path of the dotnet executable, or the command when PATH does not hold it
+---@param dotnet string the path of the dotnet executable, or the command when PATH does not contain it
 ---@param floor integer
 ---@return string
 function M.sdk_found(dotnet, floor)
