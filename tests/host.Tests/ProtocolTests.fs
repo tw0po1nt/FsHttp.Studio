@@ -58,10 +58,6 @@ let formatCompileErrorTests =
           Range = r
           LoadedFile = None }
 
-    let loaded file message r =
-        { diag message r with
-            LoadedFile = Some file }
-
     testList
         "formatCompileError"
         [ test "prefixes the message with its (line,col), shifting the 0-based column to 1-based" {
@@ -90,44 +86,6 @@ let formatCompileErrorTests =
                   (formatCompileError None [ d1; d2 ])
                   "Compile error:\n(2,5) First error.\n(5,1) Second error."
                   "one header, one line per diagnostic"
-          }
-
-          test "names a Loaded file by its path from the directory of the Script" {
-              let script = Some "/scripts/api/probe.fsx"
-
-              Expect.equal
-                  (formatCompileError
-                      script
-                      [ loaded "/scripts/api/lib/helpers.fsx" "In the Loaded file." (range 3 8 3 9)
-                        loaded "/scripts/shared/inner.fsx" "Outside the directory." (range 1 0 1 2)
-                        diag "In the Script." (range 4 0 4 1) ])
-                  "Compile error:\nlib/helpers.fsx(3,9) In the Loaded file.\n../shared/inner.fsx(1,1) Outside the directory.\n(4,1) In the Script."
-                  "a Loaded file path is relative to the directory of the Script, and a Script diagnostic has no path"
-          }
-
-          test "names a Loaded file by its absolute path when the Script has no file name" {
-              Expect.equal
-                  (formatCompileError None [ loaded "/scripts/lib/helpers.fsx" "In the Loaded file." (range 3 8 3 9) ])
-                  "Compile error:\n/scripts/lib/helpers.fsx(3,9) In the Loaded file."
-                  "an untitled Script has no directory"
-          } ]
-
-[<Tests>]
-let loadedFilePathTests =
-    testList
-        "loadedFilePath"
-        [ test "a Windows path is relative to the directory of the Script" {
-              Expect.equal
-                  (loadedFilePath (Some @"C:\scripts\probe.fsx") @"C:\scripts\lib\helpers.fsx")
-                  "lib/helpers.fsx"
-                  "the parts join with a forward slash"
-          }
-
-          test "a path on another drive stays absolute" {
-              Expect.equal
-                  (loadedFilePath (Some @"C:\scripts\probe.fsx") @"D:\lib\helpers.fsx")
-                  @"D:\lib\helpers.fsx"
-                  "two paths with no common root give no relative path"
           } ]
 
 let private okResponse =

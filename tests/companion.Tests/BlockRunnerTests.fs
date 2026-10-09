@@ -8,6 +8,8 @@ open System.IO
 open System.Net.Http
 open System.Text.Json
 open Expecto
+open FSharp.Compiler.Diagnostics
+open FSharp.Compiler.Text
 open Companion.BlockRunner
 open Companion.RequestCapture
 open Companion.Tests.TestServer
@@ -683,6 +685,34 @@ let tests =
                       | other -> failtestf "expected one compileError diagnostic, got %A" other
               finally
                   Directory.Delete(dir, true)
+          }
+
+          test "a diagnostic with a placeholder file name has no Loaded file" {
+              let diagnostic fileName =
+                  FSharpDiagnostic.Create(
+                      FSharpDiagnosticSeverity.Error,
+                      "message",
+                      0,
+                      Range.mkRange fileName (Position.mkPos 1 0) (Position.mkPos 1 1)
+                  )
+
+              let loadedFile = Path.GetFullPath(Path.Combine("scripts", "lib", "helpers.fsx"))
+              let scriptPath = Path.GetFullPath(Path.Combine("scripts", "probe.fsx"))
+
+              Expect.isNone
+                  (loadedFileOf
+                      (Some scriptPath)
+                      (FSharpDiagnostic.Create(FSharpDiagnosticSeverity.Error, "message", 0, Range.range0)))
+                  "a diagnostic at range0 is in the Script"
+
+              Expect.isNone (loadedFileOf (Some scriptPath) (diagnostic "startup")) "a relative name is in the Script"
+              Expect.isNone (loadedFileOf (Some scriptPath) (diagnostic scriptPath)) "the Script name is in the Script"
+              Expect.isNone (loadedFileOf None (diagnostic "input.fsx")) "the FSI default name is in the Script"
+
+              Expect.equal
+                  (loadedFileOf (Some scriptPath) (diagnostic loadedFile))
+                  (Some loadedFile)
+                  "a full path names a Loaded file"
           }
 
           test "the wire keeps the Loaded file of a diagnostic, and omits it for a Script diagnostic" {

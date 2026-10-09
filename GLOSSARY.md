@@ -27,7 +27,7 @@ The code that a Run evaluates to reach the target block. It starts at the first 
 _Avoid_: context, preamble, prelude.
 
 **Loaded file**:
-A source file that a Script brings in with `#load`. It can be a `.fsx` or a `.fs` file. Its code is part of the Setup, so a Compile error can have its position in a Loaded file. A loaded `.fsx` file is a Loaded file to the Script that loads it.
+A source file that a Script brings in with `#load`. It can be a `.fsx` or a `.fs` file. Its code is part of the Setup, so a Compile error can have its position in a Loaded file. A file that a Loaded file brings in with `#load` is also a Loaded file. A loaded `.fsx` file is also a Script. That file is a Loaded file only in a Run of a Script that loads it.
 _Avoid_: included file, dependency, imported script.
 
 **Run**:

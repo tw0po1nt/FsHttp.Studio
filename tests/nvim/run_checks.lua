@@ -271,7 +271,7 @@ T["a Compile error shows as text, <CR> and <Plug>(FsHttpJump) move to its positi
         return window ~= nil and (shown.lines[1] or "") == "Compile error:" and has_text(shown.lines, "(12,19) ")
     end)
     local window = assert(only_window(snapshot))
-    assert.equal("Compile error  <CR> on a (line,col) moves to it in the script", window.winbar)
+    assert.equal("Compile error  <CR> on a (line,col) moves to it", window.winbar)
     assert.equal(true, has_text(snapshot.lines, "expected to have type"), vim.inspect(snapshot.lines))
     for _, line in ipairs(snapshot.lines or {}) do
         assert.equal(false, line:match(" $") ~= nil, "a trailing space on: " .. line)
@@ -352,7 +352,6 @@ local function loaded_file_position_line(snapshot)
     end
 end
 
--- Runs the Block of the Script at `path`, and gives the Response window and the line of the Loaded file position.
 ---@param child nvim_suite.Child
 ---@param path string
 ---@return integer window, integer position_line
@@ -436,7 +435,6 @@ T["a Compile error in a Loaded file names its path, and <CR> opens the Loaded fi
         return state.name == loaded_file and vim.deep_equal(state.cursor, { 3, 18 })
     end)
 
-    -- A second <CR> uses the window that shows the Loaded file.
     harness.cmd(child, "call cursor(1, 1)")
     press_enter_on(child, window, position_line)
     eventually_in_loaded_file(child, "the cursor back in the same Loaded file window", function(state)

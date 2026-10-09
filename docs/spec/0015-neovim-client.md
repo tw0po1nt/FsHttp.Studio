@@ -323,13 +323,15 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
 - **Compile error.** The buffer shows the Compile error text of the VSCode viewer, with the trailing
   spaces removed from each line. A diagnostic from a Loaded file starts with the path of the Loaded
   file, for example `lib/helpers.fsx(3,9)`. The path is relative to the directory of the script.
-  The path is absolute when the script has no file name. `<CR>` on a `(line,col)` line moves the
-  cursor to that position in the script, or in the Loaded file. For a Loaded file, `<CR>` uses a
-  window in the current tab that shows the Loaded file, or opens a `topleft split`. If the Loaded
-  file does not exist, a WARN notice names it. If the position is past the end of its file, a WARN
-  notice states that. In both cases, the cursor stays. The winbar shows
-  `Compile error  <CR> on a (line,col) moves to it in the script`. The script gets no diagnostic,
-  no sign, and no quickfix entry. This keeps the rule of spec 0009.
+  The path is absolute when the script has no file name, and when the Loaded file is on another
+  drive. On Windows, FSI expands an 8.3 short name in the path of a Loaded file. If the path of the
+  script has a short name, the relative path can start with many `../` parts. `<CR>` on a
+  `(line,col)` line moves the cursor to that position in the script, or in the Loaded file. For a
+  Loaded file, `<CR>` uses a window in the current tab that shows the Loaded file, or opens a
+  `topleft split`. If the Loaded file does not exist, a WARN notice names it. If the position is
+  past the end of its file, a WARN notice states that. In both cases, the cursor stays. The winbar
+  shows `Compile error  <CR> on a (line,col) moves to it`. The script gets no diagnostic, no sign,
+  and no quickfix entry. This keeps the rule of spec 0009.
 - **Runtime error and Refused Run.** Each one shows as text in the Response buffer, as in VSCode.
 
 #### A9. `:FsHttp open`

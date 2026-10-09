@@ -253,60 +253,23 @@ describe("fshttp.response_view", function()
             { message = "three", range = { start_line = 20, start_col = 0 } },
         })
         local plain = view.winbar:gsub("%%#[^#]*#", ""):gsub("%%%*", "")
-        assert.equal("Compile error  <CR> on a (line,col) moves to it in the script", plain)
+        assert.equal("Compile error  <CR> on a (line,col) moves to it", plain)
         assert.same({ [2] = { line = 12, col = 4 }, [4] = { line = 20, col = 0 } }, view.positions)
     end)
 
-    it(
-        "names a Loaded file by its path from the directory of the Script, as the VSCode Response viewer does",
-        function()
-            local view = response_view.compile_error({
-                {
-                    message = "In the Loaded file.",
-                    range = { start_line = 3, start_col = 8 },
-                    loaded_file = "/scripts/api/lib/helpers.fsx",
-                },
-                {
-                    message = "Outside the directory.",
-                    range = { start_line = 1, start_col = 0 },
-                    loaded_file = "/scripts/shared/inner.fsx",
-                },
-                { message = "In the Script.", range = { start_line = 4, start_col = 0 } },
-            }, "/scripts/api/probe.fsx")
-            assert.same({
-                "Compile error:",
-                "lib/helpers.fsx(3,9) In the Loaded file.",
-                "../shared/inner.fsx(1,1) Outside the directory.",
-                "(4,1) In the Script.",
-            }, view.lines)
-            assert.same({
-                [2] = { line = 3, col = 8, loaded_file = "/scripts/api/lib/helpers.fsx" },
-                [3] = { line = 1, col = 0, loaded_file = "/scripts/shared/inner.fsx" },
-                [4] = { line = 4, col = 0 },
-            }, view.positions)
-        end
-    )
-
-    it("names a Loaded file by its absolute path when the Script has no file name", function()
+    it("gives the position of a Loaded file line its Loaded file", function()
         local view = response_view.compile_error({
             {
                 message = "In the Loaded file.",
                 range = { start_line = 3, start_col = 8 },
-                loaded_file = "/scripts/lib/helpers.fsx",
+                loaded_file = "/scripts/api/lib/helpers.fsx",
             },
-        }, nil)
-        assert.same({ "Compile error:", "/scripts/lib/helpers.fsx(3,9) In the Loaded file." }, view.lines)
-    end)
-
-    it("gives a Windows Loaded file path with a forward slash, and keeps a path on another drive absolute", function()
-        assert.equal(
-            "lib/helpers.fsx",
-            response_view.loaded_file_path("C:\\scripts\\probe.fsx", "C:\\scripts\\lib\\helpers.fsx")
-        )
-        assert.equal(
-            "D:\\lib\\helpers.fsx",
-            response_view.loaded_file_path("C:\\scripts\\probe.fsx", "D:\\lib\\helpers.fsx")
-        )
+            { message = "In the Script.", range = { start_line = 4, start_col = 0 } },
+        }, "/scripts/api/probe.fsx")
+        assert.same({
+            [2] = { line = 3, col = 8, loaded_file = "/scripts/api/lib/helpers.fsx" },
+            [3] = { line = 4, col = 0 },
+        }, view.positions)
     end)
 
     it("shows a Refused Run for a value that another Block binds with its title and its detail", function()

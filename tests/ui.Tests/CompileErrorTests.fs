@@ -7,7 +7,7 @@ module CompileErrorTests
 open Fable.Mocha
 
 let private fixtureFileName = "compile-error.fsx"
-/// Blocks in `compile-error.fsx` and in `loaded-file-error.fsx`. Must match each fixture.
+/// The Block count of each fixture. Must match each fixture.
 let private blockCount = 1
 /// 1-based line the fixture marks as the break-target. Must match `compile-error.fsx`.
 let private brokenLine = 12
@@ -118,8 +118,8 @@ let private compileErrorNamesItsSource =
 
 let private loadedFileFixtureFileName = "loaded-file-error.fsx"
 
-/// The path from the fixture directory and the 1-based position of the type error in
-/// `loaded/broken.fsx`. Must match the fixture.
+/// The path from the fixture directory and the 1-based position of the type error in the Loaded
+/// file. Must match the fixture.
 let private loadedFilePosition = "loaded/broken.fsx(3,19)"
 
 let private tryCompileErrorInLoadedFile () =

@@ -42,8 +42,8 @@ local function move_to(win, buf, position)
 end
 
 ---@param path string
----@return integer? buf the loaded buffer that edits the file at `path`
-local function loaded_buffer(path)
+---@return integer? buf a buffer that Neovim has loaded for the file at `path`
+local function buffer_for_path(path)
     local wanted = vim.fs.normalize(path)
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
         if vim.api.nvim_buf_is_loaded(buf) and vim.fs.normalize(vim.api.nvim_buf_get_name(buf)) == wanted then
@@ -60,7 +60,7 @@ local function jump_to_loaded_file(position, loaded_file)
         notify(string.format("The loaded file %s does not exist.", shown), vim.log.levels.WARN)
         return
     end
-    local buf = loaded_buffer(loaded_file)
+    local buf = buffer_for_path(loaded_file)
     local line_count = buf and vim.api.nvim_buf_line_count(buf) or #vim.fn.readfile(loaded_file)
     if position.line > line_count then
         notify(string.format("The position is past the end of the loaded file %s.", shown), vim.log.levels.WARN)

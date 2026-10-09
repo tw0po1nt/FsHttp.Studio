@@ -417,7 +417,7 @@ function M.compile_error(diagnostics, script_file_name)
     local view = new_view()
     view.winbar = statusline({
         { "Compile error", "FsHttpResponseError" },
-        { "  <CR> on a (line,col) moves to it in the script", "FsHttpResponseDetail" },
+        { "  <CR> on a (line,col) moves to it", "FsHttpResponseDetail" },
     })
     add(view, { { "Compile error:", "FsHttpResponseError" } })
     view.positions = {}

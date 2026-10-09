@@ -342,6 +342,15 @@ let private unshiftPos (shift: ColumnShift option) (line: int, col: int) =
         else line, col - s.Offset
     | _ -> line, col
 
+let private unshiftedRange (shift: ColumnShift option) (d: FSharpDiagnostic) : BlockRange =
+    let sl, sc = unshiftPos shift (d.StartLine, d.StartColumn)
+    let el, ec = unshiftPos shift (d.EndLine, d.EndColumn)
+
+    { StartLine = sl
+      StartCol = sc
+      EndLine = el
+      EndCol = ec }
+
 /// True when a *Setup-coordinate* position falls inside the R1 inserted text itself, which is
 /// the companion's own generated `let <name> = `. Such a position has no user-source counterpart,
 /// and `unshiftPos` clamps it to the insertion point, which is also the block's own start
@@ -466,9 +475,9 @@ let private setupMessage (d: FSharpDiagnostic) =
 /// evaluate:` prefix, including an anchored one.
 let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d: FSharpDiagnostic) : Diagnostic =
     let message = setupMessage d
-    let sl, sc = unshiftPos shift (d.StartLine, d.StartColumn)
+    let range = unshiftedRange shift d
 
-    if sl > realLineCount then
+    if range.StartLine > realLineCount then
         { Message = message
           Range =
             { StartLine = 1
@@ -477,14 +486,8 @@ let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d:
               EndCol = 0 }
           LoadedFile = None }
     else
-        let el, ec = unshiftPos shift (d.EndLine, d.EndColumn)
-
         { Message = message
-          Range =
-            { StartLine = sl
-              StartCol = sc
-              EndLine = el
-              EndCol = ec }
+          Range = range
           LoadedFile = None }
 
 /// FSI gives an interaction this file name when the caller gives none.
@@ -492,9 +495,13 @@ let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d:
 let private defaultScriptFileName = "input.fsx"
 
 /// The path of the Loaded file that contains `d`, or `None` when `d` is in the Script. For a nested
-/// `#load`, FCS gives the innermost file that contains the error.
-let private loadedFileOf (scriptFileName: string option) (d: FSharpDiagnostic) : string option =
-    if d.FileName = defaultArg scriptFileName defaultScriptFileName then
+/// `#load`, FCS gives the innermost file that contains the error. FCS gives a Loaded file its full
+/// path. FCS gives a diagnostic with no source position a placeholder name, such as `unknown`.
+let loadedFileOf (scriptFileName: string option) (d: FSharpDiagnostic) : string option =
+    if
+        d.FileName = defaultArg scriptFileName defaultScriptFileName
+        || not (IO.Path.IsPathRooted d.FileName)
+    then
         None
     else
         Some d.FileName
@@ -502,14 +509,9 @@ let private loadedFileOf (scriptFileName: string option) (d: FSharpDiagnostic) :
 /// A Loaded file is outside the Script text, so its FCS range needs no translation.
 let private loadedFileDiagnostic (loadedFile: string) (d: FSharpDiagnostic) : Diagnostic =
     { Message = setupMessage d
-      Range =
-        { StartLine = d.StartLine
-          StartCol = d.StartColumn
-          EndLine = d.EndLine
-          EndCol = d.EndColumn }
+      Range = unshiftedRange None d
       LoadedFile = Some loadedFile }
 
-/// Gives a Loaded file diagnostic its own treatment, and each other diagnostic `scriptDiagnostic`.
 let private toDiagnostic
     (scriptFileName: string option)
     (scriptDiagnostic: FSharpDiagnostic -> Diagnostic)
@@ -570,15 +572,8 @@ let private blankedNameRefusal
 /// unchanged, at its own (unshifted) position, with no introductory sentence, because the fault
 /// is in the user's block rather than in text the companion generated.
 let private blockDiagnostic (shift: ColumnShift option) (d: FSharpDiagnostic) : Diagnostic =
-    let sl, sc = unshiftPos shift (d.StartLine, d.StartColumn)
-    let el, ec = unshiftPos shift (d.EndLine, d.EndColumn)
-
     { Message = d.Message
-      Range =
-        { StartLine = sl
-          StartCol = sc
-          EndLine = el
-          EndCol = ec }
+      Range = unshiftedRange shift d
       LoadedFile = None }
 
 /// Splits a Setup-interaction diagnostic between the two treatments above, by whether its
