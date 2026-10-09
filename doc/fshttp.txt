@@ -1,6 +1,334 @@
 *fshttp.txt*  Run one FsHttp request from an F# script
 
-The Neovim client of FsHttp.Studio. This file will contain the commands, the
-options, and the health check.
+                                                                      *fshttp*
+The Neovim client of FsHttp.Studio runs one FsHttp request from an F# script,
+and shows the response in a buffer beside the script.
+
+==============================================================================
+CONTENTS                                                     *fshttp-contents*
+
+  1. Introduction ............................................ |fshttp-intro|
+  2. Requirements ..................................... |fshttp-requirements|
+  3. Commands ............................................. |fshttp-commands|
+  4. Maps and keys ............................................ |fshttp-maps|
+  5. Options ............................................... |fshttp-options|
+  6. Lua API and statusline ..................................... |fshttp-api|
+  7. Health check ........................................... |fshttp-health|
+
+==============================================================================
+1. Introduction                                                 *fshttp-intro*
+
+A Script is a `.fsx` file. A Block is one `http { }` expression in a Script.
+A Run evaluates the Script from the first line to the end of one Block, and
+shows the result. The Run skips each other Block.
+
+The companion is a .NET process that parses each Script and runs each Block.
+The client starts one companion when you open the first Script. With no
+|fshttp-companion_path|, the client downloads the Companion archive of its own
+version from the GitHub release. A lazy.nvim install or update downloads it at
+once.
+
+Each Block gets a Block mark: a virtual line above the Block, and a sign. The
+Block mark shows `▶ Run request` when a Run can reach the Block. It shows
+`⊘ Cannot run: ...` with the reason when a Run cannot reach the Block.
+
+The Active document is the buffer that you look at. It can be a Script, the
+Response buffer, or another buffer.
+
+A Run shows its result in the Response buffer. The client keeps one Response
+buffer, and opens it in a split. The cursor stays in the Script. The buffer
+has three folds: Request, Response headers, and Body. The winbar shows the
+status code, the times, the size, the method, and the URL.
+
+The client shows the Body by its Content-Type:
+- The client gives a JSON, XML, or HTML body highlights and folds from its
+  tree-sitter parser. With no JSON parser, the client pretty-prints a JSON
+  body.
+- The client shows an image through snacks.nvim, when the terminal can show
+  images.
+- The client shows a binary body as a hex view.
+- The client shows each other body as text.
+
+A Compile error shows each error with its position. Press <CR> on a
+`(line,col)` line to move to that position in the Script or the Loaded file.
+
+==============================================================================
+2. Requirements                                          *fshttp-requirements*
+
+Required:
+- Neovim 0.11 or later.
+- A .NET SDK at the floor of the companion (.NET 10 or later), on PATH or in
+  |fshttp-dotnet_path|. Download it from https://aka.ms/dotnet/download.
+- `curl`, `tar`, and a checksum tool, to download the Companion archive. The
+  checksum tool is `sha256sum` on Linux, `shasum` on macOS, and `certutil` on
+  Windows. With |fshttp-companion_path|, the client downloads nothing.
+
+Optional:
+- snacks.nvim and a terminal that can show images, for an image body.
+- The `json`, `xml`, and `html` tree-sitter parsers, for highlights and folds
+  in the Body.
+- lualine.nvim, for the Status line text in the statusline.
+
+|fshttp-health| reports each item.
+
+==============================================================================
+3. Commands                                                  *fshttp-commands*
+
+                                                                     *:FsHttp*
+:FsHttp {subcommand} [args]
+    The one command of the client. It completes each subcommand.
+
+                                                                 *:FsHttp-run*
+:FsHttp run
+    Run the Block at the cursor. A Block contains the cursor when the cursor
+    line is between the first line and the last line of the Block. In a Block
+    inside another Block, the inner Block is the target.
+
+    When the cursor is outside each Block, a picker lists each Block of the
+    Script, the refused Blocks too. A pick on a Block that a Run can reach
+    starts a Run. A pick on a refused Block shows its refusal, and no Run
+    starts.
+
+    While the companion starts, the Run waits, and starts when the companion
+    is ready. A new `:FsHttp run` replaces the Run that waits.
+
+                                                                *:FsHttp-open*
+:FsHttp open
+    Open the Body of the last Run in the system application. An HTML body
+    opens in the browser. The client adds a Content-Security-Policy to the
+    page, which blocks each script of the page. An image body opens in the
+    image viewer. The client writes the Body to a temporary file, so the file
+    does not change on the next Run.
+
+                                                              *:FsHttp-status*
+:FsHttp status
+    Echo the Status line text of the Active document. In a buffer that is not
+    F#, echo the state of the companion.
+
+                                                                *:FsHttp-yank*
+:FsHttp yank {item} [register]
+    Put the Copy text of {item} from the last Run in [register]. The items are
+    `request`, `headers`, and `body`. With no [register], the command uses
+    |v:register|, which is the default register in an Ex command.
+    Example: >vim
+        :FsHttp yank body +
+<
+    A Body of zero bytes has no Copy text, and the command writes no register.
+
+==============================================================================
+4. Maps and keys                                                 *fshttp-maps*
+
+The client binds no key in a Script. Map |<Plug>(FsHttpRun)| to a key of your
+choice. Example: >lua
+    vim.keymap.set("n", "<leader>rr", "<Plug>(FsHttpRun)")
+<
+                                                           *<Plug>(FsHttpRun)*
+<Plug>(FsHttpRun)
+    Run the Block at the cursor, as |:FsHttp-run| does.
+
+The Response buffer maps these local keys. Set
+|fshttp-response_buffer.keys| to false to remove them. Each <Plug> map stays.
+
+    Key    Action                              <Plug> map ~
+    `yr`     Yank the Request                    |<Plug>(FsHttpYankRequest)|
+    `yh`     Yank the Response headers           |<Plug>(FsHttpYankHeaders)|
+    `yb`     Yank the Body                       |<Plug>(FsHttpYankBody)|
+    `<CR>`   Move to a Compile error position    |<Plug>(FsHttpJump)|
+    `g?`     List the active keys                |<Plug>(FsHttpHelp)|
+
+                                                   *<Plug>(FsHttpYankRequest)*
+<Plug>(FsHttpYankRequest)
+    Put the Copy text of the Request in |v:register|. Type `"+yr` to put it
+    in the system clipboard.
+
+                                                   *<Plug>(FsHttpYankHeaders)*
+<Plug>(FsHttpYankHeaders)
+    Put the Copy text of the Response headers in |v:register|.
+
+                                                      *<Plug>(FsHttpYankBody)*
+<Plug>(FsHttpYankBody)
+    Put the Copy text of the Body in |v:register|.
+
+                                                          *<Plug>(FsHttpJump)*
+<Plug>(FsHttpJump)
+    On a `(line,col)` line of a Compile error, move the cursor to that
+    position. For a Loaded file, use a window of the current tab that shows
+    the file, or open a split.
+
+                                                          *<Plug>(FsHttpHelp)*
+<Plug>(FsHttpHelp)
+    List the active keys of the Response buffer.
+
+==============================================================================
+5. Options                                                    *fshttp-options*
+
+Give the options to `require("fshttp").setup()`. lazy.nvim calls `setup()`
+with the `opts` of the lazy.nvim spec of the client. With no `setup()` call,
+the client uses the defaults. Each `setup()` call replaces the options with
+the defaults and the new values. The defaults: >lua
+    require("fshttp").setup({
+        dotnet_path = nil,
+        companion_path = nil,
+        request_timeout_ms = 30000,
+        block_mark = { virtual_line = true, sign = true },
+        response_buffer = { split = "right", images = true, keys = true },
+        status_line = { lualine = true },
+    })
+<
+A bad value gives an ERROR notice, and the key keeps its default. An unknown
+key gives a WARN notice. Each other key applies.
+
+                                                          *fshttp-dotnet_path*
+dotnet_path ~
+    string or nil (default: nil)
+    The `dotnet` executable that starts the companion. With nil, the client
+    uses `dotnet` on PATH. A change applies at the next start of the
+    companion.
+
+                                                       *fshttp-companion_path*
+companion_path ~
+    string or nil (default: nil)
+    A folder that contains `Companion.dll`. Set it to use a local build of the
+    companion, or a companion that you downloaded by hand. With nil, the
+    client downloads the Companion archive. A change applies at the next start
+    of the companion.
+
+    The client compares the version of this companion with its own version.
+    On a mismatch, one WARN notice names the two versions, and each Run still
+    starts.
+
+                                                   *fshttp-request_timeout_ms*
+request_timeout_ms ~
+    number (default: 30000)
+    The bound of each Run in milliseconds. It includes the connection, the
+    request, and the download of the response. The restore of the
+    `#r "nuget:"` packages occurs before the bound starts. A Block that sets
+    its own timeout keeps it. 0 sets no bound. A change applies to the next
+    Run.
+
+                                              *fshttp-block_mark.virtual_line*
+block_mark.virtual_line ~
+    boolean (default: true)
+    Show the virtual line of each Block mark. A change applies at once.
+
+                                                      *fshttp-block_mark.sign*
+block_mark.sign ~
+    boolean (default: true)
+    Show the sign of each Block mark. A change applies at once.
+
+                                                *fshttp-response_buffer.split*
+response_buffer.split ~
+    "right", "left", "below", or "above" (default: "right")
+    The side of the split that opens the Response buffer. A change applies to
+    the next Run.
+
+                                               *fshttp-response_buffer.images*
+response_buffer.images ~
+    boolean (default: true)
+    Show an image body through snacks.nvim. With false, the Body shows the
+    pixel size of the image. A change applies to the next Run.
+
+                                                 *fshttp-response_buffer.keys*
+response_buffer.keys ~
+    boolean (default: true)
+    Map the local keys of the Response buffer. See |fshttp-maps|. A change
+    applies to the next Run.
+
+                                                  *fshttp-status_line.lualine*
+status_line.lualine ~
+    boolean (default: true)
+    Show the Status line text in the `lualine_x` section of lualine.nvim. A
+    change applies at the next draw of the statusline.
+
+==============================================================================
+6. Lua API and statusline                                         *fshttp-api*
+
+                                                              *fshttp.setup()*
+require("fshttp").setup({opts})
+    Set the options. See |fshttp-options|.
+
+                                                             *fshttp.status()*
+require("fshttp").status()
+    Return the Status line text of the Active document, or nil when the
+    Active document does not have the `fsharp` filetype. The text reports the
+    state of the companion and the Blocks of the Script.
+
+                                                              *fshttp-lualine*
+With lazy.nvim and lualine.nvim, the client adds |fshttp.status()| to the
+`lualine_x` section. Set |fshttp-status_line.lualine| to false to remove it.
+
+                                                 *FsHttpStatusLineTextChanged*
+Each change of the Status line text fires the |User| autocmd
+`FsHttpStatusLineTextChanged`. For another statusline, call |fshttp.status()|
+from your statusline, and draw the statusline again on this event: >lua
+    vim.api.nvim_create_autocmd("User", {
+        pattern = "FsHttpStatusLineTextChanged",
+        command = "redrawstatus",
+    })
+<
+                                                           *fshttp-highlights*
+The client links each highlight group to a default group. Set a group to
+change its colors. Each entry gives the group, its default link, and its use.
+
+The groups of the Block marks:
+    FsHttpBlockMark              LspCodeLens
+        The virtual line of a Block mark.
+    FsHttpBlockMarkRun           DiagnosticOk
+        The sign of a Block that a Run can reach.
+    FsHttpBlockMarkRefused       DiagnosticWarn
+        The sign of a Block that a Run cannot reach.
+
+The groups of the Response buffer:
+    FsHttpResponseSection        Title
+        The title of each fold: Request, Response headers, and Body.
+    FsHttpResponseDetail         Comment
+        Secondary text, such as the detail beside a fold title, the total
+        time and the size in the winbar, and the hint lines.
+    FsHttpResponseHeaderName     Identifier
+        The name of each header.
+    FsHttpResponseMethod         Keyword
+        The method in the winbar and in the Request fold.
+    FsHttpResponseUrl            Underlined
+        The URL in the winbar and in the Request fold.
+    FsHttpResponseTime           Number
+        The request time in the winbar.
+    FsHttpResponseError          DiagnosticError
+        The title of a Runtime error or a Compile error.
+    FsHttpResponseRefused        Title
+        The title of a Refused Run.
+    FsHttpResponseStatus2xx      DiagnosticOk
+        A status code from 200 to 299 in the winbar.
+    FsHttpResponseStatus3xx      DiagnosticInfo
+        A status code from 300 to 399 in the winbar.
+    FsHttpResponseStatus4xx      DiagnosticWarn
+        A status code from 400 to 499 in the winbar.
+    FsHttpResponseStatus5xx      DiagnosticError
+        A status code from 500 to 599 in the winbar.
+    FsHttpResponseStatusOther    Comment
+        Each other status code in the winbar.
+
+==============================================================================
+7. Health check                                                *fshttp-health*
+
+Type `:checkhealth fshttp` to see these sections:
+
+Required items ~
+    The .NET SDK and its floor, the companion with its version and its
+    folder, and the download tools. With |fshttp-companion_path|, a missing
+    download tool is an INFO line. Each missing item is an ERROR with the fix.
+
+Optional items ~
+    snacks.nvim with a terminal that can show images, and the `json`, `xml`,
+    and `html` tree-sitter parsers. Each missing item is a WARN that names
+    what degrades. A missing optional item stops no Run. With
+    |fshttp-response_buffer.images| set to false, the image item is OK, and
+    it states that images are turned off.
+
+Companion ~
+    The state of the companion, and the result of the version check.
+
+Options ~
+    Whether `setup()` applied, one INFO line for each value that is not its
+    default, and one line for each bad value or unknown key.
 
  vim:tw=78:ft=help:norl:

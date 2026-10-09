@@ -182,6 +182,32 @@ function M.resolve(opts)
     return config, problems
 end
 
+---@param config fshttp.Config
+---@param key string the dotted name of the key
+---@return any
+local function value_at(config, key)
+    local name, sub = key:match("^([^.]+)%.(.+)$")
+    if name then
+        return config[name][sub]
+    end
+    return config[key]
+end
+
+---@return string[] keys the dotted name of each key
+function M.keys()
+    local keys = {}
+    for _, name in ipairs(sorted_keys(schema)) do
+        if schema[name].accept then
+            keys[#keys + 1] = name
+        else
+            for _, sub in ipairs(sorted_keys(schema[name])) do
+                keys[#keys + 1] = name .. "." .. sub
+            end
+        end
+    end
+    return keys
+end
+
 ---@param old fshttp.Config
 ---@param new fshttp.Config
 ---@return string[]
@@ -205,18 +231,10 @@ end
 function M.changed_values(config)
     local defaults = M.defaults()
     local changes = {}
-    for _, name in ipairs(sorted_keys(schema)) do
-        if schema[name].accept then
-            if config[name] ~= defaults[name] then
-                changes[#changes + 1] = { key = name, value = config[name], default = defaults[name] }
-            end
-        else
-            for _, sub in ipairs(sorted_keys(schema[name])) do
-                if config[name][sub] ~= defaults[name][sub] then
-                    changes[#changes + 1] =
-                        { key = name .. "." .. sub, value = config[name][sub], default = defaults[name][sub] }
-                end
-            end
+    for _, key in ipairs(M.keys()) do
+        local value, default = value_at(config, key), value_at(defaults, key)
+        if value ~= default then
+            changes[#changes + 1] = { key = key, value = value, default = default }
         end
     end
     return changes

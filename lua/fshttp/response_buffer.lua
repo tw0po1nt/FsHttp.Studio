@@ -18,23 +18,25 @@ local levels = {}
 local running_timer
 local highlights_defined = false
 
+---@type table<string, string> the default link of each highlight group
+M.highlight_links = {
+    FsHttpResponseSection = "Title",
+    FsHttpResponseDetail = "Comment",
+    FsHttpResponseHeaderName = "Identifier",
+    FsHttpResponseMethod = "Keyword",
+    FsHttpResponseUrl = "Underlined",
+    FsHttpResponseTime = "Number",
+    FsHttpResponseError = "DiagnosticError",
+    FsHttpResponseRefused = "Title",
+    FsHttpResponseStatus2xx = "DiagnosticOk",
+    FsHttpResponseStatus3xx = "DiagnosticInfo",
+    FsHttpResponseStatus4xx = "DiagnosticWarn",
+    FsHttpResponseStatus5xx = "DiagnosticError",
+    FsHttpResponseStatusOther = "Comment",
+}
+
 local function define_highlights()
-    local links = {
-        FsHttpResponseSection = "Title",
-        FsHttpResponseDetail = "Comment",
-        FsHttpResponseHeaderName = "Identifier",
-        FsHttpResponseMethod = "Keyword",
-        FsHttpResponseUrl = "Underlined",
-        FsHttpResponseTime = "Number",
-        FsHttpResponseError = "DiagnosticError",
-        FsHttpResponseRefused = "Title",
-        FsHttpResponseStatus2xx = "DiagnosticOk",
-        FsHttpResponseStatus3xx = "DiagnosticInfo",
-        FsHttpResponseStatus4xx = "DiagnosticWarn",
-        FsHttpResponseStatus5xx = "DiagnosticError",
-        FsHttpResponseStatusOther = "Comment",
-    }
-    for group, link in pairs(links) do
+    for group, link in pairs(M.highlight_links) do
         vim.api.nvim_set_hl(0, group, { link = link, default = true })
     end
 end

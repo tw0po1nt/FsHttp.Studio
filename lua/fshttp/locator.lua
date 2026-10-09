@@ -27,10 +27,17 @@ local answers = {}
 local listeners = {}
 local watching = false
 
+---@type table<string, string> the default link of each highlight group
+M.highlight_links = {
+    FsHttpBlockMark = "LspCodeLens",
+    FsHttpBlockMarkRun = "DiagnosticOk",
+    FsHttpBlockMarkRefused = "DiagnosticWarn",
+}
+
 local function define_highlights()
-    vim.api.nvim_set_hl(0, "FsHttpBlockMark", { link = "LspCodeLens", default = true })
-    vim.api.nvim_set_hl(0, "FsHttpBlockMarkRun", { link = "DiagnosticOk", default = true })
-    vim.api.nvim_set_hl(0, "FsHttpBlockMarkRefused", { link = "DiagnosticWarn", default = true })
+    for group, link in pairs(M.highlight_links) do
+        vim.api.nvim_set_hl(0, group, { link = link, default = true })
+    end
 end
 
 ---@param buf integer
