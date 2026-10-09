@@ -402,6 +402,15 @@ function M.type_keys(child, ...)
     end)
 end
 
+-- The screen of the child, as the screenshot that mini.test compares with a reference file.
+---@param child nvim_suite.Child
+---@return table
+function M.screenshot(child)
+    return guarded(child, "the screenshot", function()
+        return child.mini.get_screenshot()
+    end)
+end
+
 -- The Block marks of the current buffer in the child, one line for each mark in line order:
 -- "<line>: <virtual line> [<sign>]". The text is empty when the buffer has no Block mark.
 ---@param child nvim_suite.Child
