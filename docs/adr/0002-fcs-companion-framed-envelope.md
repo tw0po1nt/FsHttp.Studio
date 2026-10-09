@@ -21,6 +21,6 @@ The process boundary is also the editor-agnostic seam. Another editor reuses the
 
 The companion hosts FCS *as a library* instead of a call out to `dotnet fsi`. This puts the companion's own FSharp.Core on the same object graph as the compiler that it hosts, so the two must agree on assembly identity.
 
-The companion therefore pins **FSharp.Core to the exact version that FCS carries**. It currently pins FSharp.Core `10.1.204` with `FSharp.Compiler.Service 43.12.204`. It also sets `DisableImplicitFSharpCoreReference`, so the default FSharp.Core of the SDK cannot add a second identity to the graph. See `companion/Companion.fsproj`.
+The companion therefore pins **FSharp.Core to the exact version that FCS carries**. It currently pins FSharp.Core `10.1.204` with `FSharp.Compiler.Service 43.12.204`. It also sets `DisableImplicitFSharpCoreReference`, so the default FSharp.Core of the SDK cannot add a second identity to the graph. `Directory.Build.props` sets the FSharp.Core version as `FSharpCoreVersion`, and each project references FSharp.Core at that version. `src/companion/Companion.fsproj` sets the FCS version.
 
 The companion targets **.NET 10** and sets `RollForward=LatestMajor`, so a newer-only SDK still launches it. The extension host mirrors that major version as an SDK floor at activation time (`Extension.fs`). These constraints are consequences of the FCS-as-a-library choice, which is why the pins in the code refer to this ADR.

@@ -7,4 +7,13 @@
     <WarnOn>1182,3390,3559,3560,3579</WarnOn>
   </PropertyGroup>
 
+  <!-- The companion hosts FCS as a library, so the companion and FCS must use the same FSharp.Core
+       (ADR 0002). This version must be the FSharp.Core version that the FSharp.Compiler.Service
+       package in src/companion/Companion.fsproj needs. Each project sets
+       DisableImplicitFSharpCoreReference and references FSharp.Core at this version. Thus the
+       graph has one FSharp.Core, and restore cannot stop with a NU1605 downgrade error. -->
+  <PropertyGroup>
+    <FSharpCoreVersion>10.1.204</FSharpCoreVersion>
+  </PropertyGroup>
+
 </Project>
