@@ -1,5 +1,4 @@
--- The screen changes with the operating system and the Neovim version, so the Checks compare only on
--- Linux with the pinned stable Neovim. NVIM_TEST_SCREENSHOTS overrides that rule.
+-- The screen changes with the OS and the Neovim version, so only Linux on the pinned stable Neovim compares.
 local MiniTest = require("mini.test")
 local harness = require("nvim.harness")
 
@@ -107,7 +106,7 @@ local function has_line(lines, text)
     return vim.tbl_contains(lines or {}, text)
 end
 
--- The URL of the test HTTP server changes with its port, and the command line shows the last message.
+-- The test HTTP server gets a new port on each run, and the command line shows the last message.
 ---@param child nvim_suite.Child
 local function mask_changing_text(child)
     harness.lua_get(

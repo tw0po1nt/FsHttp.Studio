@@ -31,7 +31,7 @@ function M.jump()
         vim.notify("The script of the Run is closed.", vim.log.levels.WARN, { title = "FsHttp.Studio" })
         return
     end
-    -- The envelope has no file name, so a line past the end of the script is a position in a loaded file.
+    -- The envelope has no file name, so a loaded-file position in the script's line range lands in the script.
     if position.line > vim.api.nvim_buf_line_count(script_buf) then
         vim.notify(
             "The position is past the end of the script. The Compile error can be in a loaded file.",

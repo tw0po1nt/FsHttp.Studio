@@ -57,7 +57,7 @@ end
 
 -- A folder that starts with a dot is the work folder of a download in progress, in this instance or in another.
 ---@param keep string the version
-local function delete_older_versions(keep)
+local function delete_other_versions(keep)
     local root = M.root()
     for name, kind in vim.fs.dir(root) do
         if kind == "directory" and name ~= keep and name:sub(1, 1) ~= "." then
@@ -138,7 +138,7 @@ function M.fetch(version, callback)
         -- Another Neovim instance can finish the same download first, before the rename or during it.
         local renamed = not M.is_installed(target) and vim.uv.fs_rename(unpacked, target)
         if renamed then
-            delete_older_versions(version)
+            delete_other_versions(version)
         end
         if renamed or M.is_installed(target) then
             finish(callback, work, { kind = "installed", folder = target })
@@ -149,7 +149,7 @@ function M.fetch(version, callback)
 
     local function unpack()
         vim.fn.mkdir(unpacked, "p")
-        -- GNU tar reads the drive letter of a Windows path (C:/...) as a host name, so tar gets relative names.
+        -- A user can have GNU tar first on PATH, which reads C:/ as a host name, so tar gets relative names.
         local tar = { "tar", "-xzf", rule.archive_name(version), "-C", unpacked_name }
         run(tar, function(result)
             if result.code ~= 0 then
@@ -204,7 +204,7 @@ function M.fetch(version, callback)
 end
 
 -- A plugin manager calls this build hook at install and at each update, so it waits for the download.
----@param companion_path string? the companion_path option
+---@param companion_path string? a set path skips the download
 ---@return boolean ok
 ---@return string message
 function M.build(companion_path)

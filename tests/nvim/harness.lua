@@ -6,7 +6,7 @@ local M = {}
 local sysname = vim.uv.os_uname().sysname
 local is_windows = sysname == "Windows_NT"
 
--- Each Budget comes from the timing table of its CI leg. A suite Budget is the slowest measured suite plus about 40%.
+-- Each Budget comes from the timing table in its CI job summary: a suite Budget is the slowest suite plus 40%.
 local budgets_ms = {
     Linux = { harness_setup = 60000, check = 30000, suite = 255000 },
     Darwin = { harness_setup = 60000, check = 30000, suite = 265000 },
@@ -164,8 +164,7 @@ end
 function M.companion_pids()
     local result
     if is_windows then
-        -- Windows has no pgrep. This PowerShell process also has the folder in its command line, so the
-        -- query looks for dotnet.exe only.
+        -- This PowerShell process has the folder in its command line too, so the query matches dotnet.exe only.
         local folder = M.companion_path():gsub("\\", "/"):gsub("'", "''")
         local script = string.format(
             "Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'dotnet.exe' -and $_.CommandLine -and $_.CommandLine.Replace('\\', '/').Contains('%s/Companion.dll') } | ForEach-Object { $_.ProcessId }",

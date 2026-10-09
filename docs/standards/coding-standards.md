@@ -69,7 +69,7 @@ survives a move of the tracker:
 ```
 
 The header of a generated file is the second exception. It names the generator and the source
-by path, because a change to the file goes into those two files:
+by path, because you change the generator or the source, and the generator then writes the file:
 
 ```lua
 -- Generated from package.json by scripts/generate-lua.fsx. Do not edit by hand.
