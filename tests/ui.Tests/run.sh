@@ -12,7 +12,7 @@ SERVER_OUT="$ROOT/out/ui-test-server"
 SERVER_BIN="$SERVER_OUT/UiTestServer"
 FIXTURES="$SUITE/fixtures"
 SIDECAR="$FIXTURES/sidecar.json"
-FIXTURE="$FIXTURES/setup.fsx"
+FIXTURE="$FIXTURES/harness-setup.fsx"
 BUNDLE="$ROOT/out/ui-tests/suite.bundle.cjs"
 SERVER_PID=""
 
@@ -63,7 +63,7 @@ if [[ ! -f "$SIDECAR" ]]; then
   exit 1
 fi
 
-if [[ "${UI_TEST_DEMO_BROKEN_SETUP:-}" == "1" ]]; then
+if [[ "${UI_TEST_DEMO_BROKEN_HARNESS_SETUP:-}" == "1" ]]; then
   echo "==> demo: kill test server before ExTester (broken proven-live)"
   kill "$SERVER_PID" 2>/dev/null || true
   wait "$SERVER_PID" 2>/dev/null || true

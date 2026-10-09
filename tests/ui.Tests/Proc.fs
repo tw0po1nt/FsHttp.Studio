@@ -76,7 +76,7 @@ let sidecarPath () : string option =
     | path -> Some path
 
 /// The outcome of reading the test server's sidecar. Missing and unreadable are separate cases
-/// because setup must name which of the two happened: a missing file means the server never
+/// because Harness setup must name which of the two happened: a missing file means the server never
 /// started, and an unreadable one means it wrote something the harness cannot trust.
 type SidecarRead =
     | SidecarMissing

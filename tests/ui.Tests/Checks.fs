@@ -1,7 +1,7 @@
 // Plumbing every product check shares: the CodeLens vocabulary each fixture renders, the fixture
 // lookup each check does, and the viewer read each viewer assertion starts from. A check file
 // keeps only its own tells, so two checks cannot drift apart on the parts that are not their
-// subject. Lands here rather than in `Harness`, which owns setup, budgets, and the wait
+// subject. Lands here rather than in `Harness`, which owns Harness setup, budgets, and the wait
 // combinator. This module owns nothing but what a check reuses.
 module Checks
 

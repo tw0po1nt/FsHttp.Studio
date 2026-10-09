@@ -18,7 +18,7 @@ let private fixtureFileName = "core-path.fsx"
 /// reads the URL off the run result rather than re-deriving it from the block's own source text
 /// Source text renders `{baseUrl}/json`, which carries neither host nor port and cannot contain
 /// this. Built at call time rather than at module load, because the address comes from the
-/// sidecar, which only setup has proven readable.
+/// sidecar, which only Harness setup has proven readable.
 ///
 /// The `/json` path is also what distinguishes this response from `/status`.
 let private firstBlockUrl () = Harness.baseUrl () + "/json"
@@ -55,9 +55,9 @@ let private trySecondResponseReplacedFirst () =
         && not (dom.JsonBodyText.Contains Harness.jsonProbeKey))
 
 /// Opens through `Checks.openFixtureAsSoleTab`, which empties the fixture column first. This is
-/// the suite's first check, so the column still has the `setup.fsx` tab that setup proved live.
-/// With two tabs open, the lens read can resolve a hidden `.editor-instance` that carries no
-/// CodeLens widgets, and report the product as having painted nothing.
+/// the suite's first check, so the column still has the `harness-setup.fsx` tab that Harness setup
+/// proved live. With two tabs open, the lens read can resolve a hidden `.editor-instance` that
+/// carries no CodeLens widgets, and report the product as having painted nothing.
 ///
 /// Leaves the fixture and the viewer open, showing the second response. That is the state the
 /// next check expects to inherit and replace.

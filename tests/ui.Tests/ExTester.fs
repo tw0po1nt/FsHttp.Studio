@@ -1,9 +1,9 @@
 // ExTester page-object bindings for the UI harness and checks. Checks import this module
 // instead of calling vscode-extension-tester directly.
 //
-// Bindings land when a check needs them: setup owns the workbench tells, the core-path check
-// owns CodeLens titles and clicks plus the viewer-beside-the-editor tell, product checks that
-// read the response viewer share the DOM read, and the companion-death check owns the window
+// Bindings land when a check needs them: Harness setup owns the workbench tells, the core-path
+// check owns CodeLens titles and clicks plus the viewer-beside-the-editor tell, product checks
+// that read the response viewer share the DOM read, and the companion-death check owns the window
 // reload. Every editor-facing binding is scoped to an editor group, because the viewer takes
 // focus when it opens and an unscoped page object would resolve the wrong column's tab. Each
 // binding reads a channel a person reads, the workbench UI or the webview DOM, and adds no
@@ -202,8 +202,8 @@ module private Viewer =
 
     let tabTitle = "FsHttp.Studio: Response"
 
-/// The column the fixture is open in. Setup opens the fixture before anything splits the editor,
-/// so it is the leftmost group.
+/// The column the fixture is open in. Harness setup opens the fixture before anything splits the
+/// editor, so it is the leftmost group.
 let private fixtureGroupIndex = 0
 
 /// The workbench command that focuses the fixture column. VSCode names these commands by ordinal,

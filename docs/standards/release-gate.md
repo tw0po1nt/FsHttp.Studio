@@ -90,7 +90,7 @@ surface. Do not leave the instruction only inside a shipped spec.
 ## What the suite covers today
 
 - Spec 1 (harness): packaged `.vsix` in a pinned headless VSCode, test HTTP server with sidecar,
-  proven-live setup, budgets, and the setup self-check.
+  proven-live Harness setup, budgets, and the Harness self-check.
 - Spec 2 (the core path): open the fixture, Run one block, then replace that response with the next.
 - Spec 3 (Run outcomes render honestly): a real 404 renders as a response with no failure. A
   dead-port Run renders as plain runtime-error text with no status line.
