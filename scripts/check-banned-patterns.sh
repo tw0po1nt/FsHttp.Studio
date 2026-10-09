@@ -18,6 +18,9 @@
 # `--text <label> <file>` checks one file of text as Markdown, and reports each
 # hit under <label>. CI uses this mode for the text of a pull request: the
 # title, the body, and the commit messages. No tracked file holds that text.
+#
+# The strippers are the awk files in scripts/strippers/. The hook at
+# .claude/hooks/banned-patterns-check.sh runs the same files.
 set -euo pipefail
 
 if [ "${1:-}" = "--text" ]; then
@@ -25,6 +28,8 @@ if [ "${1:-}" = "--text" ]; then
   text_label="$2"
   text_file="$(cd "$(dirname "$3")" && pwd)/$(basename "$3")"
 fi
+
+strippers="$(cd "$(dirname "$0")" && pwd)/strippers"
 
 cd "$(git rev-parse --show-toplevel)"
 
@@ -41,109 +46,6 @@ if [ ${#patterns[@]} -eq 0 ]; then
   exit 0
 fi
 
-# A fenced block and an inline code span are not prose, which lets a rule name
-# the text it forbids. Blanking a stripped line keeps the line numbers true.
-strip_markdown='
-  /^[[:space:]]*```/ { fence = !fence; print ""; next }
-  fence { print ""; next }
-  { gsub(/`[^`]*`/, ""); print }
-'
-
-# A comment line is prose. A code line contributes its string literals alone,
-# because a shipped string is prose that a user reads.
-strip_fsharp='
-  /^[[:space:]]*\/\// { gsub(/`[^`]*`/, ""); print; next }
-  {
-    out = ""
-    rest = $0
-    while (match(rest, /"[^"]*"/)) {
-      out = out " " substr(rest, RSTART + 1, RLENGTH - 2)
-      rest = substr(rest, RSTART + RLENGTH)
-    }
-    gsub(/`[^`]*`/, "", out)
-    print out
-  }
-'
-
-# A Lua line contributes the text of each comment and each string literal. A
-# long comment or a long string can span lines, so `closing` holds the bracket
-# that ends it, such as "]]" or "]==]". A quoted string spans lines after a
-# trailing "\" or "\z", so `quote` holds its open quote character.
-strip_lua='
-  {
-    line = $0
-    n = length(line)
-    out = ""
-    i = 1
-    while (i <= n) {
-      if (closing != "") {
-        j = index(substr(line, i), closing)
-        if (j == 0) { out = out " " substr(line, i); break }
-        out = out " " substr(line, i, j - 1)
-        i += j - 1 + length(closing)
-        closing = ""
-        continue
-      }
-      if (quote != "") {
-        j = i
-        while (j <= n && substr(line, j, 1) != quote) {
-          if (substr(line, j, 1) == "\\") j++
-          j++
-        }
-        out = out " " substr(line, i, j - i)
-        if (j > n) break
-        quote = ""
-        i = j + 1
-        continue
-      }
-      rest = substr(line, i)
-      if (substr(rest, 1, 2) == "--") {
-        rest = substr(rest, 3)
-        if (match(rest, /^\[=*\[/)) {
-          closing = "]" substr(rest, 2, RLENGTH - 2) "]"
-          i += 2 + RLENGTH
-          continue
-        }
-        out = out " " rest
-        break
-      }
-      if (match(rest, /^\[=*\[/)) {
-        closing = "]" substr(rest, 2, RLENGTH - 2) "]"
-        i += RLENGTH
-        continue
-      }
-      c = substr(rest, 1, 1)
-      if (c == "\"" || c == "\047") {
-        quote = c
-        i++
-        continue
-      }
-      i++
-    }
-    gsub(/`[^`]*`/, "", out)
-    print out
-  }
-'
-
-# A Vim help line is prose, except in an example. A line that ends in ">", or
-# in ">" and a language name, starts an example. In the example, an indented
-# line is code. A line that starts with "<", or with a character that is not a
-# space, ends the example.
-strip_vimhelp='
-  example && /^</ { example = 0; print substr($0, 2); next }
-  example && /^[^[:space:]]/ { example = 0 }
-  example { print ""; next }
-  {
-    line = $0
-    if (match(line, /(^|[[:space:]])>[a-z]*$/)) {
-      example = 1
-      line = substr(line, 1, RSTART - 1)
-    }
-    gsub(/`[^`]*`/, "", line)
-    print line
-  }
-'
-
 found=0
 
 # Prints each hit in the stripped text of one source. $1 is the label for a hit.
@@ -159,7 +61,7 @@ report_hits() {
 }
 
 if [ -n "${text_file:-}" ]; then
-  report_hits "$text_label" "$(awk "$strip_markdown" "$text_file")"
+  report_hits "$text_label" "$(awk -f "$strippers/strip_markdown.awk" "$text_file")"
 else
   while IFS= read -r file; do
     case "$file" in
@@ -167,10 +69,10 @@ else
     esac
 
     case "$file" in
-      *.md) stripped="$(awk "$strip_markdown" "$file")" ;;
-      *.fs | *.fsx) stripped="$(awk "$strip_fsharp" "$file")" ;;
-      *.lua) stripped="$(awk "$strip_lua" "$file")" ;;
-      doc/*.txt) stripped="$(awk "$strip_vimhelp" "$file")" ;;
+      *.md) stripped="$(awk -f "$strippers/strip_markdown.awk" "$file")" ;;
+      *.fs | *.fsx) stripped="$(awk -f "$strippers/strip_fsharp.awk" "$file")" ;;
+      *.lua) stripped="$(awk -f "$strippers/strip_lua.awk" "$file")" ;;
+      doc/*.txt) stripped="$(awk -f "$strippers/strip_vimhelp.awk" "$file")" ;;
       *) continue ;;
     esac
 

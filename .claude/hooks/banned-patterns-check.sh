@@ -73,104 +73,16 @@ while IFS=$'\t' read -r pattern message; do
 done < "$root/.banned-patterns"
 [ ${#patterns[@]} -eq 0 ] && exit 0
 
-# Match the stripping that scripts/check-banned-patterns.sh applies, so the hook
-# and CI agree on what counts as prose.
-strip_markdown='
-  /^[[:space:]]*```/ { fence = !fence; print ""; next }
-  fence { print ""; next }
-  { gsub(/`[^`]*`/, ""); print }
-'
-
-strip_fsharp='
-  /^[[:space:]]*\/\// { gsub(/`[^`]*`/, ""); print; next }
-  {
-    out = ""
-    rest = $0
-    while (match(rest, /"[^"]*"/)) {
-      out = out " " substr(rest, RSTART + 1, RLENGTH - 2)
-      rest = substr(rest, RSTART + RLENGTH)
-    }
-    gsub(/`[^`]*`/, "", out)
-    print out
-  }
-'
-
-strip_lua='
-  {
-    line = $0
-    n = length(line)
-    out = ""
-    i = 1
-    while (i <= n) {
-      if (closing != "") {
-        j = index(substr(line, i), closing)
-        if (j == 0) { out = out " " substr(line, i); break }
-        out = out " " substr(line, i, j - 1)
-        i += j - 1 + length(closing)
-        closing = ""
-        continue
-      }
-      if (quote != "") {
-        j = i
-        while (j <= n && substr(line, j, 1) != quote) {
-          if (substr(line, j, 1) == "\\") j++
-          j++
-        }
-        out = out " " substr(line, i, j - i)
-        if (j > n) break
-        quote = ""
-        i = j + 1
-        continue
-      }
-      rest = substr(line, i)
-      if (substr(rest, 1, 2) == "--") {
-        rest = substr(rest, 3)
-        if (match(rest, /^\[=*\[/)) {
-          closing = "]" substr(rest, 2, RLENGTH - 2) "]"
-          i += 2 + RLENGTH
-          continue
-        }
-        out = out " " rest
-        break
-      }
-      if (match(rest, /^\[=*\[/)) {
-        closing = "]" substr(rest, 2, RLENGTH - 2) "]"
-        i += RLENGTH
-        continue
-      }
-      c = substr(rest, 1, 1)
-      if (c == "\"" || c == "\047") {
-        quote = c
-        i++
-        continue
-      }
-      i++
-    }
-    gsub(/`[^`]*`/, "", out)
-    print out
-  }
-'
-
-strip_vimhelp='
-  example && /^</ { example = 0; print substr($0, 2); next }
-  example && /^[^[:space:]]/ { example = 0 }
-  example { print ""; next }
-  {
-    line = $0
-    if (match(line, /(^|[[:space:]])>[a-z]*$/)) {
-      example = 1
-      line = substr(line, 1, RSTART - 1)
-    }
-    gsub(/`[^`]*`/, "", line)
-    print line
-  }
-'
+# Run the strippers that scripts/check-banned-patterns.sh runs, so the hook and CI
+# agree on what counts as prose. The path comes from this file, because the hook
+# can start in a subdirectory of the repo.
+strippers="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../scripts/strippers" && pwd)"
 
 case "$kind" in
-  markdown) stripped="$(printf '%s\n' "$pending" | awk "$strip_markdown")" ;;
-  lua) stripped="$(printf '%s\n' "$pending" | awk "$strip_lua")" ;;
-  vimhelp) stripped="$(printf '%s\n' "$pending" | awk "$strip_vimhelp")" ;;
-  *) stripped="$(printf '%s\n' "$pending" | awk "$strip_fsharp")" ;;
+  markdown) stripped="$(printf '%s\n' "$pending" | awk -f "$strippers/strip_markdown.awk")" ;;
+  lua) stripped="$(printf '%s\n' "$pending" | awk -f "$strippers/strip_lua.awk")" ;;
+  vimhelp) stripped="$(printf '%s\n' "$pending" | awk -f "$strippers/strip_vimhelp.awk")" ;;
+  *) stripped="$(printf '%s\n' "$pending" | awk -f "$strippers/strip_fsharp.awk")" ;;
 esac
 
 hits=""
