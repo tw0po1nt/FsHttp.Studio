@@ -37,8 +37,9 @@ end
 -- Runs a command. The callback runs on the main loop. A command that cannot start gives code -1.
 ---@param cmd string[]
 ---@param callback fun(result: vim.SystemCompleted)
-local function run(cmd, callback)
-    local ok, err = pcall(vim.system, cmd, { text = true }, vim.schedule_wrap(callback))
+---@param cwd? string the folder that the command runs in
+local function run(cmd, callback, cwd)
+    local ok, err = pcall(vim.system, cmd, { text = true, cwd = cwd }, vim.schedule_wrap(callback))
     if not ok then
         vim.schedule(function()
             callback({ code = -1, signal = 0, stdout = "", stderr = tostring(err) })
@@ -130,7 +131,8 @@ function M.fetch(version, callback)
 
     local archive = vim.fs.joinpath(work, rule.archive_name(version))
     local checksum_file = vim.fs.joinpath(work, rule.checksum_name(version))
-    local unpacked = vim.fs.joinpath(work, "companion")
+    local unpacked_name = "companion"
+    local unpacked = vim.fs.joinpath(work, unpacked_name)
 
     ---@param cause fshttp.DownloadCause
     ---@param detail string
@@ -153,7 +155,10 @@ function M.fetch(version, callback)
 
     local function unpack()
         vim.fn.mkdir(unpacked, "p")
-        run({ "tar", "-xzf", archive, "-C", unpacked }, function(result)
+        -- GNU tar reads the drive letter of a Windows path (C:/...) as a host name. A user can have
+        -- GNU tar first on PATH, so tar runs in the work folder and gets relative names.
+        local tar = { "tar", "-xzf", rule.archive_name(version), "-C", unpacked_name }
+        run(tar, function(result)
             if result.code ~= 0 then
                 local detail = first_line(result.stderr)
                 fail("tar", detail ~= "" and detail or ("exit code " .. result.code))
@@ -162,7 +167,7 @@ function M.fetch(version, callback)
             else
                 install()
             end
-        end)
+        end, work)
     end
 
     local function verify()

@@ -178,9 +178,11 @@ function M.companion_pids()
     local result
     if is_windows then
         -- Windows has no pgrep. The command line and the folder are compared with forward slashes.
+        -- The command line of this PowerShell process also contains the folder, so the query looks
+        -- for dotnet.exe processes only.
         local folder = M.companion_path():gsub("\\", "/"):gsub("'", "''")
         local script = string.format(
-            "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Replace('\\', '/').Contains('%s/Companion.dll') } | ForEach-Object { $_.ProcessId }",
+            "Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'dotnet.exe' -and $_.CommandLine -and $_.CommandLine.Replace('\\', '/').Contains('%s/Companion.dll') } | ForEach-Object { $_.ProcessId }",
             folder
         )
         result = run({ "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script })

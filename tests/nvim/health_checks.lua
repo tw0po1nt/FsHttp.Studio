@@ -76,7 +76,9 @@ T["a dotnet_path that names a missing file gives an ERROR with the fix, and the 
     local required_errors = items_in(items, "Required items", "ERROR")
     assert.equal(1, #required_errors, vim.inspect(items))
     local dotnet = required_errors[1].text
-    assert.equal(true, dotnet:find("dotnet_path (" .. missing .. ")", 1, true) ~= nil, dotnet)
+    -- setup() normalizes each path option, so the item shows the normalized path.
+    local shown = "dotnet_path (" .. vim.fs.normalize(missing) .. ")"
+    assert.equal(true, dotnet:find(shown, 1, true) ~= nil, dotnet)
     assert.equal(true, dotnet:find("https://aka.ms/dotnet/download", 1, true) ~= nil, dotnet)
 
     local state = item_with(items, "Companion", "FsHttp.Studio: .NET SDK not found")
