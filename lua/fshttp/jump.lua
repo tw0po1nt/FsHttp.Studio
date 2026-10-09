@@ -55,14 +55,15 @@ end
 ---@param position fshttp.CompileErrorPosition
 ---@param loaded_file string
 local function jump_to_loaded_file(position, loaded_file)
+    local shown = vim.fs.normalize(loaded_file)
     if not vim.uv.fs_stat(loaded_file) then
-        notify(string.format("The loaded file %s does not exist.", loaded_file), vim.log.levels.WARN)
+        notify(string.format("The loaded file %s does not exist.", shown), vim.log.levels.WARN)
         return
     end
     local buf = loaded_buffer(loaded_file)
     local line_count = buf and vim.api.nvim_buf_line_count(buf) or #vim.fn.readfile(loaded_file)
     if position.line > line_count then
-        notify(string.format("The position is past the end of the loaded file %s.", loaded_file), vim.log.levels.WARN)
+        notify(string.format("The position is past the end of the loaded file %s.", shown), vim.log.levels.WARN)
         return
     end
     local win = buf and window_in_tab(buf)
