@@ -11,6 +11,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 steps=(
   "./scripts/check-banned-patterns.sh"
+  "./tests/strippers/run.sh"
   "stylua --check ."
   "dotnet tool restore"
   "dotnet fantomas --check ."

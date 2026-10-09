@@ -9,18 +9,20 @@
 #   - The `//` comment lines and the string literals of F# source.
 #   - The `--` comments and the string literals of Lua source.
 #   - The Vim help files in doc/, which the Neovim client ships.
+#   - The `#` comments of YAML files and shell scripts.
 #
-# It strips fenced code blocks, Vim help examples, and inline code spans first,
-# so a rule can name the text it forbids by writing that text in backticks. A
-# file that git ignores is skipped. A new file that git does not track yet is
-# still read.
+# It strips fenced code blocks, Vim help examples, shebang lines, and inline code
+# spans first, so a rule can name the text it forbids by writing that text in
+# backticks. A file that git ignores is skipped. A new file that git does not
+# track yet is still read.
 #
 # `--text <label> <file>` checks one file of text as Markdown, and reports each
 # hit under <label>. CI uses this mode for the text of a pull request: the
 # title, the body, and the commit messages. No tracked file contains that text.
 #
-# The strippers are the awk files in scripts/strippers/. The hook at
-# .claude/hooks/banned-patterns-check.sh runs the same files.
+# The strippers are the awk files in scripts/strippers/, and
+# scripts/strippers/kinds.sh gives the stripper for each file. The hook at
+# .claude/hooks/banned-patterns-check.sh uses the same map and the same files.
 set -euo pipefail
 
 if [ "${1:-}" = "--text" ]; then
@@ -30,6 +32,8 @@ if [ "${1:-}" = "--text" ]; then
 fi
 
 strippers="$(cd "$(dirname "$0")" && pwd)/strippers"
+# shellcheck source=strippers/kinds.sh
+. "$strippers/kinds.sh"
 
 cd "$(git rev-parse --show-toplevel)"
 
@@ -64,20 +68,11 @@ if [ -n "${text_file:-}" ]; then
   report_hits "$text_label" "$(awk -f "$strippers/strip_markdown.awk" "$text_file")"
 else
   while IFS= read -r file; do
-    case "$file" in
-      .agents/* | */obj/* | .banned-patterns | scripts/check-banned-patterns.sh) continue ;;
-    esac
-
-    case "$file" in
-      *.md) stripped="$(awk -f "$strippers/strip_markdown.awk" "$file")" ;;
-      *.fs | *.fsx) stripped="$(awk -f "$strippers/strip_fsharp.awk" "$file")" ;;
-      *.lua) stripped="$(awk -f "$strippers/strip_lua.awk" "$file")" ;;
-      doc/*.txt) stripped="$(awk -f "$strippers/strip_vimhelp.awk" "$file")" ;;
-      *) continue ;;
-    esac
-
+    stripper_kind "$file"
+    [ -n "$kind" ] || continue
+    stripped="$(awk -f "$strippers/strip_$kind.awk" "$file")"
     report_hits "$file" "$stripped"
-  done < <(git ls-files --cached --others --exclude-standard -- '*.md' '*.fs' '*.fsx' '*.lua' 'doc/*.txt')
+  done < <(git ls-files --cached --others --exclude-standard)
 fi
 
 if [ "$found" -eq 1 ]; then

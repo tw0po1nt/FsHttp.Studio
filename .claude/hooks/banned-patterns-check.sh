@@ -2,8 +2,8 @@
 # PreToolUse check: deny the call when its pending prose matches a pattern that
 # `.banned-patterns` forbids. Two kinds of call carry prose:
 #
-#   - A Write or an Edit on Markdown, F# source, Lua source, or a Vim help file
-#     in doc/.
+#   - A Write or an Edit on Markdown, F# source, Lua source, a Vim help file in
+#     doc/, a YAML file, or a shell script.
 #   - A Bash command that publishes prose: `git commit`, a `gh` issue or pull
 #     request create, edit, or comment, and a `gh api` call that sends a body.
 #     The check reads the command text and each body file that the command
@@ -19,6 +19,10 @@ set -euo pipefail
 
 input="$(cat)"
 tool_name="$(jq -r '.tool_name // empty' <<<"$input")"
+
+# The repo root comes from the location of this file, because the hook can start
+# in a subdirectory of the repo.
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 if [ "$tool_name" = "Bash" ]; then
   command="$(jq -r '.tool_input.command // empty' <<<"$input")"
@@ -42,28 +46,24 @@ if [ "$tool_name" = "Bash" ]; then
 else
   file_path="$(jq -r '.tool_input.file_path // empty' <<<"$input")"
 
-  case "$file_path" in
-    *.md | *.markdown) kind="markdown" ;;
-    *.fs | *.fsx) kind="fsharp" ;;
-    *.lua) kind="lua" ;;
-    */doc/*.txt) kind="vimhelp" ;;
-    *) exit 0 ;;
-  esac
-
-  case "$file_path" in
-    */.agents/* | */.claude/skills/* | */node_modules/* | */obj/* | *.banned-patterns) exit 0 ;;
-  esac
+  # The map from a path to its stripper is the map that the CI check uses.
+  # shellcheck source=../../scripts/strippers/kinds.sh
+  . "$root/scripts/strippers/kinds.sh"
+  stripper_kind "$file_path"
+  [ -n "$kind" ] || exit 0
 
   # Write carries the whole file, Edit carries the replacement text alone.
   pending="$(jq -r '[.tool_input.content, .tool_input.new_string] | map(select(. != null)) | join("\n")' <<<"$input")"
+  # strip_hash.awk skips a shebang on line 1. The text of an Edit can be at any
+  # line of the file, so the hook puts a blank line before that text.
+  if [ "$tool_name" = "Edit" ] && [ "$kind" = "hash" ]; then
+    pending=$'\n'"$pending"
+  fi
   label="$file_path"
 fi
 
 [ -n "$pending" ] || exit 0
 
-# The repo root comes from the location of this file, because the hook can start
-# in a subdirectory of the repo.
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 [ -f "$root/.banned-patterns" ] || exit 0
 
 patterns=()

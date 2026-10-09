@@ -75,8 +75,8 @@ jobs:
           fi
           echo "pin=$PIN" >> "$GITHUB_OUTPUT"
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
-          # Behind, not merely different. A pin deliberately set ahead of stable
-          # must not produce a downgrade pull request every Monday.
+          # Update the pin only when it is behind stable. A pin deliberately set
+          # ahead of stable must not produce a downgrade pull request every Monday.
           NEWEST="$(printf '%s\n%s\n' "$PIN" "$LATEST" | sort -V | tail -1)"
           if [ "$PIN" = "$LATEST" ] || [ "$NEWEST" = "$PIN" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
