@@ -591,10 +591,10 @@ Ticket: [What gates a release of the Neovim client?](https://github.com/tw0po1nt
 | Companion death | The Response buffer shows the stopped text, each Block mark shows the stopped title, and `:FsHttp restart` recovers a Run. |
 | Copy buttons | `:FsHttp yank` and `yr`, `yh`, `yb` put the spec 0013 payload in the register. |
 | Request section shows what a POST sent | The Request fold shows it. |
-| No-requests lens on syntax errors | The Block marks match the same four cases. |
-| Clean scripts report one, many, and zero requests | `status()` returns the same three rows. |
+| No-requests lens on Parse failures | The Block marks match the same four cases. |
+| Clean scripts report one, many, and zero Blocks | `status()` returns the same three rows. |
 | An `.fs` module | `status()` returns `not an .fsx script`. |
-| Syntax-error scripts | `status()` returns the same two rows. |
+| Parse failure scripts | `status()` returns the same two rows. |
 | The item hides outside F# | `status()` returns nil in a buffer that is not F#, and the row again on the script. |
 | A document switch | A buffer switch returns `looking for requests…` until the locate response arrives. |
 | The count of the active script | The same, for the current buffer. |

@@ -143,7 +143,7 @@ let private cleanEmptyScriptPaintsNoLens =
 let tests =
     testList
         "no-requests lens"
-        [ testCaseAsync "syntax error above the blocks paints the line-1 lens only" syntaxErrorAbovePaintsLine1Lens
-          testCaseAsync "syntax error below the last block keeps Run lenses" syntaxErrorBelowKeepsRunLenses
-          testCaseAsync "syntax error between two blocks keeps one Run lens" syntaxErrorBetweenKeepsOneRunLens
+        [ testCaseAsync "a Parse failure above the Blocks paints the line-1 lens only" syntaxErrorAbovePaintsLine1Lens
+          testCaseAsync "a Parse failure below the last Block keeps Run lenses" syntaxErrorBelowKeepsRunLenses
+          testCaseAsync "a Parse failure between two Blocks keeps one Run lens" syntaxErrorBetweenKeepsOneRunLens
           testCaseAsync "clean script with no blocks paints no lens" cleanEmptyScriptPaintsNoLens ]
