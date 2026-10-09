@@ -84,7 +84,8 @@ function M.companion_path()
     return required_env("NVIM_TEST_COMPANION_PATH", "the companion")
 end
 
--- The folder that tests/nvim/run.sh packed the Companion archive into.
+-- The folder that holds the Companion archive. tests/nvim/run.sh packs the archive into it, or
+-- copies the archive of a release into it.
 ---@return string
 function M.archive_dir()
     return required_env("NVIM_TEST_ARCHIVE_DIR", "the Companion archive from scripts/pack-companion.sh")
