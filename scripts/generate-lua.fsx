@@ -36,7 +36,7 @@ let refusalsLua () =
     let sb = StringBuilder(header "src/host/Refusals.fs")
     let line (text: string) = sb.Append(text).Append('\n') |> ignore
 
-    line "return {"
+    line "local M = {"
     line "    codes = {"
 
     for code in Refusals.catalogCodes do
@@ -63,6 +63,14 @@ let refusalsLua () =
     line (sprintf "    no_blocks_parse_failure_block_mark_title = %s," (quote Refusals.noBlocksParseFailureLensTitle))
     line (sprintf "    no_blocks_empty = %s," (quote Refusals.noBlocksEmpty))
     line "}"
+    line ""
+    line "---@param code string"
+    line "---@return { block_mark_title: string, title: string, detail: string }"
+    line "function M.entry(code)"
+    line "    return M.codes[code] or M.codes[M.fallback_code]"
+    line "end"
+    line ""
+    line "return M"
     sb.ToString()
 
 let outputs =

@@ -14,8 +14,7 @@ local function title(refusal)
     if refusal == nil then
         return refusals.run_block_mark_title
     end
-    local entry = refusals.codes[refusal] or refusals.codes[refusals.fallback_code]
-    return entry.block_mark_title
+    return refusals.entry(refusal).block_mark_title
 end
 
 ---@param blocks { parse_failed: boolean, ranges: { start_line: integer, refusal: string? }[] } a decoded blocks envelope

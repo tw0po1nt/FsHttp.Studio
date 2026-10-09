@@ -126,8 +126,7 @@ local function on_located(blocks, buf, source, cursor_line)
         picker.open(blocks, source, function(block_index, refused)
             if refused then
                 local code = blocks.ranges[block_index + 1].refusal
-                local entry = refusals.codes[code] or refusals.codes[refusals.fallback_code]
-                notify(entry.detail, vim.log.levels.WARN)
+                notify(refusals.entry(code).detail, vim.log.levels.WARN)
             else
                 start_run(buf, source, block_index)
             end

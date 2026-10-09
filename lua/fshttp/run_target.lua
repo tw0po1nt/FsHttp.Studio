@@ -29,8 +29,7 @@ function M.for_cursor(blocks, cursor_line)
     end
     local refusal = blocks.ranges[block_index + 1].refusal
     if refusal ~= nil then
-        local entry = refusals.codes[refusal] or refusals.codes[refusals.fallback_code]
-        return { kind = "notice", level = "WARN", message = entry.detail }
+        return { kind = "notice", level = "WARN", message = refusals.entry(refusal).detail }
     end
     return { kind = "run", block_index = block_index }
 end
