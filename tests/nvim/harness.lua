@@ -1,5 +1,4 @@
--- The Harness of the Neovim suite: the child Neovim helpers, the wait combinator, the Budgets, and
--- the mini.test hooks. Each Check uses this module, and defines no wait and no Budget of its own.
+-- A Check defines no wait and no Budget of its own.
 local MiniTest = require("mini.test")
 
 local M = {}
@@ -7,9 +6,7 @@ local M = {}
 local sysname = vim.uv.os_uname().sysname
 local is_windows = sysname == "Windows_NT"
 
--- The Budgets of each operating system. Each leg of nvim-tests.yml writes the timing table to the
--- job summary, and the Budgets of a system come from the rows of its leg. Each suite Budget is the
--- slowest measured suite of its system plus about 40%.
+-- Each Budget comes from the timing table in the CI job summary. A suite Budget is the slowest suite plus about 40%.
 local budgets_ms = {
     Linux = { harness_setup = 60000, check = 30000, suite = 255000 },
     Darwin = { harness_setup = 60000, check = 30000, suite = 265000 },
@@ -77,14 +74,11 @@ local function required_env(name, purpose)
     return value
 end
 
--- The folder of the companion that tests/nvim/run.sh published for this run.
 ---@return string
 function M.companion_path()
     return required_env("NVIM_TEST_COMPANION_PATH", "the companion")
 end
 
--- The folder that contains the Companion archive. tests/nvim/run.sh packs the archive into it, or
--- copies the archive of a release into it.
 ---@return string
 function M.archive_dir()
     return required_env("NVIM_TEST_ARCHIVE_DIR", "the Companion archive from scripts/pack-companion.sh")
@@ -96,7 +90,7 @@ function M.fixture(name)
     return fixtures_dir .. "/" .. name
 end
 
--- A fixture of the UI suite. A ported Check opens the same Script as the UI suite Check.
+-- A ported Check opens the same Script as its UI suite Check.
 ---@param name string
 ---@return string
 function M.ui_fixture(name)
@@ -125,10 +119,8 @@ local function run(cmd)
     return process:wait()
 end
 
--- Polls `predicate` until it is true, or fails when `timeout_ms` passes. `subject` names the thing
--- that the wait expects, so a timeout names the thing that did not occur.
 ---@param timeout_ms integer
----@param subject string
+---@param subject string the thing that the wait expects, which a timeout names
 ---@param predicate fun(): boolean
 function M.eventually(timeout_ms, subject, predicate)
     local deadline = now() + timeout_ms
@@ -140,8 +132,6 @@ function M.eventually(timeout_ms, subject, predicate)
     end
 end
 
--- Polls `read` until it returns `expected`, or fails with the last observed value when
--- `timeout_ms` passes.
 ---@param timeout_ms integer
 ---@param subject string
 ---@param expected string
@@ -157,7 +147,6 @@ function M.eventually_equal(timeout_ms, subject, expected, read)
     end
 end
 
--- Fails when `predicate` is false at a poll in the settle window.
 ---@param subject string
 ---@param predicate fun(): boolean
 function M.holds_for_settle(subject, predicate)
@@ -170,15 +159,12 @@ function M.holds_for_settle(subject, predicate)
     until now() >= deadline
 end
 
--- Each companion process of this run, found through the command line that contains the companion
--- folder. A companion of another editor has a different folder, so this list leaves it out.
+-- A companion of another editor has a different folder, so this list leaves it out.
 ---@return integer[]
 function M.companion_pids()
     local result
     if is_windows then
-        -- Windows has no pgrep. The command line and the folder are compared with forward slashes.
-        -- The command line of this PowerShell process also contains the folder, so the query looks
-        -- for dotnet.exe processes only.
+        -- This PowerShell process has the folder in its command line too, so the query matches dotnet.exe only.
         local folder = M.companion_path():gsub("\\", "/"):gsub("'", "''")
         local script = string.format(
             "Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'dotnet.exe' -and $_.CommandLine -and $_.CommandLine.Replace('\\', '/').Contains('%s/Companion.dll') } | ForEach-Object { $_.ProcessId }",
@@ -196,7 +182,6 @@ function M.companion_pids()
     return pids
 end
 
--- Each companion pid in `M.companion_pids()` that is not in `known`.
 ---@param known integer[]
 ---@return integer[]
 function M.new_companion_pids(known)
@@ -219,8 +204,7 @@ function M.process_exists(pid)
     return vim.uv.kill(pid, 0) == 0
 end
 
--- Freezes a process so that it answers nothing and stays alive. Windows has no SIGSTOP, so the
--- freeze there suspends the process through NtSuspendProcess.
+-- Windows has no SIGSTOP, so the freeze there suspends the process through NtSuspendProcess.
 ---@param pid integer
 function M.freeze_process(pid)
     if not is_windows then
@@ -256,8 +240,7 @@ local children = {}
 ---@type nvim_suite.Child?
 local harness_setup_child
 
--- Runs `fn` with a watchdog. When the child gives no answer in time, the watchdog kills the child
--- process. The blocked request then returns an error, and the runner continues to the next Check.
+-- A kill of the child makes the blocked request return an error, so the runner goes on to the next Check.
 ---@param child nvim_suite.Child
 ---@param subject string
 ---@param fn fun(): any
@@ -288,11 +271,8 @@ local function guarded(child, subject, fn)
     return result
 end
 
--- Starts a child Neovim that loads the client through lazy.nvim with `opts`. With `client_version`,
--- the client in the child uses that version in place of the version that version.lua sets. With
--- `with_lualine`, lazy.nvim also loads lualine.nvim in the child.
 ---@param opts table
----@param client_version? string
+---@param client_version? string replaces the client version in the child
 ---@param with_lualine? boolean
 ---@return nvim_suite.Child
 function M.start_child(opts, client_version, with_lualine)
@@ -306,26 +286,19 @@ function M.start_child(opts, client_version, with_lualine)
     return child
 end
 
--- A dotnet wrapper that sleeps one time, so the companion stays in the starting state long enough
--- for a Check to drive :FsHttp run while it starts. After the sleep, the companion goes to
--- `end_state`: "ready" runs the real companion, "stopped" makes the companion exit, and
--- "sdkNotFound" makes `--list-sdks` list no SDK.
+-- The sleep keeps the companion in the starting state long enough for a Check to drive :FsHttp run.
 ---@param delay_s integer
 ---@param end_state? "ready"|"stopped"|"sdkNotFound" default "ready"
 ---@return string path to an executable wrapper script
 function M.slow_dotnet(delay_s, end_state)
     local real = vim.fn.exepath("dotnet")
     assert(real ~= "", "dotnet is not on PATH in the runner")
-    -- Each end state gives the steps for `--list-sdks`, then the steps for the companion.
-    -- "real" runs the real dotnet and ends the wrapper with its exit code.
     local steps = {
         ready = { { "real" }, { "sleep", "real" } },
         stopped = { { "real" }, { "sleep", "exit1" } },
         sdkNotFound = { { "sleep", "exit0" }, { "real" } },
     }
     local plan = assert(steps[end_state or "ready"], "no wrapper for the end state " .. tostring(end_state))
-    -- The shell of each system: the steps, the lines before the `--list-sdks` steps, the line
-    -- between the two step lists, the file extension, and the line ending.
     local shell
     if is_windows then
         -- ping waits with no console. timeout fails when stdin is not a console.
@@ -403,7 +376,6 @@ function M.type_keys(child, ...)
     end)
 end
 
--- The screen of the child, as the screenshot that mini.test compares with a reference file.
 ---@param child nvim_suite.Child
 ---@return table
 function M.screenshot(child)
@@ -412,8 +384,6 @@ function M.screenshot(child)
     end)
 end
 
--- The Block marks of the current buffer in the child, one line for each mark in line order:
--- "<line>: <virtual line> [<sign>]". The text is empty when the buffer has no Block mark.
 ---@param child nvim_suite.Child
 ---@return string
 function M.block_marks(child)
@@ -445,8 +415,6 @@ function M.block_marks(child)
     )
 end
 
--- Waits until the current buffer of the child has a Block mark on `line`. The mark can be at any
--- position in the list of Block marks.
 ---@param child nvim_suite.Child
 ---@param line integer
 function M.await_block_mark(child, line)
@@ -455,16 +423,13 @@ function M.await_block_mark(child, line)
     end)
 end
 
--- The text that status() gives for the Active document of the child. The text is "nil" when status()
--- gives nil.
 ---@param child nvim_suite.Child
----@return string
+---@return string text "nil" when status() gives nil
 function M.status(child)
     return M.lua_get(child, [[tostring(require("fshttp").status())]])
 end
 
--- Edits `path` in the child, and gives the text of status() before the child reads an answer of
--- the companion. The edit and the read are one request, so no answer can arrive between them.
+-- The edit and the read are one request, so no answer of the companion can arrive between them.
 ---@param child nvim_suite.Child
 ---@param path string
 ---@return string
@@ -479,7 +444,6 @@ function M.edit_and_read_status(child, path)
     )
 end
 
--- Polls status() in the child until it gives `expected`.
 ---@param child nvim_suite.Child
 ---@param subject string
 ---@param expected string
@@ -489,7 +453,6 @@ function M.expect_status(child, subject, expected)
     end)
 end
 
--- The text that `:FsHttp status` echoes in the child.
 ---@param child nvim_suite.Child
 ---@return string
 function M.fshttp_status_echo(child)
@@ -505,8 +468,7 @@ end
 -- The levels that `vim.health` writes after the icon of a line. An INFO line has no icon and no level.
 local health_levels = { OK = true, WARNING = true, ERROR = true }
 
--- Each item that `:checkhealth fshttp` reports in the child. The child then shows the window that
--- was current before the command, and has no health buffer, so a later Check sees no change.
+-- The child then shows the window that was current before, and has no health buffer, so a later Check sees no change.
 ---@param child nvim_suite.Child
 ---@return nvim_suite.HealthItem[]
 function M.checkhealth(child)
@@ -570,7 +532,6 @@ end
 ---@field current_buffer_name string
 ---@field current_col integer the screen column of the current window
 
--- The Response buffer in the child, as the user sees it in the current tab page.
 ---@param child nvim_suite.Child
 ---@return nvim_suite.ResponseBuffer
 function M.response_buffer(child)
@@ -631,7 +592,6 @@ function M.response_buffer(child)
     )
 end
 
--- Puts the cursor on `line` of the current buffer in the child, and runs `:FsHttp run`.
 ---@param child nvim_suite.Child
 ---@param line integer
 function M.run_at(child, line)
@@ -639,7 +599,6 @@ function M.run_at(child, line)
     M.cmd(child, "FsHttp run")
 end
 
--- Closes each window that shows the Response buffer in the child.
 ---@param child nvim_suite.Child
 function M.close_response_windows(child)
     M.lua_get(
@@ -655,14 +614,12 @@ function M.close_response_windows(child)
     )
 end
 
--- Each notice that the client gave in the child, as { message, level }.
 ---@param child nvim_suite.Child
 ---@return nvim_suite.Notice[]
 function M.notices(child)
     return M.lua_get(child, "_G.fshttp_suite_notices")
 end
 
--- Each notice that the client gave in the child at `level`, in the order the client gave them.
 ---@param child nvim_suite.Child
 ---@param level integer
 ---@return nvim_suite.Notice[]
@@ -676,7 +633,6 @@ function M.notices_at(child, level)
     return found
 end
 
--- Each notice that the client gave in the child after the first `count` notices.
 ---@param child nvim_suite.Child
 ---@param count integer
 ---@return nvim_suite.Notice[]
@@ -689,7 +645,6 @@ function M.notices_after(child, count)
     return found
 end
 
--- Stops the child Neovim. A child that does not quit in time gets SIGKILL.
 ---@param child nvim_suite.Child
 function M.stop_child(child)
     if child.stopped then
@@ -704,8 +659,7 @@ function M.stop_child(child)
     end
 end
 
--- Kills each companion of this run that is not in `keep`. A hung companion that outlives its child
--- Neovim thus cannot reach the next Check.
+-- A hung companion that outlives its child Neovim must not reach the next Check.
 ---@param keep integer[]
 local function kill_companions(keep)
     for _, pid in ipairs(M.new_companion_pids(keep)) do
@@ -765,13 +719,11 @@ function M.timing_table_was_emitted()
     return timing_table_emitted
 end
 
--- The child Neovim that Harness setup started. It has the fixture and the companion.
 ---@return nvim_suite.Child
 function M.harness_setup_child()
     return assert(harness_setup_child, "Harness setup started no child Neovim")
 end
 
--- The companion pids that the child Neovim of Harness setup started.
 ---@return integer[]
 function M.harness_setup_companion_pids()
     return vim.deepcopy(harness_setup_companions)
@@ -790,25 +742,22 @@ local function read_sidecar()
     return sidecar.baseUrl, sidecar.deadUrl
 end
 
--- The URL of the test HTTP server, with no trailing slash, as the fixtures compute it.
+-- The URL must match the URL that the fixtures compute, which has no trailing slash.
 ---@return string
 function M.base_url()
     local base_url = read_sidecar()
     return (base_url:gsub("/$", ""))
 end
 
--- Answers each request that waits on the /slow route of the test HTTP server.
 function M.release_slow()
     run({ "curl", "-sS", "-m", "10", M.base_url() .. "/release" })
 end
 
--- The folder behind /download/ on the test HTTP server. It stands in for the GitHub releases.
+-- The test HTTP server serves this folder at /download/ in place of the GitHub releases.
 local downloads_dir = vim.fn.tempname() .. "-downloads"
 
--- Puts the Companion archive and its .sha256 file where a client of `version` looks for the release
--- v<version>. With `corrupt_checksum`, the .sha256 file names a hash that matches no archive.
 ---@param version string
----@param corrupt_checksum? boolean
+---@param corrupt_checksum? boolean the .sha256 file then names a hash that matches no archive
 function M.publish_release(version, corrupt_checksum)
     local folder = string.format("%s/v%s", downloads_dir, version)
     vim.fn.mkdir(folder, "p")
@@ -825,7 +774,6 @@ function M.publish_release(version, corrupt_checksum)
     end
 end
 
--- The folder that contains one folder for each downloaded version, as the child sees it.
 ---@param child nvim_suite.Child
 ---@return string
 function M.download_root(child)

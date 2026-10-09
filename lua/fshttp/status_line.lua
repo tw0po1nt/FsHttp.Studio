@@ -1,4 +1,4 @@
--- Gives the Status line text of a buffer. Each change of the text fires a User autocmd.
+-- Each change of the Status line text fires a User autocmd.
 local companion = require("fshttp.companion")
 local locator = require("fshttp.locator")
 local status_line_text = require("fshttp.status_line_text")
@@ -8,7 +8,6 @@ local M = {}
 M.event = "FsHttpStatusLineTextChanged"
 
 local watching = false
--- The row of the current buffer at the last User autocmd.
 ---@type string?
 local last_row
 
@@ -33,7 +32,6 @@ function M.row(buf)
     return status_line_text.row(companion.state(), script_view(buf), require("fshttp.version"))
 end
 
--- Echoes the row of the Active document. A buffer that is not F# gets the companion state row.
 function M.echo()
     local row = M.row(vim.api.nvim_get_current_buf())
         or status_line_text.state_row(companion.state(), require("fshttp.version"))
@@ -46,15 +44,13 @@ local function changed()
     vim.cmd.redrawstatus({ bang = true })
 end
 
--- A buffer switch can change the script view with no change of a locate answer, for example a switch
--- to a buffer that is not a Script.
+-- A buffer switch, such as to a buffer that is not a Script, can change the script view with no new locate answer.
 local function current_buffer_changed()
     if M.row(vim.api.nvim_get_current_buf()) ~= last_row then
         changed()
     end
 end
 
--- Only the first call has an effect.
 function M.watch()
     if watching then
         return

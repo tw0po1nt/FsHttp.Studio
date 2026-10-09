@@ -5,8 +5,7 @@ local T = MiniTest.new_set()
 
 local fixture = harness.fixture("harness-setup.fsx")
 
--- Starts a child Neovim for the client version `version`, with an empty download folder. The
--- download folder of the runner is private to the suite, so the Check may delete it.
+-- The download folder of the runner is private to the suite, so the Check can delete it.
 ---@param version string
 ---@param opts? table
 ---@return nvim_suite.Child child, string root

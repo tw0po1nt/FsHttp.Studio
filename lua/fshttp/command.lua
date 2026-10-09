@@ -1,4 +1,3 @@
--- The :FsHttp command. Each subcommand is one entry of M.subcommands.
 local M = {}
 
 ---@alias fshttp.Subcommand fun(args: string[])
@@ -41,7 +40,6 @@ function M.dispatch(opts)
     subcommand(vim.list_slice(opts.fargs, 2))
 end
 
--- Completes the subcommand name only.
 ---@param arg_lead string
 ---@param cmdline string
 ---@return string[]

@@ -1,4 +1,4 @@
--- The rule that finds a .NET SDK for the companion. The VSCode extension host uses the same rule.
+-- The VSCode extension host uses the same SDK rule.
 local json = require("fshttp.json")
 
 local M = {}
@@ -22,7 +22,6 @@ local function is_set(dotnet_path)
     return type(dotnet_path) == "string" and dotnet_path:find("%S") ~= nil
 end
 
--- Returns dotnet_path, or "dotnet" on PATH when dotnet_path is nil or blank.
 ---@param dotnet_path string?
 ---@return string
 function M.dotnet_command(dotnet_path)
@@ -33,7 +32,7 @@ function M.dotnet_command(dotnet_path)
     return "dotnet"
 end
 
--- Returns the major version of runtimeOptions.framework.version, which is the SDK floor.
+-- The major version of runtimeOptions.framework.version is the SDK floor.
 ---@param runtimeconfig_text string? the text of Companion.runtimeconfig.json, or nil when the file is missing
 ---@return integer
 function M.floor(runtimeconfig_text)
@@ -52,8 +51,7 @@ function M.floor(runtimeconfig_text)
     return major_of(version) or M.fallback_floor
 end
 
--- True when a line of the `dotnet --list-sdks` output names an SDK at the floor or above. The
--- companion rolls forward onto a newer major version, so a newer SDK also runs it.
+-- The companion rolls forward onto a newer major version, so a newer SDK also runs it.
 ---@param floor integer
 ---@param list_sdks_output string
 ---@return boolean
@@ -68,7 +66,6 @@ function M.has_sdk_at_floor(floor, list_sdks_output)
     return false
 end
 
--- The WARN notice when no SDK at the floor is found.
 ---@param floor integer
 ---@param dotnet_path string?
 ---@return string

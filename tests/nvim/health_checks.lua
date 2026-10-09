@@ -26,7 +26,6 @@ local function item_with(items, section, text)
     error(string.format("no item %q in the section %s:\n%s", text, section, vim.inspect(items)), 0)
 end
 
--- The child Neovim of Harness setup, with a ready companion.
 ---@return nvim_suite.Child
 local function ready_child()
     local child = harness.harness_setup_child()

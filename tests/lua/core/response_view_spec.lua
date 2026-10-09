@@ -4,7 +4,6 @@ describe("fshttp.response_view", function()
     local response_view = core_env.load("fshttp.response_view")
     local refusals = core_env.load("fshttp.refusals")
 
-    -- The text that a statusline expression shows, with each highlight item removed.
     local function shown(winbar)
         return (winbar:gsub("%%#[^#]*#", ""):gsub("%%%*", ""):gsub("%%<", ""):gsub("%%%%", "%%"))
     end

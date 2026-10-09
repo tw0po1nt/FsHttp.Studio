@@ -21,7 +21,6 @@ describe("the Body of fshttp.response_view", function()
         }
     end
 
-    -- The lines below the Body title.
     local function body_lines(view)
         for i, line in ipairs(view.lines) do
             if line:sub(1, #"▾ Body") == "▾ Body" then
@@ -31,7 +30,6 @@ describe("the Body of fshttp.response_view", function()
         error("the view has no Body section")
     end
 
-    -- The folds that start on the Body title or below it.
     local function body_folds(view, title)
         local folds = {}
         for _, fold in ipairs(view.folds) do

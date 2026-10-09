@@ -1,4 +1,3 @@
--- Locates each Script again after a change, and paints the Block marks that the locate gives.
 local block_mark = require("fshttp.block_mark")
 local companion = require("fshttp.companion")
 local refusals = require("fshttp.refusals")
@@ -12,10 +11,8 @@ local M = {}
 local namespace = vim.api.nvim_create_namespace("fshttp.block_mark")
 local relocate_delay_ms = 300
 
--- The extmark ids of the marks on a Block, for each Script that a locate covered.
 ---@type table<integer, table<integer, true>>
 local located = {}
--- The marks of the last paint for each Script, so that a change of the options paints them again.
 ---@type table<integer, fshttp.BlockMark[]>
 local shown = {}
 ---@type table<integer, uv.uv_timer_t>
@@ -23,7 +20,7 @@ local timers = {}
 -- The changedtick check of an answer covers each edit that comes while a locate waits.
 ---@type table<integer, true>
 local waiting = {}
--- The answer of the last locate for each Script. A Script with no entry waits for a locate.
+-- A Script with no entry waits for a locate.
 ---@type table<integer, fshttp.LocateAnswer>
 local answers = {}
 ---@type fun(buf: integer)[]
@@ -185,8 +182,7 @@ local function forget(buf)
     set_answer(buf, nil)
 end
 
--- Paints each Block mark again with the current options. Only the ready and stopped states have
--- a paint of their own. In each other state the Block marks wait for the next state change.
+-- In a state other than ready or stopped, the Block marks wait for the next state change.
 function M.repaint()
     local state = companion.state()
     for buf, marks in pairs(shown) do
@@ -215,9 +211,8 @@ local function on_state_change(state)
     end
 end
 
--- Returns the answer of the last locate for a Script, or nil while the Script waits for a locate.
 ---@param buf integer
----@return fshttp.LocateAnswer?
+---@return fshttp.LocateAnswer? answer nil while the Script waits for a locate
 function M.answer(buf)
     return answers[buf]
 end
@@ -228,7 +223,6 @@ function M.on_answer_change(listener)
     listeners[#listeners + 1] = listener
 end
 
--- Only the first call has an effect.
 function M.watch()
     if watching then
         return

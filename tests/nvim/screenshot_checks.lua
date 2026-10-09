@@ -1,5 +1,4 @@
--- The screen changes with the operating system and the Neovim version, so the Checks compare only on
--- Linux with the pinned stable Neovim. NVIM_TEST_SCREENSHOTS overrides that rule.
+-- The screen changes with the OS and the Neovim version, so the Checks compare only on Linux with the pinned Neovim.
 local MiniTest = require("mini.test")
 local harness = require("nvim.harness")
 
@@ -66,8 +65,7 @@ local function json_parser_path()
     return path
 end
 
--- A new child Neovim with a screen of a fixed size. Each Check starts its own child, so no earlier
--- Check can change the screen.
+-- Each Check starts its own child, so no earlier Check can change the screen.
 ---@return nvim_suite.Child
 local function start_screen_child()
     local child = harness.start_child({ companion_path = harness.companion_path() })
@@ -75,8 +73,7 @@ local function start_screen_child()
     return child
 end
 
--- Opens `path`, and waits for the Block mark on `line`. The status line of the Script shows the
--- path from the repo root, because `:cd` makes Neovim shorten each buffer name.
+-- The status line shows the path from the repo root, because `:cd` makes Neovim shorten each buffer name.
 ---@param child nvim_suite.Child
 ---@param path string
 ---@param line integer
@@ -86,7 +83,6 @@ local function open_script(child, path, line)
     harness.await_block_mark(child, line)
 end
 
--- Runs the Block on `line`, and waits until the Response buffer satisfies `predicate`.
 ---@param child nvim_suite.Child
 ---@param line integer
 ---@param subject string
@@ -110,8 +106,7 @@ local function has_line(lines, text)
     return vim.tbl_contains(lines or {}, text)
 end
 
--- Replaces the parts of the winbar that change on each run: the times, and the URL of the test HTTP
--- server, which keeps its port. Then clears the command line, because it shows the last message.
+-- The test HTTP server gets a new port on each run, and the command line shows the last message.
 ---@param child nvim_suite.Child
 local function mask_changing_text(child)
     harness.lua_get(
@@ -132,8 +127,7 @@ local function mask_changing_text(child)
     harness.cmd(child, "echo ''")
 end
 
--- Compares the screen of the child with the reference file `name`. When the reference file is
--- missing, the Check fails. Without this guard, mini.test writes the file and passes.
+-- Without this guard, mini.test writes a missing reference file and passes.
 ---@param child nvim_suite.Child
 ---@param name string
 local function expect_screenshot(child, name)

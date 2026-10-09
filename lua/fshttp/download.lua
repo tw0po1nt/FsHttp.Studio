@@ -1,4 +1,3 @@
--- The download of the Companion archive: curl, the checksum, tar, and the folder of each version.
 local rule = require("fshttp.download_rule")
 
 local M = {}
@@ -7,7 +6,6 @@ local curl_timeout_s = 600
 local connect_timeout_s = 20
 local blocking_timeout_ms = 15 * 60 * 1000
 
--- The folder that contains one folder for each version.
 ---@return string
 function M.root()
     return vim.fs.joinpath(vim.fn.stdpath("data"), "fshttp-studio", "companion")
@@ -34,10 +32,9 @@ local function base_url()
     return rule.default_base_url
 end
 
--- Runs a command. The callback runs on the main loop. A command that cannot start gives code -1.
 ---@param cmd string[]
 ---@param callback fun(result: vim.SystemCompleted)
----@param cwd? string the folder that the command runs in
+---@param cwd? string
 local function run(cmd, callback, cwd)
     local ok, err = pcall(vim.system, cmd, { text = true, cwd = cwd }, vim.schedule_wrap(callback))
     if not ok then
@@ -58,10 +55,9 @@ local function delete_tree(folder_path)
     vim.fn.delete(folder_path, "rf")
 end
 
--- The kept folder is the only version folder after a download. A folder that starts with a dot is
--- the work folder of a download in progress, in this instance or in another.
----@param keep string the version to keep
-local function delete_older_versions(keep)
+-- A folder that starts with a dot is the work folder of a download in progress, in this instance or in another.
+---@param keep string the version
+local function delete_other_versions(keep)
     local root = M.root()
     for name, kind in vim.fs.dir(root) do
         if kind == "directory" and name ~= keep and name:sub(1, 1) ~= "." then
@@ -78,7 +74,7 @@ local function finish(callback, work, result)
     callback(result)
 end
 
--- Fetches one file to `target`. The file has a temporary name until curl finishes.
+-- The file has a temporary name until curl finishes.
 ---@param url string
 ---@param target string
 ---@param callback fun(status: "ok"|"notFound"|"failed", detail: string?)
@@ -117,9 +113,7 @@ local function fetch_file(url, target, callback)
     end)
 end
 
--- Downloads the Companion archive of `version`, verifies the checksum, and unpacks it into the
--- folder of the version. The callback runs on the main loop. Older version folders go after
--- a success.
+-- The callback runs on the main loop.
 ---@param version string
 ---@param callback fun(result: fshttp.DownloadResult)
 function M.fetch(version, callback)
@@ -144,7 +138,7 @@ function M.fetch(version, callback)
         -- Another Neovim instance can finish the same download first, before the rename or during it.
         local renamed = not M.is_installed(target) and vim.uv.fs_rename(unpacked, target)
         if renamed then
-            delete_older_versions(version)
+            delete_other_versions(version)
         end
         if renamed or M.is_installed(target) then
             finish(callback, work, { kind = "installed", folder = target })
@@ -155,8 +149,7 @@ function M.fetch(version, callback)
 
     local function unpack()
         vim.fn.mkdir(unpacked, "p")
-        -- GNU tar reads the drive letter of a Windows path (C:/...) as a host name. A user can have
-        -- GNU tar first on PATH, so tar runs in the work folder and gets relative names.
+        -- A user can have GNU tar first on PATH. GNU tar reads C:/ as a host name, so tar gets relative names.
         local tar = { "tar", "-xzf", rule.archive_name(version), "-C", unpacked_name }
         run(tar, function(result)
             if result.code ~= 0 then
@@ -210,8 +203,8 @@ function M.fetch(version, callback)
     end)
 end
 
--- The routine that build.lua calls at install and at each update. It waits for the download.
----@param companion_path string? the companion_path option
+-- A plugin manager calls this build hook at install and at each update, so it waits for the download.
+---@param companion_path string? a set path skips the download
 ---@return boolean ok
 ---@return string message
 function M.build(companion_path)

@@ -1,6 +1,4 @@
--- The envelopes that a Client and the companion exchange. A decoded envelope is a table with a
--- `tag` and snake_case fields. Each encoder writes the fields in the order that the companion
--- writes them, which is alphabetical by wire name.
+-- Each encoder must write the fields in the order that the companion writes them: alphabetical by wire name.
 local json = require("fshttp.json")
 
 local M = {}
@@ -135,7 +133,6 @@ codecs.locate = {
     end,
 }
 
--- An absent `parseFailed` decodes to false.
 codecs.blocks = {
     decode = function(object)
         return {
@@ -254,7 +251,6 @@ codecs.error = {
     end,
 }
 
--- Returns the envelope, or nil and the reason when the payload is not an envelope.
 function M.decode(payload)
     local ok, result = pcall(function()
         local object = json.decode(payload)

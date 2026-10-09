@@ -1,4 +1,3 @@
--- The version match rule between the client and the companion that it runs.
 local M = {}
 
 -- A Beta build carries a suffix such as `-beta.2`, and the rule ignores it.

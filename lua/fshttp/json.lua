@@ -1,13 +1,10 @@
--- JSON that keeps the key order of each object. The encoder writes the same bytes as the default
--- System.Text.Json encoder of the companion.
+-- The encoder must write the same bytes as the System.Text.Json encoder of the companion.
 local M = {}
 
 local array_meta = { kind = "array" }
 
 M.null = setmetatable({}, { kind = "null" })
 
--- Makes an object from a list of { key, value } pairs, in order. The object omits a pair with a
--- nil value.
 function M.object(fields)
     local object = {}
     local keys = {}
@@ -38,7 +35,6 @@ function M.is_array(value)
     return type(value) == "table" and kind(value) == "array"
 end
 
--- Returns the keys of an object in the order that the text or the pair list gave them.
 function M.keys(object)
     return getmetatable(object).keys
 end
@@ -223,7 +219,7 @@ local function utf16_escape(code)
     return string.format("\\u%04X\\u%04X", 0xD800 + math.floor(code / 0x400), 0xDC00 + code % 0x400)
 end
 
--- Escapes a run of UTF-8 bytes. A byte that does not start a whole sequence becomes U+FFFD.
+-- A byte that does not start a whole sequence becomes U+FFFD.
 local function escape_utf8(run)
     local parts = {}
     local i = 1
@@ -316,8 +312,7 @@ local function fail_pretty()
     error(not_one_value, 0)
 end
 
--- Gives the position after the closing quote of the string at `pos`. It accepts only the strings
--- that the renderer's JSON parser accepts, so the pretty-printed text matches the Golden fixture.
+-- Accepts only the strings that the JSON parser of the Renderer core accepts, so the output matches the Golden fixture.
 local function string_end(text, pos)
     local i = pos + 1
     while true do
@@ -440,12 +435,9 @@ pretty_value = function(state, pos, indent)
     return pos
 end
 
--- Copies each token as the text gives it, so each escape, each number, and the key order stay the
--- same. Only the space between the tokens changes, to a two-space indent. Gives nil when `text` is
--- not one JSON value. The folds give the lines of each object and each array that spans more than
--- one line of the output.
+-- Only the space between the tokens changes, so each escape, each number, and the key order stay the same.
 ---@param text string
----@return string? pretty
+---@return string? pretty nil when `text` is not one JSON value
 ---@return { first: integer, last: integer }[]? folds
 function M.pretty_print(text)
     local state = { text = text, parts = {}, line = 1, folds = {} }

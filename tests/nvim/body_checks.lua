@@ -33,8 +33,6 @@ end
 ---@field folds string[] each fold of the body as "<first>-<last>", with lines that count from the first body line
 ---@field highlights string[] each highlight of the body as "<line>:<first col>-<last col> <group>"
 
--- The Body of the Response buffer in the child. To find each fold, the Check closes the fold at each
--- body line, reads its range, and opens it again.
 ---@param child nvim_suite.Child
 ---@return nvim_suite.ResponseBody?
 local function response_body(child)
@@ -96,8 +94,6 @@ local function response_body(child)
     )
 end
 
--- Opens the fixture, waits for its Block mark, runs the Block, and waits for the Body of
--- `expected_lines`.
 ---@param child nvim_suite.Child
 ---@param expected_lines string[]
 ---@return nvim_suite.ResponseBody

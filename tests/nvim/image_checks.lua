@@ -10,9 +10,7 @@ local block_line = 25
 local png_signature = "\137PNG\r\n\26\n"
 local png_size = 218
 
--- Replaces snacks.nvim in the child with a stub. The stub records each call of the image placement
--- in `_G.fshttp_image_calls`, and reads the file at the time of the call, because the client removes
--- the file on the next paint.
+-- The stub reads the file at the time of the call, because the client removes the file on the next paint.
 ---@param child nvim_suite.Child
 ---@param terminal_supported boolean
 local function stub_snacks(child, terminal_supported)
@@ -65,7 +63,6 @@ local function body_lines(child)
     return nil
 end
 
--- Opens the fixture, runs its Block, and waits until the first line below the Body title is `expected`.
 ---@param child nvim_suite.Child
 ---@param expected string
 local function run_image_block(child, expected)

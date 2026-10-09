@@ -1,4 +1,4 @@
--- :checkhealth fshttp. Neovim finds this module by its name.
+-- Neovim finds this module by its name for :checkhealth fshttp.
 local body_syntax = require("fshttp.body_syntax")
 local companion = require("fshttp.companion")
 local download = require("fshttp.download")

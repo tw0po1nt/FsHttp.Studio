@@ -1,13 +1,12 @@
--- The text of each Block mark that a locate gives.
 local refusals = require("fshttp.refusals")
 
 local M = {}
 
 ---@class fshttp.BlockMark
----@field line integer the 1-based line that the mark sits on
----@field title string the text of the virtual line
+---@field line integer 1-based
+---@field title string
 ---@field on_block boolean false for the line-1 mark of a Parse failure with no Block
----@field runnable boolean true when a Run can reach the Block
+---@field runnable boolean
 
 ---@param refusal string?
 ---@return string

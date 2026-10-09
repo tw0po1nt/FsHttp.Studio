@@ -1,20 +1,30 @@
 # Coding standards
 
-House rules for F# in this repo, beyond the rules that tooling already enforces. **Tooling owns formatting.** Fantomas (`fantomas --check`, run in CI) and `.editorconfig` (4-space indent, final newline) do that work. Do not restate the layout rules, and do not fix layout by hand. These rules cover what a formatter cannot see.
+House rules for the F# and Lua code in this repo, beyond the rules that tooling already enforces. **Tooling owns formatting.** For F#, Fantomas (`fantomas --check`, run in CI) and `.editorconfig` (4-space indent, final newline) do that work. For Lua, StyLua (`stylua --check .`) sets the layout, and lua-language-server (`./scripts/check-lua-types.sh`) checks the LuaCATS types. CI runs both. Do not restate the layout rules, and do not fix layout by hand. These rules cover what a formatter cannot see.
+
+Each rule names the languages that it binds. Rules 1, 2, 3, and 5 bind F# and Lua. Rules 4 and 6 bind F# only.
 
 Each rule is a convention. Cite it in review, and weigh it against the case. Where a rule here and one of Fowler's generic smells disagree, the rule here wins.
 
 ## 1. Names and comments use the glossary
 
+*Binds F# and Lua.*
+
 `GLOSSARY.md` is the ubiquitous language. Identifiers, comments, log strings, and envelope tags that name a domain concept use the glossary term, and avoid the listed `_Avoid_` synonyms. Write **Companion** in place of "server", "backend", or "host". Write **Block** in place of "request" or "snippet". Write **Run** in place of "execute" or "send". Write **Envelope** in place of "message" or "payload". "Extension host" is the one sanctioned use of "host", because it is the glossary's own name for the JS side. A name that you cannot express in glossary terms is a signal: the concept is either missing from `GLOSSARY.md` or muddled in the code. Resolve that, and do not reach for a synonym.
 
 ## 2. Cross-boundary wire helpers live in one module
+
+*Binds F# and Lua.*
 
 Everything that reads or writes the framed envelope wire belongs in **`Companion.Envelope`**, or is re-exported from there. Do not copy it into each caller. This covers frame I/O, the `JsonElement` property readers (`getStringProp`, `getIntProp`, `jsonString`), and the outcome-to-wire mapping.
 
 Two copies of a `JsonElement` reader drift apart. They already disagreed on whether a missing string is `null` or `""`. Two ends of a channel that serialize the same shape in different modules also fall out of step silently. Use one module, and open it at both ends. `BlockRunner.outcomeToWire` and `wireToOutcome` are the pattern to follow: one shape, one inverse, shared by the host and the worker.
 
+In Lua, the wire has two modules. `fshttp.frame` reads and writes a frame, and `fshttp.envelope` decodes and encodes each envelope. A Lua module that reads or writes the wire calls these two modules.
+
 ## 3. Every external process gets a bounded wait and a kill path
+
+*Binds F# and Lua.*
 
 When you drive a child process (`--worker`, or any `Process.Start`), a crashed child and a *hung* child are different failures. Both must terminate the Run:
 
@@ -23,11 +33,17 @@ When you drive a child process (`--worker`, or any `Process.Start`), a crashed c
 
 `use proc = proc` gives disposal, which is necessary but not sufficient. Disposal does not unblock a wait. A driven process without a timeout is an incomplete implementation.
 
+In Lua, give `vim.system` a `timeout`, so that Neovim stops the process when the time passes. When a wait on the process expires, such as a `vim.wait` with a bound, call `kill` on the process handle.
+
 ## 4. Compound reads-and-writes of process-global state are one atomic step
+
+*Binds F# only. Neovim runs Lua on one thread, so a Lua client has no lock to take.*
 
 Process-global mutable state under a lock, such as `loadedVersions`, must take that lock **once for each logical operation**. A check in one `lock` scope, followed by an act in another scope, is a TOCTOU gap. It is correct only while the caller is single-threaded, and it stops being correct silently on the day a second caller appears. If `run` reads `conflictsWithLoaded` and then writes `markLoaded`, that check and that act belong under one lock. If the state is single-threaded and always will be, do not add the lock at all. A half-taken lock advertises a safety that it does not provide.
 
 ## 5. Comments state what the code cannot, and they speak from where they stand
+
+*Binds F# and Lua.*
 
 Write a comment only for what a competent reader cannot derive from the code itself: an external
 constraint, a non-obvious invariant, or a workaround for a defect elsewhere. Keep it to one line,
@@ -44,12 +60,19 @@ constraint is the thing the reader needs. A tracker number carries the further d
 tracker renumbers its items. `git blame`, the commit message, and the pull request keep the history,
 and a test name states the behavior under test rather than the ticket that asked for it.
 
-A **`TODO`** is the one exception, because it points at work that does not exist yet, so no fact on
+A **`TODO`** is the first exception, because it points at work that does not exist yet, so no fact on
 the page can stand for it. A `TODO` carries the **full URL**, so the work stays one click away and
 survives a move of the tracker:
 
 ```fsharp
 // TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/42): bound the worker wait
+```
+
+The header of a generated file is the second exception. It names the generator and the source
+by path, because you change the generator or the source, and the generator then writes the file:
+
+```lua
+-- Generated from package.json by scripts/generate-lua.fsx. Do not edit by hand.
 ```
 
 This rule governs `///` XML doc comments as much as `//` comments. A doc comment that restates the
@@ -58,12 +81,24 @@ past it for nothing. Write a `///` comment only when it states something the sig
 such as a parameter's unit or valid range, a non-obvious exception, or a constraint on how to use
 the member.
 
+In Lua, this rule governs `--` comments and `---` doc comments. The tag and the type of a LuaCATS
+`---@` annotation are exempt, because lua-language-server reads them. Free text after the type
+follows this rule, the same as a `///` comment. Keep that text only when it states something that
+the type does not:
+
+```lua
+---@param timeout_ms integer the bound of the wait, in milliseconds
+---@param name string
+```
+
 This rule is an overlay on the vendored `simplified-technical-english` skill, whose "Code comments
 and software text" section says that a comment explains why the code exists. Apply STE to the
 wording of a comment that this rule permits, and take the question of whether to write the comment
 from here.
 
 ## 6. A record of closures needs strong justification
+
+*Binds F# only. A Lua module is itself a table of functions, so this rule does not fit Lua.*
 
 A record whose fields are function types is a smell. It can hide a cycle between two modules. It can also hide state that a caller cannot see or test without a call to the closure. Consider these alternatives, in this order, before you use one:
 
@@ -75,10 +110,11 @@ Use a closure-record field only when none of these three alternatives fits. Stat
 
 ## The hook is a backstop
 
-A `PreToolUse` hook (`.claude/settings.json`) fires before a `Write` or an `Edit` on a `.fs` or
-`.fsx` file. It names the rules above at the moment an agent is about to write F#. The hook cannot
-read the pending code, and it cannot judge a comment. It also cannot see a file that a Bash command
-writes. The rules above are still the requirement.
+A `PreToolUse` hook (`.claude/settings.json`) fires before a `Write` or an `Edit` on a `.fs`,
+`.fsx`, or `.lua` file. It names the rules above that bind the language of the file, at the moment
+an agent is about to write that language. The hook cannot read the pending code, and it cannot
+judge a comment. It also cannot see a file that a Bash command writes. The rules above are still
+the requirement.
 
 ---
 

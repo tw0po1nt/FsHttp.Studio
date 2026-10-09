@@ -1,4 +1,3 @@
--- The entry point of the Neovim suite.
 local MiniTest = require("mini.test")
 local harness = require("nvim.harness")
 

@@ -1,5 +1,3 @@
--- The rules of the Companion archive download: the names, the URLs, the checksum command, and the
--- text of each notice. The download itself runs in fshttp.download.
 local M = {}
 
 M.default_base_url = "https://github.com/tw0po1nt/FsHttp.Studio/releases/download"
@@ -28,7 +26,6 @@ function M.url(base_url, version, file_name)
     return (base_url:gsub("/+$", "")) .. "/v" .. version .. "/" .. file_name
 end
 
--- The executable that prints the SHA-256 hash of a file.
 ---@param sysname string the `sysname` field of `vim.uv.os_uname()`
 ---@return string
 function M.checksum_tool(sysname)
@@ -40,7 +37,6 @@ function M.checksum_tool(sysname)
     return "sha256sum"
 end
 
--- The command that prints the SHA-256 hash of a file.
 ---@param sysname string the `sysname` field of `vim.uv.os_uname()`
 ---@param path string
 ---@return string[]
@@ -54,9 +50,7 @@ function M.checksum_command(sysname, path)
     return { tool, path }
 end
 
--- Reads a SHA-256 hash from a `.sha256` file or from the output of a checksum command. The first
--- line that contains a hash gives it. A line is either `<hash>  <name>`, or a hash that certutil
--- writes in groups of two digits.
+-- A line is either `<hash>  <name>`, or a hash that certutil writes in groups of two digits.
 ---@param text string
 ---@return string? hash 64 lower-case hexadecimal digits, or nil when the text contains no hash
 function M.parse_hash(text)
@@ -91,14 +85,14 @@ end
 
 ---@class fshttp.Installed
 ---@field kind "installed"
----@field folder string the folder that contains the companion
+---@field folder string
 
 ---@class fshttp.NoRelease
 ---@field kind "noRelease"
 
 ---@class fshttp.DownloadFailed
 ---@field kind "failed"
----@field cause fshttp.DownloadCause the failed step
+---@field cause fshttp.DownloadCause
 ---@field detail string
 
 ---@alias fshttp.DownloadResult fshttp.Installed|fshttp.NoRelease|fshttp.DownloadFailed

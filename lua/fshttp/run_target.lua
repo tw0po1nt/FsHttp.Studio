@@ -1,4 +1,3 @@
--- What `:FsHttp run` does with the Blocks of a fresh locate and the cursor line.
 local cursor = require("fshttp.cursor")
 local refusals = require("fshttp.refusals")
 
