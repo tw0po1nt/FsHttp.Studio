@@ -176,3 +176,5 @@ shows the state. No Check drives a statusline other than lualine.
   that is not F#. The lualine entry shows the row, and `status_line.lualine = false` removes it. A
   `dotnet_path` that names a missing file gives the `.NET SDK not found` row. In that state,
   `:FsHttp run` shows the WARN notice of the SDK again.
+- `:help fshttp`: `:helptags` finds no duplicate tag, and `:help fshttp` opens `doc/fshttp.txt`.
+  Each `:FsHttp` subcommand, each option key, and each `<Plug>(FsHttp…)` map has a help tag.

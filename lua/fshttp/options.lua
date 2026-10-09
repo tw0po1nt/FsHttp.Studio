@@ -182,6 +182,21 @@ function M.resolve(opts)
     return config, problems
 end
 
+---@return string[] keys the dotted name of each key
+function M.keys()
+    local keys = {}
+    for _, name in ipairs(sorted_keys(schema)) do
+        if schema[name].accept then
+            keys[#keys + 1] = name
+        else
+            for _, sub in ipairs(sorted_keys(schema[name])) do
+                keys[#keys + 1] = name .. "." .. sub
+            end
+        end
+    end
+    return keys
+end
+
 ---@param old fshttp.Config
 ---@param new fshttp.Config
 ---@return string[]

@@ -17,6 +17,7 @@ T["reference screenshots of the Response buffer"] = require("nvim.screenshot_che
 T["version check"] = require("nvim.version_check_checks")
 T["Status line text"] = require("nvim.status_line_checks")
 T[":checkhealth fshttp"] = require("nvim.health_checks")
+T[":help fshttp"] = require("nvim.help_checks")
 T["Harness watchdog"] = require("nvim.watchdog_checks")
 
 return T

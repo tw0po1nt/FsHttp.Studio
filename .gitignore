@@ -47,3 +47,6 @@ tests/ui.Tests/fixtures/sidecar.json
 
 # Neovim suite: generated when the test HTTP server starts
 tests/nvim/fixtures/sidecar.json
+
+# Neovim writes the help tags of the client here. The Neovim suite and lazy.nvim both run :helptags.
+doc/tags

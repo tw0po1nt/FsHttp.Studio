@@ -14,6 +14,20 @@ describe("fshttp.options", function()
         }, config)
     end)
 
+    it("lists the dotted name of each key, the path options too", function()
+        assert.same({
+            "block_mark.sign",
+            "block_mark.virtual_line",
+            "companion_path",
+            "dotnet_path",
+            "request_timeout_ms",
+            "response_buffer.images",
+            "response_buffer.keys",
+            "response_buffer.split",
+            "status_line.lualine",
+        }, options.keys())
+    end)
+
     it("applies each good key over the defaults", function()
         local config, problems = options.resolve({
             dotnet_path = "/opt/dotnet",
