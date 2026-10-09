@@ -48,6 +48,9 @@ local function body_title(child)
                     buf = candidate
                 end
             end
+            if not buf then
+                return { virtual = {}, next_line = nil }
+            end
             local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
             for i, line in ipairs(lines) do
                 if line:sub(1, #"▾ Body") == "▾ Body" then
@@ -70,13 +73,25 @@ local function body_title(child)
     )
 end
 
--- An earlier Check can leave a Response buffer in the child, so the wait needs the expected body.
+-- An earlier Check can leave a Response buffer with the same body in the child. The Run paints the
+-- buffer only after the locate answer arrives, so the wait can match the old body. To prevent this,
+-- run_block deletes the Response buffer before the Run.
 ---@param child nvim_suite.Child
 ---@param fixture_name string
 ---@param expected string
 local function run_block(child, fixture_name, expected)
     harness.edit(child, harness.fixture(fixture_name))
     harness.await_block_mark(child, block_line)
+    harness.lua_get(
+        child,
+        [[(function()
+            for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                if vim.bo[buf].filetype == "fshttp_response" then
+                    vim.api.nvim_buf_delete(buf, { force = true })
+                end
+            end
+        end)()]]
+    )
     harness.run_at(child, block_line)
     harness.eventually(harness.response_deadline_ms, "the body of this Run below the Body title", function()
         local next_line = body_title(child).next_line
