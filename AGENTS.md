@@ -71,6 +71,9 @@ rule at the moment of risk, and it cannot check that you obeyed. The rule is sti
   carry a screenshot of the running editor.
 - **Before you publish a release**, read `docs/standards/release-gate.md`. The UI suite is the
   release gate, and that file states the gaps it leaves open.
+- **Before you edit `README.md`, or write a ticket that changes it**, read
+  `docs/standards/release-gate.md`. The README on `main` describes the latest release, and each
+  milestone has one README ticket.
 
 ## Terminology
 
