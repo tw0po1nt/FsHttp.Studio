@@ -56,7 +56,7 @@ build fails on errors that a Fable-only loop never shows.
 | `npm run smoke` | The bundled renderer runs under node. |
 | `./scripts/check-lua-types.sh` | lua-language-server finds no problem in the LuaCATS annotations. The Neovim API types come from the `nvim` on `PATH`, or from `$VIMRUNTIME` when you set it. CI uses the Neovim 0.11 types. |
 | `nvim -l tests/minit.lua --minitest` | The Lua core suite passes. Each core module loads in an environment with no `vim` global. |
-| `./tests/nvim/run.sh` | The Neovim suite passes. The script publishes the test HTTP server and the companion, and then drives a child Neovim against them. `NVIM_TEST_SKIP_BUILD=1` uses the builds that are already in `out/`. `NVIM_TEST_COMPANION_ARCHIVE` names a Companion archive to verify and drive in place of the companion build. `release.yml` uses it. |
+| `./tests/nvim/run.sh` | The Neovim suite passes. The script publishes the test HTTP server and the companion, and then drives a child Neovim against them. `NVIM_TEST_SKIP_BUILD=1` uses the builds that are already in `out/`. `NVIM_TEST_COMPANION_ARCHIVE` names a Companion archive to verify and drive in place of the companion build. `release.yml` uses it. The reference screenshots compare only on Linux with the pinned stable Neovim. `NVIM_TEST_SCREENSHOTS=1` compares them on any system, and `NVIM_TEST_SCREENSHOTS=update` writes them again. |
 | `./tests/ui.Tests/run.sh` | The UI suite, which is the release gate. See `docs/standards/release-gate.md`. |
 
 `./scripts/verify.sh` first runs the steps of `.github/workflows/ci.yml` in the same order: the
