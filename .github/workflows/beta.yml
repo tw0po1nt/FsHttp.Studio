@@ -1,15 +1,17 @@
 name: Beta
 
-# Optional pre-release .vsix channel for handing someone a build. A Beta is
-# distribution only. It is not required for a release. The UI suite is the
-# release gate. Manual only — an operator clicks "Run workflow".
+# Optional pre-release channel for handing someone a build of both Clients: the
+# .vsix and the Companion archive. A Beta is distribution only. It is not
+# required for a release. The Release gate is in release.yml. Manual only: an
+# operator clicks "Run workflow".
 #
 # Two paths, chosen by the `ref` input:
 #
-#   ref empty  → Beta. Builds main, runs the full CI gate, publishes a GitHub
-#                pre-release at tag v<version>-beta.<n>.
-#   ref set    → Branch build. Builds that ref, skips the CI gate, uploads the
-#                .vsix as a workflow artifact. No tag, and no release.
+#   ref empty  -> Beta. Builds main, runs the full CI gate, publishes a GitHub
+#                 pre-release at tag v<version>-beta.<n>.
+#   ref set    -> Branch build. Builds that ref, skips the CI gate, uploads the
+#                 .vsix and the Companion archive as workflow artifacts. No tag,
+#                 and no release.
 #
 # The CI gate is skipped on a Branch build on purpose. ci.yml already runs it on
 # the pull request, and a Branch build must reach the operator's hands before
@@ -27,7 +29,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write # create the tag + pre-release, upload the .vsix asset
+  contents: write # create the tag and the pre-release, and upload the files
 
 jobs:
   build:
@@ -111,8 +113,9 @@ jobs:
 
       - run: dotnet tool restore
 
-      # The Beta gate. Same guardrails as ci.yml and release.yml — a red build
-      # can never become a release candidate. A Branch build skips this block.
+      # The Beta gate. The same guardrails as ci.yml and release.yml. A red
+      # build can never become a release candidate. A Branch build skips this
+      # block.
       - name: Check the formatting
         if: steps.path.outputs.kind == 'beta'
         run: dotnet fantomas --check .
@@ -159,6 +162,7 @@ jobs:
       - name: Stamp the version into the manifest
         run: npm version "${{ steps.version.outputs.stamp }}" --no-git-tag-version
 
+      # Publishes the companion into dist/companion, and builds the .vsix.
       - run: npm run package
 
       # Ship a checksum beside the asset, for the same reason release.yml does.
@@ -168,6 +172,14 @@ jobs:
           VSIX="fshttp-studio-${{ steps.version.outputs.stamp }}.vsix"
           sha256sum "$VSIX" > "$VSIX.sha256"
           cat "$VSIX.sha256"
+
+      # The archive holds the companion that the .vsix holds. pack-companion.sh
+      # reads the stamped version from package.json, and writes the .sha256 file.
+      - name: Pack the Companion archive
+        run: |
+          set -euo pipefail
+          ./scripts/pack-companion.sh . dist/companion
+          cat "fshttp-studio-companion-${{ steps.version.outputs.stamp }}.tar.gz.sha256"
 
       - name: Publish the pre-release
         if: steps.path.outputs.kind == 'beta'
@@ -183,16 +195,23 @@ jobs:
           body: |
             Beta for `${{ steps.version.outputs.target }}`, built from `${{ steps.commit.outputs.sha }}`.
 
-            Install the `.vsix` to try this build. A Beta is distribution only.
-            The UI suite is the release gate. A Beta is not required for a release.
+            Install the `.vsix` to try this build in VSCode.
+
+            To try this build in Neovim, pin the plugin to the tag `${{ steps.version.outputs.tag }}`.
+            Download the Companion archive, and check it against its `.sha256` file.
+            Unpack the archive into a folder, and set `companion_path` to that folder.
+
+            A Beta is distribution only. It is not required for a release.
 
             This build is not a supported install.
             `prune-betas.yml` deletes it when `${{ steps.version.outputs.target }}` ships.
           files: |
             fshttp-studio-${{ steps.version.outputs.stamp }}.vsix
             fshttp-studio-${{ steps.version.outputs.stamp }}.vsix.sha256
+            fshttp-studio-companion-${{ steps.version.outputs.stamp }}.tar.gz
+            fshttp-studio-companion-${{ steps.version.outputs.stamp }}.tar.gz.sha256
 
-      - name: Upload the Branch build
+      - name: Upload the Branch build (.vsix)
         if: steps.path.outputs.kind == 'branch'
         uses: actions/upload-artifact@v4
         with:
@@ -200,4 +219,16 @@ jobs:
           path: |
             fshttp-studio-${{ steps.version.outputs.stamp }}.vsix
             fshttp-studio-${{ steps.version.outputs.stamp }}.vsix.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the Branch build (Companion archive)
+        if: steps.path.outputs.kind == 'branch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fshttp-studio-companion-${{ steps.version.outputs.stamp }}
+          path: |
+            fshttp-studio-companion-${{ steps.version.outputs.stamp }}.tar.gz
+            fshttp-studio-companion-${{ steps.version.outputs.stamp }}.tar.gz.sha256
+          if-no-files-found: error
           retention-days: 14

@@ -1,7 +1,20 @@
 # Release gate
 
-This document states what the UI test suite covers and what it does not. The suite is the
-release gate. A green Actions run of the suite is the record of what was verified.
+This document states what the suites of the Release gate cover and what they do not. The Release
+gate is the UI suite, the Neovim suite, and the Lua core suite. A green Actions run of
+`release.yml` is the record of what was verified.
+
+## How a release runs the gate
+
+`release.yml` has three stages. The build job runs the guardrails of `ci.yml`. Then it packages the
+`.vsix` and the Companion archive, writes a `.sha256` file for each, and uploads the four files as
+workflow artifacts. The UI suite job downloads the `.vsix` and drives it. The four Neovim legs
+download the Companion archive. Each leg runs the Lua core suite and the Neovim suite against that
+archive. The publish job needs each gate to be green, and attaches the same four files to the draft
+Release.
+
+The `force` input skips each suite, and the run log shows a warning for the skip. The guardrails
+always run.
 
 ## Prerequisites
 
@@ -105,12 +118,20 @@ dispatches `nvim-tests.yml` against the pin branch.
 another version ships uncaught. Neovim 0.11 runs on Linux only.
 
 **The Windows leg cannot fail the run.** The Windows leg runs with `continue-on-error` until its
-Checks pass, and #306 tracks that work. A defect that occurs only on Windows ships uncaught.
+Checks pass, and #306 tracks that work. In `release.yml`, a red Windows leg cannot refuse a draft
+Release. A defect that occurs only on Windows ships uncaught.
 
-**`release.yml` does not run the suite yet.** A red Neovim suite cannot refuse a draft Release.
+**The suite gets the companion from `companion_path`.** A release run unpacks the Companion
+archive that it ships, and each Check that sets `companion_path` uses that folder. A run in
+`nvim-tests.yml` publishes the companion from the checkout.
 
-**The suite gets the companion from `companion_path`.** The suite publishes the companion into
-`out/nvim-tests/companion`. No Check downloads or verifies a Companion archive.
+**No Check downloads from a real GitHub Release URL.** The download Checks get the Companion archive
+from the test HTTP server. In a release run, that archive is the file that the release attaches. A
+defect in the release URL, or in the redirect of GitHub, ships uncaught.
+
+**No Check compares the pixels of an image.** The image Checks run with no snacks.nvim, or with a
+stub in place of snacks.nvim. The stub records each image placement and the bytes of the image
+file. A defect that occurs only in the drawn image ships uncaught.
 
 **The Budgets come from local runs and from one CI run on Linux and on macOS.** The values are 60 s
 for Harness setup and 30 s for each Check on each system. The suite Budget is 180 s on Linux and
