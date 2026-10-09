@@ -235,11 +235,11 @@ end
 ---@param content_type string the type with no parameters
 ---@return string?
 local function body_language(content_type)
-    if content_type == "application/json" or content_type == "text/json" or content_type:match("%+json$") then
+    if open_rule.is_json(content_type) then
         return "json"
     elseif open_rule.is_html(content_type) then
         return "html"
-    elseif content_type == "application/xml" or content_type == "text/xml" or content_type:match("%+xml$") then
+    elseif open_rule.is_xml(content_type) then
         return "xml"
     end
     return nil

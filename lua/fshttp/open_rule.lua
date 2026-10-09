@@ -18,7 +18,19 @@ function M.is_html(content_type)
     return content_type == "text/html" or content_type == "application/xhtml+xml"
 end
 
--- The hint line below the Body header, or nil when the body has no hint.
+---@param content_type string the type with no parameters
+---@return boolean
+function M.is_json(content_type)
+    return content_type == "application/json" or content_type == "text/json" or content_type:match("%+json$") ~= nil
+end
+
+---@param content_type string the type with no parameters
+---@return boolean
+function M.is_xml(content_type)
+    return content_type == "application/xml" or content_type == "text/xml" or content_type:match("%+xml$") ~= nil
+end
+
+-- The hint line below the Body title, or nil when the body has no hint.
 ---@param content_type string the type with no parameters
 ---@return string?
 function M.hint(content_type)
@@ -37,9 +49,9 @@ function M.extension(content_type)
         return "html"
     elseif image_body.is_image(content_type) then
         return image_body.extension(content_type)
-    elseif content_type == "application/json" or content_type:match("%+json$") then
+    elseif M.is_json(content_type) then
         return "json"
-    elseif content_type == "application/xml" or content_type == "text/xml" or content_type:match("%+xml$") then
+    elseif M.is_xml(content_type) then
         return "xml"
     elseif content_type == "text/plain" then
         return "txt"
