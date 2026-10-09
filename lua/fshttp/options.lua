@@ -10,6 +10,10 @@ local M = {}
 ---@field response_buffer { split: "right"|"left"|"below"|"above", images: boolean, keys: boolean }
 ---@field status_line { lualine: boolean }
 
+-- The options that hold a file path. setup() normalizes each one, and a change to one needs a
+-- restart of the companion.
+M.path_options = { "dotnet_path", "companion_path" }
+
 ---@return fshttp.Config
 function M.defaults()
     return {
@@ -187,7 +191,7 @@ end
 ---@return string[]
 function M.changed_paths(old, new)
     local changed = {}
-    for _, name in ipairs({ "dotnet_path", "companion_path" }) do
+    for _, name in ipairs(M.path_options) do
         if old[name] ~= new[name] then
             changed[#changed + 1] = name
         end

@@ -18,7 +18,7 @@ local levels = { ERROR = vim.log.levels.ERROR, WARN = vim.log.levels.WARN }
 ---@param opts? fshttp.Options
 function M.setup(opts)
     local new, problems = options.resolve(opts)
-    for _, name in ipairs({ "dotnet_path", "companion_path" }) do
+    for _, name in ipairs(options.path_options) do
         if new[name] then
             new[name] = vim.fs.normalize(new[name])
         end
