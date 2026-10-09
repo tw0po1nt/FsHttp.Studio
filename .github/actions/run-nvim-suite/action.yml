@@ -3,14 +3,16 @@ description: >
   Installs Neovim, runs the Lua core suite, and runs the Neovim suite. The action works on Linux,
   macOS, and Windows runners.
 
-# One copy of the suite steps, called by nvim-tests.yml and by release.yml.
+# One copy of the suite steps. nvim-tests.yml calls it.
 #
-# The two callers must run the same suites. The release caller must run them against the files it
-# is about to ship. A `workflow_call` cannot do that: a called workflow runs on its own runner. A
+# TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/285): call it from release.yml too.
+#
+# Each caller must run the same suites. The release caller must run them against the files it is
+# about to ship. A `workflow_call` cannot do that: a called workflow runs on its own runner. A
 # composite action runs on the caller's runner, so it drives the files that the caller built.
 #
-# What stays with the caller: the checkout, the .NET setup, and the NuGet cache. The caller also
-# decides which Neovim versions to run.
+# What stays with the caller: the checkout, the `actions/setup-dotnet` step, and the NuGet cache.
+# The caller also decides which Neovim versions to run.
 
 inputs:
   neovim-pin:

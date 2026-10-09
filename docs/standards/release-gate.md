@@ -104,18 +104,22 @@ dispatches `nvim-tests.yml` against the pin branch.
 `tests/nvim/neovim-pin.json`) and the pinned stable version (`stable`). A defect that occurs only on
 another version ships uncaught. Neovim 0.11 runs on Linux only.
 
+**The Windows leg cannot fail the run.** The Windows leg runs with `continue-on-error` until its
+Checks pass, and #306 tracks that work. A defect that occurs only on Windows ships uncaught.
+
 **`release.yml` does not run the suite yet.** A red Neovim suite cannot refuse a draft Release.
 
 **The suite gets the companion from `companion_path`.** The suite publishes the companion into
 `out/nvim-tests/companion`. No Check downloads or verifies a Companion archive.
 
-**The Budgets come from local runs and one Linux CI run.** The values are 60 s for Harness setup,
-30 s for each Check, and 180 s for the suite. The suite took 128.7 s on the Linux leg of CI, and
-the suite Budget adds a margin for the Checks that the open Neovim client issues add. `harness.lua`
-holds one row of Budgets for each operating system. The macOS and Windows rows copy the Linux row,
-because no measured run on those systems has set them yet. Each leg writes its timing table to the
-job summary. Replace the macOS and Windows rows with values from those tables. The suite Budget
-starts at the first Check, so it leaves out Harness setup, as in the UI suite.
+**The Budgets come from local runs and from one CI run on Linux and on macOS.** The values are 60 s
+for Harness setup and 30 s for each Check on each system. The suite Budget is 180 s on Linux and
+240 s on macOS. The suite took 128.7 s on the first Linux run and 173.3 s on the first macOS run.
+Each suite Budget adds a margin of about 40% for the Checks that the open Neovim client issues add.
+`harness.lua` holds one row of Budgets for each operating system. The Windows row copies the Linux
+row, because no passing run on Windows has set it yet. Each leg writes its timing table to the job
+summary. The suite Budget starts at the first Check, so it leaves out Harness setup, as in the UI
+suite.
 
 **The suites test lazy.nvim only.** The `vim.pack` route gets no Check.
 

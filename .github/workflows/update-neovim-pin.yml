@@ -53,8 +53,8 @@ jobs:
           fi
           echo "pin=$PIN" >> "$GITHUB_OUTPUT"
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
-          # Behind, not merely different. A pin that a person set ahead of the latest release must
-          # not produce a downgrade pull request every Monday.
+          # The job opens a pull request only when the pin is behind the latest release. A person can
+          # set the pin ahead of the latest release, and that pin must not cause a weekly downgrade.
           NEWEST="$(printf '%s\n%s\n' "$PIN" "$LATEST" | sort -V | tail -1)"
           if [ "$PIN" = "$LATEST" ] || [ "$NEWEST" = "$PIN" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"

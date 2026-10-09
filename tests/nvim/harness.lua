@@ -9,11 +9,11 @@ local is_windows = sysname == "Windows_NT"
 
 -- The Budgets of each operating system. Each leg of nvim-tests.yml writes the timing table to the
 -- job summary, and the Budgets of a system come from the rows of its leg.
--- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/283): the Darwin and Windows_NT rows copy
--- the Linux row until the first run of each leg gives a measured row.
+-- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/306): the Windows_NT row copies the Linux
+-- row until a passing run of the Windows leg gives a measured row.
 local budgets_ms = {
     Linux = { harness_setup = 60000, check = 30000, suite = 180000 },
-    Darwin = { harness_setup = 60000, check = 30000, suite = 180000 },
+    Darwin = { harness_setup = 60000, check = 30000, suite = 240000 },
     Windows_NT = { harness_setup = 60000, check = 30000, suite = 180000 },
 }
 local budget_ms = budgets_ms[sysname] or budgets_ms.Linux

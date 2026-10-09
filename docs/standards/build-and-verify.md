@@ -28,6 +28,7 @@ uses `gcc` when `cc` is missing, writes the parser as a `.dll`, and stops proces
 PowerShell in place of `pkill`. The Harness finds the companion with PowerShell in place of
 `pgrep`. The Lua core suite needs the Visual C++ compiler on `PATH`, because hererocks builds
 Lua 5.1 with it. CI puts the compiler there with `ilammy/msvc-dev-cmd`.
+
 `tests/nvim/neovim-pin.json` holds the Neovim versions that CI installs: `floor` for the Lua type
 check, and `stable` for the two Neovim suites.
 

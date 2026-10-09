@@ -7,7 +7,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/nvim-tests.yml'
-      # The suite steps live in a composite action that release.yml also calls.
+      # The suite steps live in a composite action.
       - '.github/actions/run-nvim-suite/action.yml'
       - 'build.lua'
       - 'lazy.lua'
