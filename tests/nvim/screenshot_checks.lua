@@ -1,4 +1,4 @@
--- The screen changes with the OS and the Neovim version, so only Linux on the pinned stable Neovim compares.
+-- The screen changes with the OS and the Neovim version, so the Checks compare only on Linux with the pinned Neovim.
 local MiniTest = require("mini.test")
 local harness = require("nvim.harness")
 

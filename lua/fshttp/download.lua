@@ -149,7 +149,7 @@ function M.fetch(version, callback)
 
     local function unpack()
         vim.fn.mkdir(unpacked, "p")
-        -- A user can have GNU tar first on PATH, which reads C:/ as a host name, so tar gets relative names.
+        -- A user can have GNU tar first on PATH. GNU tar reads C:/ as a host name, so tar gets relative names.
         local tar = { "tar", "-xzf", rule.archive_name(version), "-C", unpacked_name }
         run(tar, function(result)
             if result.code ~= 0 then

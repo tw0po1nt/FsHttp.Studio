@@ -42,7 +42,7 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
     end,
 })
 
--- lazy.nvim can call setup() after Neovim reads the first Script, so the scan waits one loop turn.
+-- lazy.nvim can call setup() after Neovim reads the first Script, so the scan runs on the next event loop turn.
 vim.schedule(function()
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
         if vim.api.nvim_buf_is_loaded(buf) and vim.api.nvim_buf_get_name(buf):match("%.fsx$") then
