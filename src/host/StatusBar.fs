@@ -25,7 +25,7 @@ let private refreshStatus () =
 let register (bar: StatusBarItem) = item <- Some bar
 
 /// The status bar for a companion state. Keeps the last script view, so a Ready transition
-/// reports what the active document holds rather than the retired `ready` word.
+/// reports what the active document contains rather than the retired `ready` word.
 let setCompanionState (state: State) =
     companionState <- state
     refreshStatus ()
@@ -44,7 +44,7 @@ let private scriptViewFor (document: TextDocument) : ScriptView =
         ScriptPending
 
 /// Follows the active document. `None` is a workbench with no active text editor at all, such
-/// as one where the response viewer holds focus. That hides the item on the same terms as a
+/// as one where the response viewer has focus. That hides the item on the same terms as a
 /// non-F# document.
 let onActiveEditorChanged (editor: TextEditor option) =
     match editor with

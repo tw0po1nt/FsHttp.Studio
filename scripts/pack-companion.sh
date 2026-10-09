@@ -5,7 +5,7 @@
 #
 # The script writes fshttp-studio-companion-<version>.tar.gz and the .sha256 file beside it into
 # <output-dir>. The version comes from package.json. Without a second argument, the script
-# publishes the companion first. The archive holds the files of the published companion at its top
+# publishes the companion first. The archive contains the files of the published companion at its top
 # level. The Neovim suite and the release both use this script.
 set -euo pipefail
 
@@ -20,7 +20,7 @@ OUT="$1"
 PUBLISHED="${2:-}"
 VERSION="$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$ROOT/package.json" | head -n 1)"
 if [[ -z "$VERSION" ]]; then
-  echo "pack-companion: package.json holds no version" >&2
+  echo "pack-companion: package.json sets no version" >&2
   exit 1
 fi
 
@@ -31,7 +31,7 @@ if [[ -z "$PUBLISHED" ]]; then
 fi
 
 if [[ ! -e "$PUBLISHED/Companion.dll" ]]; then
-  echo "pack-companion: $PUBLISHED holds no Companion.dll" >&2
+  echo "pack-companion: $PUBLISHED contains no Companion.dll" >&2
   exit 1
 fi
 

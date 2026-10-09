@@ -2,7 +2,7 @@
 
 Spec for the main feature of v0.3: a Neovim client beside the VSCode extension. The map
 [FsHttp.Studio v0.3: Neovim support and shared features](https://github.com/tw0po1nt/FsHttp.Studio/issues/239)
-holds the decisions. Each decision below names the ticket that holds its detail.
+records the decisions. Each decision below names the ticket that records its detail.
 
 v0.3 also ships three features in both Clients, each with its own spec:
 [0016 Copy as curl](0016-copy-as-curl.md), [0017 Run request at cursor](0017-run-request-at-cursor.md),
@@ -28,7 +28,7 @@ v0.2 in full: a Block mark on each located block, a Response buffer with the sta
 Request, the Response headers, and the Body, images through snacks.nvim, and a yank for each copy
 button.
 
-**One source of truth holds the two Clients together.** An F# script generates the user-facing text
+**One source of truth keeps the two Clients together.** An F# script generates the user-facing text
 for the Lua client from `Refusals.fs`. F# tests write Golden fixtures that the Lua core suite must
 match byte for byte.
 
@@ -118,7 +118,7 @@ the Neovim suite, and the Lua core suite together are the Release gate.
 59. As the maintainer, I want the user-facing text of both Clients to come from `Refusals.fs`, so that the two Clients cannot drift.
 60. As the maintainer, I want Golden fixtures that F# writes and Lua reads, so that a change to the envelope or a pure rule fails in both suites.
 61. As the maintainer, I want the Release gate to drive the files that the release ships, so that a green gate proves the shipped bytes.
-62. As the maintainer, I want the `.vsix` to hold no Lua file, so that the VSCode package stays the same size.
+62. As the maintainer, I want the `.vsix` to contain no Lua file, so that the VSCode package stays the same size.
 63. As the maintainer, I want the Neovim suite on Linux, macOS, and Windows, so that `curl`, `tar`, the checksum tool, and `dotnet` discovery work on each platform.
 
 ## Implementation Decisions
@@ -136,7 +136,7 @@ Ticket: [Which language and runtime does the Neovim client use?](https://github.
   on the Neovim API.
 - The pure core sits behind a module seam. A core module never reads the `vim` global. Generated
   code can replace the core in the future.
-- The pure core holds: the envelope decode and encode, the frame parser, the cursor rule, the
+- The pure core contains: the envelope decode and encode, the frame parser, the cursor rule, the
   Status line text rows, the copy payload, the Curl command, the binary test, the hex dump, the
   JSON pretty-printer, the version match rule, and the option validation.
 - `vim.json.decode` loses key order. Thus the Lua JSON pretty-printer reformats the body token by
@@ -151,9 +151,9 @@ Ticket: [Where does the Neovim client live, and how does it ship?](https://githu
 - The client lives at the root of this repo: `lua/`, `plugin/`, `doc/`, `build.lua`, and
   `lazy.lua` sit beside `package.json`. lazy.nvim loads the repo root, and reads `build.lua` from
   the root only.
-- `.vscodeignore` excludes each of these paths. A guardrail checks that the `.vsix` holds no Lua
+- `.vscodeignore` excludes each of these paths. A guardrail checks that the `.vsix` contains no Lua
   file.
-- `package.json` holds one version. The VSCode extension, the Neovim client, and the companion
+- `package.json` sets one version. The VSCode extension, the Neovim client, and the companion
   carry that version.
 - Each version gets one tag `v<version>` and one GitHub Release. The release carries the `.vsix`,
   the Companion archive `fshttp-studio-companion-<version>.tar.gz`, and a `.sha256` file for each.
@@ -170,7 +170,7 @@ Ticket: [Where does the Neovim client live, and how does it ship?](https://githu
 - The project tests lazy.nvim only. The README also gives a `vim.pack` snippet for Neovim 0.12 and
   later. The client has no luarocks package.
 - README.md gets a short Neovim section: the requirements, the LazyVim and `vim.pack` snippets, and
-  a pointer to `:help fshttp`. `doc/fshttp.txt` holds the commands, the options, and the health
+  a pointer to `:help fshttp`. `doc/fshttp.txt` gives the commands, the options, and the health
   check.
 - A new ADR records the location at the repo root and the single version.
 
@@ -303,10 +303,10 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
   ...
 ```
 
-- **The winbar holds the status line.** The order is the status code and reason, the request time,
+- **The winbar shows the status line.** The order is the status code and reason, the request time,
   the total time, the size, the method, and the URL. When the split is too narrow, the winbar cuts
   the start of the URL (`%<`).
-- **The buffer holds three folds:** Request, Response headers, and Body. Request and Response
+- **The buffer has three folds:** Request, Response headers, and Body. Request and Response
   headers start closed. Body starts open. A closed fold shows its title and its line count.
 - **Body text.** For a JSON, XML, or HTML body, the client parses the body region with the
   tree-sitter parser for that language, for highlights and folds. With no parser, a JSON body shows
@@ -322,7 +322,7 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
   - Image: `:FsHttp open  shows the image in the system viewer`
 - **Compile error.** The buffer shows the Compile error text of the VSCode viewer, with the trailing
   spaces removed from each line. `<CR>` on a `(line,col)` line moves the cursor to that position in
-  the script, or opens the loaded file that holds the error. The winbar shows
+  the script, or opens the loaded file that contains the error. The winbar shows
   `Compile error  <CR> on a (line,col) moves to it in the script`. The script gets no diagnostic,
   no sign, and no quickfix entry. This keeps the rule of spec 0009.
 - **Runtime error and Refused Run.** Each one shows as text in the Response buffer, as in VSCode.
@@ -467,7 +467,7 @@ Ticket: [Which settings does the Neovim client have, and how does a user set the
 #### C1. Text from `Refusals.fs`
 
 - `generate-lua.fsx` writes each user-facing sentence of `Refusals.fs` into `refusals.lua`.
-- `staleBlockIndex` names the lens in VSCode. `Refusals.fs` holds a variant for each Client. The
+- `staleBlockIndex` names the lens in VSCode. `Refusals.fs` has a variant for each Client. The
   Neovim variant ends "To run this request, run :FsHttp run again."
 - `companionStopped` becomes the template of spec 0018. The generator fills in `:FsHttp restart`.
 - `Refusals.fs` gets the three new entries of spec 0018: the starting lens title, the restart
@@ -513,11 +513,11 @@ Ticket: [What gates a release of the Neovim client?](https://github.com/tw0po1nt
 - A new workflow, `nvim-tests.yml`, runs both suites on the four legs. It runs on each push to
   `main`, and on a pull request that changes the Lua client, the Neovim tests, the Golden fixtures,
   `src/**`, `package.json`, or the workflow files.
-- A composite action, `run-nvim-suite`, holds the suite steps for `nvim-tests.yml` and
+- A composite action, `run-nvim-suite`, contains the suite steps for `nvim-tests.yml` and
   `release.yml`.
 - `ci.yml` and the build job of `release.yml` run these guardrails:
   - `generate-lua.fsx --check`
-  - a check that the `.vsix` holds no Lua file
+  - a check that the `.vsix` contains no Lua file
   - StyLua `--check`, with a `stylua.toml` at the repo root
   - `lua-language-server --check` over the LuaCATS annotations, with the Neovim 0.11 API types
   - `check-banned-patterns.sh`, extended to read Lua `--` comments, Lua string literals, and
@@ -554,7 +554,7 @@ Ticket: [What gates a release of the Neovim client?](https://github.com/tw0po1nt
   suite, and UI suite. Active document, Check, Harness, Harness setup, Proven-live, Budget, Sidecar,
   Dead port, Beta, and Branch build become editor-neutral. The ticket
   [Which glossary terms become editor-neutral, and which get a Neovim sibling?](https://github.com/tw0po1nt/FsHttp.Studio/issues/253)
-  holds the detail.
+  records the detail.
 
 ## Testing Decisions
 
@@ -563,7 +563,7 @@ Ticket: [What gates a release of the Neovim client?](https://github.com/tw0po1nt
 - A test drives the behavior that a user or a Client sees. It asserts the text on screen, the
   register, the clipboard, the bytes that a server receives, or the process that exists.
 - A test does not assert the inner state of a module.
-- A pure rule that both Clients hold gets one Golden fixture. The F# side writes it, and the Lua
+- A pure rule that both Clients share gets one Golden fixture. The F# side writes it, and the Lua
   side reads it. Thus one fixture proves both Clients.
 - A Check in the Neovim suite asserts the layout through the child Neovim: the buffer lines, the
   closed folds, the winbar text, and the virtual lines.

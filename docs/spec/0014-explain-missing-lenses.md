@@ -146,7 +146,7 @@ damage, and one message ran to two lines and named a compiler flag.
 
 ### 4. The companion: the flag comes from `ParseHadErrors`
 
-`BlockLocator.parse` already holds the `FSharpParseFileResults`. Return its `ParseHadErrors` beside
+`BlockLocator.parse` already has the `FSharpParseFileResults`. Return its `ParseHadErrors` beside
 the blocks.
 
 ```fsharp
@@ -197,7 +197,7 @@ lenses for each open document, and two editors can be visible at once. Compare t
 The word `ready` leaves the user interface. Each `Ready` row states what FsHttp.Studio found, which
 is a stronger statement than the state of a process that the user did not start.
 
-`looking for requests…` holds from the activation of a `.fsx` document until its first `blocks`
+`looking for requests…` stays from the activation of a `.fsx` document until its first `blocks`
 response. `Extension` resets to this state when the active document changes. An edit updates the count in
 place instead.
 
@@ -219,7 +219,7 @@ lens behavior there is unchanged, and the status bar now explains it.
 
 ### 7. The count includes each block that #97 refuses
 
-A script can hold three blocks of which #97 refuses two. The status bar reports `3 requests`.
+A script can contain three blocks of which #97 refuses two. The status bar reports `3 requests`.
 
 The count equals the number of lenses on the screen, always, because #97 gives a refused block a
 lens of its own. The status bar answers *did FsHttp.Studio find my requests*. The lens answers *can
@@ -228,8 +228,8 @@ families in one line.
 
 ### 8. The seam: both decisions move into `Protocol.fs`
 
-`CodeLensProvider` and `Extension` hold VSCode interop and no test drives them. `Protocol.fs` states
-at its head that it holds no Fable or VSCode interop, so `tests/host.Tests` drives it directly.
+`CodeLensProvider` and `Extension` contain VSCode interop and no test drives them. `Protocol.fs` states
+at its head that it contains no Fable or VSCode interop, so `tests/host.Tests` drives it directly.
 
 Add to `Protocol.fs`:
 
@@ -244,7 +244,7 @@ val statusText : State -> ScriptView -> string option   // None hides the item
 val noRequestsLensTitle : ScriptView -> string option   // Some for Script(0, true) only
 ```
 
-`statusText` returns an option, so one function holds Decision 6's visibility rule and Decision 5's
+`statusText` returns an option, so one function contains Decision 6's visibility rule and Decision 5's
 table together, and one test suite asserts both.
 
 **Move `State` and `statusText` from `Companion.fs` into `Protocol.fs`.** The move is forced and not
@@ -282,7 +282,7 @@ Register the listener's `Disposable` in `context.subscriptions`, as each other s
 | `1 request: a syntax error can hide others` | Status bar |
 | `{n} requests: a syntax error can hide others` | Status bar |
 
-Rules that these strings hold, and that a later edit must hold:
+Rules that these strings obey, and that a later edit must obey:
 
 - No contractions, active voice, and American spellings, per `AGENTS.md` and the controlled-language
   skill.
@@ -307,7 +307,7 @@ Rules that these strings hold, and that a later edit must hold:
 4. **A script with damage between two blocks reports `ParseFailed = true` and one block.** Partial
    loss, which Decision 5 routes to the status bar.
 
-Take the fixtures from the probe, which holds a measured expectation for each one.
+Take the fixtures from the probe, which has a measured expectation for each one.
 
 ### Seam 2: the envelope
 
@@ -334,7 +334,7 @@ Take the fixtures from the probe, which holds a measured expectation for each on
 ### What is not tested here
 
 No test drives the status bar item, the CodeLens surface, or the active-editor listener. These are
-interop, and ADR-0003's seam puts the testable logic in `Protocol`. Seams 1 and 3 hold each rule and
+interop, and ADR-0003's seam puts the testable logic in `Protocol`. Seams 1 and 3 contain each rule and
 each string.
 
 ## Out of Scope
@@ -346,7 +346,7 @@ each string.
   case reported the line after the damage.
 - **An in-editor signal on each script with no block.** Ruled out by the deciding ticket. Most `.fsx`
   files that a user opens are not FsHttp scripts, and a lens on each of them is worse than silence.
-  The trigger holds to *failure to parse* rather than to *absence of blocks*.
+  The trigger stays with *failure to parse* rather than to *absence of blocks*.
 - **A separate message for a builder with a name other than `http`.** Telling `myHttp { }` apart from
   a script with no computation expression needs an AST branch that matches each builder name. That
   case reports `no requests found`, which is true.

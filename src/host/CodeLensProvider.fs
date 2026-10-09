@@ -42,7 +42,7 @@ let mutable private onLocated: (TextDocument -> ScriptView -> unit) option = Non
 ///
 /// A ready companion never reads this table, because it locates the script again on every query.
 /// The entries therefore only serve the *next* stop, and `setReady true` clears all of them.
-/// Nothing else removes an entry. What a session holds is one range list for each script that the
+/// Nothing else removes an entry. What a session stores is one range list for each script that the
 /// user opened since the companion last became ready, which is small.
 let private lastLocated =
     System.Collections.Generic.Dictionary<string, BlockRange list>()

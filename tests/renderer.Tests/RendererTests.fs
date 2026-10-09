@@ -243,7 +243,7 @@ let statusLineTests =
 
           test "the status line sits above the request, the headers, and the body" {
               // The response wrapper's children are the status line and three section shells, in
-              // that order. Each shell holds its section.
+              // that order. Each shell contains its section.
               let node = render (envelope "text/plain" (utf8 "x"))
 
               match node with

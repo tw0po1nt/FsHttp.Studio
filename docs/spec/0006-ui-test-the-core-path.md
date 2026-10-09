@@ -94,7 +94,7 @@ the host, into a live webview, so that the four existing suites gain an end-to-e
 One checked-in fixture under the suite's `fixtures/` directory, owned by this check alone. Fixture
 content is never shared between checks. The rule is one fixture per Automated check.
 
-It holds **two blocks**, both of which a Run can reach (neither is refused), and both of which request
+It contains **two blocks**, both of which a Run can reach (neither is refused), and both of which request
 the local test server. It reads the sidecar beside itself:
 
 - `Path.Combine(__SOURCE_DIRECTORY__, "sidecar.json")`, parsed for `baseUrl`.
@@ -136,7 +136,7 @@ In order, with every wait through `eventually`:
 1. Open the fixture. Assert that a `▶ Run request` lens is rendered above **each** of the two blocks
    (lens-appearance deadline).
 2. Click the first block's lens, find-and-click inside one retry.
-3. Assert the response viewer opened beside the editor, in a second editor group holding the viewer.
+3. Assert the response viewer opened beside the editor, in a second editor group that shows the viewer.
 4. Assert `Running…` is rendered in the viewer (see the softness note below).
 5. Assert, in the webview DOM, that the viewer renders the status code `200`, the first block's URL in
    the status line, and the probe body (viewer-update deadline).
@@ -153,7 +153,7 @@ proves the second response arrived. Absence at a fixed time means nothing.
 Step 4 is the one assertion in this check that races the product rather than waiting for it. `Running…`
 is a transient state, and a check that looks for a transient state can lose.
 
-The check asserts it anyway, and it is expected to hold. The **first** Run in a session pays for a
+The check asserts it anyway, and it is expected to pass. The **first** Run in a session pays for a
 `#r "nuget:"` restore and a cold FSI session. Prototyping measured that first Run in seconds rather than
 milliseconds. The assertion is therefore ordered deliberately: `Running…` is asserted on the **first**
 Run of the check, never the second.
@@ -210,7 +210,7 @@ exported handle. If this check cannot see something, the answer is a better DOM 
 - `tests/renderer.Tests/`: the assertions this check *escalates*. Those pin what the renderer
 draws from a handed-in record. This check pins that a real response reaches it.
 - `tests/companion.Tests/`: the F# assertion style the check's source should read like.
-- Spec 1's harness self-check: the shape of a check in this suite, holding hooks, `eventually`, and `Assert`.
+- Spec 1's harness self-check: the shape of a check in this suite, with hooks, `eventually`, and `Assert`.
 
 **Negative verification is required before this is called done.** Run the check once with a
 deliberately wrong expected body. Confirm that CI goes red and that the failure names the `.fs`

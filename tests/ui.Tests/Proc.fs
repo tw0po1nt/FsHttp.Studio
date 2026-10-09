@@ -4,7 +4,7 @@ module Proc
 open Fable.Core
 open Fable.Core.JsInterop
 
-/// Upper bound on any shell command this module runs. A hung `curl` or `pgrep` must not hold the
+/// Upper bound on any shell command this module runs. A hung `curl` or `pgrep` must not block the
 /// harness past its own budget, so the wait is bounded and expiry reads as "no output".
 let private shellTimeoutMs = 30_000
 

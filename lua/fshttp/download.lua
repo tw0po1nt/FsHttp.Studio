@@ -7,7 +7,7 @@ local curl_timeout_s = 600
 local connect_timeout_s = 20
 local blocking_timeout_ms = 15 * 60 * 1000
 
--- The folder that holds one folder for each version.
+-- The folder that contains one folder for each version.
 ---@return string
 function M.root()
     return vim.fs.joinpath(vim.fn.stdpath("data"), "fshttp-studio", "companion")
@@ -158,7 +158,7 @@ function M.fetch(version, callback)
                 local detail = first_line(result.stderr)
                 fail("tar", detail ~= "" and detail or ("exit code " .. result.code))
             elseif not M.is_installed(unpacked) then
-                fail("tar", "the archive holds no Companion.dll")
+                fail("tar", "the archive contains no Companion.dll")
             else
                 install()
             end

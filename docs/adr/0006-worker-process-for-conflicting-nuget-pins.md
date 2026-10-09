@@ -22,7 +22,7 @@ The parent and the worker exchange the same framed run envelope as the host-to-c
 
 ### Version-less pins
 
-A version-less `#r "nuget: FsHttp"` resolves *some* latest version into the process-wide ALC, exactly as a pinned reference does. It only fails to name the version. The map therefore records it as a distinct `Versionless` marker instead of nothing. Conflict detection routes a Run to a worker unless it can *prove* that the requested load matches what the ALC already holds:
+A version-less `#r "nuget: FsHttp"` resolves *some* latest version into the process-wide ALC, exactly as a pinned reference does. It only fails to name the version. The map therefore records it as a distinct `Versionless` marker instead of nothing. Conflict detection routes a Run to a worker unless it can *prove* that the requested load matches what the ALC already contains:
 
 - **A version-less load, then a version-less pin, is safe in-process.** In one process, nuget resolves `#r "nuget: pkg"` to the same latest version every time. A later version-less Run of a loaded package therefore adds no new version, and stays on the warm path.
 - **Two explicit pins conflict exactly when they name different versions.** This is the original case.

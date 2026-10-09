@@ -91,7 +91,7 @@ The shell text that a Client builds from the request as sent. In a POSIX shell, 
 _Avoid_: curl snippet, curl export, cURL.
 
 **Copy text**:
-The text that a copy button of the Response viewer puts on the clipboard. A yank from the Response buffer puts the same text in a register. The Renderer core defines it for the Request, the Response headers, and the Body. The Lua core ports that rule, and a Golden fixture holds both to the same bytes. A Body of zero bytes has no copy text.
+The text that a copy button of the Response viewer puts on the clipboard. A yank from the Response buffer puts the same text in a register. The Renderer core defines it for the Request, the Response headers, and the Body. The Lua core ports that rule, and a Golden fixture checks that both give the same bytes. A Body of zero bytes has no copy text.
 _Avoid_: copy payload, clipboard text.
 
 **Refusal code**:
@@ -123,7 +123,7 @@ _Avoid_: unsupported, blocked, disabled.
 ### Shipping
 
 **Companion archive**:
-The release file that holds the companion for the Neovim client, with a `.sha256` file beside it. The Neovim client downloads it from the release that matches its own version. The VSCode extension carries the companion inside its `.vsix`.
+The release file that contains the companion for the Neovim client, with a `.sha256` file beside it. The Neovim client downloads it from the release that matches its own version. The VSCode extension carries the companion inside its `.vsix`.
 _Avoid_: tarball, companion bundle, companion download.
 
 **Release gate**:
@@ -161,7 +161,7 @@ One test in the UI suite or the Neovim suite. A Check drives a real editor and n
 _Avoid_: test, case, scenario, spec (a spec is the written ticket that asks for the check).
 
 **Harness**:
-The shared module that every Check of one suite imports. In the UI suite it holds the ExTester page-object bindings, the wait combinator, the Budgets, and the Mocha hooks. In the Neovim suite it holds the child Neovim helpers, the wait combinator, the Budgets, and the mini.test hooks. A Check that defines its own wait or its own Budget has bypassed the Harness.
+The shared module that every Check of one suite imports. In the UI suite it contains the ExTester page-object bindings, the wait combinator, the Budgets, and the Mocha hooks. In the Neovim suite it contains the child Neovim helpers, the wait combinator, the Budgets, and the mini.test hooks. A Check that defines its own wait or its own Budget has bypassed the Harness.
 _Avoid_: framework, fixture (a fixture is the checked-in script the suite opens), helpers.
 
 **Harness setup**:

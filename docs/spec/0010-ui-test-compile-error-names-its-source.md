@@ -3,7 +3,7 @@
 Spec 6 of 7 for the UI test suite that retires `docs/manual-check.md`. This one adds the check named
 **Compile Error names its source**.
 
-Decisions come from a wayfinder map held locally (`.local/wayfinder/ui-tests/`, gitignored). The map
+Decisions come from a wayfinder map kept locally (`.local/wayfinder/ui-tests/`, gitignored). The map
 is not a GitHub issue, so this spec restates every decision it depends on rather than linking to one.
 
 **Blocked by** #146 (the harness and its setup) and spec 2 (the core path). **Not blocked by #144.**
@@ -94,7 +94,7 @@ After this spec lands, steps 3–5 of *Run outcomes* are automated.
 
 ### The fixture
 
-One new checked-in fixture under the suite's `fixtures/` directory, owned by this check alone. It holds
+One new checked-in fixture under the suite's `fixtures/` directory, owned by this check alone. It contains
 a single reachable block and, above it, a stable region the check can break.
 
 **The fixture reads no sidecar and needs no live server.** A Setup that does not compile never sends a
@@ -153,7 +153,7 @@ In order, every wait through `eventually`:
 
 ### The line-number assertion is exact, and a mismatch is a finding
 
-Step 5 asserts the **exact line** the check broke. No looser claim of "some position" or "a position within a range" holds here.
+Step 5 asserts the **exact line** the check broke. No looser claim of "some position" or "a position within a range" is enough here.
 
 The coordinate path is where this could go wrong, so the assertion is deliberately sharp. The
 companion reports positions in the compiler's own numbering: 1-based lines, 0-based columns. The

@@ -8,7 +8,7 @@ that already ships and that hangs or lies.
 Three defects, found by reading the source, all on the path between a `▶ Run request` click and the
 status line the user reads afterwards.
 
-**1. A slow server holds the Run for 100 seconds.** The companion never sets a request timeout, so
+**1. A slow server stops the Run for 100 seconds.** The companion never sets a request timeout, so
 the bound is whatever `HttpClient` defaults to. Measured, that is 100 seconds. The response viewer
 says `Running…` for the whole of it, and the user cannot tell a slow server from a wedged
 extension. Coding-standards rule 3 asks for a bounded wait on every external process. Only the
@@ -184,7 +184,7 @@ setting is still the correct advice for someone who wants to wait longer.
 ### 6. Flush the pending queue, and close it
 
 The naive fix, which resolves every queued resolver with a `runtimeError` object, breaks `locate`. The
-FIFO holds untyped `obj -> unit` resolvers, and `locate`'s resolver does `unbox (json?ranges)`. Hand
+FIFO stores untyped `obj -> unit` resolvers, and `locate`'s resolver does `unbox (json?ranges)`. Hand
 it an error object and it throws inside a continuation that nobody catches.
 
 Give each pending entry an abandon path of its own:
@@ -328,10 +328,10 @@ asserts its text, and the interop module in Decision 6 has nothing to get wrong 
 pending `locate` abandons to an empty list, so it contributes no second string.
 
 > **Update (2026-08-10):** The abandon string moved to `Refusals.companionStopped.Detail`, and
-> `RefusalsTests` asserts it. `Protocol.fs` no longer holds it. The reason is that the string got a
+> `RefusalsTests` asserts it. `Protocol.fs` no longer contains it. The reason is that the string got a
 > second surface: the CodeLens that a stopped companion leaves behind shows the same sentence in a
 > toast (ADR-0003). `Refusals` is the one file that owns a shipped sentence (spec 0003, user story
-> 11). The seam is unchanged. A pure host module still holds the string, and a host test still
+> 11). The seam is unchanged. A pure host module still contains the string, and a host test still
 > asserts its text.
 
 ### What is not tested here
@@ -361,7 +361,7 @@ the Beta gate and built the Beta that it needs.
 ## Out of Scope
 
 - **A bound on a user's infinite loop.** The request timeout bounds the request. A block that loops
-  forever still holds the in-process Run. Bounding that means routing every Run to the killable
+  forever still blocks the in-process Run. Bounding that means routing every Run to the killable
   worker, which costs a process spawn on top of a 145 ms warm Run. Knowingly accepted when the item
   list was fixed.
 - **Restarting a crashed companion.** Decision 6 makes the failure legible and tells the user to

@@ -101,7 +101,7 @@ let nested =
 let _ = http { GET "http://127.0.0.1:8391/api/v2/wildcard" }
 
 
-// A bare block holding another bare block in its own expression -- F5, insideAnotherRequest,
+// A bare block that contains another bare block in its own expression -- F5, insideAnotherRequest,
 // derived by range containment rather than by a syntax-tree branch. Case 24 above exercises the
 // same code through an R2 outer binding, and this one exercises it through an R1 outer block.
 http {

@@ -16,7 +16,7 @@ if [ -z "${VIMRUNTIME:-}" ]; then
 fi
 
 if [ ! -d "$VIMRUNTIME/lua/vim" ]; then
-  echo "check-lua-types: $VIMRUNTIME holds no Neovim runtime. Set VIMRUNTIME, or put nvim on PATH." >&2
+  echo "check-lua-types: $VIMRUNTIME contains no Neovim runtime. Set VIMRUNTIME, or put nvim on PATH." >&2
   exit 2
 fi
 

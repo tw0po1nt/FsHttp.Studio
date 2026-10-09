@@ -1,7 +1,7 @@
 # A Lua line contributes the text of each comment and each string literal. A
-# long comment or a long string can span lines, so `closing` holds the bracket
+# long comment or a long string can span lines, so `closing` stores the bracket
 # that ends it, such as "]]" or "]==]". A quoted string spans lines after a
-# trailing "\" or "\z", so `quote` holds its open quote character.
+# trailing "\" or "\z", so `quote` stores its open quote character.
 {
   line = $0
   n = length(line)

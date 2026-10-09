@@ -1,6 +1,6 @@
 --|---------|---------|---------|---------|---------|---------|---------|---------|---------|---------|---------|---------|---------|---------|---------|---------|
-01|  // which holds a script. `baseUrl` comes from the Sidecar that the test serve│ 200 OK  N ms · N ms total  136 B  GET http://test-server/html                  
-02|  r writes beside this file.                                                   │▸ Request  2 lines······························································
+01|  // which contains a script. `baseUrl` comes from the Sidecar that the test se│ 200 OK  N ms · N ms total  136 B  GET http://test-server/html                  
+02|  rver writes beside this file.                                                │▸ Request  2 lines······························································
 03|                                                                               │▸ Response headers  (4)  4 lines················································
 04|  #r "nuget: FsHttp"                                                           │▾ Body  text/html · 136 B                                                       
 05|                                                                               │:FsHttp open  shows the rendered page in the browser, with scripts blocked      

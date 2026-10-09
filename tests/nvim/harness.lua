@@ -32,7 +32,7 @@ M.response_deadline_ms = 30000
 -- A child Neovim that gives no answer to one request in this time is hung, and the Harness stops it.
 M.child_answer_deadline_ms = 10000
 
--- How long a claim that a thing does not occur must hold before the Check believes it.
+-- How long a claim that a thing does not occur must stay true before the Check believes it.
 M.absence_settle_ms = 3000
 
 M.poll_interval_ms = 100
@@ -84,7 +84,7 @@ function M.companion_path()
     return required_env("NVIM_TEST_COMPANION_PATH", "the companion")
 end
 
--- The folder that holds the Companion archive. tests/nvim/run.sh packs the archive into it, or
+-- The folder that contains the Companion archive. tests/nvim/run.sh packs the archive into it, or
 -- copies the archive of a release into it.
 ---@return string
 function M.archive_dir()
@@ -126,7 +126,7 @@ local function run(cmd)
     return process:wait()
 end
 
--- Polls `predicate` until it holds, or fails when `timeout_ms` passes. `subject` names the thing
+-- Polls `predicate` until it is true, or fails when `timeout_ms` passes. `subject` names the thing
 -- that the wait expects, so a timeout names the thing that did not occur.
 ---@param timeout_ms integer
 ---@param subject string
@@ -171,7 +171,7 @@ function M.holds_for_settle(subject, predicate)
     until now() >= deadline
 end
 
--- Each companion process of this run, found through the command line that holds the companion
+-- Each companion process of this run, found through the command line that contains the companion
 -- folder. A companion of another editor has a different folder, so this list leaves it out.
 ---@return integer[]
 function M.companion_pids()
@@ -288,7 +288,7 @@ local function guarded(child, subject, fn)
 end
 
 -- Starts a child Neovim that loads the client through lazy.nvim with `opts`. With `client_version`,
--- the client in the child uses that version in place of the version that version.lua holds. With
+-- the client in the child uses that version in place of the version that version.lua sets. With
 -- `with_lualine`, lazy.nvim also loads lualine.nvim in the child.
 ---@param opts table
 ---@param client_version? string
@@ -496,7 +496,7 @@ function M.fshttp_status_echo(child)
 end
 
 ---@class nvim_suite.HealthItem
----@field section string the title of the section that holds the item
+---@field section string the title of the section that contains the item
 ---@field level "OK"|"WARNING"|"ERROR"|"INFO"
 ---@field text string
 ---@field advice string[]
@@ -764,7 +764,7 @@ function M.timing_table_was_emitted()
     return timing_table_emitted
 end
 
--- The child Neovim that Harness setup started. It holds the fixture and the companion.
+-- The child Neovim that Harness setup started. It has the fixture and the companion.
 ---@return nvim_suite.Child
 function M.harness_setup_child()
     return assert(harness_setup_child, "Harness setup started no child Neovim")
@@ -824,7 +824,7 @@ function M.publish_release(version, corrupt_checksum)
     end
 end
 
--- The folder that holds one folder for each downloaded version, as the child sees it.
+-- The folder that contains one folder for each downloaded version, as the child sees it.
 ---@param child nvim_suite.Child
 ---@return string
 function M.download_root(child)

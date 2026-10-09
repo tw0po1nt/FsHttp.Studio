@@ -46,7 +46,7 @@ type RefusalCode =
 
 /// Derived from the code alone, so two shapes that share a code cannot drift into two sentences
 /// for one verdict. No sentence names an FCS type, and every sentence uses the glossary's block.
-/// The host keys its lens titles and toasts on the code, and `Refusals.forCode` holds what a user
+/// The host keys its lens titles and toasts on the code, and `Refusals.forCode` gives what a user
 /// reads.
 let reasonFor (code: RefusalCode) =
     match code with
@@ -175,7 +175,7 @@ let rec private skipValueWrappers (path: SyntaxNode list) =
 /// Every enclosing module on the block's path, innermost first, with the module's own
 /// accessibility. A nested `module M =` is one, and so is the file's own `module M` header,
 /// which puts the same name in front of the invocation and can carry the same `private`. A
-/// script with no header parses as an anonymous module, and a namespace holds no bindings, so
+/// script with no header parses as an anonymous module, and a namespace contains no bindings, so
 /// neither is one.
 let private enclosingModules (path: SyntaxNode list) =
     path
@@ -341,7 +341,7 @@ let private classify (blockStart: pos) (path: SyntaxNode list) : Classification 
           Access = None
           TypeAnnotation = None }
 
-/// The smallest enclosing statement that can hold an expression. A module-level
+/// The smallest enclosing statement that can contain an expression. A module-level
 /// binding blanks its whole declaration, which keeps the value-leakage protection: the binding
 /// disappears, and a consumer fails with a clean "not defined" instead of leaking a value. A
 /// member or inner binding blanks its right side only, because erasing `member _.Get() = …`

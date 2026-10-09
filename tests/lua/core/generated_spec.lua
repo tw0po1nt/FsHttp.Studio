@@ -37,12 +37,12 @@ describe("fshttp.refusals", function()
         assert.is_nil(refusals.stale_block_index.detail:find("lens", 1, true))
     end)
 
-    it("holds the two no-Block sentences", function()
+    it("has the two no-Block sentences", function()
         assert.equal("No requests found: this script has a syntax error.", refusals.no_blocks_parse_failure)
         assert.equal("This script has no request. Write an http { } block to run one.", refusals.no_blocks_empty)
     end)
 
-    it("holds a Block mark title for each catalog code", function()
+    it("has a Block mark title for each catalog code", function()
         for code, refusal in pairs(refusals.codes) do
             assert.equal("⊘ " .. refusal.title, refusal.block_mark_title, code)
         end

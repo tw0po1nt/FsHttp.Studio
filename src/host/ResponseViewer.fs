@@ -111,7 +111,7 @@ summary::-webkit-details-marker { display: none; }
    collapsed, and does not scroll with the body. */
 .section-shell { position: relative; margin-bottom: 12px; }
 /* The body is the last section, and it had no bottom margin before the shell existed.
-   Zero here holds the spacing where it was. */
+   Zero here keeps the spacing where it was. */
 .section-shell:last-child { margin-bottom: 0; }
 .copy-button {
   position: absolute;

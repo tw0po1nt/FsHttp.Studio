@@ -48,9 +48,9 @@ let private catalog: (string * Refusal) list =
           "FsHttp.Studio cannot run a request in a local binding. A local binding is not in scope after the script runs. To run this request, move it to a module-level binding." }
 
       "lambdaValue",
-      { Title = "Cannot run: this binding holds a function"
+      { Title = "Cannot run: this binding is a function"
         Detail =
-          "This binding holds a function rather than a request. FsHttp.Studio sends the request only when your code calls the function. To run this request, bind it directly to a name." }
+          "This binding is a function rather than a request. FsHttp.Studio sends the request only when your code calls the function. To run this request, bind it directly to a name." }
 
       "noNameToCall",
       { Title = "Cannot run: this binding has no name"

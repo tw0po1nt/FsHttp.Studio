@@ -3,7 +3,7 @@
 Spec 7 of 7 for the UI test suite that retires `docs/manual-check.md`. This one adds the last and riskiest check, **companion death is visible and recoverable**. It then
 switches the release gate off a person and onto the suite.
 
-Decisions come from a wayfinder map held locally (`.local/wayfinder/ui-tests/`, gitignored). The map
+Decisions come from a wayfinder map kept locally (`.local/wayfinder/ui-tests/`, gitignored). The map
 is not a GitHub issue, so this spec restates every decision it depends on rather than linking to one.
 
 **Blocked by** #146 (the harness and its setup), spec 2 (the core path), and #144
@@ -84,7 +84,7 @@ code and a body in the viewer, so that recovery is proven to the same standard a
 15. As a check author, I want a **fresh companion process** as the tell that the reload finished, so
 that I do not assert against the old workbench.
 16. As a check author, I want the hang released during teardown, so that the test server is not left
-    holding a stuck request for the rest of the job.
+    that keeps a stuck request open for the rest of the job.
 17. As a check author, I want every wait through the harness's `eventually`, with its post-reload
     deadline for the reload, so that this check invents no timeout.
 18. As a check author, I want no fixed `sleep`, so that the check costs what the product costs.
@@ -128,7 +128,7 @@ deleted, so that the instruction does not vanish with its file.
 ### The fixture
 
 One new checked-in fixture under the suite's `fixtures/` directory, owned by this check alone. It
-holds **two blocks**, and reads `baseUrl` from the sidecar beside it:
+contains **two blocks**, and reads `baseUrl` from the sidecar beside it:
 
 | Block | Requests | Role |
 |---|---|---|

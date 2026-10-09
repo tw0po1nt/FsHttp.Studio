@@ -4,5 +4,5 @@ tests/ui.Tests/fixtures/no-requests-above.fsx
 tests/ui.Tests/fixtures/no-requests-below.fsx
 tests/ui.Tests/fixtures/no-requests-between.fsx
 
-# Local agent worktrees hold full copies of the repo. CI never has them.
+# Local agent worktrees contain full copies of the repo. CI never has them.
 .claude/worktrees/

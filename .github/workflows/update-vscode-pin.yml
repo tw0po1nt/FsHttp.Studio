@@ -14,16 +14,16 @@ name: Update VSCode pin
 # Uses gh throughout with the built-in GITHUB_TOKEN. No third-party action
 # opens the pull request. Permissions stay on this workflow only.
 #
-# A hold stops the pull request. tests/ui.Tests/vscode-pin-hold.json names the
+# A freeze stops the pull request. tests/ui.Tests/vscode-pin-freeze.json names the
 # first version known to fail the suite. While the latest stable release is at
 # or above that version, every pull request this job could open would be red on
 # arrival, and a red pull request that reappears every Monday teaches the reader
-# to ignore the gate. The job reports the hold in the run summary instead.
+# to ignore the gate. The job reports the freeze in the run summary instead.
 #
-# The hold has no way to notice that the defect was fixed upstream, because only
+# The freeze has no way to notice that the defect was fixed upstream, because only
 # a suite run against the new version can tell. Run this workflow by hand with
 # the probe input to open the pull request anyway, which dispatches that run.
-# Delete the hold file once a version passes.
+# Delete the freeze file once a version passes.
 on:
   schedule:
     # Weekly. A no-op week is free. A patch that breaks ChromeDriver must not
@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       probe:
-        description: 'Open the pin-update pull request even while a hold is in force.'
+        description: 'Open the pin-update pull request even while a freeze is in force.'
         type: boolean
         required: false
         default: false
@@ -48,7 +48,7 @@ permissions:
 
 env:
   CONFIG: tests/ui.Tests/extester.config.json
-  HOLD: tests/ui.Tests/vscode-pin-hold.json
+  FREEZE: tests/ui.Tests/vscode-pin-freeze.json
   GATE_WORKFLOW: ui-tests.yml
 
 jobs:
@@ -80,7 +80,7 @@ jobs:
           NEWEST="$(printf '%s\n%s\n' "$PIN" "$LATEST" | sort -V | tail -1)"
           if [ "$PIN" = "$LATEST" ] || [ "$NEWEST" = "$PIN" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "held=false" >> "$GITHUB_OUTPUT"
+            echo "frozen=false" >> "$GITHUB_OUTPUT"
             echo "Pin $PIN is at or ahead of the latest stable release $LATEST."
             exit 0
           fi
@@ -88,43 +88,43 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "Pin $PIN is behind the latest stable release $LATEST."
 
-          # The hold. No file means no hold, which is the normal state.
-          if [ ! -f "$HOLD" ]; then
-            echo "held=false" >> "$GITHUB_OUTPUT"
+          # The freeze. No file means no freeze, which is the normal state.
+          if [ ! -f "$FREEZE" ]; then
+            echo "frozen=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          BAD="$(jq -r '.knownBadFrom // empty' "$HOLD")"
+          BAD="$(jq -r '.knownBadFrom // empty' "$FREEZE")"
           if [ -z "$BAD" ]; then
-            echo "::error::$HOLD names no knownBadFrom version. Give it one, or delete the file."
+            echo "::error::$FREEZE names no knownBadFrom version. Give it one, or delete the file."
             exit 1
           fi
 
           echo "bad=$BAD" >> "$GITHUB_OUTPUT"
-          echo "reason=$(jq -r '.reason // empty' "$HOLD")" >> "$GITHUB_OUTPUT"
+          echo "reason=$(jq -r '.reason // empty' "$FREEZE")" >> "$GITHUB_OUTPUT"
 
-          # At or above the first known-bad version. A hold below the latest release
+          # At or above the first known-bad version. A freeze below the latest release
           # would leave a good version unoffered, so the comparison must include the
           # bad version itself and everything after it.
           NEWEST_OF_BAD="$(printf '%s\n%s\n' "$BAD" "$LATEST" | sort -V | tail -1)"
           if [ "$NEWEST_OF_BAD" != "$LATEST" ]; then
-            echo "held=false" >> "$GITHUB_OUTPUT"
-            echo "Latest stable $LATEST is below the held version $BAD."
+            echo "frozen=false" >> "$GITHUB_OUTPUT"
+            echo "Latest stable $LATEST is below the frozen version $BAD."
             exit 0
           fi
 
           if [ "${PROBE}" = "true" ]; then
-            echo "held=false" >> "$GITHUB_OUTPUT"
+            echo "frozen=false" >> "$GITHUB_OUTPUT"
             echo "probed=true" >> "$GITHUB_OUTPUT"
-            echo "A hold is in force from $BAD, and the probe input overrides it."
+            echo "A freeze is in force from $BAD, and the probe input overrides it."
           else
-            echo "held=true" >> "$GITHUB_OUTPUT"
+            echo "frozen=true" >> "$GITHUB_OUTPUT"
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "A hold is in force from $BAD. No pull request opens for $LATEST."
+            echo "A freeze is in force from $BAD. No pull request opens for $LATEST."
           fi
 
-      - name: Report the hold
-        if: steps.pin.outputs.held == 'true'
+      - name: Report the freeze
+        if: steps.pin.outputs.frozen == 'true'
         env:
           PIN: ${{ steps.pin.outputs.pin }}
           LATEST: ${{ steps.pin.outputs.latest }}
@@ -132,13 +132,13 @@ jobs:
           REASON: ${{ steps.pin.outputs.reason }}
         run: |
           {
-            echo "## The VSCode pin is held"
+            echo "## The VSCode pin is frozen"
             echo
             echo "| | |"
             echo "|---|---|"
             echo "| Pin | \`$PIN\` |"
             echo "| Latest stable | \`$LATEST\` |"
-            echo "| Held from | \`$BAD\` |"
+            echo "| Frozen from | \`$BAD\` |"
             echo
             echo "$REASON"
             echo
@@ -146,7 +146,7 @@ jobs:
             echo "so the pull request would be red on arrival."
             echo
             echo "Run this workflow by hand with the **probe** input to test \`$LATEST\` anyway."
-            echo "Delete \`$HOLD\` once a version passes."
+            echo "Delete \`$FREEZE\` once a version passes."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Push the updated pin and open a pull request
@@ -160,8 +160,8 @@ jobs:
           set -euo pipefail
           BRANCH="chore/vscode-pin-${LATEST}"
 
-          # A probe tests a version that a hold says is bad, so its pull request needs
-          # the extra instruction: a green run retires the hold, and the hold file must
+          # A probe tests a version that a freeze says is bad, so its pull request needs
+          # the extra instruction: a green run retires the freeze, and the freeze file must
           # go in this same pull request. A merge that leaves it names a version that
           # the pin has already passed.
           if [ "${PROBED}" = "true" ]; then
@@ -169,11 +169,11 @@ jobs:
 
           ## This is a probe
 
-          A hold in \`${HOLD}\` says that \`${LATEST}\` fails the suite. This pull
+          A freeze in \`${FREEZE}\` says that \`${LATEST}\` fails the suite. This pull
           request tests that claim anyway.
 
-          A red gate run means the hold still holds. Close this pull request.
-          A green gate run retires the hold. Delete \`${HOLD}\` in this pull
+          A red gate run means the freeze is still correct. Close this pull request.
+          A green gate run retires the freeze. Delete \`${FREEZE}\` in this pull
           request before you merge it.
           EOF
           )"

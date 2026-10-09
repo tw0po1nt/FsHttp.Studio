@@ -1,6 +1,6 @@
 # The feedback ledger
 
-The **ledger** is one document for each pull request. It holds every **finding** that a review
+The **ledger** is one document for each pull request. It records every **finding** that a review
 has raised, with the **state** of each. Three skills share it. `to-feedback` creates and extends
 it. `address-feedback` works it. `verify-feedback` judges it and writes the **verdict**.
 
@@ -70,7 +70,7 @@ Pending.
 
 ## Findings
 
-### SP1. `OVERLAY_WIDTH` cannot hold the widest score
+### SP1. `OVERLAY_WIDTH` cannot fit the widest score
 
 - State: open
 - Kind: required
@@ -111,14 +111,14 @@ Pending.
   A reopened finding returns to `open` with a `Reopened:` line under it that says why.
 - **Kind**: `required` for a breach of a documented standard or of the spec. `optional` for a
   baseline smell, a design note, or a style nit. Only an optional finding can be declined.
-- **Where**: a `path:line` range pinned to the commit the review read. The pin holds that commit
+- **Where**: a `path:line` range pinned to the commit the review read. The pin keeps that commit
   after the lines move.
 - **Rule**: the quoted standard or spec line the finding rests on.
 - **Done when**: a condition a reader can check from the diff. `verify-feedback` tests it, so
   write an observable fact. "The test renders the full number" is checkable. "Improve the test"
   gives the verifier nothing to check.
 - **Summary**: the commit the last review read, then the ids in each state, with `none` for a
-  state that holds no id. `to-feedback` writes the commit. Every skill that changes a state
+  state that has no id. `to-feedback` writes the commit. Every skill that changes a state
   updates the ids.
 - **Verdict**: `Pending.`, `Ready to merge at <sha>.`, or `Not ready: <reasons>.`, where a
   reason is `<ids> open` or `gate red at <sha>`. `verify-feedback` writes the verdict. Any other

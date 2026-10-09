@@ -39,23 +39,23 @@ three months. A weekly workflow opens a pull request that updates the pin. The C
 request is the gate run for the new version. If a pin is outside the ExTester support window,
 ExTester can fail to download the matching ChromeDriver, and the gate then fails.
 
-**The pin is held below 1.123.0, and the hold has a clock on it.**
+**The pin is frozen below 1.123.0, and the freeze has a clock on it.**
 VSCode 1.123.0 and later load every file of a folder workspace twice, which the suite reads as a
-document that holds each block two times. `tests/ui.Tests/vscode-pin-hold.json` records the hold,
+document that contains each block two times. `tests/ui.Tests/vscode-pin-freeze.json` records the freeze,
 and the weekly workflow opens no pull request while it is in force. The `//pin` note in
 `tests/ui.Tests/extester.config.json` carries the measurement and the version bisect.
 
-The hold and the support window pull against each other. Each week the pin stays at 1.122.0, it
+The freeze and the support window pull against each other. Each week the pin stays at 1.122.0, it
 falls one release further behind, and the paragraph above states what happens at about three
 months: ExTester can fail to fetch a matching ChromeDriver, and the whole suite goes red for a
-reason that has nothing to do with the product. A hold is therefore a delay and not a resolution.
+reason that has nothing to do with the product. A freeze therefore only delays the problem.
 Run the workflow by hand with the probe input to test the latest release against the suite. Delete
-the hold file when a release passes.
+the freeze file when a release passes.
 
 The workflow dispatches the gate run for a pin update. GitHub raises no `pull_request` event for
 anything the built-in `GITHUB_TOKEN` does. The pin-update pull request therefore shows no status
 checks of its own. The workflow starts the UI tests job against the branch and links the run from a
-comment. That comment link holds the gate result for a pin update.
+comment. That comment link gives the gate result for a pin update.
 
 **CI retries the suite three times, and a green third attempt reports green.**
 The CI job runs the suite up to three times and passes if any attempt passes. A check that fails
@@ -110,7 +110,7 @@ The Neovim suite drives a child Neovim against a real companion, the test HTTP s
 Sidecar of the UI suite. lazy.minit loads the client in the child as a lazy.nvim spec.
 `nvim-tests.yml` runs the Neovim suite and the Lua core suite on four legs: Linux with Neovim 0.11,
 and Linux, macOS, and Windows with the pinned stable Neovim. The composite action
-`.github/actions/run-nvim-suite` holds the suite steps. The suite has no retry, so one red Check
+`.github/actions/run-nvim-suite` contains the suite steps. The suite has no retry, so one red Check
 gives a red leg. `update-neovim-pin.yml` opens a pull request when a newer Neovim ships, and it
 dispatches `nvim-tests.yml` against the pin branch.
 
@@ -141,7 +141,7 @@ file. A defect that occurs only in the drawn image ships uncaught.
 for Harness setup and 30 s for each Check on each system. The suite Budget is 180 s on Linux and
 240 s on macOS. The suite took 128.7 s on the first Linux run and 173.3 s on the first macOS run.
 Each suite Budget adds a margin of about 40% for the Checks that the open Neovim client issues add.
-`harness.lua` holds one row of Budgets for each operating system. The Windows row copies the Linux
+`harness.lua` has one row of Budgets for each operating system. The Windows row copies the Linux
 row, because no passing run on Windows has set it yet. Each leg writes its timing table to the job
 summary. The suite Budget starts at the first Check, so it leaves out Harness setup, as in the UI
 suite.

@@ -1,5 +1,5 @@
 // The :FsHttp open Checks of the Neovim suite. The Block requests the HTML page of the `/html` route,
-// which holds a script. `baseUrl` comes from the Sidecar that the test server writes beside this file.
+// which contains a script. `baseUrl` comes from the Sidecar that the test server writes beside this file.
 
 #r "nuget: FsHttp"
 

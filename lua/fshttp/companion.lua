@@ -333,7 +333,7 @@ function M.start(config)
     end
 end
 
--- Sends SIGTERM to the companion and returns at once, so a hung companion cannot hold the exit of
+-- Sends SIGTERM to the companion and returns at once, so a hung companion cannot delay the exit of
 -- Neovim.
 function M.stop()
     if process then

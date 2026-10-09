@@ -378,7 +378,7 @@ let matched =
               Expect.equal (routeOf 3) (Refused MatchClause) "a real match clause stays a match clause"
           }
 
-          // A refusal's sentence never interpolates an FCS type name. `reasonFor` holds all twelve
+          // A refusal's sentence never interpolates an FCS type name. `reasonFor` contains all twelve
           // sentences in one table, so one guard covers all twelve.
           test "every refusal code has a plain reason that names no FCS type" {
               let codes =

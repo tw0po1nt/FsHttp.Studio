@@ -1,5 +1,5 @@
 // Document-aware status bar: each text row and each visibility row, read from ExTester.StatusBar
-// while the real editor holds the matching fixture. UI checks rather than a manual pass
+// while the real editor has the matching fixture. UI checks rather than a manual pass
 // over a running extension.
 module StatusBarTests
 
@@ -110,7 +110,7 @@ let private pendingOnDocumentSwitch =
 /// produce the losing response: a second script that is open but not active gets no lens query,
 /// and one that is visible beside the active script does not locate again on demand. Removing the
 /// guard from the product was measured against this check in both layouts, and it stayed green
-/// either way. What it does claim is what a user would see: a count that arrives and then holds,
+/// either way. What it does claim is what a user would see: a count that arrives and then stays,
 /// rather than one that flickers to another script's.
 let private countHoldsWithASecondScriptOpen =
     async {
@@ -137,4 +137,4 @@ let tests =
           testCaseAsync "syntax-error scripts report total loss and partial loss" syntaxErrorRows
           testCaseAsync "the item hides outside F# and returns on an .fsx script" hidesOutsideFSharp
           testCaseAsync "a document switch reads looking for requests… until locate" pendingOnDocumentSwitch
-          testCaseAsync "the active script's count holds with a second script open" countHoldsWithASecondScriptOpen ]
+          testCaseAsync "the active script's count stays with a second script open" countHoldsWithASecondScriptOpen ]

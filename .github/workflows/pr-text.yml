@@ -1,7 +1,7 @@
 name: PR text
 
 # Checks the text of a pull request against .banned-patterns: the title, the
-# body, and each commit message. No tracked file holds that text, so the file
+# body, and each commit message. No tracked file contains that text, so the file
 # check in ci.yml cannot see it. The `edited` type runs the check again when
 # the title or the body changes.
 on:

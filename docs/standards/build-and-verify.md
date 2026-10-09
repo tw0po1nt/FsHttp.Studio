@@ -29,7 +29,7 @@ PowerShell in place of `pkill`. The Harness finds the companion with PowerShell 
 `pgrep`. The Lua core suite needs the Visual C++ compiler on `PATH`, because hererocks builds
 Lua 5.1 with it. CI puts the compiler there with `ilammy/msvc-dev-cmd`.
 
-`tests/nvim/neovim-pin.json` holds the Neovim versions that CI installs: `floor` for the Lua type
+`tests/nvim/neovim-pin.json` lists the Neovim versions that CI installs: `floor` for the Lua type
 check, and `stable` for the two Neovim suites.
 
 ## The compiler is the check that matters
@@ -52,8 +52,8 @@ build fails on errors that a Fable-only loop never shows.
 | `stylua --check .` | The Lua layout matches `stylua.toml`. `.styluaignore` skips the files that `generate-lua.fsx` writes. |
 | `npm run compile` | The companion publishes, Fable emits, and esbuild bundles. |
 | `npm run package` | `npm run compile` runs, then the `.vsix` builds. |
-| `./scripts/check-vsix-holds-no-lua.sh` | The `.vsix` holds no Lua file. Run it after `npm run package`. |
-| `./scripts/check-vsix-holds-only-shipped-files.sh` | The `.vsix` holds only the files that ship. Run it after `npm run package`. |
+| `./scripts/check-vsix-has-no-lua.sh` | The `.vsix` contains no Lua file. Run it after `npm run package`. |
+| `./scripts/check-vsix-has-only-shipped-files.sh` | The `.vsix` contains only the files that ship. Run it after `npm run package`. |
 | `npm run smoke` | The bundled renderer runs under node. |
 | `./scripts/check-lua-types.sh` | lua-language-server finds no problem in the LuaCATS annotations. The Neovim API types come from the `nvim` on `PATH`, or from `$VIMRUNTIME` when you set it. CI uses the Neovim 0.11 types. |
 | `nvim -l tests/minit.lua --minitest` | The Lua core suite passes. Each core module loads in an environment with no `vim` global. |
@@ -69,7 +69,7 @@ the UI suite, because `ci.yml` leaves it out. `ui-tests.yml` runs the UI suite s
 The script runs the Neovim suite because that suite needs only Neovim and the .NET SDK.
 When you change a step in `ci.yml` or `nvim-tests.yml`, make the same change in the script.
 
-`package.json` holds the individual `build:*` scripts that `compile` composes. Use one of those
+`package.json` has the individual `build:*` scripts that `compile` composes. Use one of those
 scripts only when you rebuild a single side.
 
 ## Golden fixtures

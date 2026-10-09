@@ -9,7 +9,7 @@ type State =
     | SdkNotFound
     | Stopped
 
-/// What the active editor holds, as the status bar and the no-requests lens see it.
+/// What the active editor contains, as the status bar and the no-requests lens see it.
 type ScriptView =
     | NoFSharpDocument
     | NotAScript // .fs or .fsi
@@ -48,7 +48,7 @@ let statusText (state: State) (view: ScriptView) : string option =
     | Ready, Script(_, false) -> Some "no requests found"
     | Ready, Script(_, true) -> Some "no requests found: syntax error"
 
-/// The CodeLens title for a script that failed to parse and holds no block. `Some` only for
+/// The CodeLens title for a script that failed to parse and contains no block. `Some` only for
 /// `Script(0, true)`. A count at or below
 /// zero reads as zero, as it does in `statusText` above.
 let noRequestsLensTitle (view: ScriptView) : string option =
@@ -73,9 +73,9 @@ type BlockRange =
         Refusal: string option
     }
 
-/// The cursor rule that both Clients hold. `cursorLine` uses FCS numbering, as `BlockRange` does.
+/// The cursor rule that both Clients obey. `cursorLine` uses FCS numbering, as `BlockRange` does.
 /// The result is the `blockIndex` of the run envelope, or `None` when the cursor is outside every
-/// Block. Of the Blocks that hold the line, the Block with the latest start is the target.
+/// Block. Of the Blocks that contain the line, the Block with the latest start is the target.
 let blockAtCursor (cursorLine: int) (ranges: BlockRange list) : int option =
     let holds (r: BlockRange) =
         r.StartLine <= cursorLine && cursorLine <= r.EndLine
@@ -96,7 +96,7 @@ let private versionMajor (version: string) : int option =
         None
 
 /// `frameworkVersion` is `runtimeOptions.framework.version` of `Companion.runtimeconfig.json`, or
-/// `None` when the file does not hold it.
+/// `None` when the file does not contain it.
 let sdkFloor (frameworkVersion: string option) : int =
     frameworkVersion
     |> Option.bind versionMajor

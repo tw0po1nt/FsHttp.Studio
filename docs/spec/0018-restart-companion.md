@@ -3,9 +3,9 @@
 Spec for v0.3 shared feature 3 of 3. VSCode gets the palette command "FsHttp.Studio: Restart
 companion", and Neovim gets `:FsHttp restart`. The map
 [FsHttp.Studio v0.3: Neovim support and shared features](https://github.com/tw0po1nt/FsHttp.Studio/issues/239)
-holds the decisions, and the ticket
+records the decisions, and the ticket
 [How does a restart of the companion work in each client?](https://github.com/tw0po1nt/FsHttp.Studio/issues/258)
-holds the detail.
+records the detail.
 
 ## Problem Statement
 
@@ -14,7 +14,7 @@ holds the detail.
 reload closes the Response viewer and each panel of each other extension.
 
 **A Run that loops forever has no way out.** The companion answers one request at a time. A user
-block that loops forever holds the companion, and each later locate and Run waits behind it.
+block that loops forever blocks the companion, and each later locate and Run waits behind it.
 
 **The process of a worker stays alive.** A Run with a conflicting `#r "nuget:"` pin runs in a
 `--worker` child (ADR-0006). The Client kills the companion process only. A worker that loops
@@ -153,7 +153,7 @@ The tree kill is necessary. A companion can start a `--worker` child, and a work
 
 ### 11. The glossary
 
-`GLOSSARY.md` holds the term **Restart**: the command of the user that stops the companion with each
+`GLOSSARY.md` defines the term **Restart**: the command of the user that stops the companion with each
 process that the companion started, and then starts a new companion.
 
 ## Testing Decisions

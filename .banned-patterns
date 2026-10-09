@@ -1,4 +1,4 @@
-# Every line holds an extended regular expression, a tab, and the message that a
+# Every line has an extended regular expression, a tab, and the message that a
 # hit reports. A blank line is skipped, and a line that starts with `#` is a
 # note. The match is case-insensitive, so write each pattern in lower case. Use
 # `\b` to bound a whole word.
@@ -8,7 +8,7 @@
 # The hook also refuses a `git commit` or a `gh` issue or pull request command
 # when its message or its body file carries a hit. In CI, pr-text.yml checks the
 # title, the body, and the commit messages of each pull request.
-# AGENTS.md states the rule, and docs/standards/technical-prose.md holds the
+# AGENTS.md states the rule, and docs/standards/technical-prose.md gives the
 # reasoning behind the prose patterns.
 #
 # The check reads Markdown files, the `//` comment lines and the string literals
@@ -65,6 +65,14 @@ claude-session:	Delete the Claude-Session trailer. It links to a private session
 # ---------------------------------------------------------------------------
 (it.s worth noting|worth noting that|that said,|at the end of the day|deep dive|dives? into|when it comes to|plays? an? (crucial|key|vital|critical) role|a testament to|great question|i hope this helps|as an ai)	Delete the filler. State the fact.
 \b(myriad|plethora|insights)\b	Delete the filler. State the fact.
+
+# ---------------------------------------------------------------------------
+# A verb that makes a thing act as a person
+#
+# docs/standards/technical-prose.md gives the rewrites. The pattern bans each
+# form, because a pattern cannot tell one sense from another.
+# ---------------------------------------------------------------------------
+\b(hold|holds|held|holding)\b	Use a plain verb: has, contains, sets, stores, keeps, lists, or gives. For a rule, write that it is true. docs/standards/technical-prose.md gives the rewrites.
 
 # ---------------------------------------------------------------------------
 # Considered and kept

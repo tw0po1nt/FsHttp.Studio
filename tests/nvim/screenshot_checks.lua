@@ -111,7 +111,7 @@ local function has_line(lines, text)
 end
 
 -- Replaces the parts of the winbar that change on each run: the times, and the URL of the test HTTP
--- server, which holds its port. Then clears the command line, because it shows the last message.
+-- server, which keeps its port. Then clears the command line, because it shows the last message.
 ---@param child nvim_suite.Child
 local function mask_changing_text(child)
     harness.lua_get(

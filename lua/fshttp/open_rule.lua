@@ -89,7 +89,7 @@ function M.with_policy(html)
     return meta .. html
 end
 
--- The bytes that the file of the body holds.
+-- The bytes that the file of the body contains.
 ---@param content_type string the type with no parameters
 ---@param body string
 ---@return string

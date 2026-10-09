@@ -55,10 +55,10 @@ function M.checksum_command(sysname, path)
 end
 
 -- Reads a SHA-256 hash from a `.sha256` file or from the output of a checksum command. The first
--- line that holds a hash gives it. A line is either `<hash>  <name>`, or a hash that certutil
+-- line that contains a hash gives it. A line is either `<hash>  <name>`, or a hash that certutil
 -- writes in groups of two digits.
 ---@param text string
----@return string? hash 64 lower-case hexadecimal digits, or nil when the text holds no hash
+---@return string? hash 64 lower-case hexadecimal digits, or nil when the text contains no hash
 function M.parse_hash(text)
     for line in text:gmatch("[^\r\n]+") do
         local first = line:match("^%s*(%S+)")
@@ -91,7 +91,7 @@ end
 
 ---@class fshttp.Installed
 ---@field kind "installed"
----@field folder string the folder that holds the companion
+---@field folder string the folder that contains the companion
 
 ---@class fshttp.NoRelease
 ---@field kind "noRelease"
@@ -145,7 +145,7 @@ end
 function M.not_found_notice(folder)
     return string.format(
         "FsHttp.Studio found no Companion.dll in companion_path (%s). "
-            .. "Set companion_path to the folder that holds Companion.dll, or remove companion_path to download the companion. "
+            .. "Set companion_path to the folder that contains Companion.dll, or remove companion_path to download the companion. "
             .. "Then run :FsHttp restart.",
         folder
     )

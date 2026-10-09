@@ -3,7 +3,7 @@
 Spec 5 of 7 for the UI test suite that retires `docs/manual-check.md`. This one adds the check named
 **cross-block Refused Run**.
 
-Decisions come from a wayfinder map held locally (`.local/wayfinder/ui-tests/`, gitignored). The map
+Decisions come from a wayfinder map kept locally (`.local/wayfinder/ui-tests/`, gitignored). The map
 is not a GitHub issue, so this spec restates every decision it depends on rather than linking to one.
 
 **Blocked by** #146 (the harness and its setup) and spec 2 (the core path). **Not blocked by #144.**
@@ -32,7 +32,7 @@ it is not. Nothing enforces that position today.
 What is untested is therefore threefold:
 
 - That a Refused Run reaches the response viewer at all, over the same wire a response takes.
-- That it renders as a **notice**, holding a reason and a workaround, rather than as an error.
+- That it renders as a **notice**, with a reason and a workaround, rather than as an error.
 - That the editor stays clean.
 
 `host.Tests` can assert the mapping from refusal code to shipped words. `companion.Tests` can assert
@@ -41,7 +41,7 @@ that the companion produces the outcome. Neither observes a webview, and neither
 ## Solution
 
 One check in the UI suite, named **cross-block Refused Run**, over one checked-in fixture. The
-fixture holds two blocks, and the second uses a value the first binds.
+fixture contains two blocks, and the second uses a value the first binds.
 
 The check runs the second block. It asserts in the webview DOM that the viewer renders a Refused
 Run whose words name the missing binding. It asserts that the render is a notice rather than an
@@ -94,7 +94,7 @@ green run as stronger evidence than it is.
 
 ### The fixture
 
-One new checked-in fixture under the suite's `fixtures/` directory, owned by this check alone, holding
+One new checked-in fixture under the suite's `fixtures/` directory, owned by this check alone, that contains
 **two blocks**:
 
 - The first binds a value to a name, which is the shape a user writes when one request's result feeds another.

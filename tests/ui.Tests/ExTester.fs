@@ -46,7 +46,7 @@ type StatusBar =
 
 /// One editor column. A group is what scopes a page object to a column: an editor or a webview
 /// built from a group reads that column's active tab, rather than whichever column happens to
-/// hold focus.
+/// have focus.
 type EditorGroup =
     abstract getOpenEditorTitles: unit -> JS.Promise<string[]>
 
@@ -215,7 +215,7 @@ let private focusFixtureGroupCommand =
     | other -> failwithf "no focus command wired for fixture column %d" other
 
 /// The column the response viewer opens in. `ResponseViewer.showBeside` asks for the column beside
-/// the active one, and the fixture holds the leftmost.
+/// the active one, and the fixture has the leftmost.
 let private viewerGroupIndex = 1
 
 /// Wait for the viewer's iframe to become the active frame. Deliberately not a check-tunable
@@ -397,13 +397,13 @@ let private holdsOnly (tabTitle: string) (titles: string[]) =
 /// caller would poll.
 type FixtureOpen =
     /// VSCode was asked to open the file. The tab may not have rendered yet, and the column can
-    /// still hold other tabs. `tryCloseOtherTabsInFixtureColumn` settles both.
+    /// still have other tabs. `tryCloseOtherTabsInFixtureColumn` settles both.
     | FixtureOpenRequested
     /// The open raised, so the column's state is unknown. Not safe to retry: a second open of a
-    /// file the column already holds concatenates the buffer into itself.
+    /// file the column already has concatenates the buffer into itself.
     | FixtureOpenRaised of reason: string
 
-/// True when the fixture column holds `tabTitle` and nothing else.
+/// True when the fixture column has `tabTitle` and nothing else.
 ///
 /// Reads and never writes, which is what makes it the poll a check waits on after
 /// `openFixtureAsSoleTab`. The open itself must happen exactly once, so it cannot be the thing
@@ -429,11 +429,11 @@ let tryFixtureColumnShowsTab (tabTitle: string) : Async<bool> =
             return false
     }
 
-/// Opens a workspace file in the fixture column, beside whatever that column already holds.
+/// Opens a workspace file in the fixture column, beside whatever that column already has.
 /// `tryCloseOtherTabsInFixtureColumn` makes it the sole tab afterwards.
 ///
 /// **Reach `FixtureOpenRequested` exactly once per fixture.** Opening a file the column already
-/// holds concatenates the buffer into itself, and a doubled buffer renders doubled lenses, which
+/// has concatenates the buffer into itself, and a doubled buffer renders doubled lenses, which
 /// reads as a provider that over-detects rather than as a driver that opened twice.
 /// `Checks.openFixtureAsSoleTab` composes the open and the waits, and is what a check should call.
 /// It also measures the size of the document, because VSCode from 1.123.0 loads every file of a
@@ -447,9 +447,9 @@ let tryFixtureColumnShowsTab (tabTitle: string) : Async<bool> =
 /// Opens the path rather than clicking the file in the Explorer, because `openResources` names
 /// the file it opens and a click depends on where the tree has scrolled to. A doubled buffer was
 /// once read as a fault in the Explorer route. It was not: the editor doubles the file whichever
-/// route opens it, and the pin in `extester.config.json` is what holds it to one copy.
+/// route opens it, and the pin in `extester.config.json` is what keeps it to one copy.
 /// `openResources` opens into the focused column, which is why the focus command comes
-/// first: without it the open lands on whichever column last held focus, which is the response
+/// first: without it the open lands on whichever column last had focus, which is the response
 /// viewer for every check after the core path.
 let openFixtureInColumn (path: string) : Async<FixtureOpen> =
     async {
@@ -466,11 +466,11 @@ let openFixtureInColumn (path: string) : Async<FixtureOpen> =
     }
 
 /// Closes every tab in the fixture column except its active one, and reports whether the column
-/// now holds `tabTitle` and nothing else.
+/// now has `tabTitle` and nothing else.
 ///
 /// Safe to poll, which is the point: closing the other tabs is idempotent, and it cannot empty the
 /// column, so the response viewer can never slide into the fixture column's index. A column
-/// holding one tab keeps exactly one `.editor-instance` laid out, which is what a CodeLens read
+/// with one tab keeps exactly one `.editor-instance` laid out, which is what a CodeLens read
 /// needs. An inactive tab leaves a second editor in the page carrying no lens.
 ///
 /// Waits for the fixture tab to appear before it closes anything. The Explorer's click makes the
@@ -524,7 +524,7 @@ let focusFixtureEditor () : Async<unit> =
 ///
 /// It reads the DOM rather than building an ExTester `TextEditor`. That constructor waits for the
 /// editor to become visible, and the wait was observed to expire after about 5 s per poll while
-/// the page held one editor at 852x691, `display=block`, `visibility=visible`, `opacity=1`, and
+/// the page had one editor at 852x691, `display=block`, `visibility=visible`, `opacity=1`, and
 /// uncovered. The wait was wrong, and the workbench was fine. A read that costs 5 s also exhausted a
 /// 45 s deadline in about 9 polls, which hid how often it was failing.
 ///
@@ -533,7 +533,7 @@ let focusFixtureEditor () : Async<unit> =
 /// promise.
 ///
 /// Picks the first *laid-out* `.editor-instance` rather than the first one in the DOM. A column
-/// holding more than one tab keeps the inactive editors in the page at zero size, and the DOM
+/// with more than one tab keeps the inactive editors in the page at zero size, and the DOM
 /// order of the group carries no promise that the active tab comes first. Reading a hidden editor
 /// finds no lens and reports it as a provider that painted nothing.
 ///
@@ -633,9 +633,9 @@ let describeLensLayout () : Async<string> =
 
 /// How the editor painted a lens carrying a title: as a command VSCode can run, or as plain text.
 type LensRendering =
-    /// The lens's decoration holds an `<a id>`: VSCode runs a command when it is clicked.
+    /// The lens's decoration contains an `<a id>`: VSCode runs a command when it is clicked.
     | RenderedAsCommandLink
-    /// The lens's decoration holds the title in a `<span>` and no link at all: nothing to run.
+    /// The lens's decoration contains the title in a `<span>` and no link at all: nothing to run.
     | RenderedAsPlainText
     /// No visible decoration carries the title.
     | TitleNotRendered
@@ -647,7 +647,7 @@ type LensRendering =
 /// Reads the DOM rather than the outcome of a click: on a script that locates no block, no lens
 /// could open a viewer whatever command it carried, so "the click did nothing" cannot tell a
 /// plain-text lens from a lens that carries a command. The `<a id>` VSCode paints for a command
-/// id is that tell, and its absence under the decoration that holds the title is what "no
+/// id is that tell, and its absence under the decoration that contains the title is what "no
 /// attached command" looks like on screen.
 let tryReadLensRendering (title: string) : Async<LensRendering> =
     async {
@@ -832,7 +832,7 @@ let tryReadCodeLensTitles () : Async<LensRead> =
             return LensReadFailed(sprintf "%s, page shows %s" e.Message editors)
     }
 
-/// True when a second editor group is open beside the first *and* holds the response viewer's
+/// True when a second editor group is open beside the first *and* contains the response viewer's
 /// tab. That is the tell that the viewer opened in a column beside the editor, rather than in
 /// the same column, nowhere at all, or with something else split beside the fixture.
 let tryViewerBesideEditor () : Async<bool> =
@@ -988,7 +988,7 @@ let private tryFixtureBuffer (holds: bool -> string -> bool) : Async<bool> =
     }
 
 /// Replaces one 1-based line in the fixture editor with `text`. Idempotent when the buffer already
-/// holds `text` on that path: a poll that finds the broken text present and the tab dirty returns
+/// has `text` on that path: a poll that finds the broken text present and the tab dirty returns
 /// without rewriting. Pair with `Harness.eventually`. The tell is dirty plus the broken
 /// fragment, rather than the paste itself.
 ///

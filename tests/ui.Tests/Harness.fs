@@ -24,12 +24,12 @@ let PostReloadRecoveryDeadlineMs = 60_000
 /// A check that waits on cold start measures the runner rather than the product.
 let CompanionReadyDeadlineMs = 120_000
 
-/// How long a claim that the editor paints *no* lens must keep holding before it is believed. An
+/// How long a claim that the editor paints *no* lens must stay true before it is believed. An
 /// empty reading taken before the provider has answered is not evidence, and a lens that appears
 /// mid-window fails the check that waited it out.
 let LensAbsenceSettleMs = 3_000.0
 
-/// How long a claim that the status bar *stayed* on one text must keep holding before it is
+/// How long a claim that the status bar *stayed* on one text must stay true before it is
 /// believed. A `locate` for a visible but inactive document that wrongly overwrote the item would
 /// land inside this window, and a single reading taken the moment the text arrived would miss it.
 let StatusStabilitySettleMs = 3_000.0
@@ -128,7 +128,7 @@ let private suitePhaseName = "Suite"
 let PollIntervalMs = 250
 
 /// Which of the four proven-live conditions setup has actually confirmed. Each field is written
-/// the moment its own tell holds, so a setup that fails partway leaves a record naming the tell
+/// the moment its own tell is true, so a setup that fails partway leaves a record naming the tell
 /// that never arrived rather than an all-or-nothing verdict.
 type ProvenLive =
     { WorkbenchReady: bool
@@ -184,8 +184,8 @@ type Poll =
     | DoesNotHold
     | Observed of observation: string
 
-/// The account a poll gives of the state it found, where it gives one. A poll that holds has no
-/// account to give a timeout, because a wait that holds never times out.
+/// The account a poll gives of the state it found, where it gives one. A poll that succeeds has no
+/// account to give a timeout, because a wait that succeeds never times out.
 let private observationOf (result: Poll) =
     match result with
     | Observed observation -> Some observation
@@ -223,7 +223,7 @@ let eventuallyObserved (timeoutMs: int) (subject: string) (poll: unit -> Async<P
         return! loop deadline
     }
 
-/// Polls `predicate` until it holds or `timeoutMs` elapses. The predicate is async because every
+/// Polls `predicate` until it is true or `timeoutMs` elapses. The predicate is async because every
 /// observation of the running editor returns a promise; wrap a synchronous condition in
 /// `async { return ... }`. `subject` names what is being waited on, so a timeout reads as the
 /// surface that never arrived rather than a bare elapsed time. A predicate that can name what it
@@ -331,11 +331,11 @@ let private tryExtensionActive () =
 
 /// The companion answered its first request, rather than merely having been spawned. This is the
 /// tell `tryCompanionRunning` cannot give: a pid exists the moment `Companion.start` spawns it,
-/// while Ready is written only once the process is serving. Until then `CodeLensProvider` holds
+/// while Ready is written only once the process is serving. Until then `CodeLensProvider` keeps
 /// every lens back, so a check that opens a fixture sees no lens through no fault of the product.
 ///
 /// The companion-death check reuses this after its window reload. The reading comes from the
-/// status bar, so it holds only once the page carries a workbench, the extension has activated in
+/// status bar, so it is true only once the page carries a workbench, the extension has activated in
 /// it, and the companion is serving. A reload satisfies those three at three different moments,
 /// and a check that resumes on the first of them sends a workbench command to a page that is still
 /// building one.
@@ -384,11 +384,11 @@ let slowWaitingCount (serverBaseUrl: string) : int option =
         None
 
 /// Advances the hang route's release generation. Teardown calls this so a stuck `/slow` does not
-/// hold a thread-pool thread for the rest of the job.
+/// block a thread-pool thread for the rest of the job.
 let releaseHang (serverBaseUrl: string) : unit =
     Proc.httpStatus (serverBaseUrl + "/release") |> ignore
 
-/// Runs `body`, then `teardown` whether the body held or failed. The body's failure is the
+/// Runs `body`, then `teardown` whether the body passed or failed. The body's failure is the
 /// diagnostic one, because it carries the `.fs` frame naming the assertion that went red, so a
 /// teardown that fails on top of it is logged under `teardownSubject` rather than raised, and
 /// cannot displace that frame. A teardown that fails on its own is the only failure there is.

@@ -25,7 +25,7 @@ The companion's FCS parse finds block ranges. A tree-sitter grammar in the exten
 >
 > Two reasons forced the change.
 >
-> The first reason is that the earlier rule did not hold in the editor. The provider obeyed the
+> The first reason is that the earlier rule was not true in the editor. The provider obeyed the
 > rule, because `provideCodeLenses` returned an empty list while the companion was down. VSCode
 > kept the lenses that it had already painted. A prototype stopped the companion 18 times and then
 > read the lens. In 16 of those 18 runs, the stale `▶ Run request` lens was still clickable 20

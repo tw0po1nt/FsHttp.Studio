@@ -5,7 +5,7 @@ Status: accepted
 # One pattern list for banned prose, and a ban on the antithesis and the em dash
 
 `.banned-words` and `scripts/check-banned-words.sh` become `.banned-patterns` and
-`scripts/check-banned-patterns.sh`. Every line of the list holds an extended regular expression, a
+`scripts/check-banned-patterns.sh`. Every line of the list has an extended regular expression, a
 tab, and the message a hit reports. A banned word is written `\bprovenance\b`, so a word is one
 shape of pattern and the file needs one reader. `.claude/hooks/banned-patterns-check.sh` reads the
 same file and denies a `Write` or an `Edit` that carries a hit.
@@ -32,7 +32,7 @@ them.
 
 ## The em dash
 
-The em dash is banned. A comma, a colon, or a period does the same work. This repository holds 307
+The em dash is banned. A comma, a colon, or a period does the same work. This repository had 307
 em dashes across 52 files, which is the cost of the rule and also the argument for it.
 
 ## The three words that were kept

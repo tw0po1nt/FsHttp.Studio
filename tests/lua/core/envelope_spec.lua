@@ -34,7 +34,7 @@ describe("fshttp.envelope", function()
         end
     end)
 
-    it("encodes the three Client envelopes as the Golden fixtures hold them", function()
+    it("encodes the three Client envelopes as the Golden fixtures contain them", function()
         local source = envelope.decode(read("locate.json")).source
         assert.equal(read("hello.json"), envelope.encode({ tag = "hello" }))
         assert.equal(read("locate.json"), envelope.encode({ tag = "locate", source = source }))
@@ -147,7 +147,7 @@ describe("fshttp.frame", function()
         end
     end)
 
-    it("holds a partial frame until a later chunk completes it", function()
+    it("keeps a partial frame until a later chunk completes it", function()
         local parser = frame.parser()
         local framed = frame.encode("{}")
         assert.same({}, parser:push(framed:sub(1, 5)))

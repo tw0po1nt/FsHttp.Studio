@@ -83,7 +83,7 @@ let private expectResolvesBesideScript (marker: string) (runner: string -> int -
     finally
         Directory.Delete(dir, true)
 
-/// The delay the timing cases hold their server at. `requestMs` brackets the invocation, so it
+/// The delay that the timing cases give their server. `requestMs` brackets the invocation, so it
 /// must cover this delay on whichever route the Run takes.
 let private timedRunDelayMs = 200
 
@@ -239,7 +239,7 @@ let tests =
               // as an application of `get` to `pikachu`, and a block the user wrote perfectly
               // well failed to compile. `BlockLocator` spells the name back for an invocation,
               // and `qualifyInvocation` splits on the `" ()"` arity suffix rather than on the
-              // first space, so a name that holds a space stays one term.
+              // first space, so a name that contains a space stays one term.
               let hitCounter = ref 0
               use server = new TestServer(Map [ "/hit", countingHandler hitCounter ])
 

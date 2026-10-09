@@ -41,7 +41,7 @@ let private tryCompileErrorAtBrokenLine () =
         && not (dom.RootText.Contains Harness.runtimeErrorLabel))
 
 /// Restores the fixture buffer from disk and asserts it is clean. Runs after the body whether the
-/// body held or failed, so a red assertion cannot leave a broken buffer for the rest of the
+/// body passed or failed, so a red assertion cannot leave a broken buffer for the rest of the
 /// session. A failed restore fails this check.
 let private revertAndAssertClean () =
     async {

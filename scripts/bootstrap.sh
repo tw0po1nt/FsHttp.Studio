@@ -25,8 +25,8 @@ failed=()
 # The loop reads from process substitution, because a loop at the end of a
 # pipe runs in a subshell and would lose `failed`.
 while read -r source names; do
-  # `names` holds a list, so it must split into words. The CLI must not read
-  # stdin, because stdin holds the remaining lines of the list.
+  # `names` contains a list, so it must split into words. The CLI must not read
+  # stdin, because stdin contains the remaining lines of the list.
   # shellcheck disable=SC2086
   if ! npx skills@latest add "$source" -s $names -a "${agents[@]}" -y --copy </dev/null; then
     failed+=("$source")

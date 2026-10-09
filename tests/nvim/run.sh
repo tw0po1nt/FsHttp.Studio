@@ -50,7 +50,7 @@ build_json_parser() {
 }
 
 cleanup() {
-  # The pattern holds the companion folder of this run, so the cleanup cannot stop a companion of
+  # The pattern contains the companion folder of this run, so the cleanup cannot stop a companion of
   # another editor.
   if [[ "$WINDOWS" == "1" ]]; then
     powershell.exe -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { \$_.CommandLine -and (\$_.CommandLine.Replace('\\', '/').Contains('$COMPANION_OUT/Companion.dll') -or \$_.CommandLine.Replace('\\', '/').Contains('$SERVER_OUT/UiTestServer')) } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force }" >/dev/null 2>&1 || true
@@ -84,7 +84,7 @@ use_companion_archive() {
   # $ARCHIVE_OUT and $COMPANION_OUT are sibling folders in out/nvim-tests.
   (cd "$COMPANION_OUT" && tar -xzf "../archive/$name")
   if [[ ! -e "$COMPANION_OUT/Companion.dll" ]]; then
-    echo "The Companion archive $archive holds no Companion.dll." >&2
+    echo "The Companion archive $archive contains no Companion.dll." >&2
     exit 1
   fi
 }

@@ -62,7 +62,7 @@ let private textOf (source: string) (r: BlockRange) =
 
 /// Asserts the source text of block `index`'s type annotation span, colon included. The range
 /// alone does not show the text: a span that swallowed the
-/// bound name, or that dropped the colon and left it behind, both hold a plausible-looking range.
+/// bound name, or that dropped the colon and left it behind, both have a plausible-looking range.
 let private assertTypeAnnotation
     (source: string)
     (blocks: LocatedBlock list)
@@ -127,13 +127,16 @@ let tests =
               assertRoute 12 "#18 try/with handler (with handler)" (isRefused ExceptionHandler)
               assertRoute 13 "#23 tuple binding (first element)" (isRefused TupleBinding)
               assertRoute 14 "#23 tuple binding (second element)" (isRefused TupleBinding)
-              assertRoute 15 "#24 outer binding that holds a nested block" (isNamedByTheBinding "nested")
+              assertRoute 15 "#24 outer binding that contains a nested block" (isNamedByTheBinding "nested")
 
               assertRoute 16 "#24 block inside another block's expression" (isRefused InsideAnotherRequest)
 
               assertRoute 17 "wildcard binding gives no name to invoke, an unnumbered position" (isRefused NoNameToCall)
 
-              assertRoute 18 "bare outer block holding a nested bare block, an unnumbered position" isNamedByTheRun
+              assertRoute
+                  18
+                  "bare outer block that contains a nested bare block, an unnumbered position"
+                  isNamedByTheRun
 
               assertRoute
                   19

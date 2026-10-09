@@ -3,7 +3,7 @@
 Spec 1 of 7 for the UI test suite that retires `docs/manual-check.md`. This one builds no product
 check. It builds the ground the other six stand on, and proves that ground is live.
 
-Decisions come from a wayfinder map held locally (`.local/wayfinder/ui-tests/`, gitignored). The
+Decisions come from a wayfinder map kept locally (`.local/wayfinder/ui-tests/`, gitignored). The
 map is not a GitHub issue, so this spec restates every decision it depends on rather than linking
 to one.
 
@@ -144,7 +144,7 @@ A new suite directory, `tests/ui.Tests/`, matching the three sibling suites:
 
 - A Fable test project at the suite root, targeting `netstandard2.0`, referencing `Fable.Core`,
   `Fable.Mocha`, and the repository's pinned `FSharp.Core`.
-- A `server/` subdirectory holding a `net10.0` executable project: the test HTTP server.
+- A `server/` subdirectory with a `net10.0` executable project: the test HTTP server.
 - A `fixtures/` directory. Fixture `.fsx` scripts are checked in; the generated `sidecar.json`
   beside them is gitignored.
 
@@ -281,7 +281,7 @@ harness spec itself does not read the sidecar from a fixture, so **this spec is 
 ### Setup, and what "live" means
 
 Setup is the Mocha `before` hook. It ends at a **proven-live** workbench rather than a visible one. All
-four tells must hold:
+four tells must be true:
 
 1. `waitForWorkbench` returned, which on its own is *not* a readiness tell.
 2. The test server answers its healthcheck and the sidecar parses.
@@ -514,7 +514,7 @@ Three weaknesses, written down rather than hidden. None blocks the work.
    its budget on attempt 1, comes in at 43 s on attempt 2, and the job is green. Making budget
    failures non-retryable is not worth the plumbing, because the retry is a workflow-level construct that
    cannot see why the suite failed. Mitigation is **visibility rather than a gate**: the suite prints its
-   timing table, holding setup, each check, and the suite total against its budget, to the GitHub Actions
+   timing table, with setup, each check, and the suite total against its budget, to the GitHub Actions
    job summary on **every** run, green or red. This relies on someone looking, which is weaker than
    a gate.
 3. **The redesign trigger is a policy rather than a mechanism.** If the suite produces two or more final

@@ -25,7 +25,7 @@ let private tryNoResponseViewer () =
         return not openBeside
     }
 
-/// The lens carries no command, so VSCode paints its title as plain text: the decoration holds a
+/// The lens carries no command, so VSCode paints its title as plain text: the decoration contains a
 /// `<span>` and no `<a id>`. Read from the DOM rather than from a click:
 /// this fixture locates no block, so nothing this lens could have carried would open a viewer,
 /// and a click that opens nothing is no evidence about the command.
@@ -106,7 +106,7 @@ let private syntaxErrorBetweenKeepsOneRunLens =
 
 /// A clean script with no `http { }` block paints nothing. Opens after the above-damage fixture
 /// so the provider has already answered once. After the empty fixture loads, empty titles must
-/// hold through `Harness.LensAbsenceSettleMs`, which is where the suite states why an absence
+/// stay true through `Harness.LensAbsenceSettleMs`, which is where the suite states why an absence
 /// needs a window at all.
 let private tryNoCodeLensesThroughSettle (settleUntil: float) =
     async {
@@ -136,7 +136,7 @@ let private cleanEmptyScriptPaintsNoLens =
         do!
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
-                "no CodeLens on a clean script with zero http blocks, held through the settle window"
+                "no CodeLens on a clean script with zero http blocks, true through the settle window"
                 (fun () -> tryNoCodeLensesThroughSettle settleUntil)
     }
 

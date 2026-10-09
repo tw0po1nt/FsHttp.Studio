@@ -55,7 +55,7 @@ let private trySecondResponseReplacedFirst () =
         && not (dom.JsonBodyText.Contains Harness.jsonProbeKey))
 
 /// Opens through `Checks.openFixtureAsSoleTab`, which empties the fixture column first. This is
-/// the suite's first check, so the column still holds the `setup.fsx` tab that setup proved live.
+/// the suite's first check, so the column still has the `setup.fsx` tab that setup proved live.
 /// With two tabs open, the lens read can resolve a hidden `.editor-instance` that carries no
 /// CodeLens widgets, and report the product as having painted nothing.
 ///

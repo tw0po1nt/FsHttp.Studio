@@ -19,7 +19,7 @@ Lua table, and F# tests write Golden fixtures that the Lua core suite must match
 
 ## Consequences
 
-Drift between the two Clients is the main cost. Two guards hold it: the generated `refusals.lua`,
+Drift between the two Clients is the main cost. Two guards limit it: the generated `refusals.lua`,
 which CI checks against `Refusals.fs`, and the Golden fixtures for the envelope and each pure rule.
 
 The Lua client keeps its pure rules behind a module seam, and a core module never reads the `vim`
