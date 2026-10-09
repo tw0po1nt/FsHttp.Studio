@@ -453,8 +453,10 @@ Ticket: [Which settings does the Neovim client have, and how does a user set the
 
 `:checkhealth fshttp` reports:
 
-- **Required items** as an ERROR with the fix when missing: `dotnet` with an SDK at the floor, the
-  companion (its version and its path), `curl`, `tar`, and a checksum tool.
+- **Required items** as an ERROR with the fix when missing: `dotnet` with an SDK at the floor, and
+  the companion (its version and its path). `curl`, `tar`, and a checksum tool are Required items
+  only when the client downloads the companion. When `companion_path` is set, a missing tool is an
+  INFO line, because the client downloads nothing (A3).
 - **Optional items** as a WARN that names what degrades: snacks.nvim with a terminal that can show
   images, and the `json`, `xml`, and `html` tree-sitter parsers. With `response_buffer.images =
   false`, the image item is OK "turned off". A missing optional item stops no Run.

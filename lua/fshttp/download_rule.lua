@@ -28,17 +28,30 @@ function M.url(base_url, version, file_name)
     return (base_url:gsub("/+$", "")) .. "/v" .. version .. "/" .. file_name
 end
 
+-- The executable that prints the SHA-256 hash of a file.
+---@param sysname string the `sysname` field of `vim.uv.os_uname()`
+---@return string
+function M.checksum_tool(sysname)
+    if sysname == "Darwin" then
+        return "shasum"
+    elseif sysname == "Windows_NT" then
+        return "certutil"
+    end
+    return "sha256sum"
+end
+
 -- The command that prints the SHA-256 hash of a file.
 ---@param sysname string the `sysname` field of `vim.uv.os_uname()`
 ---@param path string
 ---@return string[]
 function M.checksum_command(sysname, path)
-    if sysname == "Darwin" then
-        return { "shasum", "-a", "256", path }
-    elseif sysname == "Windows_NT" then
-        return { "certutil", "-hashfile", path, "SHA256" }
+    local tool = M.checksum_tool(sysname)
+    if tool == "shasum" then
+        return { tool, "-a", "256", path }
+    elseif tool == "certutil" then
+        return { tool, "-hashfile", path, "SHA256" }
     end
-    return { "sha256sum", path }
+    return { tool, path }
 end
 
 -- Reads a SHA-256 hash from a `.sha256` file or from the output of a checksum command. The first

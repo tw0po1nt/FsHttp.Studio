@@ -3,16 +3,14 @@ description: >
   Installs Neovim, runs the Lua core suite, and runs the Neovim suite. The action works on Linux,
   macOS, and Windows runners.
 
-# One copy of the suite steps. nvim-tests.yml calls it.
-#
-# TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/285): call it from release.yml too.
+# One copy of the suite steps, called by nvim-tests.yml and by release.yml.
 #
 # Each caller must run the same suites. The release caller must run them against the files it is
 # about to ship. A `workflow_call` cannot do that: a called workflow runs on its own runner. A
-# composite action runs on the caller's runner, so it drives the files that the caller built.
+# composite action runs on the caller's runner, so it drives the files that the caller downloaded.
 #
 # What stays with the caller: the checkout, the `actions/setup-dotnet` step, and the NuGet cache.
-# The caller also decides which Neovim versions to run.
+# The caller also decides which Neovim versions to run, and which Companion archive to drive.
 
 inputs:
   neovim-pin:
@@ -21,6 +19,14 @@ inputs:
       the pinned stable release. `floor` is the oldest version that the client supports.
     required: false
     default: stable
+  companion-archive:
+    description: >
+      The path of a Companion archive, relative to the repository root. Its .sha256 file must be
+      beside it. The Neovim suite verifies the archive, and drives it as the companion and as the
+      download of the download Checks. When the value is empty, the suite builds the companion from
+      the checkout.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -70,4 +76,6 @@ runs:
     # the job summary, and the Budgets of each operating system come from that table.
     - name: Run the Neovim suite
       shell: bash
+      env:
+        NVIM_TEST_COMPANION_ARCHIVE: ${{ inputs.companion-archive }}
       run: tests/nvim/run.sh

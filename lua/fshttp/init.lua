@@ -12,6 +12,9 @@ local options = require("fshttp.options")
 
 ---@type fshttp.Config
 local config = options.defaults()
+-- The problems of the last setup() call, which :checkhealth fshttp shows again. nil before the first call.
+---@type fshttp.OptionProblem[]?
+local setup_problems
 
 local levels = { ERROR = vim.log.levels.ERROR, WARN = vim.log.levels.WARN }
 
@@ -28,6 +31,7 @@ function M.setup(opts)
     end
     local changed = options.changed_paths(config, new)
     config = new
+    setup_problems = problems
     local companion = package.loaded["fshttp.companion"]
     local state = companion and companion.state()
     if #changed > 0 and (state == "starting" or state == "ready") then
@@ -48,6 +52,11 @@ end
 ---@return fshttp.Config
 function M.config()
     return config
+end
+
+---@return fshttp.OptionProblem[]? problems the problems of the last setup() call, or nil before the first call
+function M.setup_problems()
+    return setup_problems
 end
 
 -- Only the first call has an effect.

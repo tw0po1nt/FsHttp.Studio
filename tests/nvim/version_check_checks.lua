@@ -31,7 +31,7 @@ T["a companion of the client version gives no version WARN notice"] = function()
     end)
 end
 
-T["a companion of a different version gives one WARN notice, the companion stays up, and a Run succeeds"] = function()
+T["a companion of a different version gives one WARN notice and the WARN health line, the companion stays up, and a Run succeeds"] = function()
     local known = harness.companion_pids()
     local child = harness.start_child({ companion_path = harness.companion_path() }, "9.9.9")
     harness.edit(child, harness.fixture("harness-setup.fsx"))
@@ -53,6 +53,11 @@ T["a companion of a different version gives one WARN notice, the companion stays
     harness.holds_for_settle("one WARN notice and a live companion", function()
         return #warn_notices(child) == 1 and harness.process_exists(companion)
     end)
+
+    local version_lines = vim.tbl_filter(function(item)
+        return item.text == message
+    end, harness.checkhealth(child))
+    assert.same({ { section = "Companion", level = "WARNING", text = message, advice = {} } }, version_lines)
 
     harness.edit(child, harness.fixture("core-path.fsx"))
     harness.await_block_mark(child, 26)

@@ -1,15 +1,25 @@
 name: Release
 
-# GitHub Releases channel (direct .vsix download). Manual only — an operator clicks
-# "Run workflow". Registry publishing (vsce / ovsx) stays manual and is out of scope here.
+# The GitHub Release of one version. It ships the VSCode extension and the Neovim client. Manual
+# only: an operator clicks "Run workflow". Registry publishing (vsce and ovsx) stays manual, and this
+# workflow does not do it.
 #
-# The UI suite is the release gate. A red suite refuses the draft Release. The force
-# input skips the suite for an emergency release and logs that skip in the run.
+# The run has three stages:
+#
+#   build    runs the guardrails, packages the .vsix and the Companion archive, writes a .sha256
+#            file for each, and uploads the four files as workflow artifacts.
+#   gates    the UI suite job and the three Neovim legs download those artifacts and drive them.
+#            The Neovim legs also run the Lua core suite. These suites are the Release gate. The
+#            experimental Windows leg runs in its own job, and it does not gate the release.
+#   publish  needs each gate to be green, and attaches the same four files to the draft Release.
+#
+# The force input skips each suite for an emergency release, and the run logs the skip. The
+# guardrails always run, so a forced release still cannot ship a red build.
 on:
   workflow_dispatch:
     inputs:
       force:
-        description: 'Skip the UI suite for an emergency release.'
+        description: 'Skip the UI suite, the Neovim suite, and the Lua core suite for an emergency release.'
         type: boolean
         required: false
         default: false
@@ -19,18 +29,20 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write # create the tag + Release, upload the .vsix asset
+  contents: read
 
 jobs:
-  release:
+  build:
+    name: Build and guardrails
     runs-on: ubuntu-latest
-    # Covers packaging plus three 20-minute UI suite attempts. The per-attempt bound is
-    # inside the run-ui-suite action; this cap only stops a wedged runner.
-    timeout-minutes: 90
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve version + tag from the manifest
+      - name: Resolve the version and the tag from the manifest
         id: version
         run: |
           VERSION=$(node -p "require('./package.json').version")
@@ -38,24 +50,79 @@ jobs:
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Releasing v$VERSION"
 
-      - name: Guard against re-releasing an existing version
+      - name: Refuse a version that has a tag
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "::error::Tag $TAG already exists — bump package.json version before releasing."
+            echo "::error::The tag $TAG exists. Increase the version in package.json, and then release."
             exit 1
           fi
 
-      # Emergency escape hatch. A release that sets force has no suite gate. The
-      # warning and the banner must both appear in the run log so the skip is visible.
-      - name: Log that the UI suite was skipped
+      # The emergency escape hatch. A release that sets force has no suite gate. The warning and
+      # the banner must both show in the run log, so that the skip is visible.
+      - name: Log that the suites were skipped
         if: ${{ inputs.force }}
         run: |
-          echo "::warning::FORCE RELEASE: the UI suite was skipped. This release has no suite gate."
+          echo "::warning::FORCE RELEASE: the UI suite, the Neovim suite, and the Lua core suite were skipped. This release has no suite gate."
           echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-          echo "FORCE INPUT SET — UI TEST SUITE SKIPPED FOR THIS RELEASE"
-          echo "This draft Release is not backed by a green suite run."
+          echo "FORCE INPUT SET: EACH SUITE IS SKIPPED FOR THIS RELEASE"
+          echo "No green suite run backs this draft Release."
           echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+
+      # The guardrails of ci.yml. A red build can never ship a release. The action also packages
+      # the .vsix, fshttp-studio-<version>.vsix at the repo root, with the companion that
+      # `npm run package` publishes into dist/companion.
+      - uses: ./.github/actions/run-guardrails
+
+      # The Companion archive holds the companion that `npm run package` published into the .vsix,
+      # so both Clients ship the same companion. pack-companion.sh writes the archive and its
+      # .sha256 file.
+      #
+      # Each .sha256 file lets a user prove that a download arrived without a change. A corporate
+      # proxy or an antivirus tool can rewrite a binary download. The sha256sum format works with
+      # `sha256sum -c` on Linux and macOS, and a Windows user can compare it with `Get-FileHash`.
+      # The bare file name keeps `-c` working next to the downloaded file.
+      - name: Pack the Companion archive, and write the checksums
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p out/release
+          mv "fshttp-studio-$VERSION.vsix" out/release/
+          (cd out/release && sha256sum "fshttp-studio-$VERSION.vsix" > "fshttp-studio-$VERSION.vsix.sha256")
+          ./scripts/pack-companion.sh out/release dist/companion
+          cat out/release/*.sha256
+
+      - name: Upload the .vsix
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-vsix
+          path: |
+            out/release/fshttp-studio-${{ steps.version.outputs.version }}.vsix
+            out/release/fshttp-studio-${{ steps.version.outputs.version }}.vsix.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the Companion archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-companion-archive
+          path: |
+            out/release/fshttp-studio-companion-${{ steps.version.outputs.version }}.tar.gz
+            out/release/fshttp-studio-companion-${{ steps.version.outputs.version }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  ui-suite:
+    name: UI suite
+    needs: build
+    if: ${{ !inputs.force }}
+    runs-on: ubuntu-latest
+    # Covers three 20-minute suite attempts plus setup. The per-attempt bound is inside the
+    # run-ui-suite action. This cap only stops a wedged runner.
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -74,63 +141,139 @@ jobs:
 
       - run: dotnet tool restore
 
-      # Same guardrails as ci.yml — a red build can never ship a release.
-      - run: dotnet fantomas --check .
-
-      - run: dotnet build FsHttp.Studio.slnx
-
-      - run: dotnet test FsHttp.Studio.slnx --no-build
-
       - run: npm ci
 
-      # Runs the bundled renderer under node — the "bundles and runs" guard the .NET
-      # tests can't cover. Same as ci.yml; a release can't ship a bundle that won't run.
-      - run: npm run smoke
-
-      # Builds the single universal .vsix (compile + vsce package), output
-      # fshttp-studio-<version>.vsix at the repo root.
-      - name: Package extension (.vsix)
-        id: vsix
-        run: |
-          set -euo pipefail
-          npm run package
-          VSIX="fshttp-studio-${{ steps.version.outputs.version }}.vsix"
-          echo "path=$PWD/$VSIX" >> "$GITHUB_OUTPUT"
-
-      # The release gate. `ui-tests.yml` calls the same composite action, so both paths run
-      # one suite with one set of budgets. The action runs on this runner, against the .vsix
-      # this job packaged and is about to ship — a gate is only worth the artifact it drove.
-      #
-      # The force input skips this one step, and with it every part of the suite. The build
-      # guardrails above it always run, so a forced release still cannot ship a red build.
-      - uses: ./.github/actions/run-ui-suite
-        if: ${{ !inputs.force }}
+      - name: Download the .vsix
+        uses: actions/download-artifact@v4
         with:
-          vsix-path: ${{ steps.vsix.outputs.path }}
+          name: release-vsix
+          path: out/release
+
+      - name: Verify the .vsix checksum
+        working-directory: out/release
+        run: sha256sum -c "fshttp-studio-${{ needs.build.outputs.version }}.vsix.sha256"
+
+      # ui-tests.yml calls the same composite action, so both paths run one suite with one set of
+      # Budgets. The suite installs the .vsix that the build job packaged and the publish job ships.
+      - uses: ./.github/actions/run-ui-suite
+        with:
+          vsix-path: ${{ github.workspace }}/out/release/fshttp-studio-${{ needs.build.outputs.version }}.vsix
           failure-artifact-label: release
 
-      # Ship a checksum alongside the asset so installers can prove their copy
-      # arrived byte-exact — corporate proxies / AV are known to silently rewrite
-      # binary downloads. sha256sum-format so `sha256sum -c` works on Linux/macOS
-      # and `Get-FileHash` verifies it by eye on Windows. Bare filename (no path)
-      # keeps `-c` working when run next to the .vsix.
-      - name: Generate SHA256 checksum
-        run: |
-          VSIX="fshttp-studio-${{ steps.version.outputs.version }}.vsix"
-          sha256sum "$VSIX" > "$VSIX.sha256"
-          cat "$VSIX.sha256"
+  nvim-suites:
+    name: Neovim suites (${{ matrix.name }})
+    needs: build
+    if: ${{ !inputs.force }}
+    runs-on: ${{ matrix.os }}
+    # The suite has its own Budgets. This cap stops a wedged runner.
+    timeout-minutes: 30
+    strategy:
+      # A red leg must not hide the result of the other legs.
+      fail-fast: false
+      # The legs of nvim-tests.yml, less the Windows leg, which has its own job.
+      matrix:
+        include:
+          - name: Linux, Neovim 0.11
+            os: ubuntu-latest
+            neovim-pin: floor
+          - name: Linux, pinned stable Neovim
+            os: ubuntu-latest
+            neovim-pin: stable
+          - name: macOS, pinned stable Neovim
+            os: macos-latest
+            neovim-pin: stable
+    steps: &nvim-suite-steps
+      - uses: actions/checkout@v4
 
-      - name: Publish draft GitHub Release with the .vsix + checksum attached
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
+
+      - name: Download the Companion archive
+        uses: actions/download-artifact@v4
+        with:
+          name: release-companion-archive
+          path: out/release
+
+      # The Neovim suite verifies the checksum, and drives the companion from this archive. The
+      # download Checks download the same archive from the test HTTP server.
+      - uses: ./.github/actions/run-nvim-suite
+        with:
+          neovim-pin: ${{ matrix.neovim-pin }}
+          companion-archive: out/release/fshttp-studio-companion-${{ needs.build.outputs.version }}.tar.gz
+
+  # The Windows leg is experimental until its Checks pass, as in nvim-tests.yml. The publish job
+  # does not need this job, so a red Windows leg cannot refuse a draft Release.
+  nvim-suite-windows:
+    name: Neovim suites (${{ matrix.name }})
+    needs: build
+    if: ${{ !inputs.force }}
+    runs-on: ${{ matrix.os }}
+    # The Windows leg is the slowest. The suite has its own Budgets, and this cap stops a wedged runner.
+    timeout-minutes: 30
+    continue-on-error: true
+    # A matrix of one leg gives the shared steps the same matrix values as the nvim-suites job.
+    strategy:
+      matrix:
+        include:
+          - name: Windows, pinned stable Neovim
+            os: windows-latest
+            neovim-pin: stable
+    steps: *nvim-suite-steps
+
+  publish:
+    name: Publish the draft Release
+    needs: [build, ui-suite, nvim-suites]
+    # A forced run skips the suite jobs, and a skipped job in `needs` skips this job too. The
+    # condition therefore states each gate. A run without force needs each suite job to be green.
+    if: ${{ !cancelled() && needs.build.result == 'success' && (inputs.force || (needs.ui-suite.result == 'success' && needs.nvim-suites.result == 'success')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the tag and the Release, and upload the four files
+    steps:
+      - name: Log that the suites were skipped
+        if: ${{ inputs.force }}
+        run: |
+          echo "::warning::FORCE RELEASE: no green suite run backs this draft Release."
+
+      - name: Download the release files
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: out/release
+
+      - name: Verify the checksums
+        working-directory: out/release
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          sha256sum -c "fshttp-studio-$VERSION.vsix.sha256"
+          sha256sum -c "fshttp-studio-companion-$VERSION.tar.gz.sha256"
+
+      - name: Publish the draft GitHub Release with the four files
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.tag }}
+          tag_name: ${{ needs.build.outputs.tag }}
+          name: ${{ needs.build.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          draft: true # a human reviews the asset + notes, then clicks Publish
-          make_latest: true # takes effect once the draft is published
+          draft: true # a person examines the files and the notes, and then clicks Publish
+          make_latest: true # applies when the draft is published
           generate_release_notes: true
           body: |
+            **Clients changed:** EDIT BEFORE PUBLISH (the VSCode extension, the Neovim client, or both)
+
             Release workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            ${{ inputs.force && 'FORCE RELEASE: no green suite run backs this draft Release.' || '' }}
           files: |
-            fshttp-studio-${{ steps.version.outputs.version }}.vsix
-            fshttp-studio-${{ steps.version.outputs.version }}.vsix.sha256
+            out/release/fshttp-studio-${{ needs.build.outputs.version }}.vsix
+            out/release/fshttp-studio-${{ needs.build.outputs.version }}.vsix.sha256
+            out/release/fshttp-studio-companion-${{ needs.build.outputs.version }}.tar.gz
+            out/release/fshttp-studio-companion-${{ needs.build.outputs.version }}.tar.gz.sha256

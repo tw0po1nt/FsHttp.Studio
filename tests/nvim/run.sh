@@ -6,6 +6,11 @@
 # use the builds that are already in out/. Set NVIM_TEST_JSON_PARSER to the path of a JSON parser
 # library to use that parser in place of the build.
 #
+# Set NVIM_TEST_COMPANION_ARCHIVE to the path of a Companion archive to drive that archive. Its
+# .sha256 file must be beside it. The script verifies the checksum and unpacks the archive as the
+# companion of the run. The download Checks get the same archive. The script then builds no
+# companion and packs no archive. The release uses this path to drive the files that it ships.
+#
 # The script runs on Linux, on macOS, and on Windows in Git Bash. On Windows the script builds the
 # parser with gcc, and it stops processes through PowerShell, because Git Bash has no pkill.
 set -euo pipefail
@@ -56,23 +61,68 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Copies the Companion archive at $1 and its .sha256 file into $ARCHIVE_OUT, verifies the checksum,
+# and unpacks the archive into $COMPANION_OUT.
+use_companion_archive() {
+  local archive="$1"
+  if [[ ! -f "$archive" || ! -f "$archive.sha256" ]]; then
+    echo "NVIM_TEST_COMPANION_ARCHIVE is $archive, but the archive or its .sha256 file is missing." >&2
+    exit 1
+  fi
+  local name
+  name="$(basename "$archive")"
+  rm -rf "$ARCHIVE_OUT" "$COMPANION_OUT"
+  mkdir -p "$ARCHIVE_OUT" "$COMPANION_OUT"
+  cp "$archive" "$archive.sha256" "$ARCHIVE_OUT/"
+  # The .sha256 file names the archive without a folder, so the check runs in the archive folder.
+  if command -v sha256sum >/dev/null 2>&1; then
+    (cd "$ARCHIVE_OUT" && sha256sum -c "$name.sha256")
+  else
+    (cd "$ARCHIVE_OUT" && shasum -a 256 -c "$name.sha256")
+  fi
+  # tar reads a drive letter in an archive name as a host name on Windows, so the name is relative.
+  # $ARCHIVE_OUT and $COMPANION_OUT are sibling folders in out/nvim-tests.
+  (cd "$COMPANION_OUT" && tar -xzf "../archive/$name")
+  if [[ ! -e "$COMPANION_OUT/Companion.dll" ]]; then
+    echo "The Companion archive $archive holds no Companion.dll." >&2
+    exit 1
+  fi
+}
+
+ARCHIVE="${NVIM_TEST_COMPANION_ARCHIVE:-}"
+if [[ -n "$ARCHIVE" ]]; then
+  # Make the path absolute before a step changes the folder.
+  ARCHIVE="$(cd "$(dirname "$ARCHIVE")" && pwd)/$(basename "$ARCHIVE")"
+fi
+
 if [[ "${NVIM_TEST_SKIP_BUILD:-}" == "1" ]]; then
-  for file in "$SERVER_OUT/UiTestServer$EXE" "$COMPANION_OUT/Companion.dll"; do
+  PREBUILT=("$SERVER_OUT/UiTestServer$EXE")
+  if [[ -z "$ARCHIVE" ]]; then
+    PREBUILT+=("$COMPANION_OUT/Companion.dll")
+  fi
+  for file in "${PREBUILT[@]}"; do
     if [[ ! -e "$file" ]]; then
       echo "NVIM_TEST_SKIP_BUILD is set, but $file is missing. Build it first." >&2
       exit 1
     fi
   done
-  echo "==> test server and companion (prebuilt in out/)"
+  echo "==> ${PREBUILT[*]} (prebuilt)"
 else
   echo "==> build the test server"
   dotnet publish "$ROOT/tests/ui.Tests/server/UiTestServer.fsproj" -c Release -o "$SERVER_OUT"
-  echo "==> build the companion"
-  dotnet publish "$ROOT/src/companion/Companion.fsproj" -c Release -o "$COMPANION_OUT"
+  if [[ -z "$ARCHIVE" ]]; then
+    echo "==> build the companion"
+    dotnet publish "$ROOT/src/companion/Companion.fsproj" -c Release -o "$COMPANION_OUT"
+  fi
 fi
 
-echo "==> pack the Companion archive"
-"$ROOT/scripts/pack-companion.sh" "$ARCHIVE_OUT" "$COMPANION_OUT"
+if [[ -n "$ARCHIVE" ]]; then
+  echo "==> verify and unpack the Companion archive ($ARCHIVE)"
+  use_companion_archive "$ARCHIVE"
+else
+  echo "==> pack the Companion archive"
+  "$ROOT/scripts/pack-companion.sh" "$ARCHIVE_OUT" "$COMPANION_OUT"
+fi
 
 if [[ -n "${NVIM_TEST_JSON_PARSER:-}" ]]; then
   echo "==> tree-sitter JSON parser ($NVIM_TEST_JSON_PARSER)"

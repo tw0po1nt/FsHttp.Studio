@@ -25,6 +25,12 @@ local state
 -- A state that never becomes ready keeps its notice, so that a Run in that state can show the fix again.
 ---@type fshttp.StateNotice?
 local state_notice
+-- The version that the companion sent in its ready envelope.
+---@type string?
+local companion_version
+-- The WARN notice of a version mismatch, which :checkhealth fshttp shows again.
+---@type string?
+local version_mismatch_notice
 ---@type fun(state: fshttp.CompanionState)[]
 local listeners = {}
 -- The companion answers one frame at a time, so each answer belongs to the oldest sent envelope.
@@ -78,11 +84,12 @@ local function report_no_sdk(floor, dotnet_path)
 end
 
 -- On a version mismatch, the companion stays up and each Run goes ahead.
----@param companion_version string?
-local function check_version(companion_version)
+---@param ready_version string?
+local function check_version(ready_version)
     local client_version = require("fshttp.version")
-    if not version_check.matches(client_version, companion_version) then
-        notify(version_check.mismatch_notice(client_version, companion_version), vim.log.levels.WARN)
+    if not version_check.matches(client_version, ready_version) then
+        version_mismatch_notice = version_check.mismatch_notice(client_version, ready_version)
+        notify(version_mismatch_notice, vim.log.levels.WARN)
     end
 end
 
@@ -91,6 +98,7 @@ end
 local function receive(encoded)
     local answer, decode_error = envelope.decode(encoded)
     if answer and answer.tag == "ready" then
+        companion_version = answer.version
         if check_companion_version then
             check_version(answer.version)
         end
@@ -150,6 +158,30 @@ function M.state_notice()
     return state_notice
 end
 
+---@return string? version the version of the ready envelope, or nil before the companion is ready
+function M.version()
+    return companion_version
+end
+
+---@return string? notice the WARN notice of a version mismatch, or nil when the versions match
+function M.version_mismatch_notice()
+    return version_mismatch_notice
+end
+
+-- The folder of the companion: companion_path, or the download folder of the client version.
+---@param config fshttp.Config
+---@return string
+function M.folder(config)
+    return config.companion_path or download.folder(require("fshttp.version"))
+end
+
+-- The SDK floor that Companion.runtimeconfig.json in `folder` states.
+---@param folder string
+---@return integer
+function M.sdk_floor(folder)
+    return sdk.floor(read_file(vim.fs.joinpath(folder, "Companion.runtimeconfig.json")))
+end
+
 ---@param listener fun(state: fshttp.CompanionState)
 function M.on_state_change(listener)
     listeners[#listeners + 1] = listener
@@ -184,33 +216,62 @@ function M.run(run_envelope, callback)
     return send(run_envelope, callback)
 end
 
--- Checks the SDK floor of the companion in `folder`, and starts the companion.
+-- Runs `dotnet --list-sdks`, and tells `on_result` if an SDK at the floor of the companion in
+-- `folder` is installed. The callback can run in a fast event.
 ---@param config fshttp.Config
 ---@param folder string
-local function check_sdk_and_spawn(config, folder)
-    set_state("starting")
-
-    local floor = sdk.floor(read_file(vim.fs.joinpath(folder, "Companion.runtimeconfig.json")))
+---@param on_result fun(found: boolean, floor: integer, dotnet: string)
+local function probe_sdk(config, folder, on_result)
+    local floor = M.sdk_floor(folder)
     local dotnet = sdk.dotnet_command(config.dotnet_path)
-    local companion_dll = vim.fs.joinpath(folder, "Companion.dll")
 
     ---@param result vim.SystemCompleted
     local function on_list_sdks(result)
-        if result.code == 0 and sdk.has_sdk_at_floor(floor, result.stdout or "") then
-            vim.schedule(function()
-                spawn(dotnet, companion_dll)
-            end)
-        else
-            report_no_sdk(floor, config.dotnet_path)
-        end
+        on_result(result.code == 0 and sdk.has_sdk_at_floor(floor, result.stdout or ""), floor, dotnet)
     end
 
     -- vim.system raises an error at once when it cannot start the executable.
     local list_sdks = { dotnet, "--list-sdks" }
     local ok = pcall(vim.system, list_sdks, { text = true, timeout = list_sdks_timeout_ms }, on_list_sdks)
     if not ok then
-        report_no_sdk(floor, config.dotnet_path)
+        on_result(false, floor, dotnet)
     end
+end
+
+-- :checkhealth writes its report in one pass, so it waits for the probe.
+---@param config fshttp.Config
+---@param folder string
+---@return boolean found
+---@return integer floor
+---@return string dotnet the dotnet command that the probe ran
+function M.has_sdk(config, folder)
+    local found, floor, dotnet
+    probe_sdk(config, folder, function(...)
+        found, floor, dotnet = ...
+    end)
+    -- vim.system stops `dotnet` at its timeout, so the callback runs before this bound.
+    vim.wait(list_sdks_timeout_ms * 2, function()
+        return found ~= nil
+    end)
+    return found == true, floor, dotnet
+end
+
+-- Checks the SDK floor of the companion in `folder`, and starts the companion.
+---@param config fshttp.Config
+---@param folder string
+local function check_sdk_and_spawn(config, folder)
+    set_state("starting")
+
+    local companion_dll = vim.fs.joinpath(folder, "Companion.dll")
+    probe_sdk(config, folder, function(found, floor, dotnet)
+        if found then
+            vim.schedule(function()
+                spawn(dotnet, companion_dll)
+            end)
+        else
+            report_no_sdk(floor, config.dotnet_path)
+        end
+    end)
 end
 
 -- A state that needs a fix raises its notice one time and keeps it for a later Run.
@@ -227,7 +288,7 @@ end
 ---@param config fshttp.Config
 local function download_and_spawn(config)
     local version = require("fshttp.version")
-    local folder = download.folder(version)
+    local folder = M.folder(config)
     if download.is_installed(folder) then
         check_sdk_and_spawn(config, folder)
         return

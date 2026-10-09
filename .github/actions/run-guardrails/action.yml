@@ -1,0 +1,93 @@
+name: Run the guardrails
+description: >
+  Runs the guardrails of the build, and packages the .vsix at the repo root, because the .vsix Lua
+  check reads that file. ci.yml and release.yml call this action, so each guardrail and each tool
+  pin has one copy.
+
+# What stays with the caller: the checkout. The caller also runs each step that comes after the
+# guardrails: the Lua core suite in ci.yml, and the Companion archive in release.yml.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: ./scripts/check-banned-patterns.sh
+
+    - name: Check the Lua format
+      uses: JohnnyMorganz/stylua-action@v5
+      with:
+        token: ${{ github.token }}
+        version: '2.5.2'
+        args: --check .
+
+    - uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: 'npm'
+        cache-dependency-path: package-lock.json
+
+    - uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
+
+    - shell: bash
+      run: dotnet tool restore
+
+    - shell: bash
+      run: dotnet fantomas --check .
+
+    - shell: bash
+      run: dotnet fsi scripts/generate-lua.fsx --check
+
+    - shell: bash
+      run: dotnet build FsHttp.Studio.slnx
+
+    - shell: bash
+      run: dotnet test FsHttp.Studio.slnx --no-build
+
+    - shell: bash
+      run: npm ci
+
+    # Runs npm run compile, then builds the .vsix.
+    - shell: bash
+      run: npm run package
+
+    - shell: bash
+      run: ./scripts/check-vsix-holds-no-lua.sh
+
+    # Runs the bundled renderer under node. The .NET tests cannot prove that the bundle runs.
+    - shell: bash
+      run: npm run smoke
+
+    - name: Read the Neovim floor pin
+      id: nvim-pin
+      shell: bash
+      run: echo "floor=$(jq -r .floor tests/nvim/neovim-pin.json)" >> "$GITHUB_OUTPUT"
+
+    # The Neovim client supports Neovim 0.11 and later, so the type check uses the 0.11 API types.
+    - name: Install Neovim ${{ steps.nvim-pin.outputs.floor }} for its API types
+      id: nvim-types
+      uses: rhysd/action-setup-vim@v1
+      with:
+        neovim: true
+        version: ${{ steps.nvim-pin.outputs.floor }}
+
+    - name: Install lua-language-server
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/lua-language-server"
+        curl -fsSL https://github.com/LuaLS/lua-language-server/releases/download/3.19.1/lua-language-server-3.19.1-linux-x64.tar.gz \
+          | tar -xz -C "$RUNNER_TEMP/lua-language-server"
+        echo "$RUNNER_TEMP/lua-language-server/bin" >> "$GITHUB_PATH"
+
+    - name: Check the Lua types against the Neovim 0.11 API
+      shell: bash
+      env:
+        VIMRUNTIME: ${{ steps.nvim-types.outputs.vim-dir }}/runtime
+      run: ./scripts/check-lua-types.sh
