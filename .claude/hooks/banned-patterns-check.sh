@@ -61,7 +61,9 @@ fi
 
 [ -n "$pending" ] || exit 0
 
-root="${CLAUDE_PROJECT_DIR:-.}"
+# The repo root comes from the location of this file, because the hook can start
+# in a subdirectory of the repo.
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 [ -f "$root/.banned-patterns" ] || exit 0
 
 patterns=()
@@ -74,16 +76,9 @@ done < "$root/.banned-patterns"
 [ ${#patterns[@]} -eq 0 ] && exit 0
 
 # Run the strippers that scripts/check-banned-patterns.sh runs, so the hook and CI
-# agree on what counts as prose. The path comes from this file, because the hook
-# can start in a subdirectory of the repo.
-strippers="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../scripts/strippers" && pwd)"
-
-case "$kind" in
-  markdown) stripped="$(printf '%s\n' "$pending" | awk -f "$strippers/strip_markdown.awk")" ;;
-  lua) stripped="$(printf '%s\n' "$pending" | awk -f "$strippers/strip_lua.awk")" ;;
-  vimhelp) stripped="$(printf '%s\n' "$pending" | awk -f "$strippers/strip_vimhelp.awk")" ;;
-  *) stripped="$(printf '%s\n' "$pending" | awk -f "$strippers/strip_fsharp.awk")" ;;
-esac
+# agree on what counts as prose. The name of each stripper file holds the `kind`
+# that it strips.
+stripped="$(printf '%s\n' "$pending" | awk -f "$root/scripts/strippers/strip_$kind.awk")"
 
 hits=""
 for i in "${!patterns[@]}"; do
