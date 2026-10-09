@@ -1,5 +1,3 @@
--- The rules of :checkhealth fshttp that need no Neovim API: the level of each companion state, the
--- download tools, the tree-sitter parsers with what each one gives, and the text of each item.
 local download_rule = require("fshttp.download_rule")
 
 local M = {}
@@ -26,7 +24,6 @@ function M.state_level(state)
     return "info"
 end
 
--- The executables that the download of the Companion archive runs.
 ---@param sysname string the `sysname` field of `vim.uv.os_uname()`
 ---@return string[]
 function M.download_tools(sysname)
@@ -51,8 +48,7 @@ end
 
 M.companion_missing_fix = { "Open an F# script (.fsx) to download the companion.", M.companion_path_fix }
 
--- The companion of companion_path tells its version only in its ready envelope.
----@param version string? the version of the ready envelope, or nil before the companion is ready
+---@param version string? nil before the companion is ready
 ---@param folder string
 ---@return string
 function M.companion_path_found(version, folder)
@@ -121,8 +117,7 @@ end
 
 M.images_on = "snacks.nvim shows images in this terminal."
 
--- The WARN line when no image can show. `reason` is the reason that the line below the Body title shows.
----@param reason string
+---@param reason string the text of the line below the Body title
 ---@return string
 function M.images_missing(reason)
     return string.format("No image can show: %s. An image body shows its pixel size and no image.", reason)

@@ -1,4 +1,3 @@
--- The start sequence and the stop of the one companion of this Neovim instance.
 local download = require("fshttp.download")
 local download_rule = require("fshttp.download_rule")
 local envelope = require("fshttp.envelope")
@@ -25,10 +24,8 @@ local state
 -- A state that never becomes ready keeps its notice, so that a Run in that state can show the fix again.
 ---@type fshttp.StateNotice?
 local state_notice
--- The version that the companion sent in its ready envelope.
 ---@type string?
 local companion_version
--- The WARN notice of a version mismatch, which :checkhealth fshttp shows again.
 ---@type string?
 local version_mismatch_notice
 ---@type fun(state: fshttp.CompanionState)[]
@@ -60,7 +57,7 @@ local function read_file(path)
 end
 
 ---@param new_state fshttp.CompanionState
----@param notice fshttp.StateNotice? the notice that the change to `new_state` raised
+---@param notice fshttp.StateNotice?
 local function set_state(new_state, notice)
     if state == new_state then
         return
@@ -83,7 +80,6 @@ local function report_no_sdk(floor, dotnet_path)
     end)
 end
 
--- On a version mismatch, the companion stays up and each Run goes ahead.
 ---@param ready_version string?
 local function check_version(ready_version)
     local client_version = require("fshttp.version")
@@ -137,7 +133,7 @@ local function spawn(dotnet, companion_dll)
                 end)
             end
         end,
-        -- The companion writes its own log to stderr. The client shows no part of it.
+        -- The companion writes its own log to stderr.
         stderr = function() end,
     }, vim.schedule_wrap(on_exit))
     if not ok then
@@ -158,24 +154,22 @@ function M.state_notice()
     return state_notice
 end
 
----@return string? version the version of the ready envelope, or nil before the companion is ready
+---@return string? version nil before the companion is ready
 function M.version()
     return companion_version
 end
 
----@return string? notice the WARN notice of a version mismatch, or nil when the versions match
+---@return string? notice nil when the versions match
 function M.version_mismatch_notice()
     return version_mismatch_notice
 end
 
--- The folder of the companion: companion_path, or the download folder of the client version.
 ---@param config fshttp.Config
 ---@return string
 function M.folder(config)
     return config.companion_path or download.folder(require("fshttp.version"))
 end
 
--- The SDK floor that Companion.runtimeconfig.json in `folder` states.
 ---@param folder string
 ---@return integer
 function M.sdk_floor(folder)
@@ -216,8 +210,7 @@ function M.run(run_envelope, callback)
     return send(run_envelope, callback)
 end
 
--- Runs `dotnet --list-sdks`, and tells `on_result` if an SDK at the floor of the companion in
--- `folder` is installed. The callback can run in a fast event.
+-- The callback can run in a fast event.
 ---@param config fshttp.Config
 ---@param folder string
 ---@param on_result fun(found: boolean, floor: integer, dotnet: string)
@@ -256,7 +249,6 @@ function M.has_sdk(config, folder)
     return found == true, floor, dotnet
 end
 
--- Checks the SDK floor of the companion in `folder`, and starts the companion.
 ---@param config fshttp.Config
 ---@param folder string
 local function check_sdk_and_spawn(config, folder)
@@ -274,7 +266,6 @@ local function check_sdk_and_spawn(config, folder)
     end)
 end
 
--- A state that needs a fix raises its notice one time and keeps it for a later Run.
 ---@param new_state fshttp.CompanionState
 ---@param message string
 ---@param level integer
@@ -284,7 +275,6 @@ local function fail_start(new_state, message, level)
     set_state(new_state, notice)
 end
 
--- Downloads the Companion archive of the client version, and then checks the SDK and starts the companion.
 ---@param config fshttp.Config
 local function download_and_spawn(config)
     local version = require("fshttp.version")
@@ -308,8 +298,6 @@ local function download_and_spawn(config)
     end)
 end
 
--- Runs the start sequence once for each Neovim instance: get the companion, check the SDK floor,
--- and start the companion.
 ---@param config fshttp.Config
 function M.start(config)
     if sequence_ran then
@@ -333,8 +321,7 @@ function M.start(config)
     end
 end
 
--- Sends SIGTERM to the companion and returns at once, so a hung companion cannot delay the exit of
--- Neovim.
+-- Returns at once, so a hung companion cannot delay the exit of Neovim.
 function M.stop()
     if process then
         process:kill("sigterm")

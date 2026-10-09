@@ -1,4 +1,3 @@
--- Puts the Request, the Response headers, or the Body of the latest Run in a register.
 local copy_text = require("fshttp.copy_text")
 
 local M = {}
@@ -6,8 +5,7 @@ local M = {}
 ---@type fshttp.RunResult?
 local latest
 
--- The result of the latest Run, or nil when that Run gave no response.
----@param result fshttp.RunResult?
+---@param result fshttp.RunResult? nil when the latest Run gave no response
 function M.remember(result)
     latest = result
 end

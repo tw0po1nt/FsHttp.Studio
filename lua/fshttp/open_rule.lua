@@ -1,5 +1,3 @@
--- The file that :FsHttp open writes, and the hint line that names the command. Pure, so the Lua core
--- suite can load it.
 local image_body = require("fshttp.image_body")
 
 local M = {}
@@ -7,7 +5,6 @@ local M = {}
 M.html_hint = ":FsHttp open  shows the rendered page in the browser, with scripts blocked"
 M.image_hint = ":FsHttp open  shows the image in the system viewer"
 
--- Blocks each script and each plugin, and allows styles and images.
 M.policy = "script-src 'none'; object-src 'none'; frame-src 'none'; style-src * 'unsafe-inline'; img-src * data:"
 
 local meta = '<meta http-equiv="Content-Security-Policy" content="' .. M.policy .. '">'
@@ -30,9 +27,8 @@ function M.is_xml(content_type)
     return content_type == "application/xml" or content_type == "text/xml" or content_type:match("%+xml$") ~= nil
 end
 
--- The hint line below the Body title, or nil when the body has no hint.
 ---@param content_type string the type with no parameters
----@return string?
+---@return string? hint the line below the Body title, or nil when the body has no hint
 function M.hint(content_type)
     if M.is_html(content_type) then
         return M.html_hint
@@ -59,7 +55,6 @@ function M.extension(content_type)
     return "bin"
 end
 
--- The position after the end of the first tag that matches `pattern`, or nil.
 ---@param lowered string
 ---@param pattern string
 ---@return integer?
@@ -68,8 +63,7 @@ local function after_tag(lowered, pattern)
     return stop
 end
 
--- Adds the policy as the first element of the head, so it comes before each script. The meta goes
--- after the doctype when the page has no head, because a browser needs the doctype first.
+-- The policy must come before each script, and the doctype must stay first.
 ---@param html string
 ---@return string
 function M.with_policy(html)
@@ -89,7 +83,6 @@ function M.with_policy(html)
     return meta .. html
 end
 
--- The bytes that the file of the body contains.
 ---@param content_type string the type with no parameters
 ---@param body string
 ---@return string

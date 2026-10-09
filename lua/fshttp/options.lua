@@ -1,5 +1,3 @@
--- The defaults of the client, and the check of the opts that setup() takes. Pure, so the Lua core
--- suite runs it.
 local M = {}
 
 ---@class fshttp.Config
@@ -10,8 +8,7 @@ local M = {}
 ---@field response_buffer { split: "right"|"left"|"below"|"above", images: boolean, keys: boolean }
 ---@field status_line { lualine: boolean }
 
--- The options that contain a file path. setup() normalizes each one, and a change to one needs a
--- restart of the companion.
+-- setup() normalizes each path option, and a change to one needs a Restart of the companion.
 M.path_options = { "dotnet_path", "companion_path" }
 
 ---@return fshttp.Config
@@ -132,8 +129,6 @@ local function unknown_key(key)
     }
 end
 
--- Applies the opts to the defaults. A bad value keeps its default, and an unknown key applies
--- nothing. Each other key applies. The two path options get a type check only.
 ---@param opts any
 ---@return fshttp.Config config
 ---@return fshttp.OptionProblem[] problems
@@ -187,7 +182,6 @@ function M.resolve(opts)
     return config, problems
 end
 
--- The names of the path options that differ between two configurations.
 ---@param old fshttp.Config
 ---@param new fshttp.Config
 ---@return string[]
@@ -206,7 +200,6 @@ end
 ---@field value any
 ---@field default any
 
--- Each value of `config` that differs from its default, in the order of the key names.
 ---@param config fshttp.Config
 ---@return fshttp.OptionChange[]
 function M.changed_values(config)

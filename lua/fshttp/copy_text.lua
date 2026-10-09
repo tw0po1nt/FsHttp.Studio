@@ -1,12 +1,11 @@
--- The Copy text that a yank puts in a register. It must match the Golden fixture of the renderer core.
+-- Each function must match its Golden fixture.
 local binary_body = require("fshttp.binary_body")
 
 local M = {}
 
 local replacement_character = "\239\191\189"
 
--- The UTF-8 decoder of .NET puts one U+FFFD in place of each maximal invalid subsequence, and the
--- Copy text must keep the same bytes.
+-- The Copy text must match the .NET UTF-8 decoder: one U+FFFD for each maximal invalid subsequence.
 ---@param bytes string
 ---@return string
 local function decode_text(bytes)
@@ -98,9 +97,8 @@ function M.headers(result)
     return message_text(string.format("%d %s", result.status, result.reason), result.headers)
 end
 
--- Gives nil for a body of zero bytes, because there is nothing to copy.
 ---@param result fshttp.RunResult
----@return string?
+---@return string? text nil for a body of zero bytes
 function M.body(result)
     if #result.body == 0 then
         return nil

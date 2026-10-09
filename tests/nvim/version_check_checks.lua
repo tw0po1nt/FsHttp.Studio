@@ -3,7 +3,6 @@ local harness = require("nvim.harness")
 
 local T = MiniTest.new_set()
 
--- The companion version that the companion of this run sends in its ready envelope.
 ---@return string
 local function companion_version()
     local file = assert(io.open("package.json", "rb"))

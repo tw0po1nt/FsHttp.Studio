@@ -1,4 +1,4 @@
--- The rows of the Status line text. The VSCode extension host has the same rows.
+-- The VSCode extension host has the same rows.
 local M = {}
 
 M.prefix = "FsHttp.Studio: "
@@ -8,7 +8,7 @@ M.prefix = "FsHttp.Studio: "
 ---@field blocks? integer the number of located Blocks, for the kind "script"
 ---@field parse_failed? boolean true when the locate found a Parse failure, for the kind "script"
 
--- The rows of the states other than ready. Only Neovim has the download states and "companionNotFound".
+-- Only Neovim has the download states and "companionNotFound".
 local state_rows = {
     starting = "starting…",
     sdkNotFound = ".NET SDK not found",
@@ -52,12 +52,10 @@ local function script_text(view)
     return "no requests found"
 end
 
--- Returns the text after the prefix, or nil to hide the Status line text. Each state other than
--- ready outranks the script view.
 ---@param state fshttp.CompanionState? nil before the start sequence runs
 ---@param view fshttp.ScriptView
 ---@param client_version string
----@return string?
+---@return string? text the text after the prefix, or nil to hide the Status line text
 function M.text(state, view, client_version)
     if view.kind == "noFSharpDocument" then
         return nil
@@ -76,7 +74,6 @@ function M.row(state, view, client_version)
     return text and M.prefix .. text
 end
 
--- The row of the companion state alone, for a buffer that is not F#.
 ---@param state fshttp.CompanionState?
 ---@param client_version string
 ---@return string

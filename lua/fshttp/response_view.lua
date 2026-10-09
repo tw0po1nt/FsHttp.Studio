@@ -1,4 +1,3 @@
--- The lines, the folds, the highlights, and the winbar of the Response buffer for each Run outcome.
 local binary_body = require("fshttp.binary_body")
 local image_body = require("fshttp.image_body")
 local json = require("fshttp.json")
@@ -38,8 +37,7 @@ local M = {}
 ---@field last_col integer 0-based byte column after the last byte
 ---@field group string
 
--- The highlights and the folds that a tree-sitter parser gives for the text of a body. Each line is
--- 1-based in that text.
+-- Each line is 1-based in the text of the body.
 ---@class fshttp.BodySyntax
 ---@field highlights fshttp.Highlight[]
 ---@field folds { first: integer, last: integer }[]
@@ -50,7 +48,6 @@ local M = {}
 -- Gives nil when the client can show an image, and the reason when it cannot.
 ---@alias fshttp.ImageSupport fun(content_type: string): string?
 
--- An image body that the client places below `line`.
 ---@class fshttp.ImageBody
 ---@field line integer 1-based line of the pixel size
 ---@field content_type string the type with no parameters
@@ -105,7 +102,6 @@ function M.human_size(bytes)
     return string.format("%.1f MB", bytes / 1024 / 1024)
 end
 
--- The type in lower case, with no parameters such as charset.
 ---@param content_type string
 ---@return string
 function M.normalize_content_type(content_type)
@@ -134,10 +130,9 @@ local function milliseconds(ms)
     return string.format("%d ms", math.floor(ms + 0.5))
 end
 
--- Appends one line made of { text, group } chunks, and returns its 1-based line number.
 ---@param view fshttp.ResponseView
 ---@param chunks { [1]: string, [2]: string? }[]
----@return integer
+---@return integer line 1-based
 local function add(view, chunks)
     local line = #view.lines + 1
     local parts = {}
@@ -164,8 +159,6 @@ local function add_text(view, text, group)
     end
 end
 
--- A section is a title line and the lines below it. A fold contains the section when it has a line
--- below the title.
 ---@param view fshttp.ResponseView
 ---@param title string
 ---@param detail string?
@@ -191,7 +184,7 @@ local function header_rows(view, headers)
     end
 end
 
--- The note and the hex dump of the VSCode Response viewer.
+-- The hex view must match the note and the hex dump of the VSCode Response viewer.
 ---@param view fshttp.ResponseView
 ---@param bytes string
 ---@param indent string
@@ -231,7 +224,6 @@ local function result_winbar(result)
     }) .. "%<" .. statusline({ { result.request.url, "FsHttpResponseUrl" } })
 end
 
--- The tree-sitter language of a body type that gets highlights and folds.
 ---@param content_type string the type with no parameters
 ---@return string?
 local function body_language(content_type)
@@ -252,7 +244,6 @@ local function skips_binary_test(content_type)
     return body_language(content_type) == "html" or image_body.is_image(content_type)
 end
 
--- With no parser, a JSON body shows pretty-printed, and each other body shows its exact bytes.
 ---@param view fshttp.ResponseView
 ---@param content_type string the type with no parameters
 ---@param body string
@@ -292,9 +283,6 @@ function M.running(seconds)
     return view
 end
 
--- The pixel size of an image body, with the reason when no image can show. The view asks the client
--- for the reason, and keeps the image for the client to place when there is none. With no lookup,
--- the view reports that snacks.nvim is missing.
 ---@param view fshttp.ResponseView
 ---@param content_type string the type with no parameters
 ---@param body string
@@ -382,8 +370,7 @@ function M.runtime_error(message)
     return view
 end
 
--- The text of the Compile error of the VSCode Response viewer, with no trailing spaces. The view
--- maps each `(line,col)` line to its position in the script.
+-- The view must match the Compile error text of the VSCode Response viewer, with no trailing spaces.
 ---@param diagnostics { message: string, range: { start_line: integer, start_col: integer } }[]
 ---@return fshttp.ResponseView
 function M.compile_error(diagnostics)
@@ -443,7 +430,6 @@ function M.message(message)
     return view
 end
 
--- The value of 'foldexpr' for each line: ">N" where a fold starts, and the fold depth elsewhere.
 ---@param line_count integer
 ---@param folds fshttp.Fold[]
 ---@return string[]
@@ -466,7 +452,6 @@ function M.fold_levels(line_count, folds)
     return levels
 end
 
--- A closed section shows its title and the count of the lines below the title.
 ---@param first_line string the text of the first line of the fold
 ---@param hidden_count integer the count of the lines below the first line
 ---@return string

@@ -11,8 +11,7 @@ local policy_meta =
 local html_body =
     "<!doctype html><html><head><title>probe</title></head><body><h1>ui-test-server</h1><script>document.title = 'ran'</script></body></html>"
 
--- Replaces vim.ui.open in the child with a stub. The stub records the path and reads the file at
--- the time of the call, so a Check can later tell that the file did not change.
+-- The stub reads the file at the time of the call, so a Check can later tell that the file did not change.
 ---@param child nvim_suite.Child
 local function stub_open(child)
     harness.lua_get(
@@ -37,7 +36,6 @@ local function open_calls(child)
     return harness.lua_get(child, [[_G.fshttp_open_calls]])
 end
 
--- The virtual lines on the Body title, and the real line below it.
 ---@param child nvim_suite.Child
 ---@return { virtual: string[], next_line: string? }
 local function body_title(child)
@@ -72,8 +70,7 @@ local function body_title(child)
     )
 end
 
--- Opens the fixture, runs its Block, and waits until the first line below the Body title starts
--- with `expected`. An earlier Check can leave a Response buffer in the child, so any body would not do.
+-- An earlier Check can leave a Response buffer in the child, so the wait needs the expected body.
 ---@param child nvim_suite.Child
 ---@param fixture_name string
 ---@param expected string

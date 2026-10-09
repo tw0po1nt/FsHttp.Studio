@@ -1,10 +1,8 @@
--- The image test, the file extension, and the pixel size of an image body. Pure, so the Lua core
--- suite can load it.
 local M = {}
 
 M.snacks_missing_reason = "snacks.nvim is not installed"
 
--- The extension that snacks.nvim needs to open the file of each common image type.
+-- snacks.nvim needs the file extension to open an image file.
 local extensions = {
     ["image/png"] = "png",
     ["image/jpeg"] = "jpg",
@@ -85,7 +83,6 @@ local function bmp_size(bytes)
     return little_endian(bytes, 19, 4), height
 end
 
--- Walks the marker segments until a start-of-frame marker.
 ---@param bytes string
 ---@return integer?, integer?
 local function jpeg_size(bytes)
@@ -134,10 +131,9 @@ local function webp_size(bytes)
     return nil
 end
 
--- The width and the height in pixels, or nil when the bytes are not a PNG, GIF, BMP, JPEG, or WebP
--- image, or when the header is cut short.
 ---@param bytes string
----@return integer?, integer?
+---@return integer? width nil when the bytes are not a PNG, GIF, BMP, JPEG, or WebP image with a whole header
+---@return integer? height
 function M.pixel_size(bytes)
     for _, reader in ipairs({ png_size, gif_size, bmp_size, jpeg_size, webp_size }) do
         local width, height = reader(bytes)
@@ -148,10 +144,8 @@ function M.pixel_size(bytes)
     return nil
 end
 
--- The reason when response_buffer.images is false.
 M.images_off_reason = "images are off (response_buffer.images)"
 
--- The line below the Body title: the pixel size, then the reason when no image can show.
 ---@param bytes string
 ---@param reason string? why no image can show, or nil when one can
 ---@return string

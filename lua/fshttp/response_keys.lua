@@ -1,4 +1,3 @@
--- The local keys of the Response buffer, and the list that g? shows.
 local M = {}
 
 ---@class fshttp.ResponseKey
@@ -15,7 +14,6 @@ M.keys = {
     { lhs = "g?", plug = "<Plug>(FsHttpHelp)", description = "List the active keys" },
 }
 
--- Sets the local keys, or removes them when response_buffer.keys is false. Each <Plug> map stays.
 ---@param buf integer
 function M.attach(buf)
     if not require("fshttp").config().response_buffer.keys then

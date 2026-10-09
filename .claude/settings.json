@@ -31,7 +31,7 @@
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/fsharp-standards-reminder.sh"
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/coding-standards-reminder.sh"
           }
         ]
       }

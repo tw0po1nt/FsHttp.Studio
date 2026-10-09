@@ -1,4 +1,3 @@
--- The highlights and the folds of a body, from the tree-sitter parser of its language.
 local M = {}
 
 -- The highlighter of Neovim gives no color to these captures.
@@ -29,7 +28,7 @@ local function highlights(query, root, text, lines, language)
     return found
 end
 
--- A node that ends at column 0 ends on the line above. A node on one line gives no fold.
+-- A node that ends at column 0 ends on the line above.
 ---@param query vim.treesitter.Query
 ---@param root TSNode
 ---@param text string

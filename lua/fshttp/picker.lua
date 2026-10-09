@@ -1,10 +1,7 @@
--- The picker that lists each located Block when the cursor is outside every Block.
 local block_mark = require("fshttp.block_mark")
 
 local M = {}
 
--- Each item shows the glyph of the Block mark title, the line number, and the first source line of
--- the Block. The items are in source order, refused Blocks too.
 ---@param blocks { parse_failed: boolean, ranges: { start_line: integer, refusal: string? }[] } a decoded blocks envelope
 ---@param first_lines string[] first_lines[i] is the first source line of the i-th located Block
 ---@return string[] items
@@ -32,11 +29,10 @@ function M.first_lines(blocks, source)
     return first_lines
 end
 
--- Opens vim.ui.select with each located Block. The callback gets the 0-based block_index and
--- whether the picked Block is refused. A cancel gives no callback.
+-- A cancel gives no callback.
 ---@param blocks { parse_failed: boolean, ranges: { start_line: integer, refusal: string? }[] } a decoded blocks envelope
 ---@param source string the text of the locate that gave `blocks`, which can differ from the buffer after a wait
----@param on_pick fun(block_index: integer, refused: boolean)
+---@param on_pick fun(block_index: integer, refused: boolean) block_index is 0-based
 function M.open(blocks, source, on_pick)
     vim.ui.select(M.items(blocks, M.first_lines(blocks, source)), { prompt = "Run request:" }, function(_, idx)
         if idx == nil then

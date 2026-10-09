@@ -1,10 +1,9 @@
--- The binary test and the hex dump of the VSCode renderer core. Each must match its Golden fixture.
+-- Each function must match its Golden fixture.
 local M = {}
 
 local max_bytes = 256
 local bytes_per_line = 16
 
--- A NUL byte, or more than 30 percent control bytes other than tab, newline, and carriage return.
 ---@param bytes string
 ---@return boolean
 function M.looks_binary(bytes)
@@ -18,7 +17,6 @@ function M.looks_binary(bytes)
     return control_count / #bytes > 0.30
 end
 
--- The first 256 bytes, 16 bytes on each line, and a line that counts the bytes that it does not show.
 ---@param bytes string
 ---@return string
 function M.hex_dump(bytes)

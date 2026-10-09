@@ -1,4 +1,3 @@
--- :FsHttp open: the body of the latest Run, as a static file in the system program for its type.
 local open_rule = require("fshttp.open_rule")
 local response_view = require("fshttp.response_view")
 

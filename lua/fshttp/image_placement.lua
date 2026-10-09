@@ -1,4 +1,3 @@
--- The image of an image body in the Response buffer, through the image placement of snacks.nvim.
 local image_body = require("fshttp.image_body")
 
 local M = {}
@@ -6,8 +5,7 @@ local M = {}
 ---@type { placement: { close: fun(self) }?, file: string }?
 local current
 
--- snacks.nvim, or nil when the user did not install it.
----@return table?
+---@return table? snacks nil when the user did not install snacks.nvim
 local function snacks()
     local ok, module = pcall(require, "snacks")
     if ok and type(module) == "table" then
@@ -16,9 +14,8 @@ local function snacks()
     return nil
 end
 
--- Gives nil when the client can show an image of this type, and the reason when it cannot.
 ---@param content_type string the type with no parameters
----@return string?
+---@return string? reason nil when the client can show an image of this type
 function M.unsupported_reason(content_type)
     if not require("fshttp").config().response_buffer.images then
         return image_body.images_off_reason
@@ -41,7 +38,6 @@ function M.unsupported_reason(content_type)
     return nil
 end
 
--- Removes the placement of the last Run, and its temporary file.
 function M.clear()
     if not current then
         return
@@ -54,7 +50,6 @@ function M.clear()
     vim.uv.fs_unlink(last.file)
 end
 
--- Writes the bytes to a temporary file, and places that file as virtual lines below `image.line`.
 ---@param buf integer
 ---@param image fshttp.ImageBody
 function M.place(buf, image)

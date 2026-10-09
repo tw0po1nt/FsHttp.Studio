@@ -1,4 +1,3 @@
--- `:FsHttp run`: a Run of the Block at the cursor, with its result in the Response buffer.
 local companion = require("fshttp.companion")
 local locator = require("fshttp.locator")
 local refusals = require("fshttp.refusals")
@@ -186,7 +185,6 @@ companion.on_state_change(function(state)
     end
 end)
 
--- A new :FsHttp run replaces the Run that waits.
 ---@param buf integer
 local function begin_wait(buf)
     pending_wait = record(buf)
@@ -198,7 +196,7 @@ end
 local function handle_not_ready(buf)
     local notice = companion.state_notice()
     if notice then
-        -- A state that never becomes ready shows its notice again. No Run starts.
+        -- A state that never becomes ready shows its notice again.
         notify(notice.message, notice.level)
     else
         begin_wait(buf)

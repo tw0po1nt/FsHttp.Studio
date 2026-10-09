@@ -34,7 +34,6 @@ local function only_window(snapshot)
     return snapshot.windows[1]
 end
 
--- Waits until the Response buffer satisfies `predicate`, and returns the snapshot that satisfied it.
 ---@param child nvim_suite.Child
 ---@param subject string
 ---@param predicate fun(snapshot: nvim_suite.ResponseBuffer): boolean
@@ -51,8 +50,7 @@ local function eventually_response(child, subject, predicate)
     return snapshot
 end
 
--- Opens `path`, and waits for a Block mark on each line of `lines`. A Block mark proves a locate,
--- so the companion is ready when this returns.
+-- A Block mark proves a locate, so the companion is ready when this returns.
 ---@param child nvim_suite.Child
 ---@param path string
 ---@param lines integer[]
@@ -91,7 +89,6 @@ local function widen_screen(child)
     harness.cmd(child, "wincmd =")
 end
 
--- The count of the lines below the title of the section whose title starts with `title`.
 ---@param lines string[]
 ---@param title string
 ---@return integer
@@ -531,8 +528,6 @@ T["a missing .NET SDK gives the SDK WARN notice again and no Run"] = function()
     end)
 end
 
--- Installs a vim.ui.select stub in the child. It records the items it is given and picks the item
--- at _G.fshttp_suite_pick_index (default the first). A Check reads _G.fshttp_suite_select.items.
 local function install_select_stub(child)
     harness.lua_get(
         child,
@@ -604,7 +599,6 @@ T["a pick on a refused Block shows its refusal, and no Run starts"] = function()
     end)
     assert.same({ '⊘ 10: http { GET "http://127.0.0.1:9/" }' }, select_items(child))
 
-    -- Picking the refused Block shows its refusal and starts no Run.
     expect_notice(child, count, vim.log.levels.WARN, refusals.codes.loopBody.detail)
     harness.holds_for_settle("no Response buffer window", function()
         return #harness.response_buffer(child).windows == 0
@@ -614,8 +608,7 @@ end
 
 local wait_notice = "The FsHttp.Studio companion is starting. This Run starts when it is ready."
 
--- Records the block_index of each run envelope that the client sends in the child. Only the latest
--- Run reaches the Response buffer, so the buffer alone cannot show that an earlier Run never started.
+-- Only the latest Run reaches the Response buffer, so the buffer alone cannot show that an earlier Run never started.
 ---@param child nvim_suite.Child
 local function install_run_spy(child)
     harness.lua_get(

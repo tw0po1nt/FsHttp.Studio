@@ -14,8 +14,7 @@ end
 local Parser = {}
 Parser.__index = Parser
 
--- Joins the stored chunks only when a whole length or a whole frame is present. Thus the parser copies
--- a large frame once, whatever the number of chunks.
+-- Joins the chunks only when a whole length or frame is present, so the parser copies a large frame once.
 local function flatten(parser)
     if #parser.chunks > 1 then
         parser.chunks = { table.concat(parser.chunks) }
@@ -23,8 +22,6 @@ local function flatten(parser)
     return parser.chunks[1] or ""
 end
 
--- Takes the next chunk of the stream, and returns a list of each payload that the chunk completes.
--- A partial frame stays in the parser until a later chunk completes it.
 function Parser:push(chunk)
     local payloads = {}
     if #chunk > 0 then

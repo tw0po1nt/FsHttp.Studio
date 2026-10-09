@@ -12,7 +12,6 @@ local options = require("fshttp.options")
 
 ---@type fshttp.Config
 local config = options.defaults()
--- The problems of the last setup() call, which :checkhealth fshttp shows again. nil before the first call.
 ---@type fshttp.OptionProblem[]?
 local setup_problems
 
@@ -54,7 +53,7 @@ function M.config()
     return config
 end
 
----@return fshttp.OptionProblem[]? problems the problems of the last setup() call, or nil before the first call
+---@return fshttp.OptionProblem[]? problems nil before the first setup() call
 function M.setup_problems()
     return setup_problems
 end
@@ -66,7 +65,7 @@ function M.start()
     require("fshttp.companion").start(config)
 end
 
----@return string? text the Status line text of the Active document, or nil when it does not have the fsharp filetype
+---@return string? text the Status line text, or nil when the Active document does not have the fsharp filetype
 function M.status()
     return require("fshttp.status_line").row(vim.api.nvim_get_current_buf())
 end

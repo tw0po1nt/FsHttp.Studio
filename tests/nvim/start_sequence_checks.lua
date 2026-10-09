@@ -9,7 +9,6 @@ local function pid_list(pids)
     return "[" .. table.concat(pids, ", ") .. "]"
 end
 
--- The SDK floor that the published companion states.
 ---@return integer
 local function companion_floor()
     local file = assert(io.open(harness.companion_path() .. "/Companion.runtimeconfig.json", "rb"))

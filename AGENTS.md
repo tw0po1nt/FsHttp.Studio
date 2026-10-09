@@ -52,8 +52,8 @@ rule at the moment of risk, and it cannot check that you obeyed. The rule is sti
 
 ## Read before you act
 
-- **Before you write F#**, read `docs/standards/coding-standards.md`. It states the house rules that
-  Fantomas and `.editorconfig` cannot check.
+- **Before you write F# or Lua**, read `docs/standards/coding-standards.md`. It states the house
+  rules that Fantomas, StyLua, and `.editorconfig` cannot check.
 - **Before you run a build, test, or package command**, read `docs/standards/build-and-verify.md`.
   It lists the full command set that CI runs.
 - **Before you explore the codebase**, read `GLOSSARY.md` and the ADRs in `docs/adr/` that touch your

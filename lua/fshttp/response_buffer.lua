@@ -1,4 +1,3 @@
--- The one Response buffer, and the window that shows it.
 local image_placement = require("fshttp.image_placement")
 local response_view = require("fshttp.response_view")
 
@@ -151,8 +150,6 @@ local function stop_running()
     end
 end
 
--- Opens a split for the buffer when no window of the current tab page shows it. The cursor stays
--- in the current window.
 local function open_window()
     local target = get_buf()
     for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
@@ -168,7 +165,6 @@ local function open_window()
     apply_to_window(win)
 end
 
--- Shows "Running… Ns" in the buffer, and opens its window, until the next call of M.show.
 function M.show_running()
     stop_running()
     paint(response_view.running(0))
@@ -194,9 +190,8 @@ function M.show(view)
     paint(view)
 end
 
--- The script position of a line of a Compile error.
 ---@param lnum integer
----@return fshttp.ScriptPosition?
+---@return fshttp.ScriptPosition? position nil when the line shows no Compile error position
 function M.position_at(lnum)
     return current_view and current_view.positions and current_view.positions[lnum]
 end

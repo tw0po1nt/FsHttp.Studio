@@ -1,10 +1,8 @@
--- <CR> in the Response buffer: moves the cursor to the position of a Compile error in the script.
 local M = {}
 
 ---@type integer?
 local script_buf
 
--- The script of the latest Run, which is where a Compile error position points.
 ---@param buf integer
 function M.remember(buf)
     script_buf = buf
@@ -33,8 +31,7 @@ function M.jump()
         vim.notify("The script of the Run is closed.", vim.log.levels.WARN, { title = "FsHttp.Studio" })
         return
     end
-    -- The envelope has no file name, so a position from a loaded file looks like a script position.
-    -- A line past the end of the script cannot be a script position, so the cursor stays.
+    -- The envelope has no file name, so a line past the end of the script is a position in a loaded file.
     if position.line > vim.api.nvim_buf_line_count(script_buf) then
         vim.notify(
             "The position is past the end of the script. The Compile error can be in a loaded file.",
