@@ -2,6 +2,7 @@
 local binary_body = require("fshttp.binary_body")
 local image_body = require("fshttp.image_body")
 local json = require("fshttp.json")
+local open_rule = require("fshttp.open_rule")
 local refusals = require("fshttp.refusals")
 
 local M = {}
@@ -60,14 +61,20 @@ local M = {}
 ---@field winbar string a statusline expression, or "" for no winbar
 ---@field folds fshttp.Fold[]
 ---@field highlights fshttp.Highlight[]
+---@field hints { line: integer, text: string }[] a virtual line below each 1-based line
 ---@field image fshttp.ImageBody? set when the client can show the image body
+---@field positions table<integer, fshttp.ScriptPosition>? the position of each `(line,col)` line, by 1-based line
+
+---@class fshttp.ScriptPosition
+---@field line integer 1-based
+---@field col integer 0-based
 
 local open_glyph = "▾"
 local closed_glyph = "▸"
 
 ---@return fshttp.ResponseView
 local function new_view()
-    return { lines = {}, winbar = "", folds = {}, highlights = {} }
+    return { lines = {}, winbar = "", folds = {}, highlights = {}, hints = {} }
 end
 
 -- Each "\n" ends a line, so the joined lines give the text again byte for byte.
@@ -228,11 +235,11 @@ end
 ---@param content_type string the type with no parameters
 ---@return string?
 local function body_language(content_type)
-    if content_type == "application/json" or content_type == "text/json" or content_type:match("%+json$") then
+    if open_rule.is_json(content_type) then
         return "json"
-    elseif content_type == "text/html" or content_type == "application/xhtml+xml" then
+    elseif open_rule.is_html(content_type) then
         return "html"
-    elseif content_type == "application/xml" or content_type == "text/xml" or content_type:match("%+xml$") then
+    elseif open_rule.is_xml(content_type) then
         return "xml"
     end
     return nil
@@ -348,6 +355,10 @@ function M.result(result, body_syntax, image_support)
     local size = M.human_size(#result.body)
     local body_detail = content_type == "" and size or (content_type .. " · " .. size)
     section(view, "Body", body_detail, false, function()
+        local hint = #result.body > 0 and open_rule.hint(content_type)
+        if hint then
+            view.hints[#view.hints + 1] = { line = #view.lines, text = hint }
+        end
         if image_body.is_image(content_type) and #result.body > 0 then
             add_image(view, content_type, result.body, image_support)
         elseif not skips_binary_test(content_type) and binary_body.looks_binary(result.body) then
@@ -371,17 +382,24 @@ function M.runtime_error(message)
     return view
 end
 
--- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/276): remove the trailing spaces, and add the
--- Compile error winbar and the <CR> jump.
--- The text of the Compile error of the VSCode Response viewer.
+-- The text of the Compile error of the VSCode Response viewer, with no trailing spaces. The view
+-- maps each `(line,col)` line to its position in the script.
 ---@param diagnostics { message: string, range: { start_line: integer, start_col: integer } }[]
 ---@return fshttp.ResponseView
 function M.compile_error(diagnostics)
     local view = new_view()
+    view.winbar = statusline({
+        { "Compile error", "FsHttpResponseError" },
+        { "  <CR> on a (line,col) moves to it in the script", "FsHttpResponseDetail" },
+    })
     add(view, { { "Compile error:", "FsHttpResponseError" } })
+    view.positions = {}
     for _, diagnostic in ipairs(diagnostics) do
         local position = string.format("(%d,%d)", diagnostic.range.start_line, diagnostic.range.start_col + 1)
-        add_text(view, position .. " " .. diagnostic.message)
+        view.positions[#view.lines + 1] = { line = diagnostic.range.start_line, col = diagnostic.range.start_col }
+        for _, line in ipairs(M.split_lines(position .. " " .. diagnostic.message)) do
+            add(view, { { (line:gsub(" +$", "")) } })
+        end
     end
     return view
 end

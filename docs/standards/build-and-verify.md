@@ -22,6 +22,13 @@ stops without them.
 The Neovim suite needs the same Neovim and network access, the .NET SDK, `curl`, `pgrep`, and a C
 compiler on `PATH` as `cc`. `tests/nvim/run.sh` builds the tree-sitter JSON parser with `cc`. To use
 a JSON parser that is already built, set `NVIM_TEST_JSON_PARSER` to the path of its library.
+
+On Windows, run `tests/nvim/run.sh` in the Bash shell that ships with Git for Windows. The script
+uses `gcc` when `cc` is missing, writes the parser as a `.dll`, and stops processes through
+PowerShell in place of `pkill`. The Harness finds the companion with PowerShell in place of
+`pgrep`. The Lua core suite needs the Visual C++ compiler on `PATH`, because hererocks builds
+Lua 5.1 with it. CI puts the compiler there with `ilammy/msvc-dev-cmd`.
+
 `tests/nvim/neovim-pin.json` holds the Neovim versions that CI installs: `floor` for the Lua type
 check, and `stable` for the two Neovim suites.
 

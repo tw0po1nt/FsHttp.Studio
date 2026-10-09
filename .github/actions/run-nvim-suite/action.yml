@@ -1,0 +1,73 @@
+name: Run Neovim suites
+description: >
+  Installs Neovim, runs the Lua core suite, and runs the Neovim suite. The action works on Linux,
+  macOS, and Windows runners.
+
+# One copy of the suite steps. nvim-tests.yml calls it.
+#
+# TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/285): call it from release.yml too.
+#
+# Each caller must run the same suites. The release caller must run them against the files it is
+# about to ship. A `workflow_call` cannot do that: a called workflow runs on its own runner. A
+# composite action runs on the caller's runner, so it drives the files that the caller built.
+#
+# What stays with the caller: the checkout, the `actions/setup-dotnet` step, and the NuGet cache.
+# The caller also decides which Neovim versions to run.
+
+inputs:
+  neovim-pin:
+    description: >
+      The key in tests/nvim/neovim-pin.json that names the Neovim version to install. `stable` is
+      the pinned stable release. `floor` is the oldest version that the client supports.
+    required: false
+    default: stable
+
+runs:
+  using: composite
+  steps:
+    - name: Read the Neovim pin
+      id: nvim-pin
+      shell: bash
+      env:
+        PIN_KEY: ${{ inputs.neovim-pin }}
+      run: |
+        set -euo pipefail
+        VERSION="$(jq -r --arg key "$PIN_KEY" '.[$key] // empty' tests/nvim/neovim-pin.json)"
+        if [ -z "$VERSION" ]; then
+          echo "::error::tests/nvim/neovim-pin.json holds no version for the key $PIN_KEY."
+          exit 1
+        fi
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+    - uses: rhysd/action-setup-vim@v1
+      with:
+        neovim: true
+        version: ${{ steps.nvim-pin.outputs.version }}
+
+    # hererocks builds Lua 5.1 for luassert. Its build stops without the readline headers on Linux.
+    - name: Install the readline headers that hererocks needs to build Lua 5.1
+      if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y libreadline-dev
+
+    # hererocks builds Lua 5.1 with Visual C++ on Windows, and the build needs the compiler on PATH.
+    - name: Put the Visual C++ compiler on PATH
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1
+
+    # Git for Windows ships a GNU `link` in /usr/bin. The bash steps put it ahead of the MSVC
+    # `link.exe`, so hererocks calls the wrong tool and its Lua 5.1 build fails.
+    - name: Remove the GNU link that hides the MSVC linker
+      if: runner.os == 'Windows'
+      shell: bash
+      run: rm -f /usr/bin/link
+
+    - name: Run the Lua core suite
+      shell: bash
+      run: nvim -l tests/minit.lua --minitest
+
+    # The suite has no retry. A flaky Check is a defect to fix. The suite writes its timing table to
+    # the job summary, and the Budgets of each operating system come from that table.
+    - name: Run the Neovim suite
+      shell: bash
+      run: tests/nvim/run.sh

@@ -72,6 +72,11 @@ let imageBody =
     Convert.FromBase64String
         "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAAoUlEQVR42u3QMQ0AAAgDsAmb/yALC3w8TaqgmZajKJAlS5YsWbIUyJIlS5YsWQpkyZIlS5YsBbJkyZIlS5YCWbJkyZIlS4EsWbJkyZKlQJYsWbJkyVIgS5YsWbJkKZAlS5YsWbIUyJIlS5YsWQpkyZIlS5YsBbJkyZIlS5YCWbJkyZIlS4EsWbJkyZKlQJYsWbJkyVIgS5YsWbJkKZAl69sCV9fW0Q6QbmMAAAAASUVORK5CYII="
 
+/// Cross-process contract for `GET /html`. Match exactly in the `:FsHttp open` Check of the Neovim
+/// suite.
+let htmlBody =
+    "<!doctype html><html><head><title>probe</title></head><body><h1>ui-test-server</h1><script>document.title = 'ran'</script></body></html>"
+
 let private catchAllBody = "ui-test-server:unknown"
 
 let private utf8 = Encoding.UTF8
@@ -180,6 +185,7 @@ type UiTestHttpServer() =
             | "GET", "/notfound" -> writeText ctx 404 "text/plain" notFoundBody
             | "GET", "/binary" -> writeBytes ctx 200 "application/octet-stream" binaryBody
             | "GET", "/image" -> writeBytes ctx 200 "image/png" imageBody
+            | "GET", "/html" -> writeText ctx 200 "text/html; charset=utf-8" htmlBody
             | "GET", "/slow" -> handleSlow ctx
             | "GET", "/release" -> handleRelease ctx
             | "GET", "/status" -> handleStatus ctx

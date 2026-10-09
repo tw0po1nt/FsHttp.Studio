@@ -5,9 +5,26 @@
 # tree-sitter JSON parser. Then it runs the suite through lazy.minit. Set NVIM_TEST_SKIP_BUILD=1 to
 # use the builds that are already in out/. Set NVIM_TEST_JSON_PARSER to the path of a JSON parser
 # library to use that parser in place of the build.
+#
+# The script runs on Linux, on macOS, and on Windows in Git Bash. On Windows the script builds the
+# parser with gcc, and it stops processes through PowerShell, because Git Bash has no pkill.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*)
+    WINDOWS=1
+    EXE=".exe"
+    PARSER_EXT="dll"
+    # `pwd -W` gives D:/a/repo. The plain form gives /d/a/repo, which Neovim cannot open.
+    ROOT="$(cd "$(dirname "$0")/../.." && pwd -W)"
+    ;;
+  *)
+    WINDOWS=0
+    EXE=""
+    PARSER_EXT="so"
+    ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+    ;;
+esac
 SERVER_OUT="$ROOT/out/ui-test-server"
 COMPANION_OUT="$ROOT/out/nvim-tests/companion"
 ARCHIVE_OUT="$ROOT/out/nvim-tests/archive"
@@ -20,19 +37,27 @@ build_json_parser() {
   git init -q "$JSON_PARSER_OUT"
   git -C "$JSON_PARSER_OUT" fetch -q --depth 1 https://github.com/tree-sitter/tree-sitter-json.git "$TREE_SITTER_JSON_COMMIT"
   git -C "$JSON_PARSER_OUT" checkout -q FETCH_HEAD
-  cc -shared -fPIC -O2 -I "$JSON_PARSER_OUT/src" -o "$JSON_PARSER_OUT/json.so" "$JSON_PARSER_OUT/src/parser.c"
+  local compiler="${CC:-cc}"
+  if ! command -v "$compiler" >/dev/null 2>&1; then
+    compiler="gcc"
+  fi
+  "$compiler" -shared -fPIC -O2 -I "$JSON_PARSER_OUT/src" -o "$JSON_PARSER_OUT/json.$PARSER_EXT" "$JSON_PARSER_OUT/src/parser.c"
 }
 
 cleanup() {
   # The pattern holds the companion folder of this run, so the cleanup cannot stop a companion of
   # another editor.
+  if [[ "$WINDOWS" == "1" ]]; then
+    powershell.exe -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { \$_.CommandLine -and (\$_.CommandLine.Replace('\\', '/').Contains('$COMPANION_OUT/Companion.dll') -or \$_.CommandLine.Replace('\\', '/').Contains('$SERVER_OUT/UiTestServer')) } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force }" >/dev/null 2>&1 || true
+    return
+  fi
   pkill -f "$COMPANION_OUT/Companion.dll" 2>/dev/null || true
   pkill -f "$SERVER_OUT/UiTestServer" 2>/dev/null || true
 }
 trap cleanup EXIT
 
 if [[ "${NVIM_TEST_SKIP_BUILD:-}" == "1" ]]; then
-  for file in "$SERVER_OUT/UiTestServer" "$COMPANION_OUT/Companion.dll"; do
+  for file in "$SERVER_OUT/UiTestServer$EXE" "$COMPANION_OUT/Companion.dll"; do
     if [[ ! -e "$file" ]]; then
       echo "NVIM_TEST_SKIP_BUILD is set, but $file is missing. Build it first." >&2
       exit 1
@@ -52,7 +77,7 @@ echo "==> pack the Companion archive"
 if [[ -n "${NVIM_TEST_JSON_PARSER:-}" ]]; then
   echo "==> tree-sitter JSON parser ($NVIM_TEST_JSON_PARSER)"
 elif [[ "${NVIM_TEST_SKIP_BUILD:-}" == "1" ]]; then
-  NVIM_TEST_JSON_PARSER="$JSON_PARSER_OUT/json.so"
+  NVIM_TEST_JSON_PARSER="$JSON_PARSER_OUT/json.$PARSER_EXT"
   if [[ ! -e "$NVIM_TEST_JSON_PARSER" ]]; then
     echo "NVIM_TEST_SKIP_BUILD is set, but $NVIM_TEST_JSON_PARSER is missing. Build it first." >&2
     exit 1
@@ -61,10 +86,10 @@ elif [[ "${NVIM_TEST_SKIP_BUILD:-}" == "1" ]]; then
 else
   echo "==> build the tree-sitter JSON parser"
   build_json_parser
-  NVIM_TEST_JSON_PARSER="$JSON_PARSER_OUT/json.so"
+  NVIM_TEST_JSON_PARSER="$JSON_PARSER_OUT/json.$PARSER_EXT"
 fi
 
-export NVIM_TEST_SERVER="$SERVER_OUT/UiTestServer"
+export NVIM_TEST_SERVER="$SERVER_OUT/UiTestServer$EXE"
 export NVIM_TEST_COMPANION_PATH="$COMPANION_OUT"
 export NVIM_TEST_ARCHIVE_DIR="$ARCHIVE_OUT"
 export NVIM_TEST_JSON_PARSER

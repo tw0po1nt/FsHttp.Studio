@@ -58,6 +58,7 @@ local function get_buf()
         if not vim.api.nvim_buf_is_loaded(buf) then
             vim.fn.bufload(buf)
         end
+        require("fshttp.response_keys").attach(buf)
         return buf
     end
     buf = vim.api.nvim_create_buf(false, true)
@@ -129,6 +130,11 @@ local function paint(view)
             hl_group = highlight.group,
         })
     end
+    for _, hint in ipairs(view.hints) do
+        vim.api.nvim_buf_set_extmark(target, namespace, hint.line - 1, 0, {
+            virt_lines = { { { hint.text, "FsHttpResponseDetail" } } },
+        })
+    end
     for _, win in ipairs(windows()) do
         apply_to_window(win)
     end
@@ -154,7 +160,11 @@ local function open_window()
             return
         end
     end
-    local win = vim.api.nvim_open_win(target, false, { split = "right", win = vim.api.nvim_get_current_win() })
+    local win = vim.api.nvim_open_win(
+        target,
+        false,
+        { split = require("fshttp").config().response_buffer.split, win = vim.api.nvim_get_current_win() }
+    )
     apply_to_window(win)
 end
 
@@ -182,6 +192,13 @@ end
 function M.show(view)
     stop_running()
     paint(view)
+end
+
+-- The script position of a line of a Compile error.
+---@param lnum integer
+---@return fshttp.ScriptPosition?
+function M.position_at(lnum)
+    return current_view and current_view.positions and current_view.positions[lnum]
 end
 
 ---@param lnum integer

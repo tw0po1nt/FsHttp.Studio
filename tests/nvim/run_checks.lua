@@ -242,6 +242,111 @@ T["a 404 shows as a response, and a Dead port shows as a Runtime error"] = funct
     end)
 end
 
+T["a Compile error shows as text, <CR> and <Plug>(FsHttpJump) move to its position, and the Script gets no mark"] = function()
+    local child = harness.harness_setup_child()
+    local fixture = harness.ui_fixture("compile-error.fsx")
+    open_script(child, fixture, { 14 })
+    harness.lua_get(child, [[vim.api.nvim_buf_set_lines(0, 11, 12, false, { 'let probe : int = "not an int"' })]])
+
+    -- The Block mark of the Block is the one sign that the Script holds. A Compile error adds no more.
+    local function script_marks()
+        return harness.lua_get(
+            child,
+            [[(function(path)
+                local buf = vim.fn.bufnr(path)
+                return {
+                    diagnostics = #vim.diagnostic.get(buf),
+                    signs = #vim.fn.sign_getplaced(buf, { group = "*" })[1].signs,
+                    quickfix = #vim.fn.getqflist(),
+                    location_list = #vim.fn.getloclist(0),
+                }
+            end)(...)]],
+            { fixture }
+        )
+    end
+    local marks_before = script_marks()
+    assert.equal(0, marks_before.diagnostics + marks_before.quickfix + marks_before.location_list)
+
+    harness.run_at(child, 14)
+
+    local snapshot = eventually_response(child, "the Compile error text at (12,19)", function(shown)
+        local window = only_window(shown)
+        return window ~= nil and (shown.lines[1] or "") == "Compile error:" and has_text(shown.lines, "(12,19) ")
+    end)
+    local window = assert(only_window(snapshot))
+    assert.equal("Compile error  <CR> on a (line,col) moves to it in the script", window.winbar)
+    assert.equal(true, has_text(snapshot.lines, "expected to have type"), vim.inspect(snapshot.lines))
+    for _, line in ipairs(snapshot.lines or {}) do
+        assert.equal(false, line:match(" $") ~= nil, "a trailing space on: " .. line)
+    end
+    assert.equal(false, has_text(snapshot.lines, "Runtime error"))
+
+    local position_line
+    for i, line in ipairs(snapshot.lines or {}) do
+        if line:sub(1, #"(12,19) ") == "(12,19) " then
+            position_line = i
+        end
+    end
+    local function move_from_response(keys)
+        harness.lua_get(child, "vim.api.nvim_set_current_win(...)", { window.id })
+        harness.cmd(child, string.format("call cursor(%d, 1)", position_line))
+        harness.type_keys(child, keys)
+        harness.eventually(harness.notice_deadline_ms, "the cursor in the Script at (12,19)", function()
+            return harness.lua_get(child, "vim.api.nvim_buf_get_name(0)") == fixture
+                and vim.deep_equal(harness.lua_get(child, "vim.api.nvim_win_get_cursor(0)"), { 12, 18 })
+        end)
+        harness.cmd(child, "call cursor(1, 1)")
+    end
+    move_from_response("<CR>")
+    move_from_response("<Plug>(FsHttpJump)")
+
+    assert.same(marks_before, script_marks())
+end
+
+T["a Compile error position past the end of the Script gives a WARN notice, and <CR> keeps the cursor"] = function()
+    local child = harness.harness_setup_child()
+    local fixture = harness.ui_fixture("compile-error.fsx")
+    -- The Check above leaves the fixture changed. The reload gives the text on disk.
+    harness.cmd(child, "silent edit! " .. vim.fn.fnameescape(fixture))
+    harness.await_block_mark(child, 14)
+    -- A char in place of a string makes this text different from the Compile error of the Check above.
+    harness.lua_get(child, [[vim.api.nvim_buf_set_lines(0, 11, 12, false, { "let probe : int = 'c'" })]])
+    harness.run_at(child, 14)
+
+    local snapshot = eventually_response(child, "the Compile error text at (12,19) for a char", function(shown)
+        return only_window(shown) ~= nil and has_text(shown.lines, "(12,19) ") and has_text(shown.lines, "'char'")
+    end)
+    local window = assert(only_window(snapshot))
+    local position_line
+    for i, line in ipairs(snapshot.lines or {}) do
+        if line:sub(1, #"(12,19) ") == "(12,19) " then
+            position_line = i
+        end
+    end
+
+    -- A Script of five lines puts line 12 past its end, as a position from a loaded file can be.
+    harness.lua_get(child, "vim.api.nvim_buf_set_lines(vim.fn.bufnr(...), 5, -1, false, {})", { fixture })
+    local count = #harness.notices(child)
+    harness.lua_get(child, "vim.api.nvim_set_current_win(...)", { window.id })
+    harness.cmd(child, string.format("call cursor(%d, 1)", position_line))
+    harness.type_keys(child, "<CR>")
+
+    expect_notice(
+        child,
+        count,
+        vim.log.levels.WARN,
+        "The position is past the end of the script. The Compile error can be in a loaded file."
+    )
+    assert.equal(window.id, harness.lua_get(child, "vim.api.nvim_get_current_win()"))
+    assert.same({ position_line, 0 }, harness.lua_get(child, "vim.api.nvim_win_get_cursor(0)"))
+
+    harness.lua_get(
+        child,
+        [[vim.api.nvim_buf_call(vim.fn.bufnr(...), function() vim.cmd("silent edit!") end)]],
+        { fixture }
+    )
+end
+
 T["a Run of the loop Block gives a WARN notice and opens no Response buffer"] = function()
     local child = harness.harness_setup_child()
     harness.close_response_windows(child)
@@ -649,6 +754,7 @@ T[":FsHttp yank and yr, yh, and yb put the Copy text in the register, and g? lis
             "yr  Yank the Request",
             "yh  Yank the Response headers",
             "yb  Yank the Body",
+            "<CR>  Move to a Compile error position",
             "g?  List the active keys",
         }, "\n")
     )

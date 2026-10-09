@@ -20,6 +20,9 @@ end
 ---@param content_type string the type with no parameters
 ---@return string?
 function M.unsupported_reason(content_type)
+    if not require("fshttp").config().response_buffer.images then
+        return image_body.images_off_reason
+    end
     local module = snacks()
     if not module then
         return image_body.snacks_missing_reason

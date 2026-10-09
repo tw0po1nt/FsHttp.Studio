@@ -1,2 +1,6 @@
+# Each text file checks out with LF on each operating system. The Neovim suite runs the shell
+# scripts on Windows, and it compares byte offsets in the fixtures of both suites.
+* text=auto eol=lf
+
 # The Lua core suite compares each Golden fixture byte for byte, so Git must not convert its line endings.
 tests/golden/** -text

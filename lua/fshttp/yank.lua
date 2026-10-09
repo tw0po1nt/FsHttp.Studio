@@ -12,6 +12,11 @@ function M.remember(result)
     latest = result
 end
 
+---@return fshttp.RunResult?
+function M.latest()
+    return latest
+end
+
 ---@param message string
 ---@param level integer
 local function notify(message, level)

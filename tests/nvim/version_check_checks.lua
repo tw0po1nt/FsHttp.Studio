@@ -55,9 +55,7 @@ T["a companion of a different version gives one WARN notice, the companion stays
     end)
 
     harness.edit(child, harness.fixture("core-path.fsx"))
-    harness.eventually(harness.block_mark_deadline_ms, "a Block mark on the first Block", function()
-        return harness.block_marks(child):find("^26: ") ~= nil
-    end)
+    harness.await_block_mark(child, 26)
     harness.run_at(child, 26)
 
     harness.eventually(harness.response_deadline_ms, "a successful Run in the Response buffer", function()

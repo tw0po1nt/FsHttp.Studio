@@ -11,11 +11,19 @@ M.keys = {
     { lhs = "yr", plug = "<Plug>(FsHttpYankRequest)", description = "Yank the Request" },
     { lhs = "yh", plug = "<Plug>(FsHttpYankHeaders)", description = "Yank the Response headers" },
     { lhs = "yb", plug = "<Plug>(FsHttpYankBody)", description = "Yank the Body" },
+    { lhs = "<CR>", plug = "<Plug>(FsHttpJump)", description = "Move to a Compile error position" },
     { lhs = "g?", plug = "<Plug>(FsHttpHelp)", description = "List the active keys" },
 }
 
+-- Sets the local keys, or removes them when response_buffer.keys is false. Each <Plug> map stays.
 ---@param buf integer
 function M.attach(buf)
+    if not require("fshttp").config().response_buffer.keys then
+        for _, key in ipairs(M.keys) do
+            pcall(vim.keymap.del, "n", key.lhs, { buffer = buf })
+        end
+        return
+    end
     for _, key in ipairs(M.keys) do
         vim.keymap.set(
             "n",

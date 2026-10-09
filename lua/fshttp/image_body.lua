@@ -148,7 +148,10 @@ function M.pixel_size(bytes)
     return nil
 end
 
--- The line below the Body header: the pixel size, then the reason when no image can show.
+-- The reason when response_buffer.images is false.
+M.images_off_reason = "images are off (response_buffer.images)"
+
+-- The line below the Body title: the pixel size, then the reason when no image can show.
 ---@param bytes string
 ---@param reason string? why no image can show, or nil when one can
 ---@return string

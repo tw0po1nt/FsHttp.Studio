@@ -4,10 +4,22 @@ local MiniTest = require("mini.test")
 
 local M = {}
 
--- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/283): set the Budgets from measured runs on each operating system.
-M.harness_setup_budget_ms = 60000
-M.check_budget_ms = 30000
-M.suite_budget_ms = 180000
+local sysname = vim.uv.os_uname().sysname
+local is_windows = sysname == "Windows_NT"
+
+-- The Budgets of each operating system. Each leg of nvim-tests.yml writes the timing table to the
+-- job summary, and the Budgets of a system come from the rows of its leg.
+-- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/306): the Windows_NT row copies the Linux
+-- row until a passing run of the Windows leg gives a measured row.
+local budgets_ms = {
+    Linux = { harness_setup = 60000, check = 30000, suite = 180000 },
+    Darwin = { harness_setup = 60000, check = 30000, suite = 240000 },
+    Windows_NT = { harness_setup = 60000, check = 30000, suite = 180000 },
+}
+local budget_ms = budgets_ms[sysname] or budgets_ms.Linux
+M.harness_setup_budget_ms = budget_ms.harness_setup
+M.check_budget_ms = budget_ms.check
+M.suite_budget_ms = budget_ms.suite
 
 M.sidecar_deadline_ms = 30000
 M.companion_exists_deadline_ms = 30000
@@ -162,7 +174,18 @@ end
 -- folder. A companion of another editor has a different folder, so this list leaves it out.
 ---@return integer[]
 function M.companion_pids()
-    local result = run({ "pgrep", "-f", M.companion_path() .. "/Companion.dll" })
+    local result
+    if is_windows then
+        -- Windows has no pgrep. The command line and the folder are compared with forward slashes.
+        local folder = M.companion_path():gsub("\\", "/"):gsub("'", "''")
+        local script = string.format(
+            "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Replace('\\', '/').Contains('%s/Companion.dll') } | ForEach-Object { $_.ProcessId }",
+            folder
+        )
+        result = run({ "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script })
+    else
+        result = run({ "pgrep", "-f", M.companion_path() .. "/Companion.dll" })
+    end
     local pids = {}
     for pid in ((result and result.stdout) or ""):gmatch("%d+") do
         pids[#pids + 1] = tonumber(pid)
@@ -192,6 +215,23 @@ end
 ---@return boolean
 function M.process_exists(pid)
     return vim.uv.kill(pid, 0) == 0
+end
+
+-- Freezes a process so that it answers nothing and stays alive. Windows has no SIGSTOP, so the
+-- freeze there suspends the process through NtSuspendProcess.
+---@param pid integer
+function M.freeze_process(pid)
+    if not is_windows then
+        vim.uv.kill(pid, "sigstop")
+        return
+    end
+    local script = string.format(
+        "Add-Type -Name Native -Namespace Suite -MemberDefinition '[DllImport(\"ntdll.dll\")] public static extern int NtSuspendProcess(IntPtr handle);'; "
+            .. "[Suite.Native]::NtSuspendProcess((Get-Process -Id %d).Handle) | Out-Null",
+        pid
+    )
+    local result = run({ "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script })
+    assert(result and result.code == 0, "could not freeze the process " .. pid .. ": " .. vim.inspect(result))
 end
 
 ---@class nvim_suite.Child
@@ -274,18 +314,56 @@ end
 function M.slow_dotnet(delay_s, end_state)
     local real = vim.fn.exepath("dotnet")
     assert(real ~= "", "dotnet is not on PATH in the runner")
-    local real_command = string.format('exec %s "$@"', real)
-    local sleep = string.format("sleep %d", delay_s)
-    -- Each end state gives the shell lines for `--list-sdks`, then the shell lines for the companion.
-    local scripts = {
-        ready = { real_command, sleep .. "\n" .. real_command },
-        stopped = { real_command, sleep .. "\nexit 1" },
-        sdkNotFound = { sleep .. "\nexit 0", real_command },
+    -- Each end state gives the steps for `--list-sdks`, then the steps for the companion.
+    -- "real" runs the real dotnet and ends the wrapper with its exit code.
+    local steps = {
+        ready = { { "real" }, { "sleep", "real" } },
+        stopped = { { "real" }, { "sleep", "exit1" } },
+        sdkNotFound = { { "sleep", "exit0" }, { "real" } },
     }
-    local script = assert(scripts[end_state or "ready"], "no wrapper for the end state " .. tostring(end_state))
-    local path = vim.fn.tempname() .. "-slow-dotnet"
-    local file = assert(io.open(path, "w"))
-    file:write(string.format('#!/bin/sh\nif [ "$1" = "--list-sdks" ]; then\n%s\nfi\n%s\n', script[1], script[2]))
+    local plan = assert(steps[end_state or "ready"], "no wrapper for the end state " .. tostring(end_state))
+    -- The shell of each system: the steps, the lines before the `--list-sdks` steps, the line
+    -- between the two step lists, the file extension, and the line ending.
+    local shell
+    if is_windows then
+        -- ping waits with no console. timeout fails when stdin is not a console.
+        shell = {
+            commands = {
+                sleep = { string.format("ping -n %d 127.0.0.1 >nul", delay_s + 1) },
+                real = { string.format('"%s" %%*', real), "exit /b %errorlevel%" },
+                exit0 = { "exit /b 0" },
+                exit1 = { "exit /b 1" },
+            },
+            head = { "@echo off", 'if "%1"=="--list-sdks" goto sdks', "goto companion", ":sdks" },
+            middle = ":companion",
+            extension = ".cmd",
+            newline = "\r\n",
+        }
+    else
+        shell = {
+            commands = {
+                sleep = { string.format("sleep %d", delay_s) },
+                real = { string.format('exec %s "$@"', real) },
+                exit0 = { "exit 0" },
+                exit1 = { "exit 1" },
+            },
+            head = { "#!/bin/sh", 'if [ "$1" = "--list-sdks" ]; then' },
+            middle = "fi",
+            extension = "",
+            newline = "\n",
+        }
+    end
+    local lines = vim.list_extend({}, shell.head)
+    for _, step in ipairs(plan[1]) do
+        vim.list_extend(lines, shell.commands[step])
+    end
+    lines[#lines + 1] = shell.middle
+    for _, step in ipairs(plan[2]) do
+        vim.list_extend(lines, shell.commands[step])
+    end
+    local path = vim.fn.tempname() .. "-slow-dotnet" .. shell.extension
+    local file = assert(io.open(path, "wb"))
+    file:write(table.concat(lines, shell.newline) .. shell.newline)
     file:close()
     vim.uv.fs_chmod(path, 493)
     return path
@@ -354,6 +432,16 @@ function M.block_marks(child)
             return table.concat(lines, "\n")
         end)()]]
     )
+end
+
+-- Waits until the current buffer of the child has a Block mark on `line`. The mark can be at any
+-- position in the list of Block marks.
+---@param child nvim_suite.Child
+---@param line integer
+function M.await_block_mark(child, line)
+    M.eventually(M.block_mark_deadline_ms, "a Block mark on line " .. line, function()
+        return ("\n" .. M.block_marks(child)):find("\n" .. line .. ": ", 1, true) ~= nil
+    end)
 end
 
 -- The text that status() gives for the Active document of the child. The text is "nil" when status()
@@ -796,7 +884,7 @@ local function run_harness_setup()
             child,
             [[(function()
                 for _, plugin in pairs(require("lazy.core.config").plugins) do
-                    if plugin.dir == vim.uv.cwd() and plugin._.loaded then
+                    if vim.fs.normalize(plugin.dir) == vim.fs.normalize(vim.uv.cwd()) and plugin._.loaded then
                         return vim.g.loaded_fshttp == true
                     end
                 end

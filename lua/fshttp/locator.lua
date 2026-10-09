@@ -15,6 +15,9 @@ local relocate_delay_ms = 300
 -- The extmark ids of the marks on a Block, for each Script that a locate covered.
 ---@type table<integer, table<integer, true>>
 local located = {}
+-- The marks of the last paint for each Script, so that a change of the options paints them again.
+---@type table<integer, fshttp.BlockMark[]>
+local shown = {}
 ---@type table<integer, uv.uv_timer_t>
 local timers = {}
 -- The changedtick check of an answer covers each edit that comes while a locate waits.
@@ -49,13 +52,16 @@ local function set_mark(buf, row, title, runnable, id)
     local indent = vim.api.nvim_buf_call(buf, function()
         return vim.fn.indent(row + 1)
     end)
+    local options = require("fshttp").config().block_mark
     local sign_highlight = runnable and "FsHttpBlockMarkRun" or "FsHttpBlockMarkRefused"
     return vim.api.nvim_buf_set_extmark(buf, namespace, row, 0, {
         id = id,
-        virt_lines = { { { string.rep(" ", math.max(indent, 0)) .. title, "FsHttpBlockMark" } } },
+        virt_lines = options.virtual_line and {
+            { { string.rep(" ", math.max(indent, 0)) .. title, "FsHttpBlockMark" } },
+        } or nil,
         virt_lines_above = true,
-        sign_text = block_mark.glyph(title),
-        sign_hl_group = sign_highlight,
+        sign_text = options.sign and block_mark.glyph(title) or nil,
+        sign_hl_group = options.sign and sign_highlight or nil,
         invalidate = true,
         strict = false,
     })
@@ -90,7 +96,8 @@ local function paint(buf, marks)
         end
     end
     located[buf] = on_block
-    if line_one_count > 0 then
+    shown[buf] = marks
+    if line_one_count > 0 and require("fshttp").config().block_mark.virtual_line then
         show_line_one_marks(buf, line_one_count)
     end
 end
@@ -174,7 +181,23 @@ local function forget(buf)
         timers[buf] = nil
     end
     located[buf] = nil
+    shown[buf] = nil
     set_answer(buf, nil)
+end
+
+-- Paints each Block mark again with the current options. Only the ready and stopped states have
+-- a paint of their own. In each other state the Block marks wait for the next state change.
+function M.repaint()
+    local state = companion.state()
+    for buf, marks in pairs(shown) do
+        if vim.api.nvim_buf_is_loaded(buf) then
+            if state == "ready" then
+                paint(buf, marks)
+            elseif state == "stopped" then
+                paint_stopped(buf)
+            end
+        end
+    end
 end
 
 ---@param state fshttp.CompanionState
