@@ -110,7 +110,12 @@ let hasSdkAtFloor (floor: int) (listSdksOutput: string) : bool =
         |> versionMajor
         |> Option.exists (fun major -> major >= floor))
 
-type Diagnostic = { Message: string; Range: BlockRange }
+/// `LoadedFile` is the absolute path of the Loaded file that contains the diagnostic, or `None` for a
+/// Script diagnostic.
+type Diagnostic =
+    { Message: string
+      Range: BlockRange
+      LoadedFile: string option }
 
 /// Blank must not mean "no body", "captured bytes", and "we chose not to read it" at once.
 type CapturedBody =
@@ -191,13 +196,41 @@ let scriptFileNameFor (scheme: string) (fileName: string) : string option =
 /// Converts an FCS-native 1-based line to vscode's 0-based line. The columns already agree.
 let toVscodeLine (fcsLine: int) : int = fcsLine - 1
 
+/// The path of a Loaded file from the directory of the Script, with `/` between its parts. The path
+/// stays absolute when the Script has no file name, or when the two paths have no common root.
+/// The Lua client gives the same text.
+let loadedFilePath (scriptFileName: string option) (loadedFile: string) : string =
+    match scriptFileName with
+    | None -> loadedFile
+    | Some script ->
+        let parts (path: string) = path.Split([| '/'; '\\' |])
+        let scriptParts = parts script
+        let directory = scriptParts.[.. scriptParts.Length - 2]
+        let loaded = parts loadedFile
+
+        let common =
+            Seq.zip directory loaded.[.. loaded.Length - 2]
+            |> Seq.takeWhile (fun (a, b) -> a = b)
+            |> Seq.length
+
+        if common = 0 then
+            loadedFile
+        else
+            Array.append (Array.replicate (directory.Length - common) "..") loaded.[common..]
+            |> String.concat "/"
+
 /// Shifts the column to 1-based, so the printed `(line,col)` prefix matches vscode's Ln/Col
 /// readout.
 /// Never an editor diagnostic, because per-block isolation can flag source that is correct in the
 /// whole file.
-let formatCompileError (diagnostics: Diagnostic list) : string =
+let formatCompileError (scriptFileName: string option) (diagnostics: Diagnostic list) : string =
     let formatOne (d: Diagnostic) =
-        sprintf "(%d,%d) %s" d.Range.StartLine (d.Range.StartCol + 1) d.Message
+        let path =
+            d.LoadedFile
+            |> Option.map (loadedFilePath scriptFileName)
+            |> Option.defaultValue ""
+
+        sprintf "%s(%d,%d) %s" path d.Range.StartLine (d.Range.StartCol + 1) d.Message
 
     let body = diagnostics |> List.map formatOne |> String.concat "\n"
     sprintf "Compile error:\n%s" body

@@ -60,11 +60,12 @@ local M = {}
 ---@field highlights fshttp.Highlight[]
 ---@field hints { line: integer, text: string }[] a virtual line below each 1-based line
 ---@field image fshttp.ImageBody? set when the client can show the image body
----@field positions table<integer, fshttp.ScriptPosition>? the position of each `(line,col)` line, by 1-based line
+---@field positions table<integer, fshttp.CompileErrorPosition>? the position of each `(line,col)` line, by 1-based line
 
----@class fshttp.ScriptPosition
+---@class fshttp.CompileErrorPosition
 ---@field line integer 1-based
 ---@field col integer 0-based
+---@field loaded_file string? the absolute path of the Loaded file, or nil for a position in the Script
 
 local open_glyph = "▾"
 local closed_glyph = "▸"
@@ -370,20 +371,66 @@ function M.runtime_error(message)
     return view
 end
 
+---@param path string
+---@return string[]
+local function path_parts(path)
+    local parts = {}
+    for part in (path .. "/"):gmatch("([^/\\]*)[/\\]") do
+        parts[#parts + 1] = part
+    end
+    return parts
+end
+
+-- The VSCode Response viewer gives the same path.
+---@param script_file_name string? nil when the Script has no file name
+---@param loaded_file string
+---@return string path relative to the directory of the Script, or absolute when the two paths have no common root
+function M.loaded_file_path(script_file_name, loaded_file)
+    if not script_file_name then
+        return loaded_file
+    end
+    local directory = path_parts(script_file_name)
+    directory[#directory] = nil
+    local loaded = path_parts(loaded_file)
+    local common = 0
+    while common < #directory and common < #loaded - 1 and directory[common + 1] == loaded[common + 1] do
+        common = common + 1
+    end
+    if common == 0 then
+        return loaded_file
+    end
+    local parts = {}
+    for _ = common + 1, #directory do
+        parts[#parts + 1] = ".."
+    end
+    for i = common + 1, #loaded do
+        parts[#parts + 1] = loaded[i]
+    end
+    return table.concat(parts, "/")
+end
+
 -- The view must match the Compile error text of the VSCode Response viewer, with no trailing spaces.
----@param diagnostics { message: string, range: { start_line: integer, start_col: integer } }[]
+---@param diagnostics { message: string, range: { start_line: integer, start_col: integer }, loaded_file: string? }[]
+---@param script_file_name string? nil when the Script has no file name
 ---@return fshttp.ResponseView
-function M.compile_error(diagnostics)
+function M.compile_error(diagnostics, script_file_name)
     local view = new_view()
     view.winbar = statusline({
         { "Compile error", "FsHttpResponseError" },
-        { "  <CR> on a (line,col) moves to it in the script", "FsHttpResponseDetail" },
+        { "  <CR> on a (line,col) moves to it", "FsHttpResponseDetail" },
     })
     add(view, { { "Compile error:", "FsHttpResponseError" } })
     view.positions = {}
     for _, diagnostic in ipairs(diagnostics) do
         local position = string.format("(%d,%d)", diagnostic.range.start_line, diagnostic.range.start_col + 1)
-        view.positions[#view.lines + 1] = { line = diagnostic.range.start_line, col = diagnostic.range.start_col }
+        if diagnostic.loaded_file then
+            position = M.loaded_file_path(script_file_name, diagnostic.loaded_file) .. position
+        end
+        view.positions[#view.lines + 1] = {
+            line = diagnostic.range.start_line,
+            col = diagnostic.range.start_col,
+            loaded_file = diagnostic.loaded_file,
+        }
         for _, line in ipairs(M.split_lines(position .. " " .. diagnostic.message)) do
             add(view, { { (line:gsub(" +$", "")) } })
         end

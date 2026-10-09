@@ -59,7 +59,8 @@ let private decodeRunEnvelope (json: obj) : RunEnvelope =
         diagnostics
         |> Array.map (fun d ->
             { Message = unbox<string> (d?message: obj)
-              Range = toBlockRange (d?range: obj) })
+              Range = toBlockRange (d?range: obj)
+              LoadedFile = tryUnbox<string> (d?loadedFile: obj) })
         |> Array.toList
         |> CompileErrorEnvelope
     | "runtimeError" -> RuntimeErrorEnvelope(unbox<string> (json?message: obj))

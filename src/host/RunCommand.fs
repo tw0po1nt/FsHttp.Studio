@@ -99,7 +99,8 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
                       TotalMs = totalMs }
 
                 ResponseViewer.post (resultUpdate request timing response)
-            | RunCompileError diagnostics -> ResponseViewer.post (errorUpdate (formatCompileError diagnostics))
+            | RunCompileError diagnostics ->
+                ResponseViewer.post (errorUpdate (formatCompileError scriptFileName diagnostics))
             | RunRuntimeError message -> ResponseViewer.post (errorUpdate (sprintf "Runtime error: %s" message))
             | RunProtocolError message -> ResponseViewer.post (errorUpdate message)
             | RunRefused(code, name) ->

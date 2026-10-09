@@ -96,13 +96,32 @@ let private compileError =
               { StartLine = 5
                 StartCol = 8
                 EndLine = 5
-                EndCol = 15 } }
+                EndCol = 15 }
+            LoadedFile = None }
           { Message = escapes
             Range =
               { StartLine = 7
                 StartCol = 0
                 EndLine = 9
-                EndCol = 1 } } ]
+                EndCol = 1 }
+            LoadedFile = None } ]
+
+let private compileErrorLoadedFile =
+    CompileError
+        [ { Message = "Setup failed to evaluate: The value or constructor 'dexId' is not defined."
+            Range =
+              { StartLine = 3
+                StartCol = 4
+                EndLine = 3
+                EndCol = 9 }
+            LoadedFile = Some "/scripts/lib/helpers.fsx" }
+          { Message = "Setup failed to evaluate: This expression was expected to have type 'int'."
+            Range =
+              { StartLine = 1
+                StartCol = 18
+                EndLine = 1
+                EndCol = 30 }
+            LoadedFile = Some "/shared/inner.fsx" } ]
 
 /// `frames.bin` contains the frame of each envelope Golden fixture in this order.
 let private goldenFixtures =
@@ -118,6 +137,7 @@ let private goldenFixtures =
       "ok-http-error-response", encode (outcomeToWire httpErrorResponse)
       "ok-not-captured", encode (outcomeToWire notCaptured)
       "compile-error", encode (outcomeToWire compileError)
+      "compile-error-loaded-file", encode (outcomeToWire compileErrorLoadedFile)
       "runtime-error", encode (outcomeToWire (RuntimeError escapes))
       "error", respond (encode {| tag = "notATag" |}) ]
 

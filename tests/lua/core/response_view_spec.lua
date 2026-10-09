@@ -253,8 +253,23 @@ describe("fshttp.response_view", function()
             { message = "three", range = { start_line = 20, start_col = 0 } },
         })
         local plain = view.winbar:gsub("%%#[^#]*#", ""):gsub("%%%*", "")
-        assert.equal("Compile error  <CR> on a (line,col) moves to it in the script", plain)
+        assert.equal("Compile error  <CR> on a (line,col) moves to it", plain)
         assert.same({ [2] = { line = 12, col = 4 }, [4] = { line = 20, col = 0 } }, view.positions)
+    end)
+
+    it("gives the position of a Loaded file line its Loaded file", function()
+        local view = response_view.compile_error({
+            {
+                message = "In the Loaded file.",
+                range = { start_line = 3, start_col = 8 },
+                loaded_file = "/scripts/api/lib/helpers.fsx",
+            },
+            { message = "In the Script.", range = { start_line = 4, start_col = 0 } },
+        }, "/scripts/api/probe.fsx")
+        assert.same({
+            [2] = { line = 3, col = 8, loaded_file = "/scripts/api/lib/helpers.fsx" },
+            [3] = { line = 4, col = 0 },
+        }, view.positions)
     end)
 
     it("shows a Refused Run for a value that another Block binds with its title and its detail", function()

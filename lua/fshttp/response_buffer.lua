@@ -191,7 +191,7 @@ function M.show(view)
 end
 
 ---@param lnum integer
----@return fshttp.ScriptPosition? position nil when the line shows no Compile error position
+---@return fshttp.CompileErrorPosition? position nil when the line shows no Compile error position
 function M.position_at(lnum)
     return current_view and current_view.positions and current_view.positions[lnum]
 end

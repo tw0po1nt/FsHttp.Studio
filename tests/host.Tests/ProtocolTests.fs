@@ -53,7 +53,10 @@ let toVscodeLineTests =
 
 [<Tests>]
 let formatCompileErrorTests =
-    let diag message r = { Message = message; Range = r }
+    let diag message r =
+        { Message = message
+          Range = r
+          LoadedFile = None }
 
     testList
         "formatCompileError"
@@ -61,7 +64,7 @@ let formatCompileErrorTests =
               let d = diag "The value or constructor 'auth' is not defined." (range 3 8 3 17)
 
               Expect.equal
-                  (formatCompileError [ d ])
+                  (formatCompileError None [ d ])
                   "Compile error:\n(3,9) The value or constructor 'auth' is not defined."
                   "col 8 (0-based) prints as 9, matching vscode's Ln/Col"
           }
@@ -70,7 +73,7 @@ let formatCompileErrorTests =
               let d = diag "The namespace or module 'FsHttp' is not defined." (range 1 0 1 0)
 
               Expect.equal
-                  (formatCompileError [ d ])
+                  (formatCompileError None [ d ])
                   "Compile error:\n(1,1) The namespace or module 'FsHttp' is not defined."
                   "top-of-script anchor prints as 1-based (1,1)"
           }
@@ -80,7 +83,7 @@ let formatCompileErrorTests =
               let d2 = diag "Second error." (range 5 0 5 6)
 
               Expect.equal
-                  (formatCompileError [ d1; d2 ])
+                  (formatCompileError None [ d1; d2 ])
                   "Compile error:\n(2,5) First error.\n(5,1) Second error."
                   "one header, one line per diagnostic"
           } ]

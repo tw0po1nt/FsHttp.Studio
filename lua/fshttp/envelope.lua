@@ -205,6 +205,7 @@ codecs.compileError = {
                 return {
                     message = field(diagnostic, "message", "string"),
                     range = decode_range(field(diagnostic, "range", "object")),
+                    loaded_file = optional(diagnostic, "loadedFile", "string"),
                 }
             end),
         }
@@ -212,6 +213,7 @@ codecs.compileError = {
     encode = function(envelope)
         local diagnostics = map(envelope.diagnostics, function(diagnostic)
             return json.object({
+                { "loadedFile", diagnostic.loaded_file },
                 { "message", diagnostic.message },
                 { "range", encode_range(diagnostic.range) },
             })

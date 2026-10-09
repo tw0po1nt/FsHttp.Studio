@@ -14,6 +14,7 @@
     <Compile Include="CursorRuleGoldenTests.fs" />
     <Compile Include="SdkFloorGoldenTests.fs" />
     <Compile Include="StatusTextGoldenTests.fs" />
+    <Compile Include="CompileErrorTextGoldenTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

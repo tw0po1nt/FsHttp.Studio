@@ -47,8 +47,9 @@ end
 ---@param outcome table?
 ---@param decode_error string?
 ---@param total_ms number
+---@param script_file_name string? the scriptFileName of the run envelope
 ---@return fshttp.ResponseView
-local function view_for(outcome, decode_error, total_ms)
+local function view_for(outcome, decode_error, total_ms, script_file_name)
     yank.remember(nil)
     if outcome == nil then
         return response_view.message(decode_error or refusals.companion_stopped.detail)
@@ -61,7 +62,7 @@ local function view_for(outcome, decode_error, total_ms)
             require("fshttp.image_placement").unsupported_reason
         )
     elseif outcome.tag == "compileError" then
-        return response_view.compile_error(outcome.diagnostics)
+        return response_view.compile_error(outcome.diagnostics, script_file_name)
     elseif outcome.tag == "runtimeError" then
         return response_view.runtime_error(outcome.message)
     elseif outcome.tag == "refused" then
@@ -89,7 +90,7 @@ local function start_run(buf, source, block_index)
             return
         end
         local total_ms = (vim.uv.hrtime() - started) / 1e6
-        local ok, view = pcall(view_for, outcome, decode_error, total_ms)
+        local ok, view = pcall(view_for, outcome, decode_error, total_ms, run_envelope.script_file_name)
         response_buffer.show(ok and view or response_view.message(tostring(view)))
     end)
     if not sent then

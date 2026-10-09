@@ -271,7 +271,7 @@ T["a Compile error shows as text, <CR> and <Plug>(FsHttpJump) move to its positi
         return window ~= nil and (shown.lines[1] or "") == "Compile error:" and has_text(shown.lines, "(12,19) ")
     end)
     local window = assert(only_window(snapshot))
-    assert.equal("Compile error  <CR> on a (line,col) moves to it in the script", window.winbar)
+    assert.equal("Compile error  <CR> on a (line,col) moves to it", window.winbar)
     assert.equal(true, has_text(snapshot.lines, "expected to have type"), vim.inspect(snapshot.lines))
     for _, line in ipairs(snapshot.lines or {}) do
         assert.equal(false, line:match(" $") ~= nil, "a trailing space on: " .. line)
@@ -321,19 +321,14 @@ T["a Compile error position past the end of the Script gives a WARN notice, and 
         end
     end
 
-    -- A Script of five lines puts line 12 past its end, as a position from a loaded file can be.
+    -- A Script of five lines puts line 12 past its end.
     harness.lua_get(child, "vim.api.nvim_buf_set_lines(vim.fn.bufnr(...), 5, -1, false, {})", { fixture })
     local count = #harness.notices(child)
     harness.lua_get(child, "vim.api.nvim_set_current_win(...)", { window.id })
     harness.cmd(child, string.format("call cursor(%d, 1)", position_line))
     harness.type_keys(child, "<CR>")
 
-    expect_notice(
-        child,
-        count,
-        vim.log.levels.WARN,
-        "The position is past the end of the script. The Compile error can be in a loaded file."
-    )
+    expect_notice(child, count, vim.log.levels.WARN, "The position is past the end of the script.")
     assert.equal(window.id, harness.lua_get(child, "vim.api.nvim_get_current_win()"))
     assert.same({ position_line, 0 }, harness.lua_get(child, "vim.api.nvim_win_get_cursor(0)"))
 
@@ -342,6 +337,154 @@ T["a Compile error position past the end of the Script gives a WARN notice, and 
         [[vim.api.nvim_buf_call(vim.fn.bufnr(...), function() vim.cmd("silent edit!") end)]],
         { fixture }
     )
+end
+
+local loaded_file_block_line = 11
+local loaded_file_position = "loaded/broken.fsx(3,19) "
+
+---@param snapshot nvim_suite.ResponseBuffer
+---@return integer?
+local function loaded_file_position_line(snapshot)
+    for i, line in ipairs(snapshot.lines or {}) do
+        if line:sub(1, #loaded_file_position) == loaded_file_position then
+            return i
+        end
+    end
+end
+
+---@param child nvim_suite.Child
+---@param path string
+---@return integer window, integer position_line
+local function run_loaded_file_error(child, path)
+    open_script(child, path, { loaded_file_block_line })
+    harness.run_at(child, loaded_file_block_line)
+    local snapshot = eventually_response(child, "the Compile error text at " .. loaded_file_position, function(shown)
+        return only_window(shown) ~= nil
+            and (shown.lines[1] or "") == "Compile error:"
+            and loaded_file_position_line(shown) ~= nil
+    end)
+    assert.equal(true, has_text(snapshot.lines, "expected to have type"), vim.inspect(snapshot.lines))
+    return assert(only_window(snapshot)).id, assert(loaded_file_position_line(snapshot))
+end
+
+-- On Windows, FCS gives the path of a Loaded file with backslashes.
+---@param child nvim_suite.Child
+---@param subject string
+---@param predicate fun(state: { name: string, cursor: integer[], window: integer }): boolean
+---@return { name: string, cursor: integer[], window: integer, buf: integer }
+local function eventually_in_loaded_file(child, subject, predicate)
+    local state
+    local ok, err = pcall(harness.eventually, harness.notice_deadline_ms, subject, function()
+        state = harness.lua_get(
+            child,
+            [[{ name = vim.fs.normalize(vim.api.nvim_buf_get_name(0)), cursor = vim.api.nvim_win_get_cursor(0),
+                window = vim.api.nvim_get_current_win(), buf = vim.api.nvim_get_current_buf() }]]
+        )
+        return predicate(state)
+    end)
+    if not ok then
+        local notices = harness.notices(child)
+        error(string.format("%s\nlast state: %s\nnotices: %s", err, vim.inspect(state), vim.inspect(notices)), 0)
+    end
+    return state
+end
+
+---@param child nvim_suite.Child
+---@param count integer the number of notices before the command
+---@param prefix string
+---@param suffix string
+local function expect_warn_notice_around(child, count, prefix, suffix)
+    local ok, err = pcall(
+        harness.eventually,
+        harness.notice_deadline_ms,
+        "the notice: " .. prefix .. "…" .. suffix,
+        function()
+            for _, notice in ipairs(harness.notices_after(child, count)) do
+                if
+                    notice.level == vim.log.levels.WARN
+                    and vim.startswith(notice.message, prefix)
+                    and ends_with(notice.message, suffix)
+                then
+                    return true
+                end
+            end
+            return false
+        end
+    )
+    if not ok then
+        error(string.format("%s\nnotices: %s", err, vim.inspect(harness.notices_after(child, count))), 0)
+    end
+end
+
+---@param child nvim_suite.Child
+---@param window integer
+---@param position_line integer
+local function press_enter_on(child, window, position_line)
+    harness.lua_get(child, "vim.api.nvim_set_current_win(...)", { window })
+    harness.cmd(child, string.format("call cursor(%d, 1)", position_line))
+    harness.type_keys(child, "<CR>")
+end
+
+T["a Compile error in a Loaded file names its path, and <CR> opens the Loaded file at its position"] = function()
+    local child = harness.harness_setup_child()
+    local loaded_file = vim.fs.normalize(harness.ui_fixture("loaded/broken.fsx"))
+    local window, position_line = run_loaded_file_error(child, harness.ui_fixture("loaded-file-error.fsx"))
+
+    press_enter_on(child, window, position_line)
+    local loaded = eventually_in_loaded_file(child, "the cursor in the Loaded file at (3,19)", function(state)
+        return state.name == loaded_file and vim.deep_equal(state.cursor, { 3, 18 })
+    end)
+
+    harness.cmd(child, "call cursor(1, 1)")
+    press_enter_on(child, window, position_line)
+    eventually_in_loaded_file(child, "the cursor back in the same Loaded file window", function(state)
+        return state.window == loaded.window and vim.deep_equal(state.cursor, { 3, 18 })
+    end)
+
+    -- A Loaded file of one line puts line 3 past its end.
+    harness.lua_get(child, "vim.api.nvim_buf_set_lines(..., 1, -1, false, {})", { loaded.buf })
+    local count = #harness.notices(child)
+    press_enter_on(child, window, position_line)
+    expect_notice(
+        child,
+        count,
+        vim.log.levels.WARN,
+        string.format("The position is past the end of the loaded file %s.", loaded_file)
+    )
+    assert.equal(window, harness.lua_get(child, "vim.api.nvim_get_current_win()"))
+    assert.same({ position_line, 0 }, harness.lua_get(child, "vim.api.nvim_win_get_cursor(0)"))
+
+    harness.lua_get(child, [[vim.api.nvim_buf_call(..., function() vim.cmd("silent edit!") end)]], { loaded.buf })
+    harness.lua_get(child, "vim.api.nvim_win_close(..., true)", { loaded.window })
+end
+
+T["a Compile error in a Loaded file that no longer exists gives a WARN notice, and <CR> keeps the cursor"] = function()
+    local child = harness.harness_setup_child()
+    -- The Windows temp path has an 8.3 short name, which FSI expands in the path of a Loaded file.
+    local directory = string.format("%s/out/nvim-tests/loaded-file-%d", vim.uv.cwd(), vim.uv.hrtime())
+    vim.fn.mkdir(directory .. "/loaded", "p")
+    for _, name in ipairs({ "loaded-file-error.fsx", "loaded/broken.fsx" }) do
+        vim.fn.writefile(vim.fn.readfile(harness.ui_fixture(name), "b"), directory .. "/" .. name, "b")
+    end
+    local script
+    local ok, err = pcall(function()
+        local window, position_line = run_loaded_file_error(child, directory .. "/loaded-file-error.fsx")
+        script = harness.lua_get(child, "vim.api.nvim_get_current_buf()")
+
+        vim.fn.delete(directory .. "/loaded/broken.fsx")
+        local count = #harness.notices(child)
+        press_enter_on(child, window, position_line)
+        expect_warn_notice_around(child, count, "The loaded file ", "/loaded/broken.fsx does not exist.")
+        assert.equal(window, harness.lua_get(child, "vim.api.nvim_get_current_win()"))
+        assert.same({ position_line, 0 }, harness.lua_get(child, "vim.api.nvim_win_get_cursor(0)"))
+    end)
+    if script then
+        harness.lua_get(child, "vim.api.nvim_buf_delete(..., { force = true })", { script })
+    end
+    vim.fn.delete(directory, "rf")
+    if not ok then
+        error(err, 0)
+    end
 end
 
 T["a Run of the loop Block gives a WARN notice and opens no Response buffer"] = function()

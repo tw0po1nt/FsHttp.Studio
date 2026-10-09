@@ -72,6 +72,13 @@ describe("fshttp.envelope", function()
         assert.equal(escapes, envelope.decode(read("compile-error.json")).diagnostics[2].message)
     end)
 
+    it("reads the Loaded file of a diagnostic, and no Loaded file for a Script diagnostic", function()
+        local loaded = envelope.decode(read("compile-error-loaded-file.json")).diagnostics
+        assert.equal("/scripts/lib/helpers.fsx", loaded[1].loaded_file)
+        assert.equal("/shared/inner.fsx", loaded[2].loaded_file)
+        assert.is_nil(envelope.decode(read("compile-error.json")).diagnostics[1].loaded_file)
+    end)
+
     it("keeps the header order of an ok envelope", function()
         local ok = envelope.decode(read("ok.json"))
         assert.same({

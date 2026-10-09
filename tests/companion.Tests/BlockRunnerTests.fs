@@ -8,6 +8,8 @@ open System.IO
 open System.Net.Http
 open System.Text.Json
 open Expecto
+open FSharp.Compiler.Diagnostics
+open FSharp.Compiler.Text
 open Companion.BlockRunner
 open Companion.RequestCapture
 open Companion.Tests.TestServer
@@ -617,6 +619,124 @@ let tests =
                           (d.Message.Contains "http")
                           "a Setup diagnostic's message must not name 'http', which is the symptom of the discarded-diagnostics defect rather than the true fault"
               | other -> failtestf "expected compileError, got %A" other
+          }
+
+          test "a Loaded file error keeps its path and its FCS range, and a Script error has no Loaded file" {
+              let dir =
+                  Path.Combine(Path.GetTempPath(), sprintf "fshttp-studio-loaded-%s" (Guid.NewGuid().ToString("N")))
+
+              Directory.CreateDirectory(Path.Combine(dir, "lib")) |> ignore
+
+              try
+                  let helpersPath = Path.Combine(dir, "lib", "helpers.fsx")
+                  let innerPath = Path.Combine(dir, "lib", "inner.fsx")
+                  let scriptPath = Path.Combine(dir, "probe.fsx")
+                  File.WriteAllText(innerPath, "let innerValue: string = 42\n")
+                  File.WriteAllText(helpersPath, "#load \"inner.fsx\"\n\nlet helperValue: int = \"one\"\n")
+
+                  let block = "http {\n    GET \"https://example.com\"\n}\n"
+
+                  // A failed `#load` stops the interaction, so FSI never reports a Loaded file
+                  // error and a Script error in one Run.
+                  match
+                      runDirectUnbounded
+                          (script ("#I __SOURCE_DIRECTORY__\n#load \"lib/helpers.fsx\"\n\n" + block))
+                          0
+                          (Some scriptPath)
+                  with
+                  | CompileError diagnostics ->
+                      let inFile file =
+                          diagnostics |> List.filter (fun d -> d.LoadedFile = Some file)
+
+                      match inFile helpersPath, inFile innerPath with
+                      | [ helper ], [ inner ] when diagnostics.Length = 2 ->
+                          Expect.equal
+                              (helper.Range.StartLine, helper.Range.StartCol)
+                              (3, 23)
+                              "the Loaded file error keeps the FCS position in the Loaded file"
+
+                          Expect.equal
+                              (inner.Range.StartLine, inner.Range.StartCol)
+                              (1, 25)
+                              "a nested Loaded file error names the innermost Loaded file"
+
+                          for d in [ helper; inner ] do
+                              Expect.stringStarts
+                                  d.Message
+                                  "Setup failed to evaluate: "
+                                  "a Loaded file is part of the Setup"
+                      | _ -> failtestf "expected one error in each Loaded file, got %A" diagnostics
+                  | other -> failtestf "expected compileError, got %A" other
+
+                  let scriptError = script ("let scriptValue: int = \"two\"\n\n" + block)
+
+                  for scriptFileName in [ Some scriptPath; None ] do
+                      match runDirectUnbounded scriptError 0 scriptFileName with
+                      | CompileError [ d ] ->
+                          Expect.equal
+                              d.LoadedFile
+                              None
+                              (sprintf "a Script error has no Loaded file (%A)" scriptFileName)
+
+                          Expect.equal
+                              (d.Range.StartLine, d.Range.StartCol)
+                              (4, 23)
+                              "the Script error keeps its position"
+                      | other -> failtestf "expected one compileError diagnostic, got %A" other
+              finally
+                  Directory.Delete(dir, true)
+          }
+
+          test "a diagnostic with a placeholder file name has no Loaded file" {
+              let diagnostic fileName =
+                  FSharpDiagnostic.Create(
+                      FSharpDiagnosticSeverity.Error,
+                      "message",
+                      0,
+                      Range.mkRange fileName (Position.mkPos 1 0) (Position.mkPos 1 1)
+                  )
+
+              let loadedFile = Path.GetFullPath(Path.Combine("scripts", "lib", "helpers.fsx"))
+              let scriptPath = Path.GetFullPath(Path.Combine("scripts", "probe.fsx"))
+
+              Expect.isNone
+                  (loadedFileOf
+                      (Some scriptPath)
+                      (FSharpDiagnostic.Create(FSharpDiagnosticSeverity.Error, "message", 0, Range.range0)))
+                  "a diagnostic at range0 is in the Script"
+
+              Expect.isNone (loadedFileOf (Some scriptPath) (diagnostic "startup")) "a relative name is in the Script"
+              Expect.isNone (loadedFileOf (Some scriptPath) (diagnostic scriptPath)) "the Script name is in the Script"
+              Expect.isNone (loadedFileOf None (diagnostic "input.fsx")) "the FSI default name is in the Script"
+
+              Expect.equal
+                  (loadedFileOf (Some scriptPath) (diagnostic loadedFile))
+                  (Some loadedFile)
+                  "a full path names a Loaded file"
+          }
+
+          test "the wire keeps the Loaded file of a diagnostic, and omits it for a Script diagnostic" {
+              let range: Companion.BlockLocator.BlockRange =
+                  { StartLine = 3
+                    StartCol = 4
+                    EndLine = 3
+                    EndCol = 9 }
+
+              let outcome =
+                  CompileError
+                      [ { Message = "in the Loaded file"
+                          Range = range
+                          LoadedFile = Some "/scripts/lib/helpers.fsx" }
+                        { Message = "in the Script"
+                          Range = range
+                          LoadedFile = None } ]
+
+              let bytes = Companion.Envelope.encode (outcomeToWire outcome)
+              use doc = JsonDocument.Parse bytes
+
+              let diagnostics = doc.RootElement.GetProperty "diagnostics"
+              Expect.isFalse (fst (diagnostics.[1].TryGetProperty "loadedFile")) "a Script diagnostic has no loadedFile"
+              Expect.equal (wireToOutcome doc.RootElement) outcome "the wire keeps each Loaded file"
           }
 
           test "a block in a for-loop body is refused with its code, and sends nothing" {

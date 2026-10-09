@@ -7,7 +7,7 @@ module CompileErrorTests
 open Fable.Mocha
 
 let private fixtureFileName = "compile-error.fsx"
-/// Blocks in `compile-error.fsx`. Must match the fixture.
+/// The Block count of each fixture. Must match each fixture.
 let private blockCount = 1
 /// 1-based line the fixture marks as the break-target. Must match `compile-error.fsx`.
 let private brokenLine = 12
@@ -116,7 +116,43 @@ let private compileErrorNamesItsSource =
         return! Harness.withTeardown "the fixture buffer restore" restore body
     }
 
+let private loadedFileFixtureFileName = "loaded-file-error.fsx"
+
+/// The path from the fixture directory and the 1-based position of the type error in the Loaded
+/// file. Must match the fixture.
+let private loadedFilePosition = "loaded/broken.fsx(3,19)"
+
+let private tryCompileErrorInLoadedFile () =
+    Checks.viewerSatisfies (fun dom ->
+        dom.RootText.Contains Harness.compileErrorLabel
+        && dom.RootText.Contains loadedFilePosition
+        && dom.RootText.Contains compilerMessageFragment
+        && dom.StatusLineText = ""
+        && dom.HeadersText = ""
+        && not (dom.RootText.Contains Harness.runtimeErrorLabel))
+
+/// The Loaded file on disk does not compile, so the Check edits no buffer.
+let private compileErrorNamesItsLoadedFile =
+    async {
+        do! Checks.openFixtureAsSoleTab loadedFileFixtureFileName
+
+        do!
+            Harness.eventuallyObserved Harness.LensAppearanceDeadlineMs "a Run request lens above the block" (fun () ->
+                Checks.tryOnlyLensTitle blockCount Checks.lensTitle)
+
+        do! Harness.eventually Harness.LensAppearanceDeadlineMs "a click on the block's Run request lens" tryClickLens
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "a compile error that names the Loaded file and its position in the viewer"
+                tryCompileErrorInLoadedFile
+    }
+
 let tests =
     testList
         "Compile Error names its source"
-        [ testCaseAsync "viewer reports the compile error at the line the check broke" compileErrorNamesItsSource ]
+        [ testCaseAsync "viewer reports the compile error at the line the check broke" compileErrorNamesItsSource
+          testCaseAsync
+              "viewer names the Loaded file of a compile error, with its path from the Script"
+              compileErrorNamesItsLoadedFile ]

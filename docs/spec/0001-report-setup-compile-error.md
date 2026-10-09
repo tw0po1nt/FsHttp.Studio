@@ -84,6 +84,10 @@ shorten a compiler diagnostic.
 Apply this wording to every Setup compile error, including a diagnostic that the companion
 moved.
 
+A Loaded file is part of the Setup, so a diagnostic from a Loaded file also gets this wording. The
+diagnostic keeps its FCS range in the Loaded file. The `loadedFile` field of the diagnostic gives
+the absolute path of the Loaded file. A diagnostic in the Script has no `loadedFile` field.
+
 ### 4. Scope: the evaluation of the Setup only.
 
 The evaluation of the block uses a different FCS entry point. That entry point does not have this
