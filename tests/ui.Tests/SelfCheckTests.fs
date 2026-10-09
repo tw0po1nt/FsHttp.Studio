@@ -4,7 +4,7 @@ open Fable.Mocha
 
 let tests =
     testList
-        "setup self-check"
+        "Harness setup self-check"
         [ testCase "proven-live workbench and timing summary" (fun () ->
               let state = Harness.provenLiveState ()
 
@@ -16,9 +16,9 @@ let tests =
               Assert.isTrue state.CompanionReady "the companion reported ready"
               Assert.isTrue (Harness.isProvenLive ()) "the before hook reached a proven-live workbench"
 
-              // Setup emits the table as its last act, so this observes a write that already
-              // happened rather than performing the one it verifies.
-              Assert.isTrue (Harness.timingSummaryWasEmitted ()) "setup emitted the timing table"
+              // Harness setup emits the table as its last act, so this observes a write that
+              // already happened rather than performing the one it verifies.
+              Assert.isTrue (Harness.timingSummaryWasEmitted ()) "Harness setup emitted the timing table"
 
               if Proc.env "GITHUB_STEP_SUMMARY" "" <> "" then
                   Assert.isTrue

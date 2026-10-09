@@ -1,4 +1,4 @@
-// Shared harness for the UI test suite: ExTester setup, budgets, and the sanctioned wait
+// Shared harness for the UI test suite: Harness setup, budgets, and the sanctioned wait
 // combinator. Checks import this module instead of inventing their own wait loops or budgets.
 module Harness
 
@@ -17,11 +17,12 @@ let ToastDeadlineMs = 15_000
 
 let PostReloadRecoveryDeadlineMs = 60_000
 
-/// Wait for the companion to report `ready`, paid once in setup. It is the longest wait the
-/// harness makes, and deliberately so: the companion's first response costs a `dotnet --list-sdks`
-/// probe, a .NET process start, and FCS's first parse. On a slow runner that cold start alone has
-/// been measured above 45 s. Setup absorbs it inside `SetupBudgetMs` so no product check pays it.
-/// A check that waits on cold start measures the runner rather than the product.
+/// Wait for the companion to report `ready`, paid once in Harness setup. It is the longest wait
+/// the harness makes, and deliberately so: the companion's first response costs a
+/// `dotnet --list-sdks` probe, a .NET process start, and FCS's first parse. On a slow runner that
+/// cold start alone has been measured above 45 s. Harness setup absorbs it inside
+/// `HarnessSetupBudgetMs` so no product check pays it. A check that waits on cold start measures
+/// the runner rather than the product.
 let CompanionReadyDeadlineMs = 120_000
 
 /// How long a claim that the editor paints *no* lens must stay true before it is believed. An
@@ -35,14 +36,14 @@ let LensAbsenceSettleMs = 3_000.0
 let StatusStabilitySettleMs = 3_000.0
 
 /// Green-path budget for the `before` hook through proven-live.
-let SetupBudgetMs = 180_000
+let HarnessSetupBudgetMs = 180_000
 
 /// Green-path budget for one check, first action through last assertion.
 let PerCheckBudgetMs = 45_000
 
-/// Green-path budget for the suite, excluding setup. Deliberately far tighter than the number of
-/// checks times `PerCheckBudgetMs`: no green run comes near the per-check ceiling, and a budget
-/// that summed the ceilings would catch nothing. Raised when the document-aware status-bar checks
+/// Green-path budget for the suite, excluding Harness setup. Deliberately far tighter than the
+/// number of checks times `PerCheckBudgetMs`: no green run comes near the per-check ceiling, and
+/// a budget that summed the ceilings would catch nothing. Raised when the document-aware status-bar checks
 /// joined the suite; a green run still sits well under this ceiling on a slow runner.
 let SuiteBudgetMs = 300_000
 
@@ -107,8 +108,8 @@ let companionStoppedText = Refusals.companionStopped.Detail
 let private extensionStatusPrefix = "FsHttp.Studio"
 
 /// Companion lifecycle labels that mean the companion is not Ready yet. A Ready status names the
-/// script view instead (`no requests found`, `2 requests`, …), so setup and post-reload waits
-/// accept any `FsHttp.Studio:` item that is not one of these.
+/// script view instead (`no requests found`, `2 requests`, …), so Harness setup and post-reload
+/// waits accept any `FsHttp.Studio:` item that is not one of these.
 ///
 /// Only `companion stopped` is asserted end to end, by the companion-death check, because it is
 /// the only one of the three the suite can reach on purpose. `starting…` was measured as a window
@@ -118,18 +119,18 @@ let private extensionStatusPrefix = "FsHttp.Studio"
 let private companionNotReadyBodies =
     [ "starting…"; ".NET SDK not found"; "companion stopped" ]
 
-let private fixtureTabSuffix = "setup.fsx"
+let private fixtureTabSuffix = "harness-setup.fsx"
 let private fixtureFolderName = "fixtures"
-let private setupPhaseName = "Harness setup"
+let private harnessSetupPhaseName = "Harness setup"
 let private suitePhaseName = "Suite"
 
 /// Retry spacing between polls. Deliberately not a parameter: the deadline is what a check tunes,
 /// and a per-call interval would put a magic number in every check body.
 let PollIntervalMs = 250
 
-/// Which of the four proven-live conditions setup has actually confirmed. Each field is written
-/// the moment its own tell is true, so a setup that fails partway leaves a record naming the tell
-/// that never arrived rather than an all-or-nothing verdict.
+/// Which of the four proven-live conditions Harness setup has actually confirmed. Each field is
+/// written the moment its own tell is true, so a Harness setup that fails partway leaves a record
+/// naming the tell that never arrived rather than an all-or-nothing verdict.
 type ProvenLive =
     { WorkbenchReady: bool
       ServerLive: bool
@@ -147,7 +148,7 @@ let private nothingProven =
       CompanionReady = false }
 
 let mutable private provenLive = nothingProven
-let mutable private setupElapsedMs = 0.0
+let mutable private harnessSetupElapsedMs = 0.0
 let mutable private timingSummaryEmitted = false
 let mutable private timingSummaryReachedJobSummary = false
 
@@ -157,10 +158,10 @@ let mutable private checkRows = ResizeArray<Timing.PhaseTiming>()
 
 let provenLiveState () = provenLive
 
-let setupElapsed () = setupElapsedMs
+let harnessSetupElapsed () = harnessSetupElapsedMs
 
-/// True once a timing table has been rendered and emitted. Setup emits one as its last act, so a
-/// check can observe the summary path without performing the write it is verifying.
+/// True once a timing table has been rendered and emitted. Harness setup emits one as its last
+/// act, so a check can observe the summary path without performing the write it is verifying.
 let timingSummaryWasEmitted () = timingSummaryEmitted
 
 /// True once a timing table reached `GITHUB_STEP_SUMMARY` itself. False outside GitHub Actions,
@@ -235,7 +236,7 @@ let eventually (timeoutMs: int) (subject: string) (predicate: unit -> Async<bool
             return if holds then Holds else DoesNotHold
         })
 
-let private failSetup (cause: string) =
+let private failHarnessSetup (cause: string) =
     Assert.fail (sprintf "Harness setup failed: %s" cause)
 
 /// The test server's two URLs, read from the sidecar. The three read outcomes are worded here
@@ -244,12 +245,13 @@ let private failSetup (cause: string) =
 let private sidecarUrls () =
     let path =
         match Proc.sidecarPath () with
-        | None -> failSetup "UI_TEST_SIDECAR is not set, so the harness cannot find the test server"
+        | None -> failHarnessSetup "UI_TEST_SIDECAR is not set, so the harness cannot find the test server"
         | Some path -> path
 
     match Proc.readSidecar path with
-    | Proc.SidecarMissing -> failSetup (sprintf "the sidecar file is missing at %s" path)
-    | Proc.SidecarUnreadable reason -> failSetup (sprintf "the sidecar file at %s does not parse: %s" path reason)
+    | Proc.SidecarMissing -> failHarnessSetup (sprintf "the sidecar file is missing at %s" path)
+    | Proc.SidecarUnreadable reason ->
+        failHarnessSetup (sprintf "the sidecar file at %s does not parse: %s" path reason)
     | Proc.SidecarLive(baseUrl, deadUrl) -> baseUrl, deadUrl
 
 /// The test server's base URL. A check that reaches the server directly rather than through a
@@ -261,10 +263,12 @@ let private verifySidecarLive () =
     let body = Proc.httpBody (baseUrl + "/json")
 
     if body <> jsonProbeBody then
-        failSetup (sprintf "test server healthcheck failed at %s/json (got %A, expected %s)" baseUrl body jsonProbeBody)
+        failHarnessSetup (
+            sprintf "test server healthcheck failed at %s/json (got %A, expected %s)" baseUrl body jsonProbeBody
+        )
 
     if not (Proc.curlConnectionRefused deadUrl) then
-        failSetup (sprintf "dead port answered at %s, so the sidecar may be stale" deadUrl)
+        failHarnessSetup (sprintf "dead port answered at %s, so the sidecar may be stale" deadUrl)
 
 /// True when the Explorer shows the fixture folder as a workspace root. A workspace folder,
 /// rather than an open tab alone, is what makes the extension's activation and every later check start from
@@ -357,7 +361,7 @@ let private companionPattern () =
     let extensionsDir = Proc.env "UI_TEST_EXTENSIONS_DIR" ""
 
     if extensionsDir = "" then
-        failSetup
+        failHarnessSetup
             "UI_TEST_EXTENSIONS_DIR is not set, so the companion tell cannot tell this run's companion from any other"
 
     extensionsDir + ".*Companion.dll"
@@ -422,10 +426,10 @@ let private emitTimingTable (caption: string) (rows: Timing.PhaseTiming list) =
     timingSummaryEmitted <- true
     timingSummaryReachedJobSummary <- timingSummaryReachedJobSummary || reachedJobSummary
 
-let private setupRow () =
-    { Timing.Name = setupPhaseName
-      Timing.ElapsedMs = setupElapsedMs
-      Timing.BudgetMs = float SetupBudgetMs }
+let private harnessSetupRow () =
+    { Timing.Name = harnessSetupPhaseName
+      Timing.ElapsedMs = harnessSetupElapsedMs
+      Timing.BudgetMs = float HarnessSetupBudgetMs }
 
 let private suiteRow () =
     let elapsed =
@@ -437,9 +441,9 @@ let private suiteRow () =
       Timing.ElapsedMs = elapsed
       Timing.BudgetMs = float SuiteBudgetMs }
 
-let private runSetup () =
+let private runHarnessSetup () =
     async {
-        let setupStart = Proc.now ()
+        let harnessSetupStart = Proc.now ()
         provenLive <- nothingProven
         let browser = ExTester.VSBrowser.instance
 
@@ -474,8 +478,8 @@ let private runSetup () =
             { provenLive with
                 CompanionReady = true }
 
-        setupElapsedMs <- Proc.now () - setupStart
-        emitTimingTable "Harness setup" [ setupRow () ]
+        harnessSetupElapsedMs <- Proc.now () - harnessSetupStart
+        emitTimingTable "Harness setup" [ harnessSetupRow () ]
         return ()
     }
 
@@ -513,10 +517,10 @@ let private onAfter () =
     async {
         // Emit before asserting. A run that drifts past a budget is the run whose timings a reader
         // most needs, and `assertBudget` throws.
-        let rows = (setupRow () :: List.ofSeq checkRows) @ [ suiteRow () ]
+        let rows = (harnessSetupRow () :: List.ofSeq checkRows) @ [ suiteRow () ]
         emitTimingTable "UI test suite timings" rows
 
-        assertBudget (setupRow ())
+        assertBudget (harnessSetupRow ())
         assertBudget (suiteRow ())
         return ()
     }
@@ -532,7 +536,7 @@ let private onBeforeEach () =
 
 [<ImportMember(from = "./harness-hooks.mjs")>]
 let private registerHarnessHooks
-    (_setupFn: unit -> JS.Promise<unit>)
+    (_harnessSetupFn: unit -> JS.Promise<unit>)
     (_beforeEachFn: unit -> JS.Promise<unit>)
     (_afterEachFn: obj -> JS.Promise<unit>)
     (_afterFn: unit -> JS.Promise<unit>)
@@ -542,7 +546,8 @@ let private registerHarnessHooks
 /// Registers Mocha hooks through ExTester so failures capture screenshots. Call once from Main
 /// before `Mocha.runTests`.
 let registerHooks () : unit =
-    let setup: unit -> JS.Promise<unit> = fun () -> runSetup () |> Async.StartAsPromise
+    let harnessSetup: unit -> JS.Promise<unit> =
+        fun () -> runHarnessSetup () |> Async.StartAsPromise
 
     let beforeEachHook: unit -> JS.Promise<unit> =
         fun () -> onBeforeEach () |> Async.StartAsPromise
@@ -555,4 +560,4 @@ let registerHooks () : unit =
     let afterHook: unit -> JS.Promise<unit> =
         fun () -> onAfter () |> Async.StartAsPromise
 
-    registerHarnessHooks setup beforeEachHook afterEachHook afterHook
+    registerHarnessHooks harnessSetup beforeEachHook afterEachHook afterHook
