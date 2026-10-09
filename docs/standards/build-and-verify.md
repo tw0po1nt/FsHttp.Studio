@@ -46,6 +46,7 @@ build fails on errors that a Fable-only loop never shows.
 
 | Command | What it proves |
 | --- | --- |
+| `./tests/strippers/run.sh` | Each prose stripper in `scripts/strippers/` gives the expected text under each awk on `PATH`: BSD awk, mawk, and gawk. |
 | `dotnet test FsHttp.Studio.slnx --no-build` | The unit suites pass. |
 | `dotnet fantomas --check .` | The formatting matches. Tooling owns layout. See `docs/standards/coding-standards.md`. |
 | `dotnet fsi scripts/generate-lua.fsx --check` | The committed files in `lua/fshttp/` match `Refusals.fs` and `package.json`. Without `--check`, the script writes the files again. |

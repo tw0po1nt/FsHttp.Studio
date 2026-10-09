@@ -47,9 +47,10 @@ runs:
 
     - uses: actions/cache@v4
       with:
-        # Binaries only — never $STORAGE/settings, which run.sh deletes so no VSCode
-        # profile state carries between runs. No restore-keys: a prefix fallback would
-        # serve the previous pin's VSCode, which is the one thing the pinned key prevents.
+        # Cache the binaries alone. $STORAGE/settings stays out, because run.sh deletes
+        # it so that no VSCode profile state carries between runs. No restore-keys: a
+        # prefix fallback would serve the previous pin's VSCode, which is the one thing
+        # the pinned key prevents.
         path: |
           ${{ env.STORAGE }}/VSCode-linux-x64
           ${{ env.STORAGE }}/chromedriver-linux64

@@ -13,6 +13,10 @@ runs:
     - shell: bash
       run: ./scripts/check-banned-patterns.sh
 
+    - name: Test the prose strippers
+      shell: bash
+      run: ./tests/strippers/run.sh
+
     - name: Check the Lua format
       uses: JohnnyMorganz/stylua-action@v5
       with:

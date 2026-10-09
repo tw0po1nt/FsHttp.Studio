@@ -26,7 +26,7 @@ on:
   workflow_dispatch:
 
 # Supersede a branch's own in-flight run only. A run on main, or one a workflow_call caller
-# is waiting on, must finish — cancelling it would leave the gate's verdict ambiguous.
+# is waiting on, must finish. A canceled run would leave the gate's verdict ambiguous.
 concurrency:
   group: ui-tests-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

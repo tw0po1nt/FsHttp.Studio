@@ -2,8 +2,8 @@
 # PreToolUse check: deny the call when its pending prose matches a pattern that
 # `.banned-patterns` forbids. Two kinds of call carry prose:
 #
-#   - A Write or an Edit on Markdown, F# source, Lua source, or a Vim help file
-#     in doc/.
+#   - A Write or an Edit on Markdown, F# source, Lua source, a Vim help file in
+#     doc/, a YAML file, or a shell script.
 #   - A Bash command that publishes prose: `git commit`, a `gh` issue or pull
 #     request create, edit, or comment, and a `gh api` call that sends a body.
 #     The check reads the command text and each body file that the command
@@ -47,6 +47,7 @@ else
     *.fs | *.fsx) kind="fsharp" ;;
     *.lua) kind="lua" ;;
     */doc/*.txt) kind="vimhelp" ;;
+    *.yml | *.yaml | *.sh) kind="hash" ;;
     *) exit 0 ;;
   esac
 

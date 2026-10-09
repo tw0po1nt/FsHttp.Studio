@@ -4,10 +4,10 @@ name: Prune Betas
 # Beta has no audience, and it is an opportunity to install the wrong build. The
 # tags stay, and they keep the rebuild path exact.
 #
-# The trigger is `release: published`, and not a step in release.yml. release.yml
-# creates a *draft*, which a human then reviews and publishes. A prune step inside
-# release.yml would therefore delete the Betas before anybody published anything,
-# and a draft that is never published would take its Betas with it.
+# The trigger is `release: published`. release.yml creates a *draft*, which a
+# human then reviews and publishes. A prune step inside release.yml would
+# therefore delete the Betas before anybody published anything, and a draft that
+# is never published would take its Betas with it.
 on:
   release:
     types: [published]
