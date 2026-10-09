@@ -4,21 +4,12 @@ local harness = require("nvim.harness")
 local T = MiniTest.new_set()
 
 ---@param items nvim_suite.HealthItem[]
----@param section string
+---@param section? string
 ---@param level? string
 ---@return nvim_suite.HealthItem[]
 local function items_in(items, section, level)
     return vim.tbl_filter(function(item)
-        return item.section == section and (level == nil or item.level == level)
-    end, items)
-end
-
----@param items nvim_suite.HealthItem[]
----@param level string
----@return nvim_suite.HealthItem[]
-local function items_at(items, level)
-    return vim.tbl_filter(function(item)
-        return item.level == level
+        return (section == nil or item.section == section) and (level == nil or item.level == level)
     end, items)
 end
 
@@ -48,7 +39,7 @@ end
 T["a valid setup reports no ERROR"] = function()
     local items = harness.checkhealth(ready_child())
 
-    assert.same({}, items_at(items, "ERROR"))
+    assert.same({}, items_in(items, nil, "ERROR"))
     assert.equal(true, #items_in(items, "Required items", "OK") >= 5, vim.inspect(items))
 end
 
@@ -122,14 +113,14 @@ T["a bad value gives an ERROR line, and an unknown key gives a WARN line, in the
 
     local options = items_in(harness.checkhealth(child), "Options")
 
-    local errors = items_at(options, "ERROR")
+    local errors = items_in(options, nil, "ERROR")
     assert.equal(1, #errors, vim.inspect(options))
     assert.equal(
         "FsHttp.Studio: the option request_timeout_ms is -5. It takes a number of 0 or more (0 sets no bound). "
             .. "The option keeps its default (30000).",
         errors[1].text
     )
-    local warnings = items_at(options, "WARNING")
+    local warnings = items_in(options, nil, "WARNING")
     assert.equal(1, #warnings, vim.inspect(options))
     assert.equal("FsHttp.Studio: setup() has no option theme. The client ignores it.", warnings[1].text)
 end

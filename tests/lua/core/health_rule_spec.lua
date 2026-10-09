@@ -26,6 +26,19 @@ describe("fshttp.health_rule", function()
         assert.same({ "curl", "tar", "certutil" }, rule.download_tools("Windows_NT"))
     end)
 
+    it("gives the companion_path fix for a missing download tool and for a missing companion", function()
+        assert.same({ "Install curl.", rule.companion_path_fix }, rule.tool_fix("curl"))
+        assert.equal(rule.companion_path_fix, rule.companion_missing_fix[2])
+    end)
+
+    it("states the version of a companion_path companion, or when the companion reports it", function()
+        assert.equal("The companion v0.3.0 is at /c (companion_path).", rule.companion_path_found("0.3.0", "/c"))
+        assert.equal(
+            "The companion is at /c (companion_path). It reports its version when it starts.",
+            rule.companion_path_found(nil, "/c")
+        )
+    end)
+
     it("names the json, xml, and html parsers, and what each missing parser changes", function()
         local languages = {}
         for _, parser in ipairs(rule.parsers) do

@@ -1,14 +1,5 @@
--- The reference screenshots of the Response buffer: one each for a JSON body, an image body, an HTML
--- body, and a Compile error. Each Check runs a Block in a new child Neovim, and compares its screen
--- with the reference file in tests/nvim/screenshots/. A difference fails the Check.
---
--- The screen changes with the operating system and the Neovim version. Thus the Checks compare only
--- on Linux with the stable version in tests/nvim/neovim-pin.json. On each other leg, the Checks skip.
---
--- To compare on a different system, set NVIM_TEST_SCREENSHOTS=1. Use a Neovim of the stable
--- version. To write the reference files again, set NVIM_TEST_SCREENSHOTS=update, and run
--- tests/nvim/run.sh. Then examine the changes with `git diff tests/nvim/screenshots` before you
--- commit them.
+-- The screen changes with the operating system and the Neovim version, so the Checks compare only on
+-- Linux with the pinned stable Neovim. NVIM_TEST_SCREENSHOTS overrides that rule.
 local MiniTest = require("mini.test")
 local harness = require("nvim.harness")
 
@@ -142,7 +133,7 @@ local function mask_changing_text(child)
 end
 
 -- Compares the screen of the child with the reference file `name`. When the reference file is
--- missing, the Check fails. Without this test, mini.test writes the file and passes.
+-- missing, the Check fails. Without this guard, mini.test writes the file and passes.
 ---@param child nvim_suite.Child
 ---@param name string
 local function expect_screenshot(child, name)

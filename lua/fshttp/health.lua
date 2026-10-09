@@ -14,19 +14,10 @@ local M = {}
 
 ---@param config fshttp.Config
 local function check_dotnet(config)
-    local folder = companion.folder(config)
-    local floor = companion.sdk_floor(folder)
-    local dotnet = sdk.dotnet_command(config.dotnet_path)
-    -- vim.system raises an error at once when it cannot start the executable.
-    local started, process = pcall(
-        vim.system,
-        { dotnet, "--list-sdks" },
-        { text = true, timeout = companion.list_sdks_timeout_ms }
-    )
-    local result = started and process:wait() or nil
-    if result and result.code == 0 and sdk.has_sdk_at_floor(floor, result.stdout or "") then
+    local found, floor, dotnet = companion.has_sdk(config, companion.folder(config))
+    if found then
         local path = vim.fn.exepath(dotnet)
-        vim.health.ok(string.format("%s has a .NET %d SDK or newer.", path ~= "" and path or dotnet, floor))
+        vim.health.ok(health_rule.sdk_found(path ~= "" and path or dotnet, floor))
     else
         vim.health.error(sdk.not_found_notice(floor, config.dotnet_path))
     end
@@ -38,17 +29,12 @@ local function check_companion(config)
     local client_version = require("fshttp.version")
     if config.companion_path == nil then
         if download.is_installed(folder) then
-            vim.health.ok(string.format("The companion for v%s is at %s.", client_version, folder))
+            vim.health.ok(download_rule.installed_message(client_version, folder))
         else
-            vim.health.error(string.format("No companion for v%s is at %s.", client_version, folder), {
-                "Open an F# script (.fsx) to download the companion.",
-                "Or set companion_path to a folder that holds a build of the companion.",
-            })
+            vim.health.error(health_rule.companion_missing(client_version, folder), health_rule.companion_missing_fix)
         end
     elseif download.is_installed(folder) then
-        local version = companion.version()
-        local version_text = version and ("The companion v" .. version) or "The companion"
-        vim.health.ok(string.format("%s is at %s (companion_path).", version_text, folder))
+        vim.health.ok(health_rule.companion_path_found(companion.version(), folder))
     else
         vim.health.error(download_rule.not_found_notice(folder))
     end
@@ -59,7 +45,7 @@ local function check_download_tools(config)
     for _, tool in ipairs(health_rule.download_tools(vim.uv.os_uname().sysname)) do
         local path = vim.fn.exepath(tool)
         if path ~= "" then
-            vim.health.ok(string.format("%s is at %s.", tool, path))
+            vim.health.ok(health_rule.tool_found(tool, path))
         elseif config.companion_path ~= nil then
             vim.health.info(health_rule.tool_not_needed(tool))
         else
@@ -71,7 +57,7 @@ end
 local function check_images()
     local reason = require("fshttp.image_placement").unsupported_reason("image/png")
     if reason == nil then
-        vim.health.ok("snacks.nvim shows images in this terminal.")
+        vim.health.ok(health_rule.images_on)
     elseif reason == image_body.images_off_reason then
         vim.health.ok(health_rule.images_off)
     else
@@ -82,7 +68,7 @@ end
 local function check_parsers()
     for _, parser in ipairs(health_rule.parsers) do
         if body_syntax.has_parser(parser.language) then
-            vim.health.ok(string.format("The tree-sitter parser for %s is installed.", parser.language))
+            vim.health.ok(health_rule.parser_found(parser))
         else
             vim.health.warn(health_rule.parser_missing(parser), health_rule.parser_fix(parser))
         end
@@ -105,29 +91,25 @@ local function check_state()
 end
 
 local function check_version()
-    local mismatch = companion.version_mismatch()
+    local mismatch = companion.version_mismatch_notice()
     local version = companion.version()
     if mismatch then
         vim.health.warn(mismatch)
     elseif version then
-        vim.health.ok(string.format("The companion v%s matches the client v%s.", version, require("fshttp.version")))
+        vim.health.ok(health_rule.version_matches(version, require("fshttp.version")))
     else
-        vim.health.info("The version check runs when the companion is ready.")
+        vim.health.info(health_rule.version_pending)
     end
 end
 
 ---@param config fshttp.Config
 local function check_options(config)
-    local called, problems = require("fshttp").setup_report()
-    if called then
-        vim.health.ok("setup() applied the options.")
-    else
-        vim.health.ok("No setup() call: the client uses the defaults.")
-    end
+    local problems = require("fshttp").setup_problems()
+    vim.health.ok(problems and health_rule.setup_applied or health_rule.setup_not_called)
     for _, change in ipairs(options.changed_values(config)) do
         vim.health.info(options.change_text(change))
     end
-    for _, problem in ipairs(problems) do
+    for _, problem in ipairs(problems or {}) do
         if problem.level == "ERROR" then
             vim.health.error(problem.message)
         else

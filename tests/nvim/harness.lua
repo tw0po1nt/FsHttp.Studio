@@ -501,6 +501,9 @@ end
 ---@field text string
 ---@field advice string[]
 
+-- The levels that `vim.health` writes after the icon of a line. An INFO line has no icon and no level.
+local health_levels = { OK = true, WARNING = true, ERROR = true }
+
 -- Each item that `:checkhealth fshttp` reports in the child. The child then shows the window that
 -- was current before the command, and has no health buffer, so a later Check sees no change.
 ---@param child nvim_suite.Child
@@ -525,12 +528,9 @@ function M.checkhealth(child)
     local section = ""
     for _, line in ipairs(lines) do
         local title = line:match("^(.-) ~$")
-        local level, text = line:match("^%- %S+ (OK) (.*)$")
-        if not level then
-            level, text = line:match("^%- %S+ (WARNING) (.*)$")
-        end
-        if not level then
-            level, text = line:match("^%- %S+ (ERROR) (.*)$")
+        local level, text = line:match("^%- %S+ (%u+) (.*)$")
+        if not health_levels[level] then
+            level, text = nil, nil
         end
         local advice = line:match("^    %- (.*)$")
         if title then
