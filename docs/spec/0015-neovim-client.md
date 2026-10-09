@@ -314,9 +314,9 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
 - **Binary body.** The buffer ports the hex view and the reason for a Captured body.
 - **Image body.** The client writes the bytes to a temporary file and calls the image placement of
   snacks.nvim, when snacks.nvim is present and the terminal supports it. The line below the Body
-  header gives the pixel size, for example `100×100 px`. When no image can show, the same line adds
+  title gives the pixel size, for example `100×100 px`. When no image can show, the same line adds
   the reason, for example `100×100 px  snacks.nvim is not installed`.
-- **Hint lines.** For an HTML body or an image body, a virtual line directly below the Body header
+- **Hint lines.** For an HTML body or an image body, a virtual line directly below the Body title
   names `:FsHttp open`:
   - HTML: `:FsHttp open  shows the rendered page in the browser, with scripts blocked`
   - Image: `:FsHttp open  shows the image in the system viewer`

@@ -37,10 +37,10 @@ local function open_calls(child)
     return harness.lua_get(child, [[_G.fshttp_open_calls]])
 end
 
--- The virtual lines on the Body header, and the real line below it.
+-- The virtual lines on the Body title, and the real line below it.
 ---@param child nvim_suite.Child
 ---@return { virtual: string[], next_line: string? }
-local function body_header(child)
+local function body_title(child)
     return harness.lua_get(
         child,
         [[(function()
@@ -72,19 +72,17 @@ local function body_header(child)
     )
 end
 
--- Opens the fixture, runs its Block, and waits until the first line below the Body header starts
+-- Opens the fixture, runs its Block, and waits until the first line below the Body title starts
 -- with `expected`. An earlier Check can leave a Response buffer in the child, so any body would not do.
 ---@param child nvim_suite.Child
 ---@param fixture_name string
 ---@param expected string
 local function run_block(child, fixture_name, expected)
     harness.edit(child, harness.fixture(fixture_name))
-    harness.eventually(harness.block_mark_deadline_ms, "a Block mark on line " .. block_line, function()
-        return harness.block_marks(child):find("^" .. block_line .. ": ") ~= nil
-    end)
+    harness.await_block_mark(child, block_line)
     harness.run_at(child, block_line)
-    harness.eventually(harness.response_deadline_ms, "the body of this Run below the Body header", function()
-        local next_line = body_header(child).next_line
+    harness.eventually(harness.response_deadline_ms, "the body of this Run below the Body title", function()
+        local next_line = body_title(child).next_line
         return next_line ~= nil and next_line:sub(1, #expected) == expected
     end)
 end
@@ -118,25 +116,25 @@ T["writes an HTML body with the policy to a static file, and calls vim.ui.open"]
     assert.equal(calls[1].content, still)
 end
 
-T["an HTML body shows the open hint directly below the Body header"] = function()
+T["an HTML body shows the open hint directly below the Body title"] = function()
     local child = harness.harness_setup_child()
     run_block(child, "open-body.fsx", html_body)
 
-    local header = body_header(child)
+    local title = body_title(child)
 
-    assert.same({ ":FsHttp open  shows the rendered page in the browser, with scripts blocked" }, header.virtual)
-    assert.equal(html_body, header.next_line)
+    assert.same({ ":FsHttp open  shows the rendered page in the browser, with scripts blocked" }, title.virtual)
+    assert.equal(html_body, title.next_line)
 end
 
-T["an image body shows the open hint directly below the Body header, and opens as a png"] = function()
+T["an image body shows the open hint directly below the Body title, and opens as a png"] = function()
     local child = harness.harness_setup_child()
     stub_open(child)
     run_block(child, "image-body.fsx", "100×100 px")
 
-    local header = body_header(child)
+    local title = body_title(child)
     harness.cmd(child, "FsHttp open")
 
-    assert.same({ ":FsHttp open  shows the image in the system viewer" }, header.virtual)
+    assert.same({ ":FsHttp open  shows the image in the system viewer" }, title.virtual)
     local calls = open_calls(child)
     assert.equal(1, #calls, vim.inspect(calls))
     assert.equal(".png", calls[1].path:sub(-4))

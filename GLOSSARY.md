@@ -48,6 +48,10 @@ _Avoid_: preview, output, inspector.
 The single scratch buffer that shows a Run's result in the Neovim client.
 _Avoid_: result window, output buffer, viewer.
 
+**Body title**:
+The title line of the Body section in the Response buffer. The lines of the body start below it. The hint line for `:FsHttp open` is a virtual line directly below it.
+_Avoid_: Body header, which a reader can confuse with an HTTP header.
+
 **Renderer core**:
 The presentation-shell-agnostic routine that turns a response body into rendered DOM in VSCode. It dispatches on the body's `Content-Type`.
 _Avoid_: renderer, view.

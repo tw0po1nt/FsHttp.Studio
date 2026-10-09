@@ -148,7 +148,7 @@ describe("fshttp.response_view", function()
         end)
 
         describe("with an HTML body", function()
-            it("puts the open hint below the Body header", function()
+            it("puts the open hint below the Body title", function()
                 local view = response_view.result(result({ body = "<p>hi</p>", content_type = "text/html" }))
                 assert.same({
                     {
@@ -193,7 +193,7 @@ describe("fshttp.response_view", function()
                 assert.is_nil(view.image)
             end)
 
-            it("puts the open hint below the Body header", function()
+            it("puts the open hint below the Body title", function()
                 local view = response_view.result(image)
                 assert.same({ { line = 7, text = ":FsHttp open  shows the image in the system viewer" } }, view.hints)
             end)
