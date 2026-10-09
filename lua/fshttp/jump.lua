@@ -33,11 +33,20 @@ function M.jump()
         vim.notify("The script of the Run is closed.", vim.log.levels.WARN, { title = "FsHttp.Studio" })
         return
     end
+    -- The envelope has no file name, so a position from a loaded file looks like a script position.
+    -- A line past the end of the script cannot be a script position, so the cursor stays.
+    if position.line > vim.api.nvim_buf_line_count(script_buf) then
+        vim.notify(
+            "The position is past the end of the script. The Compile error can be in a loaded file.",
+            vim.log.levels.WARN,
+            { title = "FsHttp.Studio" }
+        )
+        return
+    end
     local win = script_window(script_buf)
-    local line = math.min(position.line, vim.api.nvim_buf_line_count(script_buf))
-    local text = vim.api.nvim_buf_get_lines(script_buf, line - 1, line, false)[1] or ""
+    local text = vim.api.nvim_buf_get_lines(script_buf, position.line - 1, position.line, false)[1] or ""
     vim.api.nvim_set_current_win(win)
-    vim.api.nvim_win_set_cursor(win, { line, math.min(position.col, math.max(#text - 1, 0)) })
+    vim.api.nvim_win_set_cursor(win, { position.line, math.min(position.col, math.max(#text - 1, 0)) })
 end
 
 return M

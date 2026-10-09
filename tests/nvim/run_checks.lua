@@ -303,6 +303,50 @@ T["a Compile error shows as text, <CR> and <Plug>(FsHttpJump) move to its positi
     assert.same(marks_before, script_marks())
 end
 
+T["a Compile error position past the end of the Script gives a WARN notice, and <CR> keeps the cursor"] = function()
+    local child = harness.harness_setup_child()
+    local fixture = harness.ui_fixture("compile-error.fsx")
+    -- The Check above leaves the fixture changed. The reload gives the text on disk.
+    harness.cmd(child, "silent edit! " .. vim.fn.fnameescape(fixture))
+    harness.await_block_mark(child, 14)
+    -- A char in place of a string makes this text different from the Compile error of the Check above.
+    harness.lua_get(child, [[vim.api.nvim_buf_set_lines(0, 11, 12, false, { "let probe : int = 'c'" })]])
+    harness.run_at(child, 14)
+
+    local snapshot = eventually_response(child, "the Compile error text at (12,19) for a char", function(shown)
+        return only_window(shown) ~= nil and has_text(shown.lines, "(12,19) ") and has_text(shown.lines, "'char'")
+    end)
+    local window = assert(only_window(snapshot))
+    local position_line
+    for i, line in ipairs(snapshot.lines or {}) do
+        if line:sub(1, #"(12,19) ") == "(12,19) " then
+            position_line = i
+        end
+    end
+
+    -- A Script of five lines puts line 12 past its end, as a position from a loaded file can be.
+    harness.lua_get(child, "vim.api.nvim_buf_set_lines(vim.fn.bufnr(...), 5, -1, false, {})", { fixture })
+    local count = #harness.notices(child)
+    harness.lua_get(child, "vim.api.nvim_set_current_win(...)", { window.id })
+    harness.cmd(child, string.format("call cursor(%d, 1)", position_line))
+    harness.type_keys(child, "<CR>")
+
+    expect_notice(
+        child,
+        count,
+        vim.log.levels.WARN,
+        "The position is past the end of the script. The Compile error can be in a loaded file."
+    )
+    assert.equal(window.id, harness.lua_get(child, "vim.api.nvim_get_current_win()"))
+    assert.same({ position_line, 0 }, harness.lua_get(child, "vim.api.nvim_win_get_cursor(0)"))
+
+    harness.lua_get(
+        child,
+        [[vim.api.nvim_buf_call(vim.fn.bufnr(...), function() vim.cmd("silent edit!") end)]],
+        { fixture }
+    )
+end
+
 T["a Run of the loop Block gives a WARN notice and opens no Response buffer"] = function()
     local child = harness.harness_setup_child()
     harness.close_response_windows(child)
