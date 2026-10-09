@@ -113,4 +113,28 @@ describe("fshttp.options", function()
         assert.same({ "dotnet_path", "companion_path" }, options.changed_paths(a, b))
         assert.same({}, options.changed_paths(a, a))
     end)
+
+    it("gives no changed value for the defaults", function()
+        assert.same({}, options.changed_values(options.defaults()))
+    end)
+
+    it("gives each value that differs from its default, in the order of the key names", function()
+        local config = options.resolve({
+            response_buffer = { split = "below", keys = true },
+            dotnet_path = "/opt/dotnet",
+            request_timeout_ms = 0,
+        })
+        assert.same({
+            { key = "dotnet_path", value = "/opt/dotnet", default = nil },
+            { key = "request_timeout_ms", value = 0, default = 30000 },
+            { key = "response_buffer.split", value = "below", default = "right" },
+        }, options.changed_values(config))
+    end)
+
+    it("states the key, the value, and the default of a changed value", function()
+        local config = options.resolve({ response_buffer = { images = false }, companion_path = "/c" })
+        local changes = options.changed_values(config)
+        assert.equal('companion_path = "/c" (default nil)', options.change_text(changes[1]))
+        assert.equal("response_buffer.images = false (default true)", options.change_text(changes[2]))
+    end)
 end)

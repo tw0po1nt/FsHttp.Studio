@@ -485,6 +485,57 @@ function M.fshttp_status_echo(child)
     return M.lua_get(child, [[vim.api.nvim_exec2("FsHttp status", { output = true }).output]])
 end
 
+---@class nvim_suite.HealthItem
+---@field section string the title of the section that holds the item
+---@field level "OK"|"WARNING"|"ERROR"|"INFO"
+---@field text string
+---@field advice string[]
+
+-- Each item that `:checkhealth fshttp` reports in the child. The child then shows the window that
+-- was current before the command, and has no health buffer, so a later Check sees no change.
+---@param child nvim_suite.Child
+---@return nvim_suite.HealthItem[]
+function M.checkhealth(child)
+    local lines = M.lua_get(
+        child,
+        [[(function()
+            local win = vim.api.nvim_get_current_win()
+            vim.cmd("checkhealth fshttp")
+            local buf = vim.api.nvim_get_current_buf()
+            local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+            if vim.api.nvim_get_current_win() ~= win and #vim.api.nvim_list_tabpages() > 1 then
+                vim.cmd("tabclose")
+            end
+            vim.api.nvim_set_current_win(win)
+            vim.api.nvim_buf_delete(buf, { force = true })
+            return lines
+        end)()]]
+    )
+    local items = {}
+    local section = ""
+    for _, line in ipairs(lines) do
+        local title = line:match("^(.-) ~$")
+        local level, text = line:match("^%- %S+ (OK) (.*)$")
+        if not level then
+            level, text = line:match("^%- %S+ (WARNING) (.*)$")
+        end
+        if not level then
+            level, text = line:match("^%- %S+ (ERROR) (.*)$")
+        end
+        local advice = line:match("^    %- (.*)$")
+        if title then
+            section = title
+        elseif level then
+            items[#items + 1] = { section = section, level = level, text = text, advice = {} }
+        elseif advice and #items > 0 then
+            table.insert(items[#items].advice, advice)
+        elseif line:match("^%- ") then
+            items[#items + 1] = { section = section, level = "INFO", text = line:sub(3), advice = {} }
+        end
+    end
+    return items
+end
+
 ---@class nvim_suite.ClosedFold
 ---@field first integer
 ---@field last integer

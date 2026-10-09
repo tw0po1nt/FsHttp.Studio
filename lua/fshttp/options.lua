@@ -82,7 +82,9 @@ local schema = {
 ---@param value any
 ---@return string
 local function describe(value)
-    if type(value) == "string" then
+    if value == nil then
+        return "nil"
+    elseif type(value) == "string" then
         return string.format("%q", value)
     elseif type(value) == "number" or type(value) == "boolean" then
         return tostring(value)
@@ -197,6 +199,40 @@ function M.changed_paths(old, new)
         end
     end
     return changed
+end
+
+---@class fshttp.OptionChange
+---@field key string the dotted name of the key
+---@field value any
+---@field default any
+
+-- Each value of `config` that differs from its default, in the order of the key names.
+---@param config fshttp.Config
+---@return fshttp.OptionChange[]
+function M.changed_values(config)
+    local defaults = M.defaults()
+    local changes = {}
+    for _, name in ipairs(sorted_keys(schema)) do
+        if schema[name].accept then
+            if config[name] ~= defaults[name] then
+                changes[#changes + 1] = { key = name, value = config[name], default = defaults[name] }
+            end
+        else
+            for _, sub in ipairs(sorted_keys(schema[name])) do
+                if config[name][sub] ~= defaults[name][sub] then
+                    changes[#changes + 1] =
+                        { key = name .. "." .. sub, value = config[name][sub], default = defaults[name][sub] }
+                end
+            end
+        end
+    end
+    return changes
+end
+
+---@param change fshttp.OptionChange
+---@return string
+function M.change_text(change)
+    return string.format("%s = %s (default %s)", change.key, describe(change.value), describe(change.default))
 end
 
 return M

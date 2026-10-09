@@ -67,11 +67,17 @@ local function parse(language, text)
     }
 end
 
+---@param language string
+---@return boolean
+function M.has_parser(language)
+    local loaded, added = pcall(vim.treesitter.language.add, language)
+    return loaded and added == true
+end
+
 -- Gives nil when Neovim has no parser for the language, or when the parser or a query fails.
 ---@type fshttp.BodySyntaxLookup
 function M.parse(language, text)
-    local loaded, added = pcall(vim.treesitter.language.add, language)
-    if not loaded or not added then
+    if not M.has_parser(language) then
         return nil
     end
     local ok, syntax = pcall(parse, language, text)
