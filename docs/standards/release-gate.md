@@ -8,9 +8,10 @@ gate is the UI suite, the Neovim suite, and the Lua core suite. A green Actions 
 
 `release.yml` has three stages. The build job runs the guardrails of `ci.yml`. Then it packages the
 `.vsix` and the Companion archive, writes a `.sha256` file for each, and uploads the four files as
-workflow artifacts. The UI suite job downloads the `.vsix` and drives it. The four Neovim legs
+workflow artifacts. The UI suite job downloads the `.vsix` and drives it. The three Neovim legs
 download the Companion archive. Each leg runs the Lua core suite and the Neovim suite against that
-archive. The publish job needs each gate to be green, and attaches the same four files to the draft
+archive. The experimental Windows leg runs the same steps in its own job, and it does not gate the
+release. The publish job needs each gate to be green, and attaches the same four files to the draft
 Release.
 
 The `force` input skips each suite, and the run log shows a warning for the skip. The guardrails
@@ -19,6 +20,8 @@ always run.
 ## Prerequisites
 
 - Before you publish a release, merge or close each open pin-update pull request.
+- Before you publish the draft Release, replace the **Clients changed** line of its notes. Name the
+  Client that changed: the VSCode extension, the Neovim client, or both.
 
 ## Honest gaps
 
@@ -118,8 +121,9 @@ dispatches `nvim-tests.yml` against the pin branch.
 another version ships uncaught. Neovim 0.11 runs on Linux only.
 
 **The Windows leg cannot fail the run.** The Windows leg runs with `continue-on-error` until its
-Checks pass, and #306 tracks that work. In `release.yml`, a red Windows leg cannot refuse a draft
-Release. A defect that occurs only on Windows ships uncaught.
+Checks pass, and #306 tracks that work. In `release.yml`, the Windows leg has its own job, and the
+publish job does not need that job. Thus a red Windows leg cannot refuse a draft Release. A defect
+that occurs only on Windows ships uncaught.
 
 **The suite gets the companion from `companion_path`.** A release run unpacks the Companion
 archive that it ships, and each Check that sets `companion_path` uses that folder. A run in

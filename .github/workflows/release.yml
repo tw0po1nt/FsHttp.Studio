@@ -8,13 +8,13 @@ name: Release
 #
 #   build    runs the guardrails, packages the .vsix and the Companion archive, writes a .sha256
 #            file for each, and uploads the four files as workflow artifacts.
-#   gates    the UI suite job and the four Neovim legs download those artifacts and drive them.
-#            The Neovim legs also run the Lua core suite. These suites are the Release gate.
+#   gates    the UI suite job and the three Neovim legs download those artifacts and drive them.
+#            The Neovim legs also run the Lua core suite. These suites are the Release gate. The
+#            experimental Windows leg runs in its own job, and it does not gate the release.
 #   publish  needs each gate to be green, and attaches the same four files to the draft Release.
 #
 # The force input skips each suite for an emergency release, and the run logs the skip. The
-# guardrails always run, so a forced release still cannot ship a red build. See ADR-0009 and
-# docs/standards/release-gate.md.
+# guardrails always run, so a forced release still cannot ship a red build.
 on:
   workflow_dispatch:
     inputs:
@@ -69,77 +69,10 @@ jobs:
           echo "No green suite run backs this draft Release."
           echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 
-      # The guardrails of ci.yml. A red build can never ship a release.
-      - run: ./scripts/check-banned-patterns.sh
-
-      - name: Check the Lua format
-        uses: JohnnyMorganz/stylua-action@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          version: '2.5.2'
-          args: --check .
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: global.json
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.fsproj', '.config/dotnet-tools.json') }}
-
-      - run: dotnet tool restore
-
-      - run: dotnet fantomas --check .
-
-      - run: dotnet fsi scripts/generate-lua.fsx --check
-
-      - run: dotnet build FsHttp.Studio.slnx
-
-      - run: dotnet test FsHttp.Studio.slnx --no-build
-
-      - run: npm ci
-
-      # Runs the bundled renderer under node. The .NET tests cannot prove that the bundle runs.
-      - run: npm run smoke
-
-      # Publishes the companion into dist/companion, compiles, and builds the one universal .vsix,
-      # fshttp-studio-<version>.vsix at the repo root.
-      - name: Package the extension (.vsix)
-        run: npm run package
-
-      - run: ./scripts/check-vsix-holds-no-lua.sh
-
-      - name: Read the Neovim pins
-        id: nvim-pin
-        run: echo "floor=$(jq -r .floor tests/nvim/neovim-pin.json)" >> "$GITHUB_OUTPUT"
-
-      # The Neovim client supports Neovim 0.11 and later, so the type check uses the 0.11 API types.
-      - name: Install Neovim ${{ steps.nvim-pin.outputs.floor }} for its API types
-        id: nvim-types
-        uses: rhysd/action-setup-vim@v1
-        with:
-          neovim: true
-          version: ${{ steps.nvim-pin.outputs.floor }}
-
-      - name: Install lua-language-server
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/lua-language-server"
-          curl -fsSL https://github.com/LuaLS/lua-language-server/releases/download/3.19.1/lua-language-server-3.19.1-linux-x64.tar.gz \
-            | tar -xz -C "$RUNNER_TEMP/lua-language-server"
-          echo "$RUNNER_TEMP/lua-language-server/bin" >> "$GITHUB_PATH"
-
-      - name: Check the Lua types against the Neovim 0.11 API
-        env:
-          VIMRUNTIME: ${{ steps.nvim-types.outputs.vim-dir }}/runtime
-        run: ./scripts/check-lua-types.sh
+      # The guardrails of ci.yml. A red build can never ship a release. The action also packages
+      # the .vsix, fshttp-studio-<version>.vsix at the repo root, with the companion that
+      # `npm run package` publishes into dist/companion.
+      - uses: ./.github/actions/run-guardrails
 
       # The Companion archive holds the companion that `npm run package` published into the .vsix,
       # so both Clients ship the same companion. pack-companion.sh writes the archive and its
@@ -232,15 +165,12 @@ jobs:
     needs: build
     if: ${{ !inputs.force }}
     runs-on: ${{ matrix.os }}
-    # The Windows leg is the slowest. The suite has its own Budgets, and this cap stops a wedged runner.
+    # The suite has its own Budgets. This cap stops a wedged runner.
     timeout-minutes: 30
-    # The Windows leg is experimental until its Checks pass, as in nvim-tests.yml. A failure there
-    # does not fail the run.
-    continue-on-error: ${{ matrix.experimental == true }}
     strategy:
       # A red leg must not hide the result of the other legs.
       fail-fast: false
-      # The same four legs as nvim-tests.yml.
+      # The legs of nvim-tests.yml, less the Windows leg, which has its own job.
       matrix:
         include:
           - name: Linux, Neovim 0.11
@@ -252,11 +182,7 @@ jobs:
           - name: macOS, pinned stable Neovim
             os: macos-latest
             neovim-pin: stable
-          - name: Windows, pinned stable Neovim
-            os: windows-latest
-            neovim-pin: stable
-            experimental: true
-    steps:
+    steps: &nvim-suite-steps
       - uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
@@ -280,6 +206,25 @@ jobs:
         with:
           neovim-pin: ${{ matrix.neovim-pin }}
           companion-archive: out/release/fshttp-studio-companion-${{ needs.build.outputs.version }}.tar.gz
+
+  # The Windows leg is experimental until its Checks pass, as in nvim-tests.yml. The publish job
+  # does not need this job, so a red Windows leg cannot refuse a draft Release.
+  nvim-suite-windows:
+    name: Neovim suites (${{ matrix.name }})
+    needs: build
+    if: ${{ !inputs.force }}
+    runs-on: ${{ matrix.os }}
+    # The Windows leg is the slowest. The suite has its own Budgets, and this cap stops a wedged runner.
+    timeout-minutes: 30
+    continue-on-error: true
+    # A matrix of one leg gives the shared steps the same matrix values as the nvim-suites job.
+    strategy:
+      matrix:
+        include:
+          - name: Windows, pinned stable Neovim
+            os: windows-latest
+            neovim-pin: stable
+    steps: *nvim-suite-steps
 
   publish:
     name: Publish the draft Release
@@ -323,6 +268,8 @@ jobs:
           make_latest: true # applies when the draft is published
           generate_release_notes: true
           body: |
+            **Clients changed:** EDIT BEFORE PUBLISH (the VSCode extension, the Neovim client, or both)
+
             Release workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
             ${{ inputs.force && 'FORCE RELEASE: no green suite run backs this draft Release.' || '' }}
           files: |
