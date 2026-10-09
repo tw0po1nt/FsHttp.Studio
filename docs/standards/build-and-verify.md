@@ -53,6 +53,7 @@ build fails on errors that a Fable-only loop never shows.
 | `npm run compile` | The companion publishes, Fable emits, and esbuild bundles. |
 | `npm run package` | `npm run compile` runs, then the `.vsix` builds. |
 | `./scripts/check-vsix-holds-no-lua.sh` | The `.vsix` holds no Lua file. Run it after `npm run package`. |
+| `./scripts/check-vsix-holds-only-shipped-files.sh` | The `.vsix` holds only the files that ship. Run it after `npm run package`. |
 | `npm run smoke` | The bundled renderer runs under node. |
 | `./scripts/check-lua-types.sh` | lua-language-server finds no problem in the LuaCATS annotations. The Neovim API types come from the `nvim` on `PATH`, or from `$VIMRUNTIME` when you set it. CI uses the Neovim 0.11 types. |
 | `nvim -l tests/minit.lua --minitest` | The Lua core suite passes. Each core module loads in an environment with no `vim` global. |

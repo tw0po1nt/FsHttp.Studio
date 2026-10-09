@@ -23,6 +23,7 @@ FsHttp.Studio.slnx
 .gitignore
 .vscodeignore
 .editorconfig
+.fantomasignore
 
 # Repo infrastructure — docs, CI, editor, agent tooling; none of it ships
 docs/**
