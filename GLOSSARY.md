@@ -26,6 +26,10 @@ _Avoid_: status bar, lualine component, status.
 The code that a Run evaluates to reach the target block. It starts at the first line of the script, and stops at the end of the target block's own expression. It thus contains the target block, because a Run reaches a block where the user wrote it. It contains no other block, because FsHttp.Studio blanks each other block first. It contains nothing after the target block. FsHttp.Studio evaluates the Setup afresh for each Run.
 _Avoid_: context, preamble, prelude.
 
+**Loaded file**:
+A source file that a Script brings in with `#load`. It can be a `.fsx` or a `.fs` file. Its code is part of the Setup, so a Compile error can have its position in a Loaded file. A loaded `.fsx` file is a Loaded file to the Script that loads it.
+_Avoid_: included file, dependency, imported script.
+
 **Run**:
 The evaluation of one block against a fresh evaluation of its setup, and the rendering of the result. A Run fires only the block that the user targets, never the other blocks.
 _Avoid_: execute, send, invoke.

@@ -246,3 +246,10 @@ being something else*: no runtime error, no response, and no wrong line. The com
 path's historical defect was never an absent message. It was a **wrong** one. A check that only
 asserts "an error appeared" would have passed against the bug that `docs/spec/0001` was written to
 fix.
+
+**The second Check: a Loaded file.** A second Check runs the Block of `loaded-file-error.fsx`. That
+Script loads `loaded/broken.fsx`, and the type error is in the Loaded file on disk. The Check
+edits no buffer. It asserts that the viewer shows `loaded/broken.fsx(3,19)`, which is the path of
+the Loaded file from the directory of the Script, and the position in the Loaded file. The Script
+uses `#I __SOURCE_DIRECTORY__`, because FSI looks for a relative `#load` of the Script only in the
+include paths.

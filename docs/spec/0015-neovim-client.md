@@ -321,8 +321,13 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
   - HTML: `:FsHttp open  shows the rendered page in the browser, with scripts blocked`
   - Image: `:FsHttp open  shows the image in the system viewer`
 - **Compile error.** The buffer shows the Compile error text of the VSCode viewer, with the trailing
-  spaces removed from each line. `<CR>` on a `(line,col)` line moves the cursor to that position in
-  the script, or opens the loaded file that contains the error. The winbar shows
+  spaces removed from each line. A diagnostic from a Loaded file starts with the path of the Loaded
+  file, for example `lib/helpers.fsx(3,9)`. The path is relative to the directory of the script.
+  The path is absolute when the script has no file name. `<CR>` on a `(line,col)` line moves the
+  cursor to that position in the script, or in the Loaded file. For a Loaded file, `<CR>` uses a
+  window in the current tab that shows the Loaded file, or opens a `topleft split`. If the Loaded
+  file does not exist, a WARN notice names it. If the position is past the end of its file, a WARN
+  notice states that. In both cases, the cursor stays. The winbar shows
   `Compile error  <CR> on a (line,col) moves to it in the script`. The script gets no diagnostic,
   no sign, and no quickfix entry. This keeps the rule of spec 0009.
 - **Runtime error and Refused Run.** Each one shows as text in the Response buffer, as in VSCode.
@@ -588,6 +593,7 @@ Ticket: [What gates a release of the Neovim client?](https://github.com/tw0po1nt
 | Loop refusal | The Block mark shows the refusal. A Run gives a WARN notice and opens no Response buffer. |
 | Cross-block Refused Run | The Response buffer shows the refused text. The script gets no diagnostic. |
 | Compile error names its source | The Response buffer shows the same text, `<CR>` moves to the range, and the script gets no diagnostic. |
+| Compile error names its Loaded file | The Response buffer shows the path of the Loaded file, and `<CR>` opens the Loaded file at the position. |
 | Companion death | The Response buffer shows the stopped text, each Block mark shows the stopped title, and `:FsHttp restart` recovers a Run. |
 | Copy buttons | `:FsHttp yank` and `yr`, `yh`, `yb` put the spec 0013 payload in the register. |
 | Request section shows what a POST sent | The Request fold shows it. |

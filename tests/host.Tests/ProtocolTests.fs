@@ -53,7 +53,14 @@ let toVscodeLineTests =
 
 [<Tests>]
 let formatCompileErrorTests =
-    let diag message r = { Message = message; Range = r }
+    let diag message r =
+        { Message = message
+          Range = r
+          LoadedFile = None }
+
+    let loaded file message r =
+        { diag message r with
+            LoadedFile = Some file }
 
     testList
         "formatCompileError"
@@ -61,7 +68,7 @@ let formatCompileErrorTests =
               let d = diag "The value or constructor 'auth' is not defined." (range 3 8 3 17)
 
               Expect.equal
-                  (formatCompileError [ d ])
+                  (formatCompileError None [ d ])
                   "Compile error:\n(3,9) The value or constructor 'auth' is not defined."
                   "col 8 (0-based) prints as 9, matching vscode's Ln/Col"
           }
@@ -70,7 +77,7 @@ let formatCompileErrorTests =
               let d = diag "The namespace or module 'FsHttp' is not defined." (range 1 0 1 0)
 
               Expect.equal
-                  (formatCompileError [ d ])
+                  (formatCompileError None [ d ])
                   "Compile error:\n(1,1) The namespace or module 'FsHttp' is not defined."
                   "top-of-script anchor prints as 1-based (1,1)"
           }
@@ -80,9 +87,47 @@ let formatCompileErrorTests =
               let d2 = diag "Second error." (range 5 0 5 6)
 
               Expect.equal
-                  (formatCompileError [ d1; d2 ])
+                  (formatCompileError None [ d1; d2 ])
                   "Compile error:\n(2,5) First error.\n(5,1) Second error."
                   "one header, one line per diagnostic"
+          }
+
+          test "names a Loaded file by its path from the directory of the Script" {
+              let script = Some "/scripts/api/probe.fsx"
+
+              Expect.equal
+                  (formatCompileError
+                      script
+                      [ loaded "/scripts/api/lib/helpers.fsx" "In the Loaded file." (range 3 8 3 9)
+                        loaded "/scripts/shared/inner.fsx" "Outside the directory." (range 1 0 1 2)
+                        diag "In the Script." (range 4 0 4 1) ])
+                  "Compile error:\nlib/helpers.fsx(3,9) In the Loaded file.\n../shared/inner.fsx(1,1) Outside the directory.\n(4,1) In the Script."
+                  "a Loaded file path is relative to the directory of the Script, and a Script diagnostic has no path"
+          }
+
+          test "names a Loaded file by its absolute path when the Script has no file name" {
+              Expect.equal
+                  (formatCompileError None [ loaded "/scripts/lib/helpers.fsx" "In the Loaded file." (range 3 8 3 9) ])
+                  "Compile error:\n/scripts/lib/helpers.fsx(3,9) In the Loaded file."
+                  "an untitled Script has no directory"
+          } ]
+
+[<Tests>]
+let loadedFilePathTests =
+    testList
+        "loadedFilePath"
+        [ test "a Windows path is relative to the directory of the Script" {
+              Expect.equal
+                  (loadedFilePath (Some @"C:\scripts\probe.fsx") @"C:\scripts\lib\helpers.fsx")
+                  "lib/helpers.fsx"
+                  "the parts join with a forward slash"
+          }
+
+          test "a path on another drive stays absolute" {
+              Expect.equal
+                  (loadedFilePath (Some @"C:\scripts\probe.fsx") @"D:\lib\helpers.fsx")
+                  @"D:\lib\helpers.fsx"
+                  "two paths with no common root give no relative path"
           } ]
 
 let private okResponse =

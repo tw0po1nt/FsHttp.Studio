@@ -16,7 +16,12 @@ open Companion.BlockLocator
 open Companion.Envelope
 open Companion.RequestCapture
 
-type Diagnostic = { Message: string; Range: BlockRange }
+/// `LoadedFile` is the absolute path that FCS gives a diagnostic from a Loaded file, and `None` for a
+/// Script diagnostic. The `Range` of a Loaded file diagnostic is a position in that Loaded file.
+type Diagnostic =
+    { Message: string
+      Range: BlockRange
+      LoadedFile: string option }
 
 /// The request that was actually sent, read off `Response.requestMessage` plus the body capture.
 type RequestData =
@@ -441,6 +446,9 @@ let private withinBlock (block: BlockRange) (line: int, col: int) =
     let beforeEnd = line < block.EndLine || (line = block.EndLine && col < block.EndCol)
     atOrAfterStart && beforeEnd
 
+let private setupMessage (d: FSharpDiagnostic) =
+    sprintf "Setup failed to evaluate: %s" d.Message
+
 /// Maps a diagnostic from the combined Setup evaluation back onto the original source, and
 /// names the Setup in its message. Every position first passes through `unshiftPos`, which is
 /// the identity off the R1 insertion line and off the R2 route (`shift = None`).
@@ -457,7 +465,7 @@ let private withinBlock (block: BlockRange) (line: int, col: int) =
 /// Every diagnostic from here keeps its compiler text verbatim behind a `Setup failed to
 /// evaluate:` prefix, including an anchored one.
 let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d: FSharpDiagnostic) : Diagnostic =
-    let message = sprintf "Setup failed to evaluate: %s" d.Message
+    let message = setupMessage d
     let sl, sc = unshiftPos shift (d.StartLine, d.StartColumn)
 
     if sl > realLineCount then
@@ -466,7 +474,8 @@ let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d:
             { StartLine = 1
               StartCol = 0
               EndLine = 1
-              EndCol = 0 } }
+              EndCol = 0 }
+          LoadedFile = None }
     else
         let el, ec = unshiftPos shift (d.EndLine, d.EndColumn)
 
@@ -475,7 +484,40 @@ let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d:
             { StartLine = sl
               StartCol = sc
               EndLine = el
-              EndCol = ec } }
+              EndCol = ec }
+          LoadedFile = None }
+
+/// FSI gives an interaction this file name when the caller gives none.
+[<Literal>]
+let private defaultScriptFileName = "input.fsx"
+
+/// The path of the Loaded file that contains `d`, or `None` when `d` is in the Script. For a nested
+/// `#load`, FCS gives the innermost file that contains the error.
+let private loadedFileOf (scriptFileName: string option) (d: FSharpDiagnostic) : string option =
+    if d.FileName = defaultArg scriptFileName defaultScriptFileName then
+        None
+    else
+        Some d.FileName
+
+/// A Loaded file is outside the Script text, so its FCS range needs no translation.
+let private loadedFileDiagnostic (loadedFile: string) (d: FSharpDiagnostic) : Diagnostic =
+    { Message = setupMessage d
+      Range =
+        { StartLine = d.StartLine
+          StartCol = d.StartColumn
+          EndLine = d.EndLine
+          EndCol = d.EndColumn }
+      LoadedFile = Some loadedFile }
+
+/// Gives a Loaded file diagnostic its own treatment, and each other diagnostic `scriptDiagnostic`.
+let private toDiagnostic
+    (scriptFileName: string option)
+    (scriptDiagnostic: FSharpDiagnostic -> Diagnostic)
+    (d: FSharpDiagnostic)
+    : Diagnostic =
+    match loadedFileOf scriptFileName d with
+    | Some loadedFile -> loadedFileDiagnostic loadedFile d
+    | None -> scriptDiagnostic d
 
 /// Whether `errors` refuses the Run rather than compile-erroring it. Every
 /// error diagnostic must trace to a blanked name for the refusal to claim the Run -- one
@@ -490,6 +532,7 @@ let private setupDiagnostic (realLineCount: int) (shift: ColumnShift option) (d:
 /// order, which is the first one the compiler reached, because the detail sentence speaks about
 /// one value. The rest are the same limit reported twice, so naming them adds nothing.
 let private blankedNameRefusal
+    (scriptFileName: string option)
     (setupLines: string[])
     (blankedNames: Set<string>)
     (errors: FSharpDiagnostic[])
@@ -507,7 +550,11 @@ let private blankedNameRefusal
         let matches =
             errors
             |> Array.map (fun d ->
-                if d.ErrorNumber = unboundValueErrorNumber then
+                // `setupLines` contains no text of a Loaded file.
+                if
+                    d.ErrorNumber = unboundValueErrorNumber
+                    && (loadedFileOf scriptFileName d).IsNone
+                then
                     textUnderDiagnostic setupLines d
                     |> Option.map unquote
                     |> Option.filter blankedNames.Contains
@@ -531,7 +578,8 @@ let private blockDiagnostic (shift: ColumnShift option) (d: FSharpDiagnostic) : 
         { StartLine = sl
           StartCol = sc
           EndLine = el
-          EndCol = ec } }
+          EndCol = ec }
+      LoadedFile = None }
 
 /// Splits a Setup-interaction diagnostic between the two treatments above, by whether its
 /// (unshifted) start position lands inside the target's own block span.
@@ -726,12 +774,12 @@ let private runLocated
         // Must run before `splitDiagnostic`, which translates the range this check needs away.
         let setupErrors = errorDiagnostics setupDiags
 
-        match blankedNameRefusal setupLines blankedNames setupErrors with
+        match blankedNameRefusal scriptFileName setupLines blankedNames setupErrors with
         | Some name -> Refused(unboundBlockValueCode, Some name)
         | None ->
             match
                 setupErrors
-                |> Array.map (splitDiagnostic shift target.Block setupLineCount)
+                |> Array.map (toDiagnostic scriptFileName (splitDiagnostic shift target.Block setupLineCount))
                 |> Array.toList
             with
             | [] ->
@@ -747,7 +795,7 @@ let private runLocated
                     | Choice2Of2 ex ->
                         match
                             errorDiagnostics targetDiags
-                            |> Array.map (setupDiagnostic 0 None)
+                            |> Array.map (toDiagnostic scriptFileName (setupDiagnostic 0 None))
                             |> Array.toList
                         with
                         | [] -> runtimeErrorFrom readAppliedTimeoutMs ex
@@ -802,12 +850,19 @@ let outcomeToWire (outcome: RunOutcome) : obj =
            diagnostics =
             diagnostics
             |> List.map (fun d ->
-                {| message = d.Message
-                   range =
+                let range =
                     {| startLine = d.Range.StartLine
                        startCol = d.Range.StartCol
                        endLine = d.Range.EndLine
-                       endCol = d.Range.EndCol |} |}) |}
+                       endCol = d.Range.EndCol |}
+
+                match d.LoadedFile with
+                | None -> box {| message = d.Message; range = range |}
+                | Some loadedFile ->
+                    box
+                        {| loadedFile = loadedFile
+                           message = d.Message
+                           range = range |}) |}
     | RuntimeError message ->
         {| tag = "runtimeError"
            message = message |}
@@ -858,7 +913,8 @@ let wireToOutcome (root: JsonElement) : RunOutcome =
                   { StartLine = r.GetProperty("startLine").GetInt32()
                     StartCol = r.GetProperty("startCol").GetInt32()
                     EndLine = r.GetProperty("endLine").GetInt32()
-                    EndCol = r.GetProperty("endCol").GetInt32() } } ]
+                    EndCol = r.GetProperty("endCol").GetInt32() }
+                LoadedFile = getOptionalStringProp "loadedFile" d } ]
         |> CompileError
     | "refused" ->
         let name =
