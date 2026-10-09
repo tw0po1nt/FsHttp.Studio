@@ -4,7 +4,7 @@ open Fable.Mocha
 
 let tests =
     testList
-        "Harness setup self-check"
+        "Harness self-check"
         [ testCase "proven-live workbench and timing summary" (fun () ->
               let state = Harness.provenLiveState ()
 
