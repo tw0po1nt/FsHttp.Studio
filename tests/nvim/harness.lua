@@ -8,13 +8,12 @@ local sysname = vim.uv.os_uname().sysname
 local is_windows = sysname == "Windows_NT"
 
 -- The Budgets of each operating system. Each leg of nvim-tests.yml writes the timing table to the
--- job summary, and the Budgets of a system come from the rows of its leg.
--- TODO(https://github.com/tw0po1nt/FsHttp.Studio/issues/306): the Windows_NT row copies the Linux
--- row until a passing run of the Windows leg gives a measured row.
+-- job summary, and the Budgets of a system come from the rows of its leg. Each suite Budget is the
+-- slowest measured suite of its system plus about 40%.
 local budgets_ms = {
-    Linux = { harness_setup = 60000, check = 30000, suite = 180000 },
-    Darwin = { harness_setup = 60000, check = 30000, suite = 240000 },
-    Windows_NT = { harness_setup = 60000, check = 30000, suite = 180000 },
+    Linux = { harness_setup = 60000, check = 30000, suite = 255000 },
+    Darwin = { harness_setup = 60000, check = 30000, suite = 265000 },
+    Windows_NT = { harness_setup = 60000, check = 30000, suite = 315000 },
 }
 local budget_ms = budgets_ms[sysname] or budgets_ms.Linux
 M.harness_setup_budget_ms = budget_ms.harness_setup
@@ -178,9 +177,11 @@ function M.companion_pids()
     local result
     if is_windows then
         -- Windows has no pgrep. The command line and the folder are compared with forward slashes.
+        -- The command line of this PowerShell process also contains the folder, so the query looks
+        -- for dotnet.exe processes only.
         local folder = M.companion_path():gsub("\\", "/"):gsub("'", "''")
         local script = string.format(
-            "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Replace('\\', '/').Contains('%s/Companion.dll') } | ForEach-Object { $_.ProcessId }",
+            "Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'dotnet.exe' -and $_.CommandLine -and $_.CommandLine.Replace('\\', '/').Contains('%s/Companion.dll') } | ForEach-Object { $_.ProcessId }",
             folder
         )
         result = run({ "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script })

@@ -116,7 +116,8 @@ T["a companion_path with no Companion.dll gives companion not found and the ERRO
 
     harness.expect_status(child, "the companion not found row", "FsHttp.Studio: companion not found")
     local error_notice = notice_at(child, vim.log.levels.ERROR, "an ERROR notice")
-    assert_contains(error_notice.message, empty)
+    -- setup() normalizes each path option, so the notice shows the normalized path.
+    assert_contains(error_notice.message, vim.fs.normalize(empty))
     assert_contains(error_notice.message, "Companion.dll")
     assert_contains(error_notice.message, "remove companion_path")
     assert_contains(error_notice.message, ":FsHttp restart")

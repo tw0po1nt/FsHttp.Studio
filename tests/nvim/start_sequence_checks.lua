@@ -61,7 +61,9 @@ T["a dotnet_path that names a missing file gives the WARN notice and the .NET SD
     local floor = companion_floor()
     assert.equal(true, warning.message:find(string.format(".NET %d SDK", floor), 1, true) ~= nil, warning.message)
     assert.equal(true, warning.message:find("https://aka.ms/dotnet/download", 1, true) ~= nil, warning.message)
-    assert.equal(true, warning.message:find("dotnet_path (" .. missing .. ")", 1, true) ~= nil, warning.message)
+    -- setup() normalizes each path option, so the notice shows the normalized path.
+    local shown = "dotnet_path (" .. vim.fs.normalize(missing) .. ")"
+    assert.equal(true, warning.message:find(shown, 1, true) ~= nil, warning.message)
     harness.expect_status(child, "the .NET SDK not found row", "FsHttp.Studio: .NET SDK not found")
 
     harness.holds_for_settle("no new companion", function()

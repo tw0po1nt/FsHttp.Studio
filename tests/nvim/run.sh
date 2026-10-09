@@ -51,9 +51,10 @@ build_json_parser() {
 
 cleanup() {
   # The pattern contains the companion folder of this run, so the cleanup cannot stop a companion of
-  # another editor.
+  # another editor. On Windows, the command line of the PowerShell process contains the same
+  # pattern, so the query ignores that process ($PID).
   if [[ "$WINDOWS" == "1" ]]; then
-    powershell.exe -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { \$_.CommandLine -and (\$_.CommandLine.Replace('\\', '/').Contains('$COMPANION_OUT/Companion.dll') -or \$_.CommandLine.Replace('\\', '/').Contains('$SERVER_OUT/UiTestServer')) } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force }" >/dev/null 2>&1 || true
+    powershell.exe -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { \$_.ProcessId -ne \$PID -and \$_.CommandLine -and (\$_.CommandLine.Replace('\\', '/').Contains('$COMPANION_OUT/Companion.dll') -or \$_.CommandLine.Replace('\\', '/').Contains('$SERVER_OUT/UiTestServer')) } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force }" >/dev/null 2>&1 || true
     return
   fi
   pkill -f "$COMPANION_OUT/Companion.dll" 2>/dev/null || true
