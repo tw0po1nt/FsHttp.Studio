@@ -49,7 +49,7 @@ let private notAnFsxScript =
     }
 
 /// Parse-failure rows: total loss and partial loss.
-let private syntaxErrorRows =
+let private parseFailureRows =
     async {
         do! Checks.openFixtureAsSoleTab aboveFixture
 
@@ -132,9 +132,9 @@ let private countHoldsWithASecondScriptOpen =
 let tests =
     testList
         "document-aware status bar"
-        [ testCaseAsync "clean .fsx scripts report one, many, and zero requests" cleanScriptCounts
+        [ testCaseAsync "clean .fsx scripts report one, many, and zero Blocks" cleanScriptCounts
           testCaseAsync "an .fs module reads not an .fsx script" notAnFsxScript
-          testCaseAsync "syntax-error scripts report total loss and partial loss" syntaxErrorRows
+          testCaseAsync "Parse failure scripts report total loss and partial loss" parseFailureRows
           testCaseAsync "the item hides outside F# and returns on an .fsx script" hidesOutsideFSharp
           testCaseAsync "a document switch reads looking for requests… until locate" pendingOnDocumentSwitch
           testCaseAsync "the active script's count stays with a second script open" countHoldsWithASecondScriptOpen ]
