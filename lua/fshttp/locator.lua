@@ -185,13 +185,15 @@ local function forget(buf)
     set_answer(buf, nil)
 end
 
--- Paints each Block mark again with the current options.
+-- Paints each Block mark again with the current options. Only the ready and stopped states have
+-- a paint of their own. In each other state the Block marks wait for the next state change.
 function M.repaint()
+    local state = companion.state()
     for buf, marks in pairs(shown) do
         if vim.api.nvim_buf_is_loaded(buf) then
-            if companion.state() == "ready" then
+            if state == "ready" then
                 paint(buf, marks)
-            else
+            elseif state == "stopped" then
                 paint_stopped(buf)
             end
         end
