@@ -148,6 +148,17 @@ let private curlFor (name: string) =
     let c = cases |> List.find (fun c -> c.Name = name)
     copyText (envelopeFor c.Request) "curl"
 
+let private notesPipeCommand (base64: string) =
+    "printf '%s' '"
+    + base64
+    + "' \\\n"
+    + "  | base64 -d \\\n"
+    + "  | curl 'http://api.example.com/notes' \\\n"
+    + "    -H 'Content-Type: text/plain' \\\n"
+    + "    -H 'User-Agent:' \\\n"
+    + "    -H 'Accept:' \\\n"
+    + "    --data-binary @-"
+
 [<Tests>]
 let tests =
     testList
@@ -219,15 +230,7 @@ let tests =
           test "a body that is not safe to paste goes through the base64 pipe" {
               Expect.equal
                   (curlFor "body-crlf")
-                  (Some(
-                      "printf '%s' 'bGluZSBvbmUNCmxpbmUgdHdvDQo=' \\\n"
-                      + "  | base64 -d \\\n"
-                      + "  | curl 'http://api.example.com/notes' \\\n"
-                      + "    -H 'Content-Type: text/plain' \\\n"
-                      + "    -H 'User-Agent:' \\\n"
-                      + "    -H 'Accept:' \\\n"
-                      + "    --data-binary @-"
-                  ))
+                  (Some(notesPipeCommand "bGluZSBvbmUNCmxpbmUgdHdvDQo="))
                   "printf, base64 -d, and curl are on separate lines, and each curl argument is on its own line"
           }
 
@@ -249,20 +252,7 @@ let tests =
                   let env =
                       envelopeFor (request "POST" "/notes" [ "Content-Type", "text/plain" ] (Captured bytes))
 
-                  Expect.equal
-                      (copyText env "curl")
-                      (Some(
-                          "printf '%s' '"
-                          + Convert.ToBase64String bytes
-                          + "' \\\n"
-                          + "  | base64 -d \\\n"
-                          + "  | curl 'http://api.example.com/notes' \\\n"
-                          + "    -H 'Content-Type: text/plain' \\\n"
-                          + "    -H 'User-Agent:' \\\n"
-                          + "    -H 'Accept:' \\\n"
-                          + "    --data-binary @-"
-                      ))
-                      description
+                  Expect.equal (copyText env "curl") (Some(notesPipeCommand (Convert.ToBase64String bytes))) description
           }
 
           test "a body with characters outside ASCII, U+00A0, a tab, and an LF is safe to paste" {
