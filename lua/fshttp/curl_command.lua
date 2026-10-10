@@ -80,12 +80,19 @@ local function shell_quote(text)
     return "'" .. (text:gsub("'", "'\\''")) .. "'"
 end
 
+---@param header fshttp.Header
+---@param name string
+---@return boolean
+local function is_header_named(header, name)
+    return header.name:lower() == name:lower()
+end
+
 ---@param headers fshttp.Header[]
 ---@param name string
 ---@return boolean
 local function has_header(headers, name)
     for _, header in ipairs(headers) do
-        if header.name:lower() == name:lower() then
+        if is_header_named(header, name) then
             return true
         end
     end
@@ -95,24 +102,16 @@ end
 -- curl sends GET with no data flag and POST with one. `-X HEAD` makes curl wait for a body.
 ---@param method string
 ---@param has_body boolean
----@return string[]
+---@return string?
 local function method_flag(method, has_body)
     if (method == "POST" and has_body) or (method == "GET" and not has_body) then
-        return {}
+        return nil
     elseif method == "HEAD" then
-        return { "--head" }
+        return "--head"
     elseif method:match("^[A-Za-z0-9%-]*$") then
-        return { "-X " .. method }
+        return "-X " .. method
     end
-    return { "-X " .. shell_quote(method) }
-end
-
----@param list string[]
----@param items string[]
-local function append(list, items)
-    for _, item in ipairs(items) do
-        list[#list + 1] = item
-    end
+    return "-X " .. shell_quote(method)
 end
 
 ---@alias fshttp.CurlBody { inline: string }|{ base64: string }
@@ -123,7 +122,10 @@ end
 ---@return string
 local function command_text(request, body)
     local first_line = { "curl" }
-    append(first_line, method_flag(request.method, body ~= nil))
+    local flag = method_flag(request.method, body ~= nil)
+    if flag then
+        first_line[#first_line + 1] = flag
+    end
     first_line[#first_line + 1] = shell_quote(request.url)
 
     local arguments = { table.concat(first_line, " ") }
@@ -131,7 +133,7 @@ local function command_text(request, body)
         arguments[#arguments + 1] = "--globoff"
     end
     for _, header in ipairs(request.headers) do
-        if header.name:lower() ~= "content-length" then
+        if not is_header_named(header, "Content-Length") then
             local value = header.value:match("^[ \t]*$") and ";" or (": " .. header.value)
             arguments[#arguments + 1] = "-H " .. shell_quote(header.name .. value)
         end
@@ -146,10 +148,10 @@ local function command_text(request, body)
         end
     end
 
-    if body == nil then
-        return table.concat(arguments, " \\\n  ")
-    elseif body.inline then
-        arguments[#arguments + 1] = "--data-raw " .. shell_quote(body.inline)
+    if body == nil or body.inline then
+        if body then
+            arguments[#arguments + 1] = "--data-raw " .. shell_quote(body.inline)
+        end
         return table.concat(arguments, " \\\n  ")
     end
     -- `--data @-` removes each CR and LF from the body.
