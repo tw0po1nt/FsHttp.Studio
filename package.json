@@ -37,6 +37,20 @@
     "onLanguage:fsharp"
   ],
   "contributes": {
+    "commands": [
+      {
+        "command": "fshttpStudio.runRequestAtCursor",
+        "title": "FsHttp.Studio: Run request at cursor"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "fshttpStudio.runRequestAtCursor",
+          "when": "editorLangId == fsharp && resourceExtname == .fsx"
+        }
+      ]
+    },
     "configuration": {
       "title": "FsHttp.Studio",
       "properties": {

@@ -74,6 +74,7 @@ let activate (context: ExtensionContext) =
 
     let onState state =
         StatusBar.setCompanionState state
+        RunCommand.setCompanionState state
         CodeLensProvider.setReady (state = Ready)
 
     let startCompanion (dotnetPath: string) =
@@ -88,9 +89,7 @@ let activate (context: ExtensionContext) =
 
     let requiredSdk = sprintf ".NET %d SDK or newer" requiredMajor
 
-    let notifyNoSdk () =
-        StatusBar.setCompanionState SdkNotFound
-
+    let showNoSdkToast () =
         let message =
             match dotnetPathOverride with
             | Some path ->
@@ -108,6 +107,12 @@ let activate (context: ExtensionContext) =
         onResolved (window.showWarningMessage (message, getSdkLabel)) (fun chosen ->
             if unbox<string> chosen = getSdkLabel then
                 commands.executeCommand ("vscode.open", uri.parse dotnetDownloadUrl) |> ignore)
+
+    let notifyNoSdk () =
+        onState SdkNotFound
+        showNoSdkToast ()
+
+    context.subscriptions.Add(box (RunCommand.registerRunAtCursor showNoSdkToast))
 
     childProcess.execFile (
         dotnetPath,

@@ -80,9 +80,18 @@ let private resultUpdate (request: RequestData) (timing: Timing) (response: Resp
 
     createObj [ "tag" ==> "result"; "envelope" ==> envelope ]
 
-let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: int) (myGeneration: int) : Async<unit> =
+let mutable private companionState = Starting
+
+let setCompanionState (state: State) = companionState <- state
+
+let private runOne
+    (h: Companion.Handle)
+    (document: TextDocument)
+    (source: string)
+    (blockIndex: int)
+    (myGeneration: int)
+    : Async<unit> =
     async {
-        let source = document.getText ()
         // Only a `file`-scheme script has the absolute path FSI needs for `__SOURCE_DIRECTORY__`.
         let scriptFileName = scriptFileNameFor document.uri.scheme document.fileName
 
@@ -108,6 +117,24 @@ let private runOne (h: Companion.Handle) (document: TextDocument) (blockIndex: i
                 ResponseViewer.post (refusedUpdate refusal.Title refusal.Detail)
     }
 
+let private startRun (h: Companion.Handle) (document: TextDocument) (source: string) (blockIndex: int) =
+    generation <- generation + 1
+    let myGeneration = generation
+
+    match extensionUri with
+    | Some u -> ResponseViewer.showBeside u |> ignore
+    | None -> ()
+
+    ResponseViewer.post runningUpdate
+
+    runOne h document source blockIndex myGeneration |> Async.StartImmediate
+
+let private showRefusalToast (code: string) =
+    window.showWarningMessage ((Refusals.forCode code).Detail) |> ignore
+
+let private showCompanionStoppedToast () =
+    window.showWarningMessage Refusals.companionStopped.Detail |> ignore
+
 /// Registers the command that a `▶ Run request` CodeLens invokes. The caller passes the same
 /// `TextDocument` that the lens was computed against, and the block's 0-based index into that
 /// document's located blocks. These match the `arguments` in `CodeLensProvider.fs`.
@@ -123,16 +150,44 @@ let register () : Disposable =
                 let document = unbox<TextDocument> doc
                 let blockIndex = unbox<int> idx
 
-                generation <- generation + 1
-                let myGeneration = generation
+                startRun h document (document.getText ()) blockIndex)
+    )
 
-                match extensionUri with
-                | Some u -> ResponseViewer.showBeside u |> ignore
-                | None -> ()
+[<Literal>]
+let runAtCursorCommandId = "fshttpStudio.runRequestAtCursor"
 
-                ResponseViewer.post runningUpdate
+let private runAtCursor (h: Companion.Handle) (editor: TextEditor) : Async<unit> =
+    async {
+        let document = editor.document
+        let source = document.getText ()
+        let cursorLine = editor.selection.active.line + 1
+        let! located = Companion.locate h source
 
-                runOne h document blockIndex myGeneration |> Async.StartImmediate)
+        match located.Ranges, located.ParseFailed with
+        | [], true -> window.showWarningMessage Refusals.noBlocksParseFailure |> ignore
+        | [], false -> window.showInformationMessage Refusals.noBlocksEmpty |> ignore
+        | ranges, _ ->
+            match blockAtCursor cursorLine ranges with
+            | Some i ->
+                match ranges.[i].Refusal with
+                | Some code -> showRefusalToast code
+                | None -> startRun h document source i
+            | None -> ()
+    }
+
+/// `showNoSdk` is the SDK toast of activation, which this module compiles before.
+let registerRunAtCursor (showNoSdk: unit -> unit) : Disposable =
+    commands.registerCommand (
+        runAtCursorCommandId,
+        System.Action<obj, obj>(fun _ _ ->
+            match window.activeTextEditor with
+            | Some editor when isScriptFileName editor.document.fileName ->
+                match companionState, handle with
+                | SdkNotFound, _ -> showNoSdk ()
+                | Stopped, _ -> showCompanionStoppedToast ()
+                | Ready, Some h -> runAtCursor h editor |> Async.StartImmediate
+                | _ -> ()
+            | _ -> window.showInformationMessage Refusals.runAtCursorNeedsScript |> ignore)
     )
 
 /// Touches neither the response viewer nor the generation counter, because no Run starts.
@@ -152,7 +207,7 @@ let registerExplain () : Disposable =
                     let! located = Companion.locate h (document.getText ())
 
                     match List.tryItem blockIndex located.Ranges |> Option.bind (fun r -> r.Refusal) with
-                    | Some code -> window.showWarningMessage ((Refusals.forCode code).Detail) |> ignore
+                    | Some code -> showRefusalToast code
                     | None -> ()
                 }
                 |> Async.StartImmediate)
@@ -162,6 +217,5 @@ let registerExplain () : Disposable =
 let registerExplainCompanionStopped () : Disposable =
     commands.registerCommand (
         CodeLensProvider.explainStoppedCommandId,
-        System.Action<obj, obj>(fun _documentArg _indexArg ->
-            window.showWarningMessage Refusals.companionStopped.Detail |> ignore)
+        System.Action<obj, obj>(fun _documentArg _indexArg -> showCompanionStoppedToast ())
     )

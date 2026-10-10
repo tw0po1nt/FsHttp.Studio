@@ -30,6 +30,8 @@ type TextEditor =
     abstract isDirty: unit -> JS.Promise<bool>
     /// The input area takes no keys until its editor has focus.
     abstract focus: unit -> JS.Promise<unit>
+    /// Puts the caret on a 1-based line and column.
+    abstract moveCursor: line: int * column: int -> JS.Promise<unit>
 
 type WebView =
     abstract switchBack: unit -> JS.Promise<unit>
@@ -970,9 +972,9 @@ let tryCloseResponseViewer () : Async<bool> =
             return false
     }
 
-/// Finds a standalone warning toast whose text is exactly `message`. `None` when no notification
-/// list is available, or none matches.
-let private tryFindWarningNotification (message: string) : Async<Notification option> =
+/// Finds a standalone toast of the given ExTester type whose text is exactly `message`. `None`
+/// when no notification list is available, or none matches.
+let private tryFindNotification (notificationKind: string) (message: string) : Async<Notification option> =
     async {
         let workbench = Workbench.create ()
         let! notifications = workbench.getNotifications () |> Async.AwaitPromise
@@ -987,29 +989,25 @@ let private tryFindWarningNotification (message: string) : Async<Notification op
                     let! text = notification.getMessage () |> Async.AwaitPromise
                     let! notificationType = notification.getType () |> Async.AwaitPromise
 
-                    if notificationType = "warning" && text = message then
+                    if notificationType = notificationKind && text = message then
                         found <- Some notification
 
             return found
     }
 
-/// True when a standalone warning toast shows exactly `message`. Reads the notification UI
-/// rather than a `showWarningMessage` call site.
-let tryWarningNotification (message: string) : Async<bool> =
+let private tryNotification (notificationKind: string) (message: string) : Async<bool> =
     async {
         try
-            let! found = tryFindWarningNotification message
+            let! found = tryFindNotification notificationKind message
             return found.IsSome
         with _ ->
             return false
     }
 
-/// Finds a warning toast whose text is exactly `message` and dismisses it in the same attempt.
-/// Pair with `Harness.eventually`: a stale handle between find and dismiss fails the attempt.
-let tryDismissWarningNotification (message: string) : Async<bool> =
+let private tryDismissNotification (notificationKind: string) (message: string) : Async<bool> =
     async {
         try
-            let! found = tryFindWarningNotification message
+            let! found = tryFindNotification notificationKind message
 
             match found with
             | Some notification ->
@@ -1019,6 +1017,21 @@ let tryDismissWarningNotification (message: string) : Async<bool> =
         with _ ->
             return false
     }
+
+/// True when a standalone warning toast shows exactly `message`. Reads the notification UI
+/// rather than a `showWarningMessage` call site.
+let tryWarningNotification (message: string) : Async<bool> = tryNotification "warning" message
+
+/// Finds a warning toast whose text is exactly `message` and dismisses it in the same attempt.
+/// Pair with `Harness.eventually`: a stale handle between find and dismiss fails the attempt.
+let tryDismissWarningNotification (message: string) : Async<bool> =
+    tryDismissNotification "warning" message
+
+/// True when a standalone info toast shows exactly `message`.
+let tryInfoNotification (message: string) : Async<bool> = tryNotification "info" message
+
+/// Finds an info toast whose text is exactly `message` and dismisses it in the same attempt.
+let tryDismissInfoNotification (message: string) : Async<bool> = tryDismissNotification "info" message
 
 /// Opens the Problems view, filters it to `fixtureFileName`, and returns true when no visible
 /// markers remain for that filter. Pair with `Harness.eventually` after a positive tell that the
@@ -1067,6 +1080,24 @@ let private fixtureEditor () : Async<TextEditor> =
     async {
         let! group = editorGroup fixtureGroupIndex
         return TextEditor.createInGroup group
+    }
+
+/// The palette title of the command that runs the Block at the cursor.
+let runAtCursorTitle = "FsHttp.Studio: Run request at cursor"
+
+/// Runs the command from the command palette, as a user does, once the fixture column has focus
+/// and the caret sits on the 1-based `line`.
+let tryRunAtCursorFromPalette (line: int) : Async<bool> =
+    async {
+        try
+            do! focusFixtureEditor ()
+            let! editor = fixtureEditor ()
+            do! editor.moveCursor (line, 1) |> Async.AwaitPromise
+            let workbench = Workbench.create ()
+            do! workbench.executeCommand runAtCursorTitle |> Async.AwaitPromise
+            return true
+        with _ ->
+            return false
     }
 
 /// An editor tab's dirty flag and full buffer text: the pair every buffer claim below reads, and

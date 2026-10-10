@@ -35,6 +35,10 @@ let LensAbsenceSettleMs = 3_000.0
 /// land inside this window, and a single reading taken the moment the text arrived would miss it.
 let StatusStabilitySettleMs = 3_000.0
 
+/// How long a claim that *no* Response viewer opened must stay true before it is believed. A viewer
+/// that a defect opens can paint after the refusal toast, so a reading at the toast is not evidence.
+let ViewerAbsenceSettleMs = 3_000.0
+
 /// Green-path budget for the `before` hook through proven-live.
 let HarnessSetupBudgetMs = 180_000
 

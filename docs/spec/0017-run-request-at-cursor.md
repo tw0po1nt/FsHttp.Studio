@@ -81,7 +81,7 @@ The companion and the envelope do not change. No setting is added.
 
 | State | Result |
 |---|---|
-| No active editor, or an editor that is not a Script | INFO toast: "Run request at cursor runs a request from an F# script (.fsx). Open a script and put the cursor in a request." |
+| No active editor, or an editor that is not a Script | INFO toast: "Open an F# script (.fsx) to run the request at the cursor." |
 | Companion stopped | The stopped toast that a stopped lens shows, with the "Restart companion" button of spec 0018. The command maps no cursor and opens no quick pick. |
 | .NET SDK not found | The SDK toast that activation shows, with the "Get the .NET SDK" button. The command maps no cursor and opens no quick pick. |
 | Companion starting | The wait of decision 6. |
