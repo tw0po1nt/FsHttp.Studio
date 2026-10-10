@@ -279,20 +279,22 @@ let tryEchoResponseRendered () =
         && dom.UrlText.Contains(echoUrl ())
         && dom.JsonBodyText.Contains Harness.echoAckKey)
 
-/// Opens the echo fixture as the sole tab, runs its one block, and returns once the viewer has
-/// painted the acknowledgement.
+/// The companion does not read a streamed body, so the Request section shows a reason.
+let streamedEchoFixtureFileName = "not-captured.fsx"
+
+/// Opens a fixture as the sole tab, runs its one `/echo` block, and waits for the acknowledgement.
 ///
 /// Opens through `openFixtureAsSoleTab` for the reason the core path documents: a second tab in
 /// the column can put the lens read on a hidden editor that carries no widgets.
-let runEchoFixture () =
+let private runEchoBlock (fileName: string) =
     async {
-        do! openFixtureAsSoleTab echoFixtureFileName
+        do! openFixtureAsSoleTab fileName
 
         do!
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
                 "a Run request lens above the fixture's single block"
-                (fun () -> tryRunRequestLensAboveEachBlock echoBlockCount echoFixtureFileName)
+                (fun () -> tryRunRequestLensAboveEachBlock echoBlockCount fileName)
 
         do!
             Harness.eventually Harness.LensAppearanceDeadlineMs "a click on the Run request lens" (fun () ->
@@ -304,6 +306,13 @@ let runEchoFixture () =
                 "status 200, the absolute URL the block posted to, and the echo acknowledgement"
                 tryEchoResponseRendered
     }
+
+/// Runs the echo fixture, whose request body the companion reads.
+let runEchoFixture () = runEchoBlock echoFixtureFileName
+
+/// Runs the streamed echo fixture, whose request body the companion does not read.
+let runStreamedEchoFixture () =
+    runEchoBlock streamedEchoFixtureFileName
 
 /// A successful `/json` Run as the viewer renders it: status 200, `urlTell` somewhere in the
 /// status line's URL, and the probe body matched by its key *and* its value from the

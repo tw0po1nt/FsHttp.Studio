@@ -71,7 +71,8 @@ as sent.
 | Each other set of captured bytes | `printf '%s' '<base64>' \| base64 -d \| curl ... --data-binary @-` |
 | Not read by the companion | No Curl command. |
 
-- A body is safe to paste when it is valid UTF-8 and contains no control byte except tab and LF. The
+- A body is safe to paste when it is valid UTF-8 and contains no control character except tab and
+  LF. The control characters are C0 (U+0000 to U+001F), DEL (U+007F), and C1 (U+0080 to U+009F). The
   rule is strict, so it gives the same result in both Clients. The display heuristic `looksBinary`
   does not decide it.
 - The inline form uses `--data-raw`, because `--data-binary` and `--data` read a file when the body
@@ -85,15 +86,22 @@ as sent.
 - curl sends GET with no data flag and POST with a data flag. The command adds a method flag only
   when the method of the Run differs from that default.
 - HEAD uses `--head`, because `-X HEAD` makes curl wait for a body.
+- A HEAD with a body gives no Curl command, because curl refuses `--head` with a data flag.
 - Each other case uses `-X <METHOD>`. A GET with a body is one example.
 - A URL that contains `[`, `]`, `{`, or `}` gets `--globoff`.
 
 ### 5. Headers
 
 - Each header of the Request goes out as `-H 'Name: value'`, in the order of the Request section.
+- A header whose value is empty, or has only spaces and tabs, goes out as `-H 'Name;'`. curl
+  removes a header that it gets as `-H 'Name:'`.
 - The command drops `Content-Length` only, because curl computes it.
 - Each other header stays as it is, `Host` and `Accept-Encoding` included.
+- curl adds `User-Agent` and `Accept` to each request. When the Request has no `User-Agent`, the
+  command adds `-H 'User-Agent:'`. When the Request has no `Accept`, the command adds `-H 'Accept:'`.
 - When the request has a body and no `Content-Type`, the command adds `-H 'Content-Type:'`.
+- These empty headers come after the headers of the Request, in the order `User-Agent`, `Accept`,
+  `Content-Type`.
 
 ### 6. Quoting and layout
 
@@ -106,12 +114,15 @@ as sent.
 curl -X PUT 'https://api.example.com/items/7' \
   -H 'Accept: application/json' \
   -H 'Content-Type: application/json' \
+  -H 'User-Agent:' \
   --data-raw '{"name":"snorlax"}'
 
 printf '%s' 'iVBORw0KGgo...' \
   | base64 -d \
   | curl 'https://api.example.com/upload' \
     -H 'Content-Type: image/png' \
+    -H 'User-Agent:' \
+    -H 'Accept:' \
     --data-binary @-
 ```
 
@@ -145,16 +156,18 @@ There is one Golden fixture for each rule. renderer.Tests writes each fixture, a
 suite reads it.
 
 - **Method and URL:** `get-no-body`, `post-json-inline`, `get-with-body`, `head`, `put-no-body`, `url-glob-chars`
-- **Headers:** `drops-content-length`, `body-no-content-type`, `value-single-quote`
+- **Headers:** `drops-content-length`, `body-no-content-type`, `value-single-quote`, `header-empty-value`
 - **Inline body:** `body-single-quote`, `body-leading-at`, `body-16384-bytes`
 - **Base64 pipe:** `body-16385-bytes`, `body-crlf`, `body-multipart`, `body-nul`, `body-invalid-utf8`, `body-control-byte`
-- **No command:** `not-captured`
+- **No command:** `not-captured`, `head-with-body`
 
 ### renderer.Tests
 
 - The `curl` key of `copyText` for each fixture.
 - **A replay test.** It runs the command of each Golden fixture with `sh` and `curl` against a
   local echo server. It compares the method, URL, headers, and body bytes that the server receives.
+  The headers must be the headers of the Run, in the same order. `Host` and `Content-Length` are
+  the only other headers that the server can receive.
   The test runs on Linux and macOS, outside the Release gate. It adds no `curl` dependency to the
   Release gate on Windows.
 
