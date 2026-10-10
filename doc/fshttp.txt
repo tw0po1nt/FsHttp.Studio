@@ -107,13 +107,23 @@ Optional:
 
                                                                 *:FsHttp-yank*
 :FsHttp yank {item} [register]
-    Put the Copy text of {item} from the last Run in [register]. The items are
-    `request`, `headers`, and `body`. With no [register], the command uses
-    |v:register|, which is the default register in an Ex command.
+    Put the text of {item} from the last Run in [register]. The items
+    `request`, `headers`, and `body` give the Copy text. The item `curl` gives
+    the Curl command. With no [register], the command uses |v:register|,
+    which is the default register in an Ex command.
     Example: >vim
         :FsHttp yank body +
 <
     A Body of zero bytes has no Copy text, and the command writes no register.
+
+    The Curl command sends the same method, URL, headers, and body bytes as
+    the Run, in a POSIX shell such as bash, zsh, Git Bash, or WSL. A body is
+    safe to paste when it is valid UTF-8 and has no control character except
+    tab and LF. A body that is not safe to paste, or that is above 16,384
+    bytes, goes through `base64 -d` to curl. Two requests have no Curl
+    command: a request whose body the companion did not read, and a HEAD
+    request with a body. For these requests, the command writes no register
+    and gives a WARN notice with the reason.
 
 ==============================================================================
 4. Maps and keys                                                 *fshttp-maps*
@@ -133,6 +143,7 @@ The Response buffer maps these local keys. Set
     `yr`     Yank the Request                    |<Plug>(FsHttpYankRequest)|
     `yh`     Yank the Response headers           |<Plug>(FsHttpYankHeaders)|
     `yb`     Yank the Body                       |<Plug>(FsHttpYankBody)|
+    `yc`     Yank the Curl command               |<Plug>(FsHttpYankCurl)|
     `<CR>`   Move to a Compile error position    |<Plug>(FsHttpJump)|
     `g?`     List the active keys                |<Plug>(FsHttpHelp)|
 
@@ -148,6 +159,11 @@ The Response buffer maps these local keys. Set
                                                       *<Plug>(FsHttpYankBody)*
 <Plug>(FsHttpYankBody)
     Put the Copy text of the Body in |v:register|.
+
+                                                      *<Plug>(FsHttpYankCurl)*
+<Plug>(FsHttpYankCurl)
+    Put the Curl command of the Request in |v:register|, as
+    |:FsHttp-yank| `curl` does.
 
                                                           *<Plug>(FsHttpJump)*
 <Plug>(FsHttpJump)

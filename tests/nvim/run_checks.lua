@@ -890,10 +890,71 @@ T[":FsHttp yank and yr, yh, and yb put the Copy text in the register, and g? lis
             "yr  Yank the Request",
             "yh  Yank the Response headers",
             "yb  Yank the Body",
+            "yc  Yank the Curl command",
             "<CR>  Move to a Compile error position",
             "g?  List the active keys",
         }, "\n")
     )
+end
+
+T[":FsHttp yank completes curl, and :FsHttp yank curl and yc put the Curl command in the unnamed register"] = function()
+    local child = harness.harness_setup_child()
+    local base_url = harness.base_url()
+    assert.same({ "curl" }, harness.lua_get(child, [[vim.fn.getcompletion("FsHttp yank c", "cmdline")]]))
+    open_script(child, harness.fixture("request-section.fsx"), { 27 })
+    harness.run_at(child, 28)
+    local snapshot = eventually_response(child, "the echoed body in the Response buffer", function(shown)
+        return only_window(shown) ~= nil and has_line(shown.lines, '  "echoed": "ui-test-server"')
+    end)
+
+    local count = #harness.notices(child)
+    harness.cmd(child, "FsHttp yank curl")
+    expect_notice(child, count, vim.log.levels.INFO, 'Yanked the Curl command to register ".')
+    local command = harness.lua_get(child, [[vim.fn.getreg('"')]])
+    assert.equal("curl '" .. base_url .. "/echo' \\", command:match("^[^\n]*"), command)
+    assert.equal(true, command:find("\n  -H 'X-Fixture: request-section' \\\n", 1, true) ~= nil, command)
+    assert.equal(true, ends_with(command, '\n  --data-raw \'{"posted":"request-section-fixture"}\''), command)
+
+    harness.lua_get(child, [[vim.fn.setreg('"', "")]])
+    harness.lua_get(child, "vim.api.nvim_set_current_win(...)", { assert(only_window(snapshot)).id })
+    count = #harness.notices(child)
+    harness.type_keys(child, "yc")
+    expect_notice(child, count, vim.log.levels.INFO, 'Yanked the Curl command to register ".')
+    assert.equal(command, harness.lua_get(child, [[vim.fn.getreg('"')]]), "yc gives the same Curl command")
+end
+
+T["a binary body gives the base64 pipe, and a body that the companion did not read gives a WARN notice"] = function()
+    local child = harness.harness_setup_child()
+    local base_url = harness.base_url()
+    open_script(child, harness.fixture("binary-body.fsx"), { 27, 29, 35 })
+
+    harness.run_at(child, 29)
+    eventually_response(child, "the hex view of the sent bytes in the Request fold", function(snapshot)
+        return only_window(snapshot) ~= nil and has_line(snapshot.lines, "  Binary body: 6 B")
+    end)
+    local count = #harness.notices(child)
+    harness.cmd(child, "FsHttp yank curl")
+    expect_notice(child, count, vim.log.levels.INFO, 'Yanked the Curl command to register ".')
+    local pipe = harness.lua_get(child, [[vim.fn.getreg('"')]])
+    local head = "printf '%s' 'AAEC/wCA' \\\n  | base64 -d \\\n  | curl '" .. base_url .. "/echo' \\\n"
+    assert.equal(head, pipe:sub(1, #head), pipe)
+    assert.equal(true, ends_with(pipe, "\n    --data-binary @-"), pipe)
+
+    harness.run_at(child, 35)
+    local not_captured = eventually_response(child, "the reason for the stream in the Request fold", function(snapshot)
+        return has_line(snapshot.lines, "  streamed body: not captured, so that the upload is unchanged")
+    end)
+    local warning = "Nothing was yanked. The companion did not read the body of the Request, "
+        .. "so a Curl command would send a different request."
+    count = #harness.notices(child)
+    harness.cmd(child, "FsHttp yank curl")
+    expect_notice(child, count, vim.log.levels.WARN, warning)
+
+    harness.lua_get(child, "vim.api.nvim_set_current_win(...)", { assert(only_window(not_captured)).id })
+    count = #harness.notices(child)
+    harness.type_keys(child, "yc")
+    expect_notice(child, count, vim.log.levels.WARN, warning)
+    assert.equal(pipe, harness.lua_get(child, [[vim.fn.getreg('"')]]), "no yank writes the register")
 end
 
 T["a yank to + with no clipboard provider gives the ERROR notice that names the failure"] = function()
@@ -932,7 +993,7 @@ T["a yank before any Run gives a WARN notice, and an unknown name or register gi
     expect_notice(child, 0, vim.log.levels.WARN, "The latest Run gave no response. Run a Block first.")
 
     harness.cmd(child, "FsHttp yank nothing")
-    expect_notice(child, 1, vim.log.levels.ERROR, ":FsHttp yank takes one of: request, headers, body.")
+    expect_notice(child, 1, vim.log.levels.ERROR, ":FsHttp yank takes one of: request, headers, body, curl.")
 
     harness.cmd(child, "FsHttp yank body ab")
     expect_notice(child, 2, vim.log.levels.ERROR, ":FsHttp yank takes one register name, such as + or a. It got ab.")
