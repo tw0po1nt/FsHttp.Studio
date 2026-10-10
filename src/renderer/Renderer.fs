@@ -371,9 +371,18 @@ let private methodFlag (httpMethod: string) (hasBody: bool) : string list =
     | _ when isPlainToken -> [ "-X " + httpMethod ]
     | _ -> [ "-X " + shellQuote httpMethod ]
 
+type private CurlBody =
+    | NoData
+    | InlineText of text: string
+    | Base64Pipe of base64: string
+
 /// `--data-raw` reads no file at a leading `@`. curl removes a `Name:` header and adds its own default headers.
-let private curlLines (request: RequestView) (bodyText: string option) : string =
-    let hasBody = Option.isSome bodyText
+let private curlLines (request: RequestView) (body: CurlBody) : string =
+    let hasBody =
+        match body with
+        | NoData -> false
+        | InlineText _
+        | Base64Pipe _ -> true
 
     let firstLine =
         "curl" :: methodFlag request.Method hasBody @ [ shellQuote request.Url ]
@@ -400,21 +409,31 @@ let private curlLines (request: RequestView) (bodyText: string option) : string 
         |> List.map (fun name -> "-H " + shellQuote (name + ":"))
 
     let data =
-        bodyText
-        |> Option.map (fun text -> "--data-raw " + shellQuote text)
-        |> Option.toList
+        match body with
+        | NoData -> []
+        | InlineText text -> [ "--data-raw " + shellQuote text ]
+        // `--data @-` removes each CR and LF from the body.
+        | Base64Pipe _ -> [ "--data-binary @-" ]
 
-    firstLine :: globoff @ headers @ removedDefaults @ data
-    |> String.concat " \\\n  "
+    let arguments = firstLine :: globoff @ headers @ removedDefaults @ data
+
+    match body with
+    | Base64Pipe base64 ->
+        "printf '%s' "
+        + shellQuote base64
+        + " \\\n  | base64 -d \\\n  | "
+        + String.concat " \\\n    " arguments
+    | NoData
+    | InlineText _ -> String.concat " \\\n  " arguments
 
 /// curl refuses `--head` with a data flag.
 let private curlCommand (request: RequestView) : string option =
     match request.Method, request.Body with
     | "HEAD", (Captured _ | NotCaptured _) -> None
-    | _, NoBody -> Some(curlLines request None)
+    | _, NoBody -> Some(curlLines request NoData)
     | _, Captured bytes when bytes.Length <= maxInlineBodyBytes && isSafeToPaste bytes ->
-        Some(curlLines request (Some(decodeText bytes)))
-    | _, Captured _
+        Some(curlLines request (InlineText(decodeText bytes)))
+    | _, Captured bytes -> Some(curlLines request (Base64Pipe(toBase64 bytes)))
     | _, NotCaptured _ -> None
 
 /// `None` means that there is nothing to copy, and the renderer then omits the button.
