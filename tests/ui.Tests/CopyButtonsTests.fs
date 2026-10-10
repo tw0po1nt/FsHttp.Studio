@@ -6,12 +6,16 @@ module CopyButtonsTests
 
 open Fable.Mocha
 
-/// Both header sections collapsed, each copy button laid out, and the three shell margins the
+/// Both header sections collapsed, each copy button laid out with its own label, and the three
+/// shell margins the
 /// product requires: 12px, 12px, then 0 on the last shell, because the body has no bottom margin.
 ///
 /// `Displayed` claims the button is present and has a size. The closed-`<details>` defect, where
 /// the browser reports a button as visible while it paints nothing, is outside what this
 /// measures. Only a screenshot shows that one.
+let private expectedCopyKeys =
+    [| "curl"; "request"; "response-headers"; "response-body" |]
+
 let private tryCollapsedButtonsAndSpacing () =
     async {
         match! ExTester.tryReadCopySurface () with
@@ -20,12 +24,9 @@ let private tryCollapsedButtonsAndSpacing () =
             return
                 not surface.RequestOpen
                 && not surface.HeadersOpen
-                && surface.Buttons.Length = 3
+                && (surface.Buttons |> Array.map (fun b -> b.Key)) = expectedCopyKeys
                 && (surface.Buttons
-                    |> Array.forall (fun b ->
-                        (b.Key = "request" || b.Key = "response-headers" || b.Key = "response-body")
-                        && b.Displayed
-                        && b.Label = ExTester.copyButtonRestingLabel))
+                    |> Array.forall (fun b -> b.Displayed && b.Label = ExTester.copyButtonRestingLabel b.Key))
                 && surface.ShellMarginsPx.Length = 3
                 && surface.ShellMarginsPx[0] = 12.
                 && surface.ShellMarginsPx[1] = 12.
@@ -75,6 +76,13 @@ let private bodyPayloadHolds (text: string) =
     && text.Contains("\"" + Harness.echoAckValue + "\"")
     && not (text.Contains "\n")
 
+/// The Curl command of the echo fixture. A POST with a body needs no method flag, and the body
+/// goes inline after the headers.
+let private curlPayloadHolds (text: string) =
+    text.StartsWith("curl '" + Checks.echoUrl () + "' \\\n")
+    && text.Contains(sprintf "  -H '%s: %s' \\\n" Harness.postedHeaderName Harness.postedHeaderValue)
+    && text.EndsWith(sprintf "\n  --data-raw '%s'" Harness.postedBody)
+
 /// Every copy click and its flash, against one Run of the echo fixture.
 ///
 /// Each click is followed by the wait for its own label to return to `Copy`. Leaving a button
@@ -89,8 +97,8 @@ let private clickAndAwaitRevert (key: string) (description: string) (holds: stri
         do!
             Harness.eventually
                 Harness.ViewerUpdateDeadlineMs
-                (sprintf "the %s copy button label to return to %s" key ExTester.copyButtonRestingLabel)
-                (fun () -> ExTester.tryCopyButtonLabel key ExTester.copyButtonRestingLabel)
+                (sprintf "the %s copy button label to return to %s" key (ExTester.copyButtonRestingLabel key))
+                (fun () -> ExTester.tryCopyButtonLabel key (ExTester.copyButtonRestingLabel key))
     }
 
 let private theCopyButtons =
@@ -130,11 +138,49 @@ let private theCopyButtons =
         do!
             Harness.eventually
                 Harness.ViewerUpdateDeadlineMs
-                (sprintf "the Copy failed label to return to %s" ExTester.copyButtonRestingLabel)
-                (fun () -> ExTester.tryCopyButtonLabel "response-body" ExTester.copyButtonRestingLabel)
+                (sprintf "the Copy failed label to return to %s" (ExTester.copyButtonRestingLabel "response-body"))
+                (fun () ->
+                    ExTester.tryCopyButtonLabel "response-body" (ExTester.copyButtonRestingLabel "response-body"))
+    }
+
+let private theCopyAsCurlButton =
+    async {
+        do! Checks.runEchoFixture ()
+
+        do!
+            clickAndAwaitRevert
+                "curl"
+                "a click on the Copy as curl button puts the Curl command on the clipboard"
+                curlPayloadHolds
+    }
+
+/// The Request copy button is the tell that the viewer painted this Run's copy buttons, so the
+/// absence of the curl key is a claim about this Run.
+let private tryRequestButtonWithoutCurl () =
+    async {
+        match! ExTester.tryReadCopySurface () with
+        | None -> return false
+        | Some surface ->
+            let keys = surface.Buttons |> Array.map (fun b -> b.Key)
+            return Array.contains "request" keys && not (Array.contains "curl" keys)
+    }
+
+let private noCopyAsCurlForANotCapturedBody =
+    async {
+        do! Checks.runStreamedEchoFixture ()
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "a Request copy button and no Copy as curl button for a body that the companion did not read"
+                tryRequestButtonWithoutCurl
     }
 
 let tests =
     testList
         "the copy buttons"
-        [ testCaseAsync "copy each section, flash the label, and leave sections collapsed" theCopyButtons ]
+        [ testCaseAsync "copy each section, flash the label, and leave sections collapsed" theCopyButtons
+          testCaseAsync "copy the request as a Curl command" theCopyAsCurlButton
+          testCaseAsync
+              "a body that the companion did not read has no Copy as curl button"
+              noCopyAsCurlForANotCapturedBody ]

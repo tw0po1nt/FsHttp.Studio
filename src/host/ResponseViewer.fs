@@ -113,10 +113,14 @@ summary::-webkit-details-marker { display: none; }
 /* The body is the last section, and it had no bottom margin before the shell existed.
    Zero here keeps the spacing where it was. */
 .section-shell:last-child { margin-bottom: 0; }
-.copy-button {
+.copy-actions {
   position: absolute;
   top: 4px;
   right: 6px;
+  display: flex;
+  gap: 4px;
+}
+.copy-button {
   padding: 2px 8px;
   font-family: var(--vscode-font-family);
   font-size: 0.82em;

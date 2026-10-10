@@ -12,6 +12,8 @@
     <Compile Include="JsonPrettyPrintGoldenTests.fs" />
     <Compile Include="BinaryGoldenTests.fs" />
     <Compile Include="CopyTextGoldenTests.fs" />
+    <Compile Include="CurlCommandGoldenTests.fs" />
+    <Compile Include="CurlReplayTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

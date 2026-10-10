@@ -164,7 +164,10 @@ type ResponseViewerDom =
 /// restores it. Restated here because this suite does not compile the renderer; it is a
 /// cross-boundary contract on the same terms as the selectors below, and the check that watches
 /// the label return to it after a flash is what keeps the two spellings honest.
-let copyButtonRestingLabel = "Copy"
+let copyButtonRestingLabel (key: string) =
+    match key with
+    | "curl" -> "Copy as curl"
+    | _ -> "Copy"
 
 /// Cross-boundary contract with the shipping renderer. Each selector must match the class name
 /// `Renderer` writes and `ResponseViewer`'s stylesheet colors; the viewer tab title must match the
@@ -1457,7 +1460,7 @@ let tryClickCopyButton (grant: ClipboardGrant) (key: string) : Async<CopyClickRe
                     async {
                         let call: JS.Promise<objnull> =
                             emitJsExpr
-                                (driver, readCopyClickScript, key, copyButtonRestingLabel)
+                                (driver, readCopyClickScript, key, copyButtonRestingLabel key)
                                 "$0.executeScript($1, $2, $3)"
 
                         let! raw = call |> Async.AwaitPromise

@@ -167,5 +167,5 @@ let tests =
           }
 
           test "an unknown key has nothing to copy" {
-              Expect.equal (copyText (List.head cases).Env "nothing") None "only the three copy keys give a Copy text"
+              Expect.equal (copyText (List.head cases).Env "nothing") None "only the copy keys give a Copy text"
           } ]

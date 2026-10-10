@@ -557,23 +557,58 @@ let copyTextTests =
 
           test "an unknown key yields None" {
               let env = envelope "text/plain" (utf8 "x")
-              Expect.equal (copyText env "nope") None "only the three known keys are defined"
+              Expect.equal (copyText env "nope") None "only the four known keys are defined"
           } ]
 
 [<Tests>]
 let copyButtonPlacementTests =
     testList
         "copy button placement"
-        [ test "a full render has three copy buttons with the three keys" {
+        [ test "a full render has four copy buttons, and Copy as curl comes first in the Request section" {
               let node = render (envelope "application/json" (utf8 """{"ok":true}"""))
               let buttons = byClass "copy-button" node
               let keys = buttons |> List.map (attr "data-copy") |> List.choose id
 
-              Expect.equal (List.length buttons) 3 "a full render has exactly three copy buttons"
-              Expect.equal keys [ "request"; "response-headers"; "response-body" ] "keys in section order"
+              Expect.equal (List.length buttons) 4 "a full render has exactly four copy buttons"
+
+              Expect.equal
+                  keys
+                  [ "curl"; "request"; "response-headers"; "response-body" ]
+                  "keys in section order, with the Curl command beside the request"
           }
 
-          test "a 204 No Content render has two copy buttons, and no response-body button" {
+          test "the Copy as curl button shows its own label" {
+              let node = render (envelope "application/json" (utf8 """{"ok":true}"""))
+
+              let labels =
+                  byClass "copy-button" node
+                  |> List.map (fun button -> attr "data-copy" button, innerText button)
+
+              Expect.equal
+                  labels
+                  [ Some "curl", "Copy as curl"
+                    Some "request", "Copy"
+                    Some "response-headers", "Copy"
+                    Some "response-body", "Copy" ]
+                  "each button shows the label of its key"
+          }
+
+          test "a request body that the companion did not read has no Copy as curl button" {
+              let env =
+                  { envelope "text/plain" (utf8 "ok") with
+                      Request =
+                          { requestWithNoBody "POST" "https://api.example.com/upload" with
+                              Body = NotCaptured "streamed body: not captured, so that the upload is unchanged" } }
+
+              let keys =
+                  byClass "copy-button" (render env)
+                  |> List.map (attr "data-copy")
+                  |> List.choose id
+
+              Expect.equal keys [ "request"; "response-headers"; "response-body" ] "no curl key"
+          }
+
+          test "a 204 No Content render has no response-body button" {
               let env =
                   { envelope "text/plain" [||] with
                       Status = 204
@@ -583,8 +618,8 @@ let copyButtonPlacementTests =
               let buttons = byClass "copy-button" node
               let keys = buttons |> List.map (attr "data-copy") |> List.choose id
 
-              Expect.equal (List.length buttons) 2 "an empty body omits the response-body button"
-              Expect.equal keys [ "request"; "response-headers" ] "only request and response-headers"
+              Expect.equal (List.length buttons) 3 "an empty body omits the response-body button"
+              Expect.equal keys [ "curl"; "request"; "response-headers" ] "no response-body key"
           }
 
           test "no copy button is a descendant of details or summary" {
@@ -602,5 +637,8 @@ let copyButtonPlacementTests =
               let node = render (envelope "application/json" (utf8 """{"ok":true}"""))
               let live = byClass "copy-button" node |> List.map (attr "aria-live")
 
-              Expect.equal live [ Some "polite"; Some "polite"; Some "polite" ] "aria-live=polite on each button"
+              Expect.equal
+                  live
+                  [ Some "polite"; Some "polite"; Some "polite"; Some "polite" ]
+                  "aria-live=polite on each button"
           } ]

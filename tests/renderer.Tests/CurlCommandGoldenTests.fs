@@ -1,0 +1,177 @@
+module Renderer.Tests.CurlCommandGoldenTests
+
+open System.IO
+open System.Text
+open System.Text.Json
+open Expecto
+open Renderer.Core
+
+let private utf8 (s: string) = Encoding.UTF8.GetBytes s
+
+type private Case = { Name: string; Request: RequestView }
+
+/// The replay test sends each command to a local echo server with `--connect-to`, which needs a
+/// URL without TLS.
+let private baseUrl = "http://api.example.com"
+
+let private request httpMethod path headers body : RequestView =
+    { Method = httpMethod
+      Url = baseUrl + path
+      Headers = headers
+      ContentType = ""
+      Body = body }
+
+let private exactly16384Bytes = String.replicate 1024 "abcdefghijklmno\n" |> utf8
+
+let private cases =
+    [ { Name = "get-no-body"
+        Request = request "GET" "/items" [ "Accept", "application/json" ] NoBody }
+      { Name = "post-json-inline"
+        Request =
+          request
+              "POST"
+              "/items"
+              [ "Accept", "application/json"; "Content-Type", "application/json" ]
+              (Captured(utf8 """{"name":"snorlax"}""")) }
+      { Name = "get-with-body"
+        Request = request "GET" "/search" [ "Content-Type", "application/json" ] (Captured(utf8 """{"q":"fs"}""")) }
+      { Name = "head"
+        Request = request "HEAD" "/items/7" [ "Accept", "application/json" ] NoBody }
+      { Name = "put-no-body"
+        Request = request "PUT" "/items/7" [ "Accept", "application/json" ] NoBody }
+      { Name = "url-glob-chars"
+        Request = request "GET" "/search?filter[name]=fs&tags={a,b}" [ "Accept", "application/json" ] NoBody }
+      { Name = "drops-content-length"
+        Request =
+          request
+              "POST"
+              "/notes"
+              [ "Content-Type", "text/plain; charset=utf-8"; "Content-Length", "5" ]
+              (Captured(utf8 "hello")) }
+      { Name = "body-no-content-type"
+        Request = request "POST" "/notes" [ "Accept", "text/plain" ] (Captured(utf8 "hello")) }
+      { Name = "value-single-quote"
+        Request = request "GET" "/items" [ "X-Note", "it's a 'quoted' value" ] NoBody }
+      { Name = "body-single-quote"
+        Request =
+          request
+              "POST"
+              "/items"
+              [ "Content-Type", "application/json" ]
+              (Captured(utf8 """{"name":"o'brien","note":"it's"}""")) }
+      { Name = "body-leading-at"
+        Request = request "POST" "/notes" [ "Content-Type", "text/plain" ] (Captured(utf8 "@/etc/passwd")) }
+      { Name = "body-16384-bytes"
+        Request = request "POST" "/notes" [ "Content-Type", "text/plain" ] (Captured exactly16384Bytes) }
+      { Name = "not-captured"
+        Request =
+          request
+              "POST"
+              "/upload"
+              [ "Content-Type", "application/octet-stream" ]
+              (NotCaptured "streamed body: not captured, so that the upload is unchanged") } ]
+
+let private envelopeFor (request: RequestView) : ResponseEnvelope =
+    { Request = request
+      Status = 200
+      Reason = "OK"
+      Headers = []
+      ContentType = ""
+      Body = [||]
+      RequestMs = 0.0
+      TotalMs = 0.0 }
+
+let private fixture () =
+    JsonSerializer.SerializeToUtf8Bytes
+        {| cases =
+            [ for c in cases ->
+                  let bodyState, bodyBytes, bodyReason =
+                      match c.Request.Body with
+                      | NoBody -> "none", [||], ""
+                      | Captured bytes -> "captured", Array.map int bytes, ""
+                      | NotCaptured reason -> "notCaptured", [||], reason
+
+                  {| curl = Option.toObj (copyText (envelopeFor c.Request) "curl")
+                     name = c.Name
+                     request =
+                      {| bodyBytes = bodyBytes
+                         bodyReason = bodyReason
+                         bodyState = bodyState
+                         headers = [ for name, value in c.Request.Headers -> [ name; value ] ]
+                         method = c.Request.Method
+                         url = c.Request.Url |} |} ] |}
+
+let private curlFor (name: string) =
+    let c = cases |> List.find (fun c -> c.Name = name)
+    copyText (envelopeFor c.Request) "curl"
+
+[<Tests>]
+let tests =
+    testList
+        "Curl command Golden fixtures"
+        [ test "the Curl command matches its Golden fixture" {
+              GoldenFixture.verify (Path.Combine("curl", "curl-command.json")) (fixture ())
+          }
+
+          test "a POST with an inline JSON body has one argument on each line" {
+              Expect.equal
+                  (curlFor "post-json-inline")
+                  (Some(
+                      "curl 'http://api.example.com/items' \\\n"
+                      + "  -H 'Accept: application/json' \\\n"
+                      + "  -H 'Content-Type: application/json' \\\n"
+                      + "  --data-raw '{\"name\":\"snorlax\"}'"
+                  ))
+                  "no method flag for a POST with a body, and the body goes inline"
+          }
+
+          test "a single quote in a value closes the quotes, escapes the quote, and opens them again" {
+              Expect.equal
+                  (curlFor "value-single-quote")
+                  (Some(
+                      "curl 'http://api.example.com/items' \\\n"
+                      + "  -H 'X-Note: it'\\''s a '\\''quoted'\\'' value'"
+                  ))
+                  "each single quote becomes '\\''"
+          }
+
+          test "a body that the companion did not read has no Curl command" {
+              Expect.isNone (curlFor "not-captured") "a Curl command would send a different request"
+          }
+
+          test "a Captured body that is not safe to paste, or above 16,384 bytes, has no Curl command" {
+              let unsafeBodies =
+                  [ "a CR", utf8 "a\r\nb"
+                    "a NUL", [| 97uy; 0uy; 98uy |]
+                    "a control byte", [| 97uy; 0x1Buy; 98uy |]
+                    "a DEL byte", [| 97uy; 0x7Fuy; 98uy |]
+                    "invalid UTF-8", [| 110uy; 0xE4uy; 0x69uy |]
+                    "an overlong form", [| 0xC0uy; 0xAFuy |]
+                    "a surrogate", [| 0xEDuy; 0xA0uy; 0x80uy |]
+                    "a sequence that the body ends inside", [| 97uy; 0xF0uy; 0x9Fuy; 0x98uy |]
+                    "16,385 bytes", Array.append exactly16384Bytes [| 97uy |] ]
+
+              for description, bytes in unsafeBodies do
+                  let env =
+                      envelopeFor (request "POST" "/notes" [ "Content-Type", "text/plain" ] (Captured bytes))
+
+                  Expect.isNone (copyText env "curl") description
+          }
+
+          test "a body with characters outside ASCII, a tab, and an LF is safe to paste" {
+              let body = "café → 日本 😀\tsecond line\n"
+
+              let env =
+                  envelopeFor (request "POST" "/notes" [ "Content-Type", "text/plain" ] (Captured(utf8 body)))
+
+              Expect.equal
+                  (copyText env "curl")
+                  (Some(
+                      "curl 'http://api.example.com/notes' \\\n"
+                      + "  -H 'Content-Type: text/plain' \\\n"
+                      + "  --data-raw '"
+                      + body
+                      + "'"
+                  ))
+                  "the body goes inline as it is"
+          } ]

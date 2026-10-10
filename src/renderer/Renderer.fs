@@ -302,6 +302,117 @@ let private messageText (firstLine: string) (headers: (string * string) list) (b
     | None -> head
     | Some text -> head + "\n\n" + text
 
+/// A large inline argument fails on Linux (128 KB for each argument) and in Git Bash (32,767
+/// characters for the Windows command line).
+let private maxInlineBodyBytes = 16_384
+
+/// Valid UTF-8 with no control byte except tab and LF. The rule is strict, so the Lua client gives
+/// the same verdict on the same bytes.
+let private isSafeToPaste (bytes: byte[]) : bool =
+    let n = bytes.Length
+
+    let inRange i lo hi =
+        i < n && bytes.[i] >= lo && bytes.[i] <= hi
+
+    let cont i = inRange i 0x80uy 0xBFuy
+    let mutable i = 0
+    let mutable safe = true
+
+    while safe && i < n do
+        let b = bytes.[i]
+
+        let width =
+            if b = 9uy || b = 10uy || (b >= 0x20uy && b < 0x7Fuy) then
+                1
+            elif inRange i 0xC2uy 0xDFuy && cont (i + 1) then
+                2
+            elif b = 0xE0uy && inRange (i + 1) 0xA0uy 0xBFuy && cont (i + 2) then
+                3
+            elif
+                (inRange i 0xE1uy 0xECuy || inRange i 0xEEuy 0xEFuy)
+                && cont (i + 1)
+                && cont (i + 2)
+            then
+                3
+            elif b = 0xEDuy && inRange (i + 1) 0x80uy 0x9Fuy && cont (i + 2) then
+                3
+            elif b = 0xF0uy && inRange (i + 1) 0x90uy 0xBFuy && cont (i + 2) && cont (i + 3) then
+                4
+            elif inRange i 0xF1uy 0xF3uy && cont (i + 1) && cont (i + 2) && cont (i + 3) then
+                4
+            elif b = 0xF4uy && inRange (i + 1) 0x80uy 0x8Fuy && cont (i + 2) && cont (i + 3) then
+                4
+            else
+                0
+
+        if width = 0 then safe <- false else i <- i + width
+
+    safe
+
+let private shellQuote (s: string) : string = "'" + s.Replace("'", "'\\''") + "'"
+
+let private isHeaderNamed (name: string) (header: string * string) : bool =
+    (fst header).ToLowerInvariant() = name.ToLowerInvariant()
+
+/// curl sends GET with no data flag and POST with one. `-X HEAD` makes curl wait for a body.
+let private methodFlag (httpMethod: string) (hasBody: bool) : string list =
+    let isPlainToken =
+        httpMethod
+        |> Seq.forall (fun c ->
+            (c >= 'A' && c <= 'Z')
+            || (c >= 'a' && c <= 'z')
+            || (c >= '0' && c <= '9')
+            || c = '-')
+
+    match httpMethod with
+    | "POST" when hasBody -> []
+    | "GET" when not hasBody -> []
+    | "HEAD" -> [ "--head" ]
+    | _ when isPlainToken -> [ "-X " + httpMethod ]
+    | _ -> [ "-X " + shellQuote httpMethod ]
+
+/// `--data-raw` reads no file when the body starts with `@`. An empty `Content-Type` stops curl
+/// from adding a form type to a body that had none.
+let private curlLines (request: RequestView) (bodyText: string option) : string =
+    let hasBody = Option.isSome bodyText
+
+    let firstLine =
+        "curl" :: methodFlag request.Method hasBody @ [ shellQuote request.Url ]
+        |> String.concat " "
+
+    let globoff =
+        if request.Url |> Seq.exists (fun c -> c = '[' || c = ']' || c = '{' || c = '}') then
+            [ "--globoff" ]
+        else
+            []
+
+    let headers =
+        request.Headers
+        |> List.filter (isHeaderNamed "Content-Length" >> not)
+        |> List.map (fun (name, value) -> "-H " + shellQuote (name + ": " + value))
+
+    let emptyContentType =
+        if hasBody && not (List.exists (isHeaderNamed "Content-Type") request.Headers) then
+            [ "-H " + shellQuote "Content-Type:" ]
+        else
+            []
+
+    let data =
+        bodyText
+        |> Option.map (fun text -> "--data-raw " + shellQuote text)
+        |> Option.toList
+
+    firstLine :: globoff @ headers @ emptyContentType @ data
+    |> String.concat " \\\n  "
+
+let private curlCommand (request: RequestView) : string option =
+    match request.Body with
+    | NoBody -> Some(curlLines request None)
+    | Captured bytes when bytes.Length <= maxInlineBodyBytes && isSafeToPaste bytes ->
+        Some(curlLines request (Some(decodeText bytes)))
+    | Captured _
+    | NotCaptured _ -> None
+
 /// `None` means that there is nothing to copy, and the renderer then omits the button.
 let copyText (env: ResponseEnvelope) (key: string) : string option =
     match key with
@@ -319,11 +430,15 @@ let copyText (env: ResponseEnvelope) (key: string) : string option =
             None
         else
             Some(bodyCopyText env.Body)
+    | "curl" -> curlCommand env.Request
     | _ -> None
 
 /// The webview's label flash restores exactly this text, so the two ends of that boundary must
 /// read one string rather than two copies.
-let copyButtonLabel = "Copy"
+let copyButtonLabel (key: string) : string =
+    match key with
+    | "curl" -> "Copy as curl"
+    | _ -> "Copy"
 
 /// `aria-live` is static markup, so it ships with the button rather than with the label flash
 /// that reads it.
@@ -336,13 +451,18 @@ let private copyButton (env: ResponseEnvelope) (key: string) : Node list =
                 "type", "button"
                 "data-copy", key
                 "aria-live", "polite" ]
-              [ Node.Text copyButtonLabel ] ]
+              [ Node.Text(copyButtonLabel key) ] ]
     | None -> []
 
 /// Keeps a copy button a sibling of its section, never a descendant of `<details>`, `<summary>`,
 /// or a scrolling body.
-let private sectionShell (env: ResponseEnvelope) (key: string) (section: Node) : Node =
-    el "div" [ "class", "section-shell" ] (copyButton env key @ [ section ])
+let private sectionShell (env: ResponseEnvelope) (keys: string list) (section: Node) : Node =
+    let actions =
+        match List.collect (copyButton env) keys with
+        | [] -> []
+        | buttons -> [ el "div" [ "class", "copy-actions" ] buttons ]
+
+    el "div" [ "class", "section-shell" ] (actions @ [ section ])
 
 /// The full response view. It is a thin status line, a collapsible Request section, and a
 /// collapsible headers section, above the body that the Content-Type dispatch produced. The
@@ -353,6 +473,6 @@ let render (env: ResponseEnvelope) : Node =
         "div"
         [ "class", "response" ]
         [ renderStatusLine env
-          sectionShell env "request" (renderRequest env.Request)
-          sectionShell env "response-headers" (renderHeaders env.Headers)
-          sectionShell env "response-body" (el "div" [ "class", "response-body" ] [ renderBody env ]) ]
+          sectionShell env [ "curl"; "request" ] (renderRequest env.Request)
+          sectionShell env [ "response-headers" ] (renderHeaders env.Headers)
+          sectionShell env [ "response-body" ] (el "div" [ "class", "response-body" ] [ renderBody env ]) ]
