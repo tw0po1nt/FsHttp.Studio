@@ -1,5 +1,6 @@
 module RunCommand
 
+open Fable.Core
 open Fable.Core.JsInterop
 open Vscode
 open Protocol
@@ -153,6 +154,45 @@ let register () : Disposable =
                 startRun h document (document.getText ()) blockIndex)
     )
 
+[<Emit("$0.then($1)")>]
+let private onResolved (_p: JS.Promise<'T>) (_onOk: 'T -> unit) : unit = jsNative
+
+/// The label that `:FsHttp run` writes: `<glyph> <line>: <first source line>`. The glyph is the
+/// first word of the lens title.
+let private quickPickItem (sourceLines: string[]) (r: BlockRange) : obj =
+    let title =
+        match r.Refusal with
+        | Some code -> Refusals.lensTitle code
+        | None -> Refusals.runLensTitle
+
+    let glyph = title.Split(' ').[0]
+
+    let firstLine =
+        if r.StartLine >= 1 && r.StartLine <= sourceLines.Length then
+            sourceLines.[r.StartLine - 1].Trim()
+        else
+            ""
+
+    let label = sprintf "%s %d: %s" glyph r.StartLine firstLine
+
+    match r.Refusal with
+    | Some _ -> createObj [ "label" ==> label; "detail" ==> title ]
+    | None -> createObj [ "label" ==> label ]
+
+let private pickBlock (h: Companion.Handle) (document: TextDocument) (source: string) (ranges: BlockRange list) =
+    let sourceLines = source.Replace("\r\n", "\n").Split('\n')
+    let items = ranges |> List.map (quickPickItem sourceLines) |> List.toArray
+
+    onResolved (window.showQuickPick items) (fun picked ->
+        match picked with
+        | null -> ()
+        | _ ->
+            let i = items |> Array.findIndex (fun item -> obj.ReferenceEquals(item, picked))
+
+            match ranges.[i].Refusal with
+            | Some code -> showRefusalToast code
+            | None -> startRun h document source i)
+
 [<Literal>]
 let runAtCursorCommandId = "fshttpStudio.runRequestAtCursor"
 
@@ -172,7 +212,7 @@ let private runAtCursor (h: Companion.Handle) (editor: TextEditor) : Async<unit>
                 match ranges.[i].Refusal with
                 | Some code -> showRefusalToast code
                 | None -> startRun h document source i
-            | None -> ()
+            | None -> pickBlock h document source ranges
     }
 
 /// `showNoSdk` is the SDK toast of activation, which this module compiles before.

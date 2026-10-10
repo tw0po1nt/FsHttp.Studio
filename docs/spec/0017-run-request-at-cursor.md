@@ -106,11 +106,11 @@ The companion and the envelope do not change. No setting is added.
 - The text matches the picker of `:FsHttp run`.
 
 ```
-▶ 4   let getSnorlax () = http {
-▶ 12  let postBerry = http {
-⊘ 21  http {
+▶ 4: let getSnorlax () = http {
+▶ 12: let postBerry = http {
+⊘ 21: http {
       Cannot run: inside a loop
-▶ 30  let deep = http {
+▶ 30: let deep = http {
 ```
 
 ### 6. The wait while the companion starts
