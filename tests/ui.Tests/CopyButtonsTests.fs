@@ -6,15 +6,16 @@ module CopyButtonsTests
 
 open Fable.Mocha
 
+let private expectedCopyKeys =
+    [| "curl"; "request"; "response-headers"; "response-body" |]
+
 /// Both header sections collapsed, each copy button laid out with its own label, and the three
-/// shell margins the
-/// product requires: 12px, 12px, then 0 on the last shell, because the body has no bottom margin.
+/// shell margins the product requires: 12px, 12px, then 0 on the last shell, because the body has
+/// no bottom margin.
 ///
 /// `Displayed` claims the button is present and has a size. The closed-`<details>` defect, where
 /// the browser reports a button as visible while it paints nothing, is outside what this
 /// measures. Only a screenshot shows that one.
-let private expectedCopyKeys =
-    [| "curl"; "request"; "response-headers"; "response-body" |]
 
 let private tryCollapsedButtonsAndSpacing () =
     async {
@@ -76,8 +77,7 @@ let private bodyPayloadHolds (text: string) =
     && text.Contains("\"" + Harness.echoAckValue + "\"")
     && not (text.Contains "\n")
 
-/// The Curl command of the echo fixture. A POST with a body needs no method flag, and the body
-/// goes inline after the headers.
+/// A POST with a body has no method flag, and the inline body is the last argument.
 let private curlPayloadHolds (text: string) =
     text.StartsWith("curl '" + Checks.echoUrl () + "' \\\n")
     && text.Contains(sprintf "  -H '%s: %s' \\\n" Harness.postedHeaderName Harness.postedHeaderValue)
@@ -154,8 +154,7 @@ let private theCopyAsCurlButton =
                 curlPayloadHolds
     }
 
-/// The Request copy button is the tell that the viewer painted this Run's copy buttons, so the
-/// absence of the curl key is a claim about this Run.
+/// The Request copy button proves that this Run painted, so a missing curl key is a claim about this Run.
 let private tryRequestButtonWithoutCurl () =
     async {
         match! ExTester.tryReadCopySurface () with

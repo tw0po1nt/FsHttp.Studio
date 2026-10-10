@@ -302,12 +302,10 @@ let private messageText (firstLine: string) (headers: (string * string) list) (b
     | None -> head
     | Some text -> head + "\n\n" + text
 
-/// A large inline argument fails on Linux (128 KB for each argument) and in Git Bash (32,767
-/// characters for the Windows command line).
+/// Linux limits each argument to 128 KB, and Git Bash limits the command line to 32,767 characters.
 let private maxInlineBodyBytes = 16_384
 
-/// Valid UTF-8 with no control byte except tab and LF. The rule is strict, so the Lua client gives
-/// the same verdict on the same bytes.
+/// Strict UTF-8 with no C0, DEL, or C1 control character except tab and LF. The Lua client must agree.
 let private isSafeToPaste (bytes: byte[]) : bool =
     let n = bytes.Length
 
@@ -324,7 +322,9 @@ let private isSafeToPaste (bytes: byte[]) : bool =
         let width =
             if b = 9uy || b = 10uy || (b >= 0x20uy && b < 0x7Fuy) then
                 1
-            elif inRange i 0xC2uy 0xDFuy && cont (i + 1) then
+            elif b = 0xC2uy && inRange (i + 1) 0xA0uy 0xBFuy then
+                2
+            elif inRange i 0xC3uy 0xDFuy && cont (i + 1) then
                 2
             elif b = 0xE0uy && inRange (i + 1) 0xA0uy 0xBFuy && cont (i + 2) then
                 3
@@ -371,8 +371,7 @@ let private methodFlag (httpMethod: string) (hasBody: bool) : string list =
     | _ when isPlainToken -> [ "-X " + httpMethod ]
     | _ -> [ "-X " + shellQuote httpMethod ]
 
-/// `--data-raw` reads no file when the body starts with `@`. An empty `Content-Type` stops curl
-/// from adding a form type to a body that had none.
+/// `--data-raw` reads no file at a leading `@`. curl removes a `Name:` header and adds its own default headers.
 let private curlLines (request: RequestView) (bodyText: string option) : string =
     let hasBody = Option.isSome bodyText
 
@@ -389,29 +388,34 @@ let private curlLines (request: RequestView) (bodyText: string option) : string 
     let headers =
         request.Headers
         |> List.filter (isHeaderNamed "Content-Length" >> not)
-        |> List.map (fun (name, value) -> "-H " + shellQuote (name + ": " + value))
+        |> List.map (fun (name, value) ->
+            if value |> Seq.forall (fun c -> c = ' ' || c = '\t') then
+                "-H " + shellQuote (name + ";")
+            else
+                "-H " + shellQuote (name + ": " + value))
 
-    let emptyContentType =
-        if hasBody && not (List.exists (isHeaderNamed "Content-Type") request.Headers) then
-            [ "-H " + shellQuote "Content-Type:" ]
-        else
-            []
+    let removedDefaults =
+        [ "User-Agent"; "Accept" ] @ (if hasBody then [ "Content-Type" ] else [])
+        |> List.filter (fun name -> not (List.exists (isHeaderNamed name) request.Headers))
+        |> List.map (fun name -> "-H " + shellQuote (name + ":"))
 
     let data =
         bodyText
         |> Option.map (fun text -> "--data-raw " + shellQuote text)
         |> Option.toList
 
-    firstLine :: globoff @ headers @ emptyContentType @ data
+    firstLine :: globoff @ headers @ removedDefaults @ data
     |> String.concat " \\\n  "
 
+/// curl refuses `--head` with a data flag.
 let private curlCommand (request: RequestView) : string option =
-    match request.Body with
-    | NoBody -> Some(curlLines request None)
-    | Captured bytes when bytes.Length <= maxInlineBodyBytes && isSafeToPaste bytes ->
+    match request.Method, request.Body with
+    | "HEAD", (Captured _ | NotCaptured _) -> None
+    | _, NoBody -> Some(curlLines request None)
+    | _, Captured bytes when bytes.Length <= maxInlineBodyBytes && isSafeToPaste bytes ->
         Some(curlLines request (Some(decodeText bytes)))
-    | Captured _
-    | NotCaptured _ -> None
+    | _, Captured _
+    | _, NotCaptured _ -> None
 
 /// `None` means that there is nothing to copy, and the renderer then omits the button.
 let copyText (env: ResponseEnvelope) (key: string) : string option =

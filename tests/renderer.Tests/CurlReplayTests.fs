@@ -128,8 +128,7 @@ let private serveOne (listener: TcpListener) : Received =
       Headers = headers
       Body = buffer[bodyStart .. bodyStart + bodyLength - 1] }
 
-/// Runs the command in `sh`, with arguments added after the last line that send it to `port`.
-/// An empty curl configuration folder keeps a `.curlrc` of the user out of the replay.
+/// An empty curl configuration folder keeps the `.curlrc` of the user out of the replay.
 let private runCurl (command: string) (port: int) : int * string =
     let configFolder = Directory.CreateTempSubdirectory "fshttp-curl-replay"
 
@@ -179,17 +178,18 @@ let private replay (case: ReplayCase) =
         let host = headerValue "Host" received.Headers |> Option.defaultValue ""
         Expect.equal ("http://" + host + received.Target) case.Url "the URL"
 
-        for name, value in case.Headers do
-            if not (String.Equals(name, "Content-Length", StringComparison.OrdinalIgnoreCase)) then
-                Expect.equal (headerValue name received.Headers) (Some value) (sprintf "the %s header" name)
+        let isNamed names (name: string, _) =
+            names
+            |> List.exists (fun n -> String.Equals(name, n, StringComparison.OrdinalIgnoreCase))
+
+        Expect.equal
+            (received.Headers |> List.filter (isNamed [ "Host"; "Content-Length" ] >> not))
+            (case.Headers |> List.filter (isNamed [ "Content-Length" ] >> not))
+            "the headers of the Run, in order, and no other header"
 
         match case.Body with
         | None -> Expect.isEmpty received.Body "no body"
-        | Some bytes ->
-            Expect.equal received.Body bytes "the body bytes"
-
-            if (headerValue "Content-Type" case.Headers).IsNone then
-                Expect.isNone (headerValue "Content-Type" received.Headers) "no Content-Type"
+        | Some bytes -> Expect.equal received.Body bytes "the body bytes"
     finally
         listener.Stop()
 

@@ -279,12 +279,10 @@ let tryEchoResponseRendered () =
         && dom.UrlText.Contains(echoUrl ())
         && dom.JsonBodyText.Contains Harness.echoAckKey)
 
-/// The fixture that POSTs a stream to `/echo`. The companion does not read a stream, so the
-/// Request section carries a reason in place of the body.
+/// The companion does not read a streamed body, so the Request section shows a reason.
 let streamedEchoFixtureFileName = "not-captured.fsx"
 
-/// Opens a fixture with one block that POSTs to `/echo` as the sole tab, runs the block, and
-/// returns once the viewer has painted the acknowledgement.
+/// Opens a fixture as the sole tab, runs its one `/echo` block, and waits for the acknowledgement.
 ///
 /// Opens through `openFixtureAsSoleTab` for the reason the core path documents: a second tab in
 /// the column can put the lens read on a hidden editor that carries no widgets.

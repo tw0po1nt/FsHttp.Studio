@@ -557,7 +557,7 @@ let copyTextTests =
 
           test "an unknown key yields None" {
               let env = envelope "text/plain" (utf8 "x")
-              Expect.equal (copyText env "nope") None "only the four known keys are defined"
+              Expect.equal (copyText env "nope") None "only the copy keys are defined"
           } ]
 
 [<Tests>]

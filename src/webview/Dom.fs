@@ -26,8 +26,7 @@ let rec private mountNode (node: Node) : Types.Node =
 /// Turns a rendered `Node` tree into a detached DOM node, ready to append into the panel.
 let mount (node: Node) : Types.Node = mountNode node
 
-/// Restores the constant `copyButtonLabel` of the button's key. Reading the live label back would
-/// capture `Copied` on a second click inside the flash window and leave it there for good.
+/// A read of the live label would keep `Copied` after a second click inside the flash.
 let private flash (button: HTMLElement) (text: string) =
     // `clearTimeout` ignores an `undefined` handle, so the first flash on a button needs no guard.
     let element: obj = !!button

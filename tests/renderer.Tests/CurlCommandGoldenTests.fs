@@ -10,8 +10,7 @@ let private utf8 (s: string) = Encoding.UTF8.GetBytes s
 
 type private Case = { Name: string; Request: RequestView }
 
-/// The replay test sends each command to a local echo server with `--connect-to`, which needs a
-/// URL without TLS.
+/// The `--connect-to` of the replay test needs a URL without TLS.
 let private baseUrl = "http://api.example.com"
 
 let private request httpMethod path headers body : RequestView =
@@ -37,6 +36,8 @@ let private cases =
         Request = request "GET" "/search" [ "Content-Type", "application/json" ] (Captured(utf8 """{"q":"fs"}""")) }
       { Name = "head"
         Request = request "HEAD" "/items/7" [ "Accept", "application/json" ] NoBody }
+      { Name = "head-with-body"
+        Request = request "HEAD" "/items/7" [ "Content-Type", "text/plain" ] (Captured(utf8 "hello")) }
       { Name = "put-no-body"
         Request = request "PUT" "/items/7" [ "Accept", "application/json" ] NoBody }
       { Name = "url-glob-chars"
@@ -52,6 +53,8 @@ let private cases =
         Request = request "POST" "/notes" [ "Accept", "text/plain" ] (Captured(utf8 "hello")) }
       { Name = "value-single-quote"
         Request = request "GET" "/items" [ "X-Note", "it's a 'quoted' value" ] NoBody }
+      { Name = "header-empty-value"
+        Request = request "GET" "/items" [ "Accept", "application/json"; "X-Empty", "" ] NoBody }
       { Name = "body-single-quote"
         Request =
           request
@@ -120,6 +123,7 @@ let tests =
                       "curl 'http://api.example.com/items' \\\n"
                       + "  -H 'Accept: application/json' \\\n"
                       + "  -H 'Content-Type: application/json' \\\n"
+                      + "  -H 'User-Agent:' \\\n"
                       + "  --data-raw '{\"name\":\"snorlax\"}'"
                   ))
                   "no method flag for a POST with a body, and the body goes inline"
@@ -130,9 +134,42 @@ let tests =
                   (curlFor "value-single-quote")
                   (Some(
                       "curl 'http://api.example.com/items' \\\n"
-                      + "  -H 'X-Note: it'\\''s a '\\''quoted'\\'' value'"
+                      + "  -H 'X-Note: it'\\''s a '\\''quoted'\\'' value' \\\n"
+                      + "  -H 'User-Agent:' \\\n"
+                      + "  -H 'Accept:'"
                   ))
                   "each single quote becomes '\\''"
+          }
+
+          test "the command removes each header that curl adds and the Run did not send" {
+              Expect.equal
+                  (curlFor "get-no-body")
+                  (Some(
+                      "curl 'http://api.example.com/items' \\\n"
+                      + "  -H 'Accept: application/json' \\\n"
+                      + "  -H 'User-Agent:'"
+                  ))
+                  "the Run sent an Accept, so only User-Agent is removed"
+          }
+
+          test "a header with an empty value goes out with a semicolon" {
+              Expect.stringContains
+                  (curlFor "header-empty-value" |> Option.defaultValue "")
+                  "  -H 'X-Empty;' \\\n"
+                  "curl removes a header that has a colon and an empty value"
+          }
+
+          test "a HEAD with a body has no Curl command" {
+              Expect.isNone (curlFor "head-with-body") "curl refuses --head with a data flag"
+          }
+
+          test "a method that is not a plain token is in single quotes" {
+              let env = envelopeFor (request "BAD METHOD" "/items" [] NoBody)
+
+              Expect.stringStarts
+                  (copyText env "curl" |> Option.defaultValue "")
+                  "curl -X 'BAD METHOD' 'http://api.example.com/items' \\\n"
+                  "the shell gets the method as one argument"
           }
 
           test "a body that the companion did not read has no Curl command" {
@@ -145,6 +182,8 @@ let tests =
                     "a NUL", [| 97uy; 0uy; 98uy |]
                     "a control byte", [| 97uy; 0x1Buy; 98uy |]
                     "a DEL byte", [| 97uy; 0x7Fuy; 98uy |]
+                    "the first C1 control character", [| 97uy; 0xC2uy; 0x80uy; 98uy |]
+                    "the last C1 control character", [| 97uy; 0xC2uy; 0x9Fuy; 98uy |]
                     "invalid UTF-8", [| 110uy; 0xE4uy; 0x69uy |]
                     "an overlong form", [| 0xC0uy; 0xAFuy |]
                     "a surrogate", [| 0xEDuy; 0xA0uy; 0x80uy |]
@@ -158,8 +197,8 @@ let tests =
                   Expect.isNone (copyText env "curl") description
           }
 
-          test "a body with characters outside ASCII, a tab, and an LF is safe to paste" {
-              let body = "café → 日本 😀\tsecond line\n"
+          test "a body with characters outside ASCII, U+00A0, a tab, and an LF is safe to paste" {
+              let body = "café\u00A0→ 日本 😀\tsecond line\n"
 
               let env =
                   envelopeFor (request "POST" "/notes" [ "Content-Type", "text/plain" ] (Captured(utf8 body)))
@@ -169,6 +208,8 @@ let tests =
                   (Some(
                       "curl 'http://api.example.com/notes' \\\n"
                       + "  -H 'Content-Type: text/plain' \\\n"
+                      + "  -H 'User-Agent:' \\\n"
+                      + "  -H 'Accept:' \\\n"
                       + "  --data-raw '"
                       + body
                       + "'"

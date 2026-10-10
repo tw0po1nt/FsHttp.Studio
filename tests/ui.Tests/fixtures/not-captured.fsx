@@ -1,7 +1,4 @@
-// Fixture for the Copy as curl Check of a body that the companion did not read. One block POSTs a
-// stream to the local test server's `/echo` route. The companion does not read a stream, so the
-// viewer has no Curl command for this Run. `baseUrl` comes from the sidecar the test server writes
-// beside this file rather than from a hardcoded port.
+// One block POSTs a stream to `/echo`, and the companion does not read a streamed body.
 
 #r "nuget: FsHttp"
 
