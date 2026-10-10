@@ -90,7 +90,6 @@ type QuickPickItem =
 type InputBox =
     abstract getQuickPicks: unit -> JS.Promise<QuickPickItem[]>
     abstract selectQuickPick: indexOrText: int -> JS.Promise<unit>
-    abstract cancel: unit -> JS.Promise<unit>
 
 type ProblemsView =
     abstract setFilter: pattern: string -> JS.Promise<unit>
@@ -1152,17 +1151,6 @@ let tryPickQuickPick (index: int) : Async<bool> =
         try
             let! box = InputBox.create () |> Async.AwaitPromise
             do! box.selectQuickPick index |> Async.AwaitPromise
-            return true
-        with _ ->
-            return false
-    }
-
-/// Cancels the open quick pick, as Escape does.
-let tryCancelQuickPick () : Async<bool> =
-    async {
-        try
-            let! box = InputBox.create () |> Async.AwaitPromise
-            do! box.cancel () |> Async.AwaitPromise
             return true
         with _ ->
             return false
