@@ -105,10 +105,22 @@ let run () : unit =
             + "  --data-raw 'it'\\''s café 😀'"
         ))
 
+    let pipeCommand (base64: string) =
+        "printf '%s' '"
+        + base64
+        + "' \\\n"
+        + "  | base64 -d \\\n"
+        + "  | curl -X PUT 'https://ex/items?f[a]=1' \\\n"
+        + "    --globoff \\\n"
+        + "    -H 'Content-Type: text/plain' \\\n"
+        + "    -H 'User-Agent:' \\\n"
+        + "    -H 'Accept:' \\\n"
+        + "    --data-binary @-"
+
     check
-        "copyText curl gives no Curl command for a CR, a C1 control character, or invalid UTF-8"
-        (copyText (withRequestBody (utf8 "a\r\nb")) "curl" = None
-         && copyText (withRequestBody [| 0xC2uy; 0x9Fuy |]) "curl" = None
-         && copyText (withRequestBody [| 0xEDuy; 0xA0uy; 0x80uy |]) "curl" = None)
+        "copyText curl gives the base64 pipe for a CR, a C1 control character, and invalid UTF-8"
+        (copyText (withRequestBody (utf8 "a\r\nb")) "curl" = Some(pipeCommand "YQ0KYg==")
+         && copyText (withRequestBody [| 0xC2uy; 0x9Fuy |]) "curl" = Some(pipeCommand "wp8=")
+         && copyText (withRequestBody [| 0xEDuy; 0xA0uy; 0x80uy |]) "curl" = Some(pipeCommand "7aCA"))
 
     printfn "renderer JS smoke: all checks passed"

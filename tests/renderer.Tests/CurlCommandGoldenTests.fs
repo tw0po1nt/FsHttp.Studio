@@ -1,5 +1,6 @@
 module Renderer.Tests.CurlCommandGoldenTests
 
+open System
 open System.IO
 open System.Text
 open System.Text.Json
@@ -21,6 +22,17 @@ let private request httpMethod path headers body : RequestView =
       Body = body }
 
 let private exactly16384Bytes = String.replicate 1024 "abcdefghijklmno\n" |> utf8
+
+let private pngSignature = Array.append [| 0x89uy |] (utf8 "PNG\r\n\u001a\n")
+
+let private multipartBody =
+    Array.concat
+        [ utf8 "--fshttp-boundary\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nhello\r\n"
+          utf8 "--fshttp-boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"pixel.png\"\r\n"
+          utf8 "Content-Type: image/png\r\n\r\n"
+          pngSignature
+          [| 0x00uy; 0xFFuy |]
+          utf8 "\r\n--fshttp-boundary--\r\n" ]
 
 let private cases =
     [ { Name = "get-no-body"
@@ -66,6 +78,34 @@ let private cases =
         Request = request "POST" "/notes" [ "Content-Type", "text/plain" ] (Captured(utf8 "@/etc/passwd")) }
       { Name = "body-16384-bytes"
         Request = request "POST" "/notes" [ "Content-Type", "text/plain" ] (Captured exactly16384Bytes) }
+      { Name = "body-16385-bytes"
+        Request =
+          request "POST" "/notes" [ "Content-Type", "text/plain" ] (Captured(Array.append exactly16384Bytes (utf8 "a"))) }
+      { Name = "body-crlf"
+        Request = request "POST" "/notes" [ "Content-Type", "text/plain" ] (Captured(utf8 "line one\r\nline two\r\n")) }
+      { Name = "body-multipart"
+        Request =
+          request
+              "POST"
+              "/upload"
+              [ "Content-Type", "multipart/form-data; boundary=fshttp-boundary" ]
+              (Captured multipartBody) }
+      { Name = "body-nul"
+        Request =
+          request
+              "PUT"
+              "/blobs/7"
+              [ "Content-Type", "application/octet-stream" ]
+              (Captured [| 0x66uy; 0x00uy; 0x73uy; 0x00uy; 0x00uy |]) }
+      { Name = "body-invalid-utf8"
+        Request =
+          request
+              "POST"
+              "/notes"
+              [ "Content-Type", "text/plain; charset=iso-8859-1" ]
+              (Captured [| 0x63uy; 0x61uy; 0x66uy; 0xE9uy |]) }
+      { Name = "body-control-byte"
+        Request = request "POST" "/notes" [] (Captured(utf8 "red \u001b[31mtext\u001b[0m")) }
       { Name = "not-captured"
         Request =
           request
@@ -176,7 +216,22 @@ let tests =
               Expect.isNone (curlFor "not-captured") "a Curl command would send a different request"
           }
 
-          test "a Captured body that is not safe to paste, or above 16,384 bytes, has no Curl command" {
+          test "a body that is not safe to paste goes through the base64 pipe" {
+              Expect.equal
+                  (curlFor "body-crlf")
+                  (Some(
+                      "printf '%s' 'bGluZSBvbmUNCmxpbmUgdHdvDQo=' \\\n"
+                      + "  | base64 -d \\\n"
+                      + "  | curl 'http://api.example.com/notes' \\\n"
+                      + "    -H 'Content-Type: text/plain' \\\n"
+                      + "    -H 'User-Agent:' \\\n"
+                      + "    -H 'Accept:' \\\n"
+                      + "    --data-binary @-"
+                  ))
+                  "printf, base64 -d, and curl are on separate lines, and each curl argument is on its own line"
+          }
+
+          test "a Captured body that is not safe to paste, or above 16,384 bytes, gives the base64 pipe" {
               let unsafeBodies =
                   [ "a CR", utf8 "a\r\nb"
                     "a NUL", [| 97uy; 0uy; 98uy |]
@@ -194,7 +249,20 @@ let tests =
                   let env =
                       envelopeFor (request "POST" "/notes" [ "Content-Type", "text/plain" ] (Captured bytes))
 
-                  Expect.isNone (copyText env "curl") description
+                  Expect.equal
+                      (copyText env "curl")
+                      (Some(
+                          "printf '%s' '"
+                          + Convert.ToBase64String bytes
+                          + "' \\\n"
+                          + "  | base64 -d \\\n"
+                          + "  | curl 'http://api.example.com/notes' \\\n"
+                          + "    -H 'Content-Type: text/plain' \\\n"
+                          + "    -H 'User-Agent:' \\\n"
+                          + "    -H 'Accept:' \\\n"
+                          + "    --data-binary @-"
+                      ))
+                      description
           }
 
           test "a body with characters outside ASCII, U+00A0, a tab, and an LF is safe to paste" {

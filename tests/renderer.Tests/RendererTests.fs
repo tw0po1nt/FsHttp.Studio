@@ -608,6 +608,30 @@ let copyButtonPlacementTests =
               Expect.equal keys [ "request"; "response-headers"; "response-body" ] "no curl key"
           }
 
+          test "a request body that goes through the base64 pipe has a Copy as curl button" {
+              let bodies =
+                  [ "a body above 16,384 bytes", Array.create 16_385 97uy
+                    "a CR", utf8 "a\r\nb"
+                    "a multipart body", utf8 "--b\r\nContent-Disposition: form-data; name=\"n\"\r\n\r\nv\r\n--b--\r\n"
+                    "a NUL", [| 97uy; 0uy; 98uy |]
+                    "invalid UTF-8", [| 0x63uy; 0xE9uy |]
+                    "a control byte", [| 97uy; 0x1Buy; 98uy |] ]
+
+              for description, bytes in bodies do
+                  let env =
+                      { envelope "text/plain" (utf8 "ok") with
+                          Request =
+                              { requestWithNoBody "POST" "https://api.example.com/upload" with
+                                  Body = Captured bytes } }
+
+                  let keys =
+                      byClass "copy-button" (render env)
+                      |> List.map (attr "data-copy")
+                      |> List.choose id
+
+                  Expect.equal keys [ "curl"; "request"; "response-headers"; "response-body" ] description
+          }
+
           test "a 204 No Content render has no response-body button" {
               let env =
                   { envelope "text/plain" [||] with
