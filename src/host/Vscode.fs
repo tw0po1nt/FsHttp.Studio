@@ -32,10 +32,19 @@ type TextDocument =
     abstract languageId: string
     abstract getText: unit -> string
 
+/// vscode.Position, narrowed to the 0-based line.
+type Position =
+    abstract line: int
+
+/// vscode.Selection, narrowed to the end of the selection that has the caret.
+type Selection =
+    abstract active: Position
+
 /// vscode.TextEditor. Narrowed to the document the editor shows, which is what a document-aware
-/// status bar reads when the active editor changes.
+/// status bar reads when the active editor changes, and to the primary selection.
 type TextEditor =
     abstract document: TextDocument
+    abstract selection: Selection
 
 /// vscode.Range. The 4-number overload constructs it (startLine, startChar, endLine, endChar).
 /// It is opaque otherwise, because the extension host only builds one to give to a `CodeLens`,
@@ -116,6 +125,8 @@ type IWindow =
     abstract showWarningMessage: message: string * item: string -> JS.Promise<obj>
     /// vscode.window.showWarningMessage(message). No button, for a toast that needs no reply.
     abstract showWarningMessage: message: string -> JS.Promise<obj>
+    /// vscode.window.showInformationMessage(message).
+    abstract showInformationMessage: message: string -> JS.Promise<obj>
 
 [<Import("window", "vscode")>]
 let window: IWindow = jsNative
