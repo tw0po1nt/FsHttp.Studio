@@ -12,6 +12,7 @@ M.keys = {
     { lhs = "yr", plug = "<Plug>(FsHttpYankRequest)", description = "Yank the Request" },
     { lhs = "yh", plug = "<Plug>(FsHttpYankHeaders)", description = "Yank the Response headers" },
     { lhs = "yb", plug = "<Plug>(FsHttpYankBody)", description = "Yank the Body" },
+    { lhs = "yc", plug = "<Plug>(FsHttpYankCurl)", description = "Yank the Curl command" },
     { lhs = "<CR>", plug = "<Plug>(FsHttpJump)", description = "Move to a Compile error position" },
     { lhs = "g?", plug = "<Plug>(FsHttpHelp)", description = "List the active keys" },
 }

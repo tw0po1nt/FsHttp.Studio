@@ -1,4 +1,5 @@
 local copy_text = require("fshttp.copy_text")
+local curl_command = require("fshttp.curl_command")
 local notify = require("fshttp.notify").notify
 
 local M = {}
@@ -19,7 +20,7 @@ end
 ---@class fshttp.YankKind
 ---@field name string
 ---@field label string
----@field text fun(result: fshttp.RunResult): string?
+---@field text fun(result: fshttp.RunResult): string?, string? the text, or nil and an optional reason
 
 -- The completion of :FsHttp yank uses this order.
 ---@type fshttp.YankKind[]
@@ -27,6 +28,7 @@ local kinds = {
     { name = "request", label = "Request", text = copy_text.request },
     { name = "headers", label = "Response headers", text = copy_text.headers },
     { name = "body", label = "Body", text = copy_text.body },
+    { name = "curl", label = "Curl command", text = curl_command.build },
 }
 
 ---@return string[]
@@ -60,7 +62,7 @@ local function write_register(register, text)
 end
 
 -- In an Ex command, v:register is always the default register, so `:FsHttp yank body +` names the register.
----@param name string request, headers, or body
+---@param name string request, headers, body, or curl
 ---@param register? string one register name, or nil for v:register
 function M.yank(name, register)
     local kind = kind_named(name)
@@ -77,8 +79,11 @@ function M.yank(name, register)
         notify("The latest Run gave no response. Run a Block first.", vim.log.levels.WARN)
         return
     end
-    local text = kind.text(latest)
-    if not text then
+    local text, reason = kind.text(latest)
+    if not text and reason then
+        notify("Nothing was yanked. " .. reason, vim.log.levels.WARN)
+        return
+    elseif not text then
         notify("The " .. kind.label .. " is empty, so nothing was yanked.", vim.log.levels.INFO)
         return
     end
