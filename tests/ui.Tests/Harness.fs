@@ -48,9 +48,9 @@ let PerCheckBudgetMs = 45_000
 /// Green-path budget for the suite, excluding Harness setup. Deliberately far tighter than the
 /// number of checks times `PerCheckBudgetMs`: no green run comes near the per-check ceiling, and
 /// a budget that summed the ceilings would catch nothing. Raised when the document-aware
-/// status-bar checks joined the suite; a green run still sits well under this ceiling on a slow
-/// runner.
-let SuiteBudgetMs = 300_000
+/// status-bar checks joined the suite, and again when the quick pick checks joined; a green run
+/// still sits under this ceiling on a slow runner.
+let SuiteBudgetMs = 420_000
 
 /// Cross-process contract for `GET /json`. Must match `UiTestServer.Server.jsonProbeBody`. The
 /// key and the value are named separately because a check reading the viewer's pretty-printed DOM
