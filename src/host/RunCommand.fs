@@ -129,6 +129,12 @@ let private startRun (h: Companion.Handle) (document: TextDocument) (source: str
 
     runOne h document source blockIndex myGeneration |> Async.StartImmediate
 
+let private showRefusalToast (code: string) =
+    window.showWarningMessage ((Refusals.forCode code).Detail) |> ignore
+
+let private showCompanionStoppedToast () =
+    window.showWarningMessage Refusals.companionStopped.Detail |> ignore
+
 /// Registers the command that a `▶ Run request` CodeLens invokes. The caller passes the same
 /// `TextDocument` that the lens was computed against, and the block's 0-based index into that
 /// document's located blocks. These match the `arguments` in `CodeLensProvider.fs`.
@@ -164,7 +170,7 @@ let private runAtCursor (h: Companion.Handle) (editor: TextEditor) : Async<unit>
             match blockAtCursor cursorLine ranges with
             | Some i ->
                 match ranges.[i].Refusal with
-                | Some code -> window.showWarningMessage ((Refusals.forCode code).Detail) |> ignore
+                | Some code -> showRefusalToast code
                 | None -> startRun h document source i
             | None -> ()
     }
@@ -178,7 +184,7 @@ let registerRunAtCursor (showNoSdk: unit -> unit) : Disposable =
             | Some editor when isScriptFileName editor.document.fileName ->
                 match companionState, handle with
                 | SdkNotFound, _ -> showNoSdk ()
-                | Stopped, _ -> window.showWarningMessage Refusals.companionStopped.Detail |> ignore
+                | Stopped, _ -> showCompanionStoppedToast ()
                 | Ready, Some h -> runAtCursor h editor |> Async.StartImmediate
                 | _ -> ()
             | _ -> window.showInformationMessage Refusals.runAtCursorNeedsScript |> ignore)
@@ -201,7 +207,7 @@ let registerExplain () : Disposable =
                     let! located = Companion.locate h (document.getText ())
 
                     match List.tryItem blockIndex located.Ranges |> Option.bind (fun r -> r.Refusal) with
-                    | Some code -> window.showWarningMessage ((Refusals.forCode code).Detail) |> ignore
+                    | Some code -> showRefusalToast code
                     | None -> ()
                 }
                 |> Async.StartImmediate)
@@ -211,6 +217,5 @@ let registerExplain () : Disposable =
 let registerExplainCompanionStopped () : Disposable =
     commands.registerCommand (
         CodeLensProvider.explainStoppedCommandId,
-        System.Action<obj, obj>(fun _documentArg _indexArg ->
-            window.showWarningMessage Refusals.companionStopped.Detail |> ignore)
+        System.Action<obj, obj>(fun _documentArg _indexArg -> showCompanionStoppedToast ())
     )

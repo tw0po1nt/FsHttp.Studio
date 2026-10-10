@@ -17,12 +17,6 @@ let private refusalLensTitle = Refusals.lensTitle loopBodyCode
 let private tryClickRefusalLens () =
     ExTester.tryClickCodeLensByTitle refusalLensTitle
 
-let private tryNoResponseViewer () =
-    async {
-        let! openBeside = ExTester.tryViewerBesideEditor ()
-        return not openBeside
-    }
-
 /// Closes any open viewer first so the post-click absence assertion is meaningful, then drives
 /// the refusal lens and its toast. Leaves the viewer closed and the toast dismissed.
 let private loopLensRefusesWithToast =
@@ -55,11 +49,13 @@ let private loopLensRefusesWithToast =
             Harness.eventually Harness.ToastDeadlineMs "a warning toast with the shipped loopBody detail" (fun () ->
                 ExTester.tryWarningNotification loopBody.Detail)
 
+        let settleUntil = Proc.now () + Harness.ViewerAbsenceSettleMs
+
         do!
-            Harness.eventually
+            Harness.eventuallyObserved
                 Harness.ViewerUpdateDeadlineMs
-                "no response viewer open after the refusal toast"
-                tryNoResponseViewer
+                "no response viewer open after the refusal toast, true through the settle window"
+                (fun () -> Checks.tryNoResponseViewerThroughSettle settleUntil)
 
         do!
             Harness.eventually Harness.ToastDeadlineMs "the warning toast to dismiss" (fun () ->

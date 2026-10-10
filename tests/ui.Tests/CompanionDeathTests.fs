@@ -143,7 +143,13 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
                 "FsHttp.Studio: companion stopped while an F# document is active"
                 (fun () -> Checks.tryStatusBarText (Checks.statusBarText "companion stopped"))
 
-        // The command maps no cursor while the Companion is stopped, so it shows the stopped toast.
+        let! stoppedToastBeforeCommand = ExTester.tryWarningNotification Harness.companionStoppedText
+
+        if stoppedToastBeforeCommand then
+            Assert.fail "the stopped toast showed before the command ran"
+
+        // Any cursor line works: a stopped Companion gives its toast before the command looks for
+        // a Block.
         do!
             Harness.eventually
                 Harness.LensAppearanceDeadlineMs

@@ -1,7 +1,6 @@
 // Run request at cursor: the palette command runs the Block at the caret, refuses with the toast of
-// the lens, and answers a script with no Block. Each check runs the command from the command
-// palette, as a user does. The stopped Companion is checked in CompanionDeathTests, which owns
-// the session that kills the Companion.
+// the lens, and answers a Script with no Block. Each Check runs the command from the command
+// palette, as a user does.
 module RunAtCursorTests
 
 open Fable.Mocha
@@ -15,12 +14,6 @@ let private loopBlockLine = 10
 let private emptyFixture = "no-requests-empty.fsx"
 
 let private loopBody = Refusals.forCode "loopBody"
-
-let private tryNoResponseViewer () =
-    async {
-        let! openBeside = ExTester.tryViewerBesideEditor ()
-        return not openBeside
-    }
 
 let private runsTheBlockAtTheCursor =
     async {
@@ -83,11 +76,13 @@ let private refusesTheLoopBlockWithTheToast =
             Harness.eventually Harness.ToastDeadlineMs "a warning toast with the shipped loopBody detail" (fun () ->
                 ExTester.tryWarningNotification loopBody.Detail)
 
+        let settleUntil = Proc.now () + Harness.ViewerAbsenceSettleMs
+
         do!
-            Harness.eventually
+            Harness.eventuallyObserved
                 Harness.ViewerUpdateDeadlineMs
-                "no response viewer open after the refusal toast"
-                tryNoResponseViewer
+                "no response viewer open after the refusal toast, true through the settle window"
+                (fun () -> Checks.tryNoResponseViewerThroughSettle settleUntil)
 
         do!
             Harness.eventually Harness.ToastDeadlineMs "the warning toast to dismiss" (fun () ->
@@ -105,7 +100,7 @@ let private answersAScriptWithNoBlock =
                 (fun () -> ExTester.tryRunAtCursorFromPalette 1)
 
         do!
-            Harness.eventually Harness.ToastDeadlineMs "the info toast for a script with no request" (fun () ->
+            Harness.eventually Harness.ToastDeadlineMs "the INFO toast for a Script with no Block" (fun () ->
                 ExTester.tryInfoNotification Refusals.noBlocksEmpty)
 
         do!
@@ -118,4 +113,4 @@ let tests =
         "run request at cursor"
         [ testCaseAsync "a runnable Block runs and the viewer shows the result" runsTheBlockAtTheCursor
           testCaseAsync "a Block in a loop gives the loopBody toast and no viewer" refusesTheLoopBlockWithTheToast
-          testCaseAsync "a script with no request gives the info toast" answersAScriptWithNoBlock ]
+          testCaseAsync "a Script with no Block gives the INFO toast" answersAScriptWithNoBlock ]

@@ -109,8 +109,7 @@ let activate (context: ExtensionContext) =
                 commands.executeCommand ("vscode.open", uri.parse dotnetDownloadUrl) |> ignore)
 
     let notifyNoSdk () =
-        StatusBar.setCompanionState SdkNotFound
-        RunCommand.setCompanionState SdkNotFound
+        onState SdkNotFound
         showNoSdkToast ()
 
     context.subscriptions.Add(box (RunCommand.registerRunAtCursor showNoSdkToast))

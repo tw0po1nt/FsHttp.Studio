@@ -212,6 +212,15 @@ let tryStatusBarHidden () =
         | other -> return Harness.Observed(describeStatus other)
     }
 
+/// True once `settleUntil` passes with no Response viewer beside the editor.
+let tryNoResponseViewerThroughSettle (settleUntil: float) =
+    async {
+        match! ExTester.tryViewerBesideEditor () with
+        | true -> return Harness.Observed "a Response viewer beside the editor"
+        | false when Proc.now () < settleUntil -> return Harness.DoesNotHold
+        | false -> return Harness.Holds
+    }
+
 /// `expected` is on the item, and has been since `stableUntil` was computed. A reading that
 /// matches before the settle window closes is not yet the claim. The claim is that nothing
 /// overwrote the item while a second visible document could still be locating.

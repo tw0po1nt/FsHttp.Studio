@@ -129,10 +129,10 @@ let noBlocksParseFailureLensTitle: string = glyph + noBlocksParseFailure.TrimEnd
 /// The CodeLens title for a Block that a Run can reach.
 let runLensTitle: string = "▶ Run request"
 
-/// The sentence for the command that runs the Block at the cursor, when the active editor is not a
-/// Script.
+/// The sentence for the command that runs the Block at the cursor, when there is no Active document,
+/// or the Active document is not a Script.
 let runAtCursorNeedsScript: string =
-    "Run request at cursor runs a request from an F# script (.fsx). Open a script and put the cursor in a request."
+    "Open an F# script (.fsx) to run the request at the cursor."
 
 /// The sentence for a script with no Block and no parse failure.
 let noBlocksEmpty: string =
