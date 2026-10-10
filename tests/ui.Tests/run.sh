@@ -92,6 +92,7 @@ unset EXTENSION_DEV_PATH || true
 
 export UI_TEST_SIDECAR="$SIDECAR"
 export UI_TEST_EXTENSIONS_DIR="$EXT_DIR"
+export UI_TEST_STORAGE="$STORAGE"
 export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--enable-source-maps"
 
 echo "==> ExTester: run suite"

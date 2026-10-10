@@ -18,6 +18,7 @@ type WebElement =
     abstract click: unit -> JS.Promise<unit>
     abstract isDisplayed: unit -> JS.Promise<bool>
     abstract getAttribute: name: string -> JS.Promise<string>
+    abstract sendKeys: keys: string -> JS.Promise<unit>
 
 type CodeLens =
     abstract getText: unit -> JS.Promise<string>
@@ -27,15 +28,14 @@ type TextEditor =
     abstract getCodeLenses: unit -> JS.Promise<CodeLens[]>
     /// True when the group's active tab carries unsaved changes.
     abstract isDirty: unit -> JS.Promise<bool>
-    /// The full buffer text of the group's active editor.
-    abstract getText: unit -> JS.Promise<string>
+    /// The input area takes no keys until its editor has focus.
+    abstract focus: unit -> JS.Promise<unit>
 
 type WebView =
     abstract switchBack: unit -> JS.Promise<unit>
     abstract findWebElement: locator: obj -> JS.Promise<WebElement>
 
 type VSBrowser =
-    abstract openResources: paths: string[] -> JS.Promise<unit>
     abstract waitForWorkbench: timeoutMs: float -> JS.Promise<unit>
     abstract takeScreenshot: name: string -> JS.Promise<unit>
     abstract driver: obj
@@ -310,11 +310,100 @@ module BottomBarPanel =
 module MarkerType =
     let any = "any"
 
+/// The system clipboard, through the `clipboardy` package that ExTester's page objects also read.
+module private Clipboard =
+    [<Emit("import('clipboardy').then(m => m.default)")>]
+    let private load () : JS.Promise<obj> = jsNative
+
+    /// `""` when the read throws, as it can for an empty clipboard.
+    let tryRead () : Async<string> =
+        async {
+            let! clipboard = load () |> Async.AwaitPromise
+
+            try
+                return clipboard?readSync ()
+            with _ ->
+                return ""
+        }
+
+    let write (text: string) : Async<unit> =
+        async {
+            let! clipboard = load () |> Async.AwaitPromise
+            clipboard?writeSync (text)
+        }
+
+[<Import("Key", "selenium-webdriver")>]
+let private Key: obj = jsNative
+
 module TextEditor =
     [<Import("TextEditor", "vscode-extension-tester")>]
     let private Ctor: obj = jsNative
 
     let createInGroup (group: EditorGroup) : TextEditor = createInstInGroup Ctor group
+
+    /// ExTester picks the locator and the control key for the running VSCode and platform.
+    let private inputArea (editor: TextEditor) : JS.Promise<WebElement> =
+        emitJsExpr (editor, Ctor) "$0.findElement($1.locators.Editor.inputArea)"
+
+    let private controlChord (key: string) : string =
+        emitJsExpr (Key, Ctor, key) "$0.chord($1.ctlKey, $2)"
+
+    let private copyDeadlineMs = 2_000
+    let private copyPollMs = 50
+
+    /// The full buffer text, copied through the select-all and copy keys on the input area. ExTester's
+    /// own `getText` runs the same copy through the command palette, at about one second for each read.
+    let getBufferText (editor: TextEditor) : Async<string> =
+        async {
+            let! original = Clipboard.tryRead ()
+            do! editor.focus () |> Async.AwaitPromise
+            let! area = inputArea editor |> Async.AwaitPromise
+            do! area.sendKeys (controlChord "a") |> Async.AwaitPromise
+            do! area.sendKeys (controlChord "c") |> Async.AwaitPromise
+
+            let rec awaitCopy (attemptsLeft: int) =
+                async {
+                    let! copied = Clipboard.tryRead ()
+
+                    if copied <> original || copied.Length > 0 then
+                        return copied
+                    elif attemptsLeft = 0 then
+                        return failwithf "the editor copy did not reach the clipboard in %d ms" copyDeadlineMs
+                    else
+                        do! Async.Sleep copyPollMs
+                        return! awaitCopy (attemptsLeft - 1)
+                }
+
+            let! text = awaitCopy (copyDeadlineMs / copyPollMs)
+            do! area.sendKeys Key?ARROW_UP |> Async.AwaitPromise
+
+            if original.Length > 0 then
+                do! Clipboard.write original
+
+            return text
+        }
+
+    /// Replaces one 1-based line through a paste over the whole buffer, so the call is a full replace
+    /// rather than a surgical edit.
+    let replaceLine (editor: TextEditor) (line: int) (text: string) : Async<unit> =
+        async {
+            let! current = getBufferText editor
+            let lines = current.Split '\n'
+
+            if line < 1 || line > lines.Length then
+                failwithf "line %d is outside the buffer, which has %d lines" line lines.Length
+
+            lines[line - 1] <- text
+            let! original = Clipboard.tryRead ()
+            do! Clipboard.write (String.concat "\n" lines)
+            do! editor.focus () |> Async.AwaitPromise
+            let! area = inputArea editor |> Async.AwaitPromise
+            do! area.sendKeys (controlChord "a") |> Async.AwaitPromise
+            do! area.sendKeys (controlChord "v") |> Async.AwaitPromise
+
+            if original.Length > 0 then
+                do! Clipboard.write original
+        }
 
     /// Partial title match, same contract as ExTester's `TextEditor.getCodeLens(string)`.
     let getCodeLensByTitle (editor: TextEditor) (title: string) : JS.Promise<CodeLens> =
@@ -324,11 +413,6 @@ module TextEditor =
     /// `Run request`, so a title match alone cannot reach the second block's lens.
     let getCodeLensByIndex (editor: TextEditor) (index: int) : JS.Promise<CodeLens> =
         emitJsExpr (editor, index) "$0.getCodeLens($1)"
-
-    /// Replaces one 1-based line in the editor. ExTester rewrites the whole buffer through the
-    /// clipboard to do this, so the call is a full replace rather than a surgical edit.
-    let setTextAtLine (editor: TextEditor) (line: int) (text: string) : JS.Promise<unit> =
-        emitJsExpr (editor, line, text) "$0.setTextAtLine($1, $2)"
 
 module WebView =
     [<Import("WebView", "vscode-extension-tester")>]
@@ -342,10 +426,27 @@ let By: ByStatic = jsNative
 let waitForWorkbench (browser: VSBrowser) (timeoutMs: float) : JS.Promise<unit> =
     emitJsExpr (browser, timeoutMs) "$0.waitForWorkbench($1)"
 
-/// Asks VSCode to open a file. Returns when ExTester has asked, before the editor has finished
-/// rendering it, so pair it with a later wait on the tab or the buffer.
-let private openResource (browser: VSBrowser) (path: string) : JS.Promise<unit> =
-    emitJsExpr (browser, path) "$0.openResources($1)"
+/// ExTester's VSCode CLI wrapper, which its package root does not export.
+module private CodeUtil =
+    [<Import("CodeUtil", "vscode-extension-tester/out/util/codeUtil")>]
+    let private Ctor: obj = jsNative
+
+    /// `run.sh` owns both folders: the CLI reaches the running editor through its user data folder.
+    let create () : obj =
+        let storage = Proc.env "UI_TEST_STORAGE" ""
+        let extensions = Proc.env "UI_TEST_EXTENSIONS_DIR" ""
+
+        if storage = "" || extensions = "" then
+            failwith "UI_TEST_STORAGE and UI_TEST_EXTENSIONS_DIR must be set, so the CLI can reach the running editor"
+
+        emitJsExpr (Ctor, storage, extensions) "new $0($1, 'stable', $2)"
+
+/// Asks VSCode to open a file through the `code -r` call of `VSBrowser.openResources`, without its
+/// 500 ms workbench wait and its tab wait. Each check waits for the tab itself. Returns before the
+/// editor has rendered the file.
+let private openResource (path: string) : unit =
+    let code = CodeUtil.create ()
+    code?``open`` (path)
 
 let private switchToFrameTimed (view: WebView) (timeoutMs: float) : JS.Promise<unit> =
     emitJsExpr (view, timeoutMs) "$0.switchToFrame($1)"
@@ -444,21 +545,20 @@ let tryFixtureColumnShowsTab (tabTitle: string) : Async<bool> =
 /// with no tabs left stops being a column: the response viewer then slides into the fixture
 /// column's index, and the file opens beside the viewer instead of replacing it.
 ///
-/// Opens the path rather than clicking the file in the Explorer, because `openResources` names
+/// Opens the path rather than clicking the file in the Explorer, because the CLI open names
 /// the file it opens and a click depends on where the tree has scrolled to. A doubled buffer was
 /// once read as a fault in the Explorer route. It was not: the editor doubles the file whichever
 /// route opens it, and the pin in `extester.config.json` is what keeps it to one copy.
-/// `openResources` opens into the focused column, which is why the focus command comes
+/// The CLI open lands in the focused column, which is why the focus command comes
 /// first: without it the open lands on whichever column last had focus, which is the response
 /// viewer for every check after the core path.
 let openFixtureInColumn (path: string) : Async<FixtureOpen> =
     async {
         try
             let workbench = Workbench.create ()
-            let browser = VSBrowser.instance
 
             do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
-            do! openResource browser path |> Async.AwaitPromise
+            openResource path
 
             return FixtureOpenRequested
         with e ->
@@ -681,7 +781,7 @@ let tryReadLensRendering (title: string) : Async<LensRendering> =
 ///
 /// Monaco renders a gutter number for a line it shows and for no line past the end of the
 /// document, so this reading is a lower bound on the size of the document. It is independent of
-/// `TextEditor.getText`, which reaches the document through the clipboard. A gutter that stops at
+/// `TextEditor.getBufferText`, which reaches the document through the clipboard. A gutter that stops at
 /// the size of the file, against a clipboard reading of twice that size, puts the fault in the
 /// clipboard. A gutter that fills the viewport puts the fault in the document.
 let describeGutterExtent () : Async<string> =
@@ -971,7 +1071,7 @@ let private fixtureEditor () : Async<TextEditor> =
 let private bufferState (editor: TextEditor) : Async<bool * string> =
     async {
         let! dirty = editor.isDirty () |> Async.AwaitPromise
-        let! text = editor.getText () |> Async.AwaitPromise
+        let! text = TextEditor.getBufferText editor
         return dirty, text
     }
 
@@ -1002,7 +1102,7 @@ let trySetFixtureLine (line: int) (text: string) : Async<bool> =
             if dirty && current.Contains text then
                 return true
             else
-                do! TextEditor.setTextAtLine editor line text |> Async.AwaitPromise
+                do! TextEditor.replaceLine editor line text
                 let! dirtyAfter, textAfter = bufferState editor
                 return dirtyAfter && textAfter.Contains text
         with _ ->
@@ -1011,7 +1111,7 @@ let trySetFixtureLine (line: int) (text: string) : Async<bool> =
 
 /// The fixture editor's whole buffer, or `None` when the editor cannot be reached.
 ///
-/// Reads through `TextEditor.getText`, which copies the document to the clipboard and reads it
+/// Reads through `TextEditor.getBufferText`, which copies the document to the clipboard and reads it
 /// back. That copy was once read as unreliable, because it returned the fixture twice over for a
 /// document that painted the correct lenses. The copy was right and the document was wrong: the
 /// lenses of the second copy sat below the viewport, and Monaco renders no lens for a line it does
@@ -1020,7 +1120,7 @@ let tryFixtureBufferText () : Async<string option> =
     async {
         try
             let! editor = fixtureEditor ()
-            let! text = editor.getText () |> Async.AwaitPromise
+            let! text = TextEditor.getBufferText editor
             return Some text
         with _ ->
             return None
