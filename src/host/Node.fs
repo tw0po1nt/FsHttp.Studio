@@ -4,6 +4,8 @@ open Fable.Core
 
 type Writable =
     abstract write: chunk: byte[] -> bool
+    abstract ``end``: unit -> unit
+    abstract on: event: string * listener: (obj -> unit) -> unit
 
 type Readable =
     abstract on: event: string * listener: (obj -> unit) -> unit
@@ -12,7 +14,7 @@ type ChildProcess =
     abstract stdin: Writable
     abstract stdout: Readable
     abstract on: event: string * listener: (obj -> unit) -> unit
-    abstract kill: unit -> bool
+    abstract pid: int
 
 type IChildProcessModule =
     abstract spawn: command: string * args: string[] * options: obj -> ChildProcess
@@ -25,6 +27,13 @@ type IChildProcessModule =
     /// The bound makes sure that a stalled `dotnet` cannot hang the probe.
     abstract execFile:
         file: string * args: string[] * options: obj * callback: (obj -> string -> string -> unit) -> unit
+
+/// A group that is already gone raises `ESRCH`, which the call swallows.
+[<Emit("(() => { try { process.kill(-$0, 'SIGKILL'); } catch (_) {} })()")>]
+let killProcessGroup (_pid: int) : unit = jsNative
+
+[<Emit("process.platform")>]
+let platform: string = jsNative
 
 [<Import("*", "child_process")>]
 let childProcess: IChildProcessModule = jsNative

@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="Js.fs" />
     <Compile Include="Node.fs" />
+    <Compile Include="ProcessStop.fs" />
     <Compile Include="Vscode.fs" />
     <Compile Include="Envelope.fs" />
     <Compile Include="Refusals.fs" />

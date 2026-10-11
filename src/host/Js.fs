@@ -23,3 +23,6 @@ let onResolved (_p: JS.Promise<'T>) (_onOk: 'T -> unit) : unit = jsNative
 /// the function exists when this returns.
 [<Emit("(() => { let fulfill; const p = new Promise(r => { fulfill = r; }); return [p, fulfill]; })()")>]
 let deferred<'T> () : JS.Promise<'T> * ('T -> unit) = jsNative
+
+[<Emit("Promise.resolve($0)")>]
+let resolved<'T> (_value: 'T) : JS.Promise<'T> = jsNative

@@ -79,6 +79,8 @@ let private flushPending (handle: Handle) =
     handle.Closed <- true
     entries |> Array.iter (fun entry -> entry.Abandon())
 
+let private hostPlatform = ProcessStop.platformOf platform
+
 /// `dotnetPath` is the SDK-bearing `dotnet` host that activation resolved (see Extension.fs).
 /// It is the `fshttpStudio.dotnetPath` override when the user sets that override. Otherwise it
 /// is `"dotnet"` from PATH, after `--list-sdks` confirms an SDK at or above the companion's
@@ -87,7 +89,13 @@ let private flushPending (handle: Handle) =
 let start (dotnetPath: string) (companionDllPath: string) (onState: State -> unit) : Handle =
     onState Starting
 
-    let options: obj = nonNull (box {| stdio = [| "pipe"; "pipe"; "pipe" |] |})
+    let options: obj =
+        nonNull (
+            box
+                {| stdio = [| "pipe"; "pipe"; "pipe" |]
+                   detached = ProcessStop.detachOnSpawn hostPlatform |}
+        )
+
     let child = childProcess.spawn (dotnetPath, [| companionDllPath |], options)
 
     let handle =
@@ -204,4 +212,40 @@ let run
 
         send handle (JS.JSON.stringify payload) entry)
 
-let stop (handle: Handle) = handle.Process.kill () |> ignore
+/// The promise resolves after the kill command ends, or at once when the companion already exited.
+let stop (handle: Handle) : JS.Promise<unit> =
+    if handle.Closed then
+        resolved ()
+    else
+        let promise, fulfill = deferred<unit> ()
+
+        let timer =
+            JS.setTimeout
+                (fun () ->
+                    if handle.Closed then
+                        fulfill ()
+                    else
+                        match ProcessStop.killCommand hostPlatform handle.Process.pid with
+                        | ProcessStop.SignalGroup pid ->
+                            killProcessGroup pid
+                            fulfill ()
+                        | ProcessStop.Exec(file, args) ->
+                            childProcess.execFile (
+                                file,
+                                args,
+                                nonNull (box {| timeout = ProcessStop.taskkillTimeoutMs |}),
+                                fun _ _ _ -> fulfill ()
+                            ))
+                ProcessStop.stopDelayMs
+
+        handle.Process.on (
+            "exit",
+            fun _ ->
+                JS.clearTimeout timer
+                fulfill ()
+        )
+
+        // A companion that is already exiting raises EPIPE, which the stop ignores.
+        handle.Process.stdin.on ("error", ignore)
+        handle.Process.stdin.``end`` ()
+        promise
