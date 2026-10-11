@@ -87,7 +87,13 @@ let private flushPending (handle: Handle) =
 let start (dotnetPath: string) (companionDllPath: string) (onState: State -> unit) : Handle =
     onState Starting
 
-    let options: obj = nonNull (box {| stdio = [| "pipe"; "pipe"; "pipe" |] |})
+    let options: obj =
+        nonNull (
+            box
+                {| stdio = [| "pipe"; "pipe"; "pipe" |]
+                   detached = ProcessStop.detachOnSpawn platform |}
+        )
+
     let child = childProcess.spawn (dotnetPath, [| companionDllPath |], options)
 
     let handle =
@@ -204,4 +210,27 @@ let run
 
         send handle (JS.JSON.stringify payload) entry)
 
-let stop (handle: Handle) = handle.Process.kill () |> ignore
+/// Closes the stdin of the companion, and kills its process tree when it is still alive after
+/// `ProcessStop.stopDelayMs`. The promise resolves once the kill command has run, or at once
+/// when the companion has already exited.
+let stop (handle: Handle) : JS.Promise<unit> =
+    let promise, fulfill = deferred<unit> ()
+
+    if handle.Closed then
+        fulfill ()
+    else
+        handle.Process.on ("exit", fun _ -> fulfill ())
+
+        handle.Process.stdin.``end`` ()
+
+        setTimeout ProcessStop.stopDelayMs (fun () ->
+            if not handle.Closed then
+                match ProcessStop.killCommand platform handle.Process.pid with
+                | ProcessStop.SignalGroup pid -> killProcessGroup pid
+                | ProcessStop.Taskkill pid ->
+                    childProcess.spawn ("taskkill", ProcessStop.taskkillArgs pid, nonNull (box {| stdio = "ignore" |}))
+                    |> ignore
+
+            fulfill ())
+
+    promise
