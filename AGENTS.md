@@ -62,8 +62,6 @@ rule at the moment of risk, and it cannot check that you obeyed. The rule is sti
 - **Before you create, edit, or comment on a GitHub issue or pull request**, read
   `docs/agents/issue-tracker.md`. Issues live as GitHub issues on `tw0po1nt/FsHttp.Studio`, and that
   file gives the `gh` command lines and the wayfinding operations.
-- **Before you write, address, or verify review feedback**, read `docs/agents/feedback-ledger.md`.
-  The ledger is one PR comment, and `./scripts/verify.sh` is its gate.
 - **Before you write a spec**, read `docs/standards/spec-writing.md`. The full text belongs in
   `docs/spec/`, and the issue keeps a short summary and a link to it.
 - **Before you open a pull request that changes `src/renderer/`, `src/webview/`, or
