@@ -3,6 +3,7 @@ local download_rule = require("fshttp.download_rule")
 local envelope = require("fshttp.envelope")
 local frame = require("fshttp.frame")
 local notify_scheduled = require("fshttp.notify").notify_scheduled
+local process_stop = require("fshttp.process_stop")
 local sdk = require("fshttp.sdk")
 local version_check = require("fshttp.version_check")
 
@@ -116,6 +117,7 @@ local function spawn(dotnet, companion_dll)
     local parser = frame.parser()
     local ok, started = pcall(vim.system, { dotnet, companion_dll }, {
         stdin = true,
+        detach = process_stop.detach_on_spawn(vim.uv.os_uname().sysname),
         stdout = function(_, chunk)
             local encoded_envelopes = chunk and parser:push(chunk) or {}
             if #encoded_envelopes > 0 then
@@ -314,10 +316,29 @@ function M.start(config)
     end
 end
 
--- Returns at once, so a hung companion cannot delay the exit of Neovim.
+-- An idle companion exits when its stdin closes.
 function M.stop()
-    if process then
-        process:kill("sigterm")
+    local stopping = process
+    if not stopping then
+        return
+    end
+    -- The write can fail when the companion is already exiting.
+    pcall(stopping.write, stopping, nil)
+    -- The exit callback clears `process`, and vim.wait runs that callback.
+    if vim.wait(process_stop.stop_delay_ms, function()
+        return process ~= stopping
+    end, 10) then
+        return
+    end
+    local command = process_stop.kill_command(vim.uv.os_uname().sysname, stopping.pid)
+    if command.kind == "signal_group" then
+        vim.uv.kill(-command.pid, "sigkill")
+    else
+        pcall(function()
+            vim.system(command.command, { timeout = process_stop.taskkill_timeout_ms }):wait()
+        end)
+    end
+    if process == stopping then
         process = nil
     end
 end
