@@ -185,5 +185,5 @@ The port the test server allocates and never listens on, so a Check can drive a 
 _Avoid_: closed port, bad port.
 
 **Budget**:
-The green-path time a phase is allowed, for Harness setup, for each Check, and for the suite. In the UI suite the values are 180 s, 45 s, and 300 s. The Neovim suite sets its own values. A Budget catches drift, and the Harness asserts it after a Check or after the suite, never in a Check body. The test runner's timeouts above it are the hang guard.
+The green-path time a phase is allowed, for Harness setup, for each Check, and for the suite. In the UI suite the values are 180 s, 45 s, and 435 s. The Neovim suite sets its own values. A Budget catches drift, and the Harness asserts it after a Check or after the suite, never in a Check body. The test runner's timeouts above it are the hang guard.
 _Avoid_: timeout, deadline (a deadline is what one `eventually` call waits against).
