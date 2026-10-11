@@ -73,6 +73,22 @@ type BlockRange =
         Refusal: string option
     }
 
+/// One title for each remembered Block while the Companion is not Ready. A Ready Companion
+/// locates afresh, so it gives none. A first start remembers no Block, so it paints nothing.
+let notReadyLensTitles (state: State) (remembered: BlockRange list option) : string list =
+    let count = remembered |> Option.map List.length |> Option.defaultValue 0
+
+    let title =
+        match state with
+        | Ready -> None
+        | Starting -> Some Refusals.companionStartingLensTitle
+        | SdkNotFound
+        | Stopped -> Some Refusals.companionStoppedLensTitle
+
+    match title with
+    | Some t -> List.replicate count t
+    | None -> []
+
 /// The cursor rule that both Clients obey. `cursorLine` uses FCS numbering, as `BlockRange` does.
 /// The result is the `blockIndex` of the run envelope, or `None` when the cursor is outside every
 /// Block. Of the Blocks that contain the line, the Block with the latest start is the target.

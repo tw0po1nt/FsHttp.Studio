@@ -9,17 +9,22 @@ open Node
 open Envelope
 open Protocol
 
+type AbandonReason =
+    | CompanionStopped
+    | CompanionRestarted
+
 /// One outstanding request, matched to its eventual `data` event or to a companion exit.
 type private IPendingRequest =
     abstract Resolve: json: obj -> unit
-    abstract Abandon: unit -> unit
+    abstract Abandon: reason: AbandonReason -> unit
 
 [<NoComparison>]
 type Handle =
     private
         { Process: ChildProcess
           Pending: ResizeArray<IPendingRequest>
-          mutable Closed: bool }
+          mutable Closed: bool
+          mutable Exited: bool }
 
 let private toBlockRange (r: obj) : BlockRange =
     { StartLine = unbox<int> (r?startLine: obj)
@@ -73,11 +78,11 @@ let private decodeRunEnvelope (json: obj) : RunEnvelope =
 /// reaches `error` and leaves the same queue behind.
 /// Drain the queue and close the handle before any `Abandon` runs, so a re-entrant `send`
 /// abandons rather than enqueueing onto the queue this call is already flushing.
-let private flushPending (handle: Handle) =
+let private flushPending (reason: AbandonReason) (handle: Handle) =
     let entries = handle.Pending.ToArray()
     handle.Pending.Clear()
     handle.Closed <- true
-    entries |> Array.iter (fun entry -> entry.Abandon())
+    entries |> Array.iter (fun entry -> entry.Abandon reason)
 
 let private hostPlatform = ProcessStop.platformOf platform
 
@@ -101,7 +106,8 @@ let start (dotnetPath: string) (companionDllPath: string) (onState: State -> uni
     let handle =
         { Process = child
           Pending = ResizeArray<IPendingRequest>()
-          Closed = false }
+          Closed = false
+          Exited = false }
 
     let parser =
         FrameParser(fun payload ->
@@ -128,14 +134,16 @@ let start (dotnetPath: string) (companionDllPath: string) (onState: State -> uni
             else
                 onState Stopped
 
-            flushPending handle
+            handle.Exited <- true
+            flushPending CompanionStopped handle
     )
 
     child.on (
         "exit",
         fun _ ->
             onState Stopped
-            flushPending handle
+            handle.Exited <- true
+            flushPending CompanionStopped handle
     )
 
     child.stdin.write (encodeFrame (encodeUtf8 "{\"tag\":\"hello\"}")) |> ignore
@@ -144,7 +152,7 @@ let start (dotnetPath: string) (companionDllPath: string) (onState: State -> uni
 
 let private send (handle: Handle) (payloadJson: string) (entry: IPendingRequest) =
     if handle.Closed then
-        entry.Abandon()
+        entry.Abandon CompanionStopped
     else
         handle.Pending.Add(entry)
         handle.Process.stdin.write (encodeFrame (encodeUtf8 payloadJson)) |> ignore
@@ -172,7 +180,7 @@ let locate (handle: Handle) (source: string) : Async<LocateResponse> =
                           ParseFailed = parseFailedOrDefault (tryUnbox<bool> (json?parseFailed: obj)) }
 
                 // An abandoned request carries no property at all, which is the same absent case.
-                member _.Abandon() =
+                member _.Abandon _ =
                     resolve
                         { Ranges = []
                           ParseFailed = parseFailedOrDefault None } }
@@ -207,14 +215,16 @@ let run
                 member _.Resolve(json) =
                     resolve (parseRunResult (decodeRunEnvelope json))
 
-                member _.Abandon() =
-                    resolve (RunProtocolError Refusals.companionStopped.Detail) }
+                member _.Abandon reason =
+                    match reason with
+                    | CompanionStopped -> resolve (RunProtocolError Refusals.companionStopped.Detail)
+                    | CompanionRestarted -> resolve (RunRuntimeError Refusals.restartEndedRun) }
 
         send handle (JS.JSON.stringify payload) entry)
 
 /// The promise resolves after the kill command ends, or at once when the companion already exited.
 let stop (handle: Handle) : JS.Promise<unit> =
-    if handle.Closed then
+    if handle.Exited then
         resolved ()
     else
         let promise, fulfill = deferred<unit> ()
@@ -222,7 +232,7 @@ let stop (handle: Handle) : JS.Promise<unit> =
         let timer =
             JS.setTimeout
                 (fun () ->
-                    if handle.Closed then
+                    if handle.Exited then
                         fulfill ()
                     else
                         match ProcessStop.killCommand hostPlatform handle.Process.pid with
@@ -249,3 +259,9 @@ let stop (handle: Handle) : JS.Promise<unit> =
         handle.Process.stdin.on ("error", ignore)
         handle.Process.stdin.``end`` ()
         promise
+
+/// Ends each waiting request as a Restart, and then stops the companion.
+let stopForRestart (handle: Handle) : JS.Promise<unit> =
+    let stopped = stop handle
+    flushPending CompanionRestarted handle
+    stopped

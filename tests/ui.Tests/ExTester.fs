@@ -1115,6 +1115,19 @@ let tryRunAtCursorFromPalette (line: int) : Async<bool> =
             return false
     }
 
+let restartCompanionTitle = "FsHttp.Studio: Restart companion"
+
+/// Runs the Restart command from the command palette, as a user does.
+let tryRestartFromPalette () : Async<bool> =
+    async {
+        try
+            let workbench = Workbench.create ()
+            do! workbench.executeCommand restartCompanionTitle |> Async.AwaitPromise
+            return true
+        with _ ->
+            return false
+    }
+
 /// One row of a quick pick as a person reads it: the label, and the detail row when the row has one.
 type QuickPickEntry =
     { Label: string; Detail: string option }

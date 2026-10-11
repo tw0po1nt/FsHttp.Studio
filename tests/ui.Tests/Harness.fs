@@ -374,6 +374,11 @@ let private companionPattern () =
 /// check kills and confirms these, then waits for a fresh pid after reload.
 let companionPids () = Proc.pidsMatching (companionPattern ())
 
+/// The `--worker` children of this run's companion. A Run with conflicting `#r "nuget:"` pins
+/// starts one.
+let workerPids () =
+    Proc.pidsMatching (companionPattern () + " --worker")
+
 let private tryCompanionRunning () =
     async { return companionPids () |> Array.isEmpty |> not }
 

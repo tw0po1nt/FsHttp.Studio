@@ -26,7 +26,7 @@ let explainStoppedCommandId = "fshttpStudio.explainCompanionStopped"
 let private emitter = EventEmitter<unit>()
 
 let mutable private handle: Companion.Handle option = None
-let mutable private ready = false
+let mutable private state = Starting
 
 /// `Extension` owns the status bar item and decides whether the document is still the active
 /// editor's document.
@@ -41,7 +41,7 @@ let mutable private onLocated: (TextDocument -> ScriptView -> unit) option = Non
 /// the way to ready.
 ///
 /// A ready companion never reads this table, because it locates the script again on every query.
-/// The entries therefore only serve the *next* stop, and `setReady true` clears all of them.
+/// The entries therefore only serve the *next* stop, and `setState Ready` clears all of them.
 /// Nothing else removes an entry. What a session stores is one range list for each script that the
 /// user opened since the companion last became ready, which is small.
 let private lastLocated =
@@ -61,16 +61,16 @@ let private reportLocated (document: TextDocument) (view: ScriptView) =
     | None -> ()
 
 /// Called on every companion state transition. It fires `onDidChangeCodeLenses` only on a real
-/// change between ready and not-ready, so VSCode does not re-query on an unrelated status tick.
+/// change of state, so VSCode does not re-query on an unrelated status tick.
 ///
 /// Becoming ready clears the remembered ranges. They came from a companion that is gone, and a
 /// live one answers for itself. Keeping them would let a stop after this point paint lenses from
 /// a parse two companions old.
-let setReady (isReady: bool) =
-    if isReady <> ready then
-        ready <- isReady
+let setState (newState: State) =
+    if newState <> state then
+        state <- newState
 
-        if isReady then
+        if newState = Ready then
             lastLocated.Clear()
 
         emitter.fire ()
@@ -106,19 +106,27 @@ let private plainTextLens (title: string) : CodeLens =
 
 let private noLenses () : Async<ResizeArray<CodeLens>> = async { return ResizeArray() }
 
-/// The answer for a script while the companion is gone: one stopped lens for each block the last
+/// The answer for a script while the companion is not Ready: one lens for each block the last
 /// locate remembered, and no lens at all for a script no locate ever covered.
 ///
 /// Every remembered block reads the same way here. A block's own refusal is still true, but it is
 /// no longer the reason the user cannot run: nothing in this script can run, whatever its
-/// position, and the one action that changes that is a reload of the window.
-let private stoppedLenses (document: TextDocument) : ResizeArray<CodeLens> =
-    match lastLocated.TryGetValue document.fileName with
-    | true, ranges ->
-        ranges
-        |> List.mapi (fun i r -> lensAt document i r Refusals.companionStoppedLensTitle explainStoppedCommandId)
+/// position. A Starting lens starts nothing, and a stopped lens explains the stop.
+let private notReadyLenses (document: TextDocument) : ResizeArray<CodeLens> =
+    let remembered =
+        match lastLocated.TryGetValue document.fileName with
+        | true, ranges -> Some ranges
+        | _ -> None
+
+    let command = if state = Starting then "" else explainStoppedCommandId
+
+    match remembered with
+    | Some ranges ->
+        notReadyLensTitles state remembered
+        |> List.zip ranges
+        |> List.mapi (fun i (r, title) -> lensAt document i r title command)
         |> ResizeArray
-    | _ -> ResizeArray()
+    | None -> ResizeArray()
 
 let provider: CodeLensProvider =
     { new CodeLensProvider with
@@ -128,8 +136,8 @@ let provider: CodeLensProvider =
             let computation =
                 if not (isScriptFileName document.fileName) then
                     noLenses ()
-                elif not ready then
-                    async { return stoppedLenses document }
+                elif state <> Ready then
+                    async { return notReadyLenses document }
                 else
                     match handle with
                     | None -> noLenses ()
@@ -140,7 +148,7 @@ let provider: CodeLensProvider =
 
                             // A companion that exits mid-locate abandons this call to an empty
                             // list, which is not a reading of the script.
-                            if ready then
+                            if state = Ready then
                                 lastLocated.[document.fileName] <- ranges
 
                                 let view = Script(ranges.Length, located.ParseFailed)
@@ -150,7 +158,7 @@ let provider: CodeLensProvider =
                                 | Some title -> return ResizeArray([ plainTextLens title ])
                                 | None -> return ranges |> List.mapi (buildCodeLens document) |> ResizeArray
                             else
-                                return stoppedLenses document
+                                return notReadyLenses document
                         }
 
             Async.StartAsPromise computation }
