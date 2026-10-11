@@ -60,4 +60,36 @@ describe("fshttp.block_mark", function()
             assert.equal("⊘", block_mark.glyph(refusal.block_mark_title), code)
         end
     end)
+
+    it("gives each remembered Block the starting title while the companion starts", function()
+        local shown = { { id = 1, row = 7, on_block = true }, { id = 2, row = 9, on_block = true } }
+        assert.same({
+            { id = 1, row = 7, title = "⊘ Cannot run: the companion is starting" },
+            { id = 2, row = 9, title = "⊘ Cannot run: the companion is starting" },
+        }, block_mark.not_ready_changes(shown, "starting"))
+    end)
+
+    it("paints no Block mark for a first start, which remembers no Block", function()
+        assert.same({}, block_mark.not_ready_changes({}, "starting"))
+    end)
+
+    it("removes a mark on no Block while the companion starts", function()
+        local shown = { { id = 3, row = 0, on_block = false } }
+        assert.same({ { id = 3, row = 0, title = nil } }, block_mark.not_ready_changes(shown, "starting"))
+    end)
+
+    it("gives each remembered Block the stopped title in the stopped state and in each failed start state", function()
+        local shown = { { id = 1, row = 7, on_block = true } }
+        for _, state in ipairs({ "stopped", "sdkNotFound", "downloadFailed", "noRelease", "companionNotFound" }) do
+            assert.same(
+                { { id = 1, row = 7, title = refusals.companion_stopped_block_mark_title } },
+                block_mark.not_ready_changes(shown, state),
+                state
+            )
+        end
+    end)
+
+    it("keeps each title while the Companion archive downloads", function()
+        assert.is_nil(block_mark.not_ready_changes({ { id = 1, row = 7, on_block = true } }, "downloading"))
+    end)
 end)

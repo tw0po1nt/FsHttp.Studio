@@ -32,16 +32,21 @@ local function base_url()
     return rule.default_base_url
 end
 
+---@alias fshttp.DownloadStep fun(cmd: string[], callback: fun(result: vim.SystemCompleted), cwd: string?)
+
 ---@param cmd string[]
 ---@param callback fun(result: vim.SystemCompleted)
 ---@param cwd? string
+---@return vim.SystemObj? process nil when the command did not start
 local function run(cmd, callback, cwd)
-    local ok, err = pcall(vim.system, cmd, { text = true, cwd = cwd }, vim.schedule_wrap(callback))
+    local ok, started = pcall(vim.system, cmd, { text = true, cwd = cwd }, vim.schedule_wrap(callback))
     if not ok then
         vim.schedule(function()
-            callback({ code = -1, signal = 0, stdout = "", stderr = tostring(err) })
+            callback({ code = -1, signal = 0, stdout = "", stderr = tostring(started) })
         end)
+        return nil
     end
+    return started
 end
 
 ---@param text string?
@@ -75,10 +80,11 @@ local function finish(callback, work, result)
 end
 
 -- The file has a temporary name until curl finishes.
+---@param step fshttp.DownloadStep
 ---@param url string
 ---@param target string
 ---@param callback fun(status: "ok"|"notFound"|"failed", detail: string?)
-local function fetch_file(url, target, callback)
+local function fetch_file(step, url, target, callback)
     local part = target .. ".part"
     local cmd = {
         "curl",
@@ -94,7 +100,7 @@ local function fetch_file(url, target, callback)
         "%{http_code}",
         url,
     }
-    run(cmd, function(result)
+    step(cmd, function(result)
         if result.code ~= 0 then
             local detail = first_line(result.stderr)
             callback("failed", detail ~= "" and detail or ("exit code " .. result.code))
@@ -116,12 +122,29 @@ end
 -- The callback runs on the main loop.
 ---@param version string
 ---@param callback fun(result: fshttp.DownloadResult)
+---@return fun() cancel stops the download, and the callback then never runs
 function M.fetch(version, callback)
     local root = M.root()
     local target = M.folder(version)
     -- The work folder is private to this download, so two Neovim instances can download at the same time.
     local work = vim.fs.joinpath(root, string.format(".work-%s-%d", version, vim.fn.getpid()))
     vim.fn.mkdir(work, "p")
+
+    local cancelled = false
+    ---@type vim.SystemObj?
+    local current
+
+    ---@type fshttp.DownloadStep
+    local function step(cmd, on_result, cwd)
+        current = run(cmd, function(result)
+            current = nil
+            if cancelled then
+                delete_tree(work)
+                return
+            end
+            on_result(result)
+        end, cwd)
+    end
 
     local archive = vim.fs.joinpath(work, rule.archive_name(version))
     local checksum_file = vim.fs.joinpath(work, rule.checksum_name(version))
@@ -151,7 +174,7 @@ function M.fetch(version, callback)
         vim.fn.mkdir(unpacked, "p")
         -- A user can have GNU tar first on PATH. GNU tar reads C:/ as a host name, so tar gets relative names.
         local tar = { "tar", "-xzf", rule.archive_name(version), "-C", unpacked_name }
-        run(tar, function(result)
+        step(tar, function(result)
             if result.code ~= 0 then
                 local detail = first_line(result.stderr)
                 fail("tar", detail ~= "" and detail or ("exit code " .. result.code))
@@ -169,7 +192,7 @@ function M.fetch(version, callback)
         if file then
             file:close()
         end
-        run(rule.checksum_command(vim.uv.os_uname().sysname, archive), function(result)
+        step(rule.checksum_command(vim.uv.os_uname().sysname, archive), function(result)
             if result.code ~= 0 then
                 fail("checksum", "the checksum command failed: " .. first_line(result.stderr))
             elseif rule.checksum_matches(expected, result.stdout or "") then
@@ -182,7 +205,7 @@ function M.fetch(version, callback)
 
     local function fetch_checksum()
         local url = rule.url(base_url(), version, rule.checksum_name(version))
-        fetch_file(url, checksum_file, function(status, detail)
+        fetch_file(step, url, checksum_file, function(status, detail)
             if status == "ok" then
                 verify()
             else
@@ -192,7 +215,7 @@ function M.fetch(version, callback)
     end
 
     local url = rule.url(base_url(), version, rule.archive_name(version))
-    fetch_file(url, archive, function(status, detail)
+    fetch_file(step, url, archive, function(status, detail)
         if status == "ok" then
             fetch_checksum()
         elseif status == "notFound" then
@@ -201,6 +224,13 @@ function M.fetch(version, callback)
             fail("curl", detail or "")
         end
     end)
+
+    return function()
+        cancelled = true
+        if current then
+            pcall(current.kill, current, "sigkill")
+        end
+    end
 end
 
 -- A plugin manager calls this build hook at install and at each update, so it waits for the download.

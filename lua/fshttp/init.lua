@@ -58,11 +58,22 @@ function M.setup_problems()
     return setup_problems
 end
 
--- Only the first call has an effect.
-function M.start()
+local function watch()
     require("fshttp.locator").watch()
     require("fshttp.status_line").watch()
+end
+
+-- Only the first call has an effect.
+function M.start()
+    watch()
     require("fshttp.companion").start(config)
+end
+
+function M.restart()
+    watch()
+    if require("fshttp.companion").restart(config) then
+        require("fshttp.run").discard_wait()
+    end
 end
 
 ---@return string? text the Status line text, or nil when the Active document does not have the fsharp filetype

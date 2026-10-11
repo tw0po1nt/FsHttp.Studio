@@ -43,15 +43,18 @@ local function to_result(ok_envelope, total_ms)
     }
 end
 
--- A nil outcome with no decode error means that the companion stopped before it answered.
+-- A nil outcome with no decode error means that the companion stopped or restarted before it answered.
 ---@param outcome table?
 ---@param decode_error string?
+---@param reason fshttp.AbandonReason?
 ---@param total_ms number
 ---@param script_file_name string? the scriptFileName of the run envelope
 ---@return fshttp.ResponseView
-local function view_for(outcome, decode_error, total_ms, script_file_name)
+local function view_for(outcome, decode_error, reason, total_ms, script_file_name)
     yank.remember(nil)
-    if outcome == nil then
+    if outcome == nil and reason == "restarted" then
+        return response_view.runtime_error(refusals.restart_ended_run)
+    elseif outcome == nil then
         return response_view.message(decode_error or refusals.companion_stopped.detail)
     elseif outcome.tag == "ok" then
         local result = to_result(outcome, total_ms)
@@ -85,12 +88,12 @@ local function start_run(buf, source, block_index)
     local run_envelope =
         run_target.run_envelope(source, block_index, vim.api.nvim_buf_get_name(buf), options.request_timeout_ms)
     local started = vim.uv.hrtime()
-    local sent = companion.run(run_envelope, function(outcome, decode_error)
+    local sent = companion.run(run_envelope, function(outcome, decode_error, reason)
         if this_run ~= generation then
             return
         end
         local total_ms = (vim.uv.hrtime() - started) / 1e6
-        local ok, view = pcall(view_for, outcome, decode_error, total_ms, run_envelope.script_file_name)
+        local ok, view = pcall(view_for, outcome, decode_error, reason, total_ms, run_envelope.script_file_name)
         response_buffer.show(ok and view or response_view.message(tostring(view)))
     end)
     if not sent then
@@ -99,12 +102,13 @@ local function start_run(buf, source, block_index)
 end
 
 ---@param blocks table? the answer to the locate
+---@param reason fshttp.AbandonReason?
 ---@param buf integer
 ---@param source string
 ---@param cursor_line integer
-local function on_located(blocks, buf, source, cursor_line)
+local function on_located(blocks, reason, buf, source, cursor_line)
     -- The user can close the Script while the locate or a Run that waits is in progress.
-    if not vim.api.nvim_buf_is_valid(buf) then
+    if not vim.api.nvim_buf_is_valid(buf) or reason == "restarted" then
         return
     elseif blocks == nil then
         notify(refusals.companion_stopped.detail, vim.log.levels.WARN)
@@ -154,8 +158,8 @@ local pending_wait
 -- Each Run locates its text again, so the Block index matches the text of the run envelope.
 ---@param recorded fshttp.RecordedRun
 local function locate_and_run(recorded)
-    local sent = companion.locate(recorded.source, function(blocks)
-        on_located(blocks, recorded.buf, recorded.source, recorded.cursor_line)
+    local sent = companion.locate(recorded.source, function(blocks, _, reason)
+        on_located(blocks, reason, recorded.buf, recorded.source, recorded.cursor_line)
     end)
     if not sent then
         notify(refusals.companion_stopped.detail, vim.log.levels.WARN)
@@ -179,6 +183,10 @@ companion.on_state_change(function(state)
         pending_wait = nil
     end
 end)
+
+function M.discard_wait()
+    pending_wait = nil
+end
 
 ---@param buf integer
 local function begin_wait(buf)

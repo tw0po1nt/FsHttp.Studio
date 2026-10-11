@@ -1,6 +1,5 @@
 local block_mark = require("fshttp.block_mark")
 local companion = require("fshttp.companion")
-local refusals = require("fshttp.refusals")
 
 local M = {}
 
@@ -106,16 +105,22 @@ local function paint(buf, marks)
     end
 end
 
--- The line-1 mark of a Parse failure is on no Block, so the stopped paint removes it.
 ---@param buf integer
-local function paint_stopped(buf)
-    local on_block = located[buf]
+---@param state fshttp.CompanionState
+local function paint_not_ready(buf, state)
+    local on_block = located[buf] or {}
+    ---@type fshttp.ShownMark[]
+    local marks = {}
     for _, extmark in ipairs(vim.api.nvim_buf_get_extmarks(buf, namespace, 0, -1, { details = true })) do
         local id, row, details = extmark[1], extmark[2], extmark[4]
-        if on_block[id] and details and not details.invalid then
-            set_mark(buf, row, refusals.companion_stopped_block_mark_title, false, id)
+        marks[#marks + 1] =
+            { id = id, row = row, on_block = on_block[id] == true and details ~= nil and not details.invalid }
+    end
+    for _, change in ipairs(block_mark.not_ready_changes(marks, state) or {}) do
+        if change.title then
+            set_mark(buf, change.row, change.title, false, change.id)
         else
-            vim.api.nvim_buf_del_extmark(buf, namespace, id)
+            vim.api.nvim_buf_del_extmark(buf, namespace, change.id)
         end
     end
 end
@@ -189,15 +194,14 @@ local function forget(buf)
     set_answer(buf, nil)
 end
 
--- In a state other than ready or stopped, the Block marks wait for the next state change.
 function M.repaint()
     local state = companion.state()
     for buf, marks in pairs(shown) do
         if vim.api.nvim_buf_is_loaded(buf) then
             if state == "ready" then
                 paint(buf, marks)
-            elseif state == "stopped" then
-                paint_stopped(buf)
+            elseif state then
+                paint_not_ready(buf, state)
             end
         end
     end
@@ -209,11 +213,11 @@ local function on_state_change(state)
         for _, buf in ipairs(vim.api.nvim_list_bufs()) do
             locate(buf)
         end
-    elseif state == "stopped" then
-        for buf in pairs(located) do
-            if vim.api.nvim_buf_is_loaded(buf) then
-                paint_stopped(buf)
-            end
+        return
+    end
+    for buf in pairs(located) do
+        if vim.api.nvim_buf_is_loaded(buf) then
+            paint_not_ready(buf, state)
         end
     end
 end
