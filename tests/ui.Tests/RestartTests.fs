@@ -1,5 +1,6 @@
 // A Restart ends a hung Run, stops each process that the companion started, and leaves a
-// companion that runs again. Runs before the companion-death check, which needs a live companion.
+// companion that runs again. Runs after the companion-death check, because that check needs the
+// viewer focus that its own Run gives, and it leaves a live companion after its reload.
 module RestartTests
 
 open Fable.Mocha
