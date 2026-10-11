@@ -198,39 +198,37 @@ let runAtCursorCommandId = "fshttpStudio.runRequestAtCursor"
 
 /// The editor text and the 1-based line of the primary cursor at the call.
 [<NoComparison>]
-type private CursorCall =
+type private CursorSnapshot =
     { Document: TextDocument
       Source: string
       CursorLine: int }
 
-let private recordCall (editor: TextEditor) : CursorCall =
+let private takeSnapshot (editor: TextEditor) : CursorSnapshot =
     { Document = editor.document
       Source = editor.document.getText ()
       CursorLine = editor.selection.active.line + 1 }
 
-let private runAtCursor (h: Companion.Handle) (call: CursorCall) : Async<unit> =
+let private runAtCursor (h: Companion.Handle) (snapshot: CursorSnapshot) : Async<unit> =
     async {
-        let! located = Companion.locate h call.Source
+        let! located = Companion.locate h snapshot.Source
 
         match located.Ranges, located.ParseFailed with
         | [], true -> window.showWarningMessage Refusals.noBlocksParseFailure |> ignore
         | [], false -> window.showInformationMessage Refusals.noBlocksEmpty |> ignore
         | ranges, _ ->
-            match blockAtCursor call.CursorLine ranges with
-            | Some i -> runOrRefuse h call.Document call.Source ranges i
-            | None -> pickBlock h call.Document call.Source ranges
+            match blockAtCursor snapshot.CursorLine ranges with
+            | Some i -> runOrRefuse h snapshot.Document snapshot.Source ranges i
+            | None -> pickBlock h snapshot.Document snapshot.Source ranges
     }
 
-let mutable private showNoSdk: unit -> unit = ignore
-
-let mutable private waitingCall: CursorCall option = None
-
-let mutable private closeWaitNotification: (unit -> unit) option = None
+let mutable private wait: (CursorSnapshot * (unit -> unit)) option = None
 
 let private endWait () =
-    waitingCall <- None
-    closeWaitNotification |> Option.iter (fun close -> close ())
-    closeWaitNotification <- None
+    match wait with
+    | Some(_, closeNotification) ->
+        wait <- None
+        closeNotification ()
+    | None -> ()
 
 let private waitNotificationOptions: obj =
     createObj
@@ -238,12 +236,12 @@ let private waitNotificationOptions: obj =
           "title" ==> "Waiting for the FsHttp.Studio companion to start"
           "cancellable" ==> true ]
 
-let private waitForCompanion (call: CursorCall) =
-    waitingCall <- Some call
-
-    if closeWaitNotification.IsNone then
-        let closed, close = Js.deferred<unit> ()
-        closeWaitNotification <- Some close
+let private waitForCompanion (snapshot: CursorSnapshot) =
+    match wait with
+    | Some(_, closeNotification) -> wait <- Some(snapshot, closeNotification)
+    | None ->
+        let closed, closeNotification = Js.deferred<unit> ()
+        wait <- Some(snapshot, closeNotification)
 
         window.withProgress (
             waitNotificationOptions,
@@ -253,25 +251,23 @@ let private waitForCompanion (call: CursorCall) =
         )
         |> ignore
 
+/// Activation shows the SDK toast on SdkNotFound, so the wait shows no toast in that state.
 let setCompanionState (state: State) =
     companionState <- state
 
-    match waitingCall, state, handle with
-    | Some call, Ready, Some h ->
+    match wait, state, handle with
+    | Some(snapshot, _), Ready, Some h ->
         endWait ()
-        runAtCursor h call |> Async.StartImmediate
+        runAtCursor h snapshot |> Async.StartImmediate
+    | Some _, Ready, None
+    | Some _, SdkNotFound, _ -> endWait ()
     | Some _, Stopped, _ ->
         endWait ()
         showCompanionStoppedToast ()
-    | Some _, SdkNotFound, _ ->
-        endWait ()
-        showNoSdk ()
     | _ -> ()
 
-/// `showNoSdkToast` is the SDK toast of activation, which this module compiles before.
-let registerRunAtCursor (showNoSdkToast: unit -> unit) : Disposable =
-    showNoSdk <- showNoSdkToast
-
+/// `showNoSdk` is the SDK toast of activation, which this module compiles before.
+let registerRunAtCursor (showNoSdk: unit -> unit) : Disposable =
     commands.registerCommand (
         runAtCursorCommandId,
         System.Action<obj, obj>(fun _ _ ->
@@ -280,8 +276,8 @@ let registerRunAtCursor (showNoSdkToast: unit -> unit) : Disposable =
                 match companionState, handle with
                 | SdkNotFound, _ -> showNoSdk ()
                 | Stopped, _ -> showCompanionStoppedToast ()
-                | Starting, _ -> waitForCompanion (recordCall editor)
-                | Ready, Some h -> runAtCursor h (recordCall editor) |> Async.StartImmediate
+                | Starting, _ -> waitForCompanion (takeSnapshot editor)
+                | Ready, Some h -> runAtCursor h (takeSnapshot editor) |> Async.StartImmediate
                 | Ready, None -> ()
             | _ -> window.showInformationMessage Refusals.runAtCursorNeedsScript |> ignore)
     )

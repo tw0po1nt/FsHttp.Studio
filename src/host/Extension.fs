@@ -67,17 +67,6 @@ let activate (context: ExtensionContext) =
         |> companionFrameworkVersion
         |> sdkFloor
 
-    let onState state =
-        StatusBar.setCompanionState state
-        RunCommand.setCompanionState state
-        CodeLensProvider.setReady (state = Ready)
-
-    let startCompanion (dotnetPath: string) =
-        let handle = Companion.start dotnetPath companionDll onState
-        CodeLensProvider.setHandle handle
-        RunCommand.setHandle handle
-        companionHandle <- Some handle
-
     // FSI's `#r "nuget:"` restore drives `dotnet msbuild`, which a runtime-only install lacks.
     let dotnetPathOverride = configuredDotnetPath ()
     let dotnetPath = dotnetPathOverride |> Option.defaultValue "dotnet"
@@ -103,9 +92,19 @@ let activate (context: ExtensionContext) =
             if unbox<string> chosen = getSdkLabel then
                 commands.executeCommand ("vscode.open", uri.parse dotnetDownloadUrl) |> ignore)
 
-    let notifyNoSdk () =
-        onState SdkNotFound
-        showNoSdkToast ()
+    let onState state =
+        StatusBar.setCompanionState state
+        RunCommand.setCompanionState state
+        CodeLensProvider.setReady (state = Ready)
+
+        if state = SdkNotFound then
+            showNoSdkToast ()
+
+    let startCompanion (dotnetPath: string) =
+        let handle = Companion.start dotnetPath companionDll onState
+        CodeLensProvider.setHandle handle
+        RunCommand.setHandle handle
+        companionHandle <- Some handle
 
     context.subscriptions.Add(box (RunCommand.registerRunAtCursor showNoSdkToast))
 
@@ -117,7 +116,7 @@ let activate (context: ExtensionContext) =
             if isNullish err && hasSdkAtFloor requiredMajor stdout then
                 startCompanion dotnetPath
             else
-                notifyNoSdk ())
+                onState SdkNotFound)
     )
 
 let deactivate () =
