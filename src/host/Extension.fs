@@ -8,6 +8,11 @@ open Node
 open Protocol
 
 let mutable private companionHandle: Companion.Handle option = None
+let mutable private session = Restart.initial
+let mutable private restartStop: JS.Promise<unit> = resolved ()
+
+[<Literal>]
+let private restartCommandId = "fshttpStudio.restartCompanion"
 
 [<Literal>]
 let private getSdkLabel = "Get the .NET SDK"
@@ -67,13 +72,9 @@ let activate (context: ExtensionContext) =
         |> companionFrameworkVersion
         |> sdkFloor
 
-    // FSI's `#r "nuget:"` restore drives `dotnet msbuild`, which a runtime-only install lacks.
-    let dotnetPathOverride = configuredDotnetPath ()
-    let dotnetPath = dotnetPathOverride |> Option.defaultValue "dotnet"
-
     let requiredSdk = sprintf ".NET %d SDK or newer" requiredMajor
 
-    let showNoSdkToast () =
+    let showNoSdkToast (dotnetPathOverride: string option) =
         let message =
             match dotnetPathOverride with
             | Some path ->
@@ -92,34 +93,85 @@ let activate (context: ExtensionContext) =
             if unbox<string> chosen = getSdkLabel then
                 commands.executeCommand ("vscode.open", uri.parse dotnetDownloadUrl) |> ignore)
 
-    let onState state =
-        StatusBar.setCompanionState state
-        RunCommand.setCompanionState state
-        CodeLensProvider.setReady (state = Ready)
+    let lastDotnetPathOverride: string option ref = ref None
 
-        if state = SdkNotFound then
-            showNoSdkToast ()
-
-    let startCompanion (dotnetPath: string) =
-        let handle = Companion.start dotnetPath companionDll onState
-        CodeLensProvider.setHandle handle
-        RunCommand.setHandle handle
-        companionHandle <- Some handle
-
-    context.subscriptions.Add(box (RunCommand.registerRunAtCursor showNoSdkToast))
-
-    childProcess.execFile (
-        dotnetPath,
-        [| "--list-sdks" |],
-        nonNull (box {| timeout = 10000 |}),
-        (fun err stdout _stderr ->
-            if isNullish err && hasSdkAtFloor requiredMajor stdout then
-                startCompanion dotnetPath
-            else
-                onState SdkNotFound)
+    // A Run at the cursor in the SdkNotFound state shows the toast of the latest start.
+    context.subscriptions.Add(
+        box (RunCommand.registerRunAtCursor (fun () -> showNoSdkToast lastDotnetPathOverride.Value))
     )
 
+    let setCompanionState state =
+        StatusBar.setCompanionState state
+        RunCommand.setCompanionState state
+        CodeLensProvider.setState state
+
+    let currentSession () = session
+
+    let startSequence (epoch: int) =
+        let onState =
+            Restart.guard currentSession epoch (fun state ->
+                setCompanionState state
+
+                if state = SdkNotFound then
+                    showNoSdkToast lastDotnetPathOverride.Value)
+
+        // FSI's `#r "nuget:"` restore drives `dotnet msbuild`, which a runtime-only install lacks.
+        let dotnetPathOverride = configuredDotnetPath ()
+        lastDotnetPathOverride.Value <- dotnetPathOverride
+        let dotnetPath = dotnetPathOverride |> Option.defaultValue "dotnet"
+
+        let onSdkList =
+            Restart.guard currentSession epoch (fun (err: obj, stdout: string) ->
+                if isNullish err && hasSdkAtFloor requiredMajor stdout then
+                    let handle = Companion.start dotnetPath companionDll onState
+                    CodeLensProvider.setHandle handle
+                    RunCommand.setHandle handle
+                    companionHandle <- Some handle
+                else
+                    onState SdkNotFound)
+
+        onState Starting
+
+        childProcess.execFile (
+            dotnetPath,
+            [| "--list-sdks" |],
+            nonNull (box {| timeout = 10000 |}),
+            (fun err stdout _stderr -> onSdkList (err, stdout))
+        )
+
+    let restartCompanion () =
+        let next, decision = Restart.onCommand session
+        session <- next
+
+        match decision with
+        | Restart.NotifyRestarting -> window.showInformationMessage Refusals.companionRestarting |> ignore
+        | Restart.BeginRestart ->
+            let epoch = session.Epoch
+            setCompanionState Starting
+
+            restartStop <-
+                match companionHandle with
+                | Some handle -> Companion.stopForRestart handle
+                | None -> resolved ()
+
+            companionHandle <- None
+
+            onResolved
+                restartStop
+                (Restart.guard currentSession epoch (fun () ->
+                    session <- Restart.onStopped session
+                    startSequence epoch))
+
+    context.subscriptions.Add(
+        commands.registerCommand (restartCommandId, System.Action<obj, obj>(fun _ _ -> restartCompanion ()))
+    )
+
+    startSequence session.Epoch
+
 let deactivate () : JS.Promise<unit> =
+    session <- Restart.onWindowClose session
+
     match companionHandle with
     | Some handle -> Companion.stop handle
-    | None -> resolved ()
+    // A Restart clears the handle at once, so its stop can still be in progress.
+    | None -> restartStop

@@ -210,15 +210,18 @@ let private takeSnapshot (editor: TextEditor) : CursorSnapshot =
 
 let private runAtCursor (h: Companion.Handle) (snapshot: CursorSnapshot) : Async<unit> =
     async {
-        let! located = Companion.locate h snapshot.Source
+        let! outcome = Companion.locate h snapshot.Source
 
-        match located.Ranges, located.ParseFailed with
-        | [], true -> window.showWarningMessage Refusals.noBlocksParseFailure |> ignore
-        | [], false -> window.showInformationMessage Refusals.noBlocksEmpty |> ignore
-        | ranges, _ ->
-            match blockAtCursor snapshot.CursorLine ranges with
-            | Some i -> runOrRefuse h snapshot.Document snapshot.Source ranges i
-            | None -> pickBlock h snapshot.Document snapshot.Source ranges
+        match outcome with
+        | Companion.Abandoned -> ()
+        | Companion.Located located ->
+            match located.Ranges, located.ParseFailed with
+            | [], true -> window.showWarningMessage Refusals.noBlocksParseFailure |> ignore
+            | [], false -> window.showInformationMessage Refusals.noBlocksEmpty |> ignore
+            | ranges, _ ->
+                match blockAtCursor snapshot.CursorLine ranges with
+                | Some i -> runOrRefuse h snapshot.Document snapshot.Source ranges i
+                | None -> pickBlock h snapshot.Document snapshot.Source ranges
     }
 
 let mutable private wait: (CursorSnapshot * (unit -> unit)) option = None
@@ -296,11 +299,14 @@ let registerExplain () : Disposable =
                 let blockIndex = unbox<int> idx
 
                 async {
-                    let! located = Companion.locate h (document.getText ())
+                    let! outcome = Companion.locate h (document.getText ())
 
-                    match List.tryItem blockIndex located.Ranges |> Option.bind (fun r -> r.Refusal) with
-                    | Some code -> showRefusalToast code
-                    | None -> ()
+                    match outcome with
+                    | Companion.Abandoned -> ()
+                    | Companion.Located located ->
+                        match List.tryItem blockIndex located.Ranges |> Option.bind (fun r -> r.Refusal) with
+                        | Some code -> showRefusalToast code
+                        | None -> ()
                 }
                 |> Async.StartImmediate)
     )

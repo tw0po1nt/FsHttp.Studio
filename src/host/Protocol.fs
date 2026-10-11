@@ -73,6 +73,23 @@ type BlockRange =
         Refusal: string option
     }
 
+type LensClick =
+    | DoesNothing
+    | ExplainsStop
+
+/// A Ready Companion locates afresh, so it gives no lens here.
+let notReadyLenses (state: State) (remembered: BlockRange list option) : (BlockRange * string * LensClick) list =
+    let lens =
+        match state with
+        | Ready -> None
+        | Starting -> Some(Refusals.companionStartingLensTitle, DoesNothing)
+        | SdkNotFound
+        | Stopped -> Some(Refusals.companionStoppedLensTitle, ExplainsStop)
+
+    match lens, remembered with
+    | Some(title, click), Some ranges -> ranges |> List.map (fun r -> r, title, click)
+    | _ -> []
+
 /// The cursor rule that both Clients obey. `cursorLine` uses FCS numbering, as `BlockRange` does.
 /// The result is the `blockIndex` of the run envelope, or `None` when the cursor is outside every
 /// Block. Of the Blocks that contain the line, the Block with the latest start is the target.

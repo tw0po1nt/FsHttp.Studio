@@ -21,6 +21,7 @@ Mocha.runTests (
           NoRequestsLensTests.tests
           StatusBarTests.tests
           RunAtCursorTests.tests
-          CompanionDeathTests.tests ]
+          CompanionDeathTests.tests
+          RestartTests.tests ]
 )
 |> ignore

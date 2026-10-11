@@ -13,6 +13,7 @@
     <Compile Include="Envelope.fs" />
     <Compile Include="Refusals.fs" />
     <Compile Include="Protocol.fs" />
+    <Compile Include="Restart.fs" />
     <Compile Include="Companion.fs" />
     <Compile Include="ResponseViewer.fs" />
     <Compile Include="StatusBar.fs" />

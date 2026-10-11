@@ -27,6 +27,7 @@
     <Compile Include="StatusBarTests.fs" />
     <Compile Include="RunAtCursorTests.fs" />
     <Compile Include="CompanionDeathTests.fs" />
+    <Compile Include="RestartTests.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

@@ -38,7 +38,6 @@ tests/ui.Tests/fixtures/sidecar.json
 .agents/skills/
 .claude/skills/
 
-# Feedback ledgers for a branch that has no PR yet. See docs/agents/feedback-ledger.md.
 .scratch/
 
 .fake

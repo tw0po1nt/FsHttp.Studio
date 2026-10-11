@@ -41,6 +41,10 @@
       {
         "command": "fshttpStudio.runRequestAtCursor",
         "title": "FsHttp.Studio: Run request at cursor"
+      },
+      {
+        "command": "fshttpStudio.restartCompanion",
+        "title": "FsHttp.Studio: Restart companion"
       }
     ],
     "menus": {
