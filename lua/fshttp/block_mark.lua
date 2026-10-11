@@ -45,6 +45,37 @@ function M.for_blocks(blocks)
     return marks
 end
 
+---@class fshttp.ShownMark
+---@field id integer the extmark id
+---@field row integer 0-based
+---@field on_block boolean false for a mark on no Block, or on Block text that was deleted
+
+---@class fshttp.MarkChange
+---@field id integer the extmark id
+---@field row integer 0-based
+---@field title string? nil removes the mark
+
+local failed_start_states = { sdkNotFound = true, downloadFailed = true, noRelease = true, companionNotFound = true }
+
+---@param shown fshttp.ShownMark[] the Block marks of one Script
+---@param state fshttp.CompanionState
+---@return fshttp.MarkChange[]? changes nil when each mark keeps its title
+function M.not_ready_changes(shown, state)
+    local title
+    if state == "starting" then
+        title = refusals.companion_starting_block_mark_title
+    elseif state == "stopped" or failed_start_states[state] then
+        title = refusals.companion_stopped_block_mark_title
+    else
+        return nil
+    end
+    local changes = {}
+    for i, mark in ipairs(shown) do
+        changes[i] = { id = mark.id, row = mark.row, title = mark.on_block and title or nil }
+    end
+    return changes
+end
+
 ---@param mark_title string
 ---@return string
 function M.glyph(mark_title)

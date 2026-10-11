@@ -100,6 +100,19 @@ Optional:
     image viewer. The client writes the Body to a temporary file, so the file
     does not change on the next Run.
 
+                                                             *:FsHttp-restart*
+:FsHttp restart
+    Stop the companion with each process that it started, then start a new
+    companion. The command works in each state of the companion. Use it to
+    end a Run that does not end, to try a failed download again, or to use a
+    new |fshttp-dotnet_path| or |fshttp-companion_path|. During a download,
+    the command stops `curl` and starts the download again.
+
+    A Run in progress ends with a Runtime error that says that the companion
+    restarted. A Run that waits for the companion does not start. While the
+    client stops the old companion, a second `:FsHttp restart` shows a notice
+    and does nothing more.
+
                                                               *:FsHttp-status*
 :FsHttp status
     Echo the Status line text of the Active document. In a buffer that is not

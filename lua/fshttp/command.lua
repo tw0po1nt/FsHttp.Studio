@@ -12,6 +12,9 @@ M.subcommands = {
     open = function()
         require("fshttp.open").open()
     end,
+    restart = function()
+        require("fshttp").restart()
+    end,
     status = function()
         require("fshttp.status_line").echo()
     end,
