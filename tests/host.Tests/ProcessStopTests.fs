@@ -7,21 +7,27 @@ open ProcessStop
 let tests =
     testList
         "ProcessStop"
-        [ test "Linux and macOS signal the process group of the companion" {
-              Expect.equal (killCommand "linux" 4242) (SignalGroup 4242) "linux"
-              Expect.equal (killCommand "darwin" 4242) (SignalGroup 4242) "darwin"
+        [ test "platformOf maps the process.platform of Node" {
+              Expect.equal (platformOf "linux") Posix "Linux has process groups"
+              Expect.equal (platformOf "darwin") Posix "macOS has process groups"
+              Expect.equal (platformOf "win32") Windows "Windows has no process groups"
           }
 
-          test "Windows runs taskkill for the process tree" {
-              Expect.equal (killCommand "win32" 4242) (Taskkill 4242) "win32"
+          test "Linux and macOS signal the process group of the companion" {
+              Expect.equal
+                  (killCommand Posix 4242)
+                  (SignalGroup 4242)
+                  "the group contains each process that the companion started"
+          }
 
-              Expect.equal (taskkillArgs 4242) [| "/T"; "/F"; "/PID"; "4242" |] "taskkill kills the tree by force"
+          test "Windows runs taskkill on each process that the companion started" {
+              Expect.equal
+                  (killCommand Windows 4242)
+                  (Exec("taskkill", [| "/T"; "/F"; "/PID"; "4242" |]))
+                  "taskkill must stop the child processes too, by force"
           }
 
           test "the companion spawns detached on Linux and macOS only" {
-              Expect.isTrue (detachOnSpawn "linux") "linux"
-              Expect.isTrue (detachOnSpawn "darwin") "darwin"
-              Expect.isFalse (detachOnSpawn "win32") "win32"
-          }
-
-          test "the stop waits 1000 ms before the kill" { Expect.equal stopDelayMs 1000 "delay" } ]
+              Expect.isTrue (detachOnSpawn Posix) "a detached child leads its own process group"
+              Expect.isFalse (detachOnSpawn Windows) "a detached child on Windows opens a console window"
+          } ]

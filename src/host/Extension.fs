@@ -122,7 +122,4 @@ let activate (context: ExtensionContext) =
 let deactivate () : JS.Promise<unit> =
     match companionHandle with
     | Some handle -> Companion.stop handle
-    | None ->
-        let promise, fulfill = deferred<unit> ()
-        fulfill ()
-        promise
+    | None -> resolved ()

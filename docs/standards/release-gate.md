@@ -110,10 +110,10 @@ recorded text and cursor. Harness setup waits until the companion is ready. On a
 starting state lasts less than one second. Thus no Check can call the command in that state. A
 defect in the wait, in its Cancel button, or in a toast that ends the wait ships uncaught.
 
-**No Check proves that a window close stops the worker.**
+**No Check proves that a window close stops each process that the companion started.**
 A window close ends the ExTester session, so no Check can close the window and then look for
-processes. The unit tests check the kill command for each platform. A defect that leaves a worker
-alive after a window close ships uncaught.
+processes. The unit tests check the kill command for each platform. A defect that leaves such a
+process alive after a window close ships uncaught.
 
 **A new untestable surface belongs in this section.**
 A spec that finds a surface no suite drives records that surface here. Prefer to automate the

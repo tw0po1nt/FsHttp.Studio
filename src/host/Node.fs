@@ -5,6 +5,7 @@ open Fable.Core
 type Writable =
     abstract write: chunk: byte[] -> bool
     abstract ``end``: unit -> unit
+    abstract on: event: string * listener: (obj -> unit) -> unit
 
 type Readable =
     abstract on: event: string * listener: (obj -> unit) -> unit
@@ -13,7 +14,6 @@ type ChildProcess =
     abstract stdin: Writable
     abstract stdout: Readable
     abstract on: event: string * listener: (obj -> unit) -> unit
-    abstract kill: unit -> bool
     abstract pid: int
 
 type IChildProcessModule =
@@ -28,16 +28,12 @@ type IChildProcessModule =
     abstract execFile:
         file: string * args: string[] * options: obj * callback: (obj -> string -> string -> unit) -> unit
 
-/// Signals the process group of `pid`. A group that is already gone raises `ESRCH`, which the
-/// call swallows.
+/// A group that is already gone raises `ESRCH`, which the call swallows.
 [<Emit("(() => { try { process.kill(-$0, 'SIGKILL'); } catch (_) {} })()")>]
 let killProcessGroup (_pid: int) : unit = jsNative
 
 [<Emit("process.platform")>]
 let platform: string = jsNative
-
-[<Emit("setTimeout($1, $0)")>]
-let setTimeout (_delayMs: int) (_callback: unit -> unit) : unit = jsNative
 
 [<Import("*", "child_process")>]
 let childProcess: IChildProcessModule = jsNative

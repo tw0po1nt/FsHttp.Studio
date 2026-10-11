@@ -1,17 +1,28 @@
 module ProcessStop
 
-/// The time between the close of the companion stdin and the kill of its process tree.
 let stopDelayMs = 1000
+
+let taskkillTimeoutMs = 5000
+
+type Platform =
+    | Windows
+    | Posix
+
+/// `nodePlatform` is the value of Node's `process.platform`.
+let platformOf (nodePlatform: string) : Platform =
+    if nodePlatform = "win32" then Windows else Posix
 
 type KillCommand =
     | SignalGroup of pid: int
-    | Taskkill of pid: int
+    | Exec of file: string * args: string[]
 
-/// `platform` is the value of Node's `process.platform`.
-let killCommand (platform: string) (pid: int) : KillCommand =
-    if platform = "win32" then Taskkill pid else SignalGroup pid
-
-let taskkillArgs (pid: int) : string[] = [| "/T"; "/F"; "/PID"; string pid |]
+let killCommand (platform: Platform) (pid: int) : KillCommand =
+    match platform with
+    | Windows -> Exec("taskkill", [| "/T"; "/F"; "/PID"; string pid |])
+    | Posix -> SignalGroup pid
 
 /// Windows has no process group to signal, and a detached child there opens a console window.
-let detachOnSpawn (platform: string) : bool = platform <> "win32"
+let detachOnSpawn (platform: Platform) : bool =
+    match platform with
+    | Windows -> false
+    | Posix -> true
