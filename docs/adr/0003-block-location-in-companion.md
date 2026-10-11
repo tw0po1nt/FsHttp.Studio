@@ -44,6 +44,18 @@ The companion's FCS parse finds block ranges. A tree-sitter grammar in the exten
 > be one line away from its block. No block can run in that state, and a reload corrects the
 > positions.
 
+> **Update (2026-10-11):** The invariant "no companion, no runnable lenses" is still true. The
+> Restart command makes two statements of the 2026-08-10 update incomplete.
+>
+> First, a companion that is still starting can show lenses. A Restart sets the Starting state, and
+> the Client still remembers the ranges of the last locate. Each remembered Block therefore keeps a
+> lens with the title `⊘ Cannot run: the companion is starting`. A click on that lens does nothing.
+> A first start remembers no Block, so it shows no lens, as before.
+>
+> Second, a reload is no longer the only recovery. The Restart command stops the companion with each
+> process that it started, and then starts a new companion. The stopped lens and its toast still
+> tell the user to reload the window.
+
 ## Considered Options
 
 Research built a working in-host path. `web-tree-sitter` loaded the tree-sitter-fsharp wasm, and located blocks in approximately 1.7 ms with ranges identical to FCS.

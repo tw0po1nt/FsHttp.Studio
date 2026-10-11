@@ -9,6 +9,7 @@ open Protocol
 
 let mutable private companionHandle: Companion.Handle option = None
 let mutable private session = Restart.initial
+let mutable private restartStop: JS.Promise<unit> = resolved ()
 
 [<Literal>]
 let private restartCommandId = "fshttpStudio.restartCompanion"
@@ -99,21 +100,35 @@ let activate (context: ExtensionContext) =
         box (RunCommand.registerRunAtCursor (fun () -> showNoSdkToast lastDotnetPathOverride.Value))
     )
 
-    // A Restart moves the epoch on, so every event of an earlier start or Companion is stale.
+    let setCompanionState state =
+        StatusBar.setCompanionState state
+        RunCommand.setCompanionState state
+        CodeLensProvider.setState state
+
+    let currentSession () = session
+
     let startSequence (epoch: int) =
-        let onState state =
-            if Restart.accepts session epoch then
-                StatusBar.setCompanionState state
-                RunCommand.setCompanionState state
-                CodeLensProvider.setState state
+        let onState =
+            Restart.guard currentSession epoch (fun state ->
+                setCompanionState state
 
                 if state = SdkNotFound then
-                    showNoSdkToast lastDotnetPathOverride.Value
+                    showNoSdkToast lastDotnetPathOverride.Value)
 
         // FSI's `#r "nuget:"` restore drives `dotnet msbuild`, which a runtime-only install lacks.
         let dotnetPathOverride = configuredDotnetPath ()
         lastDotnetPathOverride.Value <- dotnetPathOverride
         let dotnetPath = dotnetPathOverride |> Option.defaultValue "dotnet"
+
+        let onSdkList =
+            Restart.guard currentSession epoch (fun (err: obj, stdout: string) ->
+                if isNullish err && hasSdkAtFloor requiredMajor stdout then
+                    let handle = Companion.start dotnetPath companionDll onState
+                    CodeLensProvider.setHandle handle
+                    RunCommand.setHandle handle
+                    companionHandle <- Some handle
+                else
+                    onState SdkNotFound)
 
         onState Starting
 
@@ -121,15 +136,7 @@ let activate (context: ExtensionContext) =
             dotnetPath,
             [| "--list-sdks" |],
             nonNull (box {| timeout = 10000 |}),
-            (fun err stdout _stderr ->
-                if Restart.accepts session epoch then
-                    if isNullish err && hasSdkAtFloor requiredMajor stdout then
-                        let handle = Companion.start dotnetPath companionDll onState
-                        CodeLensProvider.setHandle handle
-                        RunCommand.setHandle handle
-                        companionHandle <- Some handle
-                    else
-                        onState SdkNotFound)
+            (fun err stdout _stderr -> onSdkList (err, stdout))
         )
 
     let restartCompanion () =
@@ -140,20 +147,20 @@ let activate (context: ExtensionContext) =
         | Restart.NotifyRestarting -> window.showInformationMessage Refusals.companionRestarting |> ignore
         | Restart.BeginRestart ->
             let epoch = session.Epoch
-            StatusBar.setCompanionState Starting
-            RunCommand.setCompanionState Starting
-            CodeLensProvider.setState Starting
+            setCompanionState Starting
 
-            let stopped =
+            restartStop <-
                 match companionHandle with
                 | Some handle -> Companion.stopForRestart handle
                 | None -> resolved ()
 
             companionHandle <- None
 
-            onResolved stopped (fun () ->
-                session <- Restart.onStopped session
-                startSequence epoch)
+            onResolved
+                restartStop
+                (Restart.guard currentSession epoch (fun () ->
+                    session <- Restart.onStopped session
+                    startSequence epoch))
 
     context.subscriptions.Add(
         commands.registerCommand (restartCommandId, System.Action<obj, obj>(fun _ _ -> restartCompanion ()))
@@ -162,6 +169,9 @@ let activate (context: ExtensionContext) =
     startSequence session.Epoch
 
 let deactivate () : JS.Promise<unit> =
+    session <- Restart.onWindowClose session
+
     match companionHandle with
     | Some handle -> Companion.stop handle
-    | None -> resolved ()
+    // A Restart clears the handle at once, so its stop can still be in progress.
+    | None -> restartStop

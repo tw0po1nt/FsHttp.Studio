@@ -23,8 +23,8 @@ type Handle =
     private
         { Process: ChildProcess
           Pending: ResizeArray<IPendingRequest>
-          mutable Closed: bool
-          mutable Exited: bool }
+          mutable QueueClosed: bool
+          mutable ProcessExited: bool }
 
 let private toBlockRange (r: obj) : BlockRange =
     { StartLine = unbox<int> (r?startLine: obj)
@@ -81,7 +81,7 @@ let private decodeRunEnvelope (json: obj) : RunEnvelope =
 let private flushPending (reason: AbandonReason) (handle: Handle) =
     let entries = handle.Pending.ToArray()
     handle.Pending.Clear()
-    handle.Closed <- true
+    handle.QueueClosed <- true
     entries |> Array.iter (fun entry -> entry.Abandon reason)
 
 let private hostPlatform = ProcessStop.platformOf platform
@@ -106,8 +106,8 @@ let start (dotnetPath: string) (companionDllPath: string) (onState: State -> uni
     let handle =
         { Process = child
           Pending = ResizeArray<IPendingRequest>()
-          Closed = false
-          Exited = false }
+          QueueClosed = false
+          ProcessExited = false }
 
     let parser =
         FrameParser(fun payload ->
@@ -134,7 +134,7 @@ let start (dotnetPath: string) (companionDllPath: string) (onState: State -> uni
             else
                 onState Stopped
 
-            handle.Exited <- true
+            handle.ProcessExited <- true
             flushPending CompanionStopped handle
     )
 
@@ -142,7 +142,7 @@ let start (dotnetPath: string) (companionDllPath: string) (onState: State -> uni
         "exit",
         fun _ ->
             onState Stopped
-            handle.Exited <- true
+            handle.ProcessExited <- true
             flushPending CompanionStopped handle
     )
 
@@ -151,7 +151,7 @@ let start (dotnetPath: string) (companionDllPath: string) (onState: State -> uni
     handle
 
 let private send (handle: Handle) (payloadJson: string) (entry: IPendingRequest) =
-    if handle.Closed then
+    if handle.QueueClosed then
         entry.Abandon CompanionStopped
     else
         handle.Pending.Add(entry)
@@ -163,10 +163,14 @@ type LocateResponse =
     { Ranges: BlockRange list
       ParseFailed: bool }
 
+/// `Abandoned` is no reading of the script, so a caller shows nothing for it.
+type LocateOutcome =
+    | Located of LocateResponse
+    | Abandoned
+
 /// Sends a `locate` request over the framed envelope. It resolves with the block ranges and the
-/// parse-failed flag after the companion's `blocks` response arrives. A companion that is gone
-/// resolves with an empty list and `ParseFailed = false`.
-let locate (handle: Handle) (source: string) : Async<LocateResponse> =
+/// parse-failed flag after the companion's `blocks` response arrives.
+let locate (handle: Handle) (source: string) : Async<LocateOutcome> =
     Async.FromContinuations(fun (resolve, _reject, _cancel) ->
         let payload: obj = createObj [ "tag" ==> "locate"; "source" ==> source ]
 
@@ -175,15 +179,13 @@ let locate (handle: Handle) (source: string) : Async<LocateResponse> =
                 member _.Resolve(json) =
                     let ranges: obj[] = unbox (json?ranges: obj)
 
-                    resolve
-                        { Ranges = ranges |> Array.map toBlockRange |> Array.toList
-                          ParseFailed = parseFailedOrDefault (tryUnbox<bool> (json?parseFailed: obj)) }
+                    resolve (
+                        Located
+                            { Ranges = ranges |> Array.map toBlockRange |> Array.toList
+                              ParseFailed = parseFailedOrDefault (tryUnbox<bool> (json?parseFailed: obj)) }
+                    )
 
-                // An abandoned request carries no property at all, which is the same absent case.
-                member _.Abandon _ =
-                    resolve
-                        { Ranges = []
-                          ParseFailed = parseFailedOrDefault None } }
+                member _.Abandon _ = resolve Abandoned }
 
         send handle (JS.JSON.stringify payload) entry)
 
@@ -224,7 +226,7 @@ let run
 
 /// The promise resolves after the kill command ends, or at once when the companion already exited.
 let stop (handle: Handle) : JS.Promise<unit> =
-    if handle.Exited then
+    if handle.ProcessExited then
         resolved ()
     else
         let promise, fulfill = deferred<unit> ()
@@ -232,7 +234,7 @@ let stop (handle: Handle) : JS.Promise<unit> =
         let timer =
             JS.setTimeout
                 (fun () ->
-                    if handle.Exited then
+                    if handle.ProcessExited then
                         fulfill ()
                     else
                         match ProcessStop.killCommand hostPlatform handle.Process.pid with
@@ -260,7 +262,6 @@ let stop (handle: Handle) : JS.Promise<unit> =
         handle.Process.stdin.``end`` ()
         promise
 
-/// Ends each waiting request as a Restart, and then stops the companion.
 let stopForRestart (handle: Handle) : JS.Promise<unit> =
     let stopped = stop handle
     flushPending CompanionRestarted handle

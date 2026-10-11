@@ -1,6 +1,4 @@
-// A Restart ends a hung Run, stops each process that the companion started, and leaves a
-// companion that runs again. Runs after the companion-death check, because that check needs the
-// viewer focus that its own Run gives, and it leaves a live companion after its reload.
+// Runs after the companion-death check, which needs the viewer focus that its own Run gives.
 module RestartTests
 
 open Fable.Mocha
@@ -74,12 +72,12 @@ let private hangThenRestart (serverBaseUrl: string) (fixtureFileName: string) (p
         return before
     }
 
+let private releaseTheHang (serverBaseUrl: string) () =
+    async { Harness.releaseHang serverBaseUrl }
+
 let private restartUnderAHang =
     async {
         let serverBaseUrl = Harness.baseUrl ()
-
-        let releaseTheHang () =
-            async { Harness.releaseHang serverBaseUrl }
 
         let body =
             async {
@@ -102,7 +100,7 @@ let private restartUnderAHang =
                 do!
                     Harness.eventually
                         Harness.PostReloadRecoveryDeadlineMs
-                        "the status bar reporting the companion ready"
+                        "the Status line text reporting the companion ready"
                         Harness.tryCompanionReady
 
                 do!
@@ -124,15 +122,12 @@ let private restartUnderAHang =
                         (fun () -> Checks.tryJsonProbeResponseRendered recoveryUrlPath)
             }
 
-        return! Harness.withTeardown "the hang release" releaseTheHang body
+        return! Harness.withTeardown "the hang release" (releaseTheHang serverBaseUrl) body
     }
 
 let private workerUnderAHang =
     async {
         let serverBaseUrl = Harness.baseUrl ()
-
-        let releaseTheHang () =
-            async { Harness.releaseHang serverBaseUrl }
 
         let body =
             async {
@@ -141,11 +136,11 @@ let private workerUnderAHang =
                 do!
                     Harness.eventually
                         Harness.PostReloadRecoveryDeadlineMs
-                        "the status bar reporting the companion ready"
+                        "the Status line text reporting the companion ready"
                         Harness.tryCompanionReady
             }
 
-        return! Harness.withTeardown "the hang release" releaseTheHang body
+        return! Harness.withTeardown "the hang release" (releaseTheHang serverBaseUrl) body
     }
 
 let tests =

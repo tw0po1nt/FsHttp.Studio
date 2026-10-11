@@ -1,7 +1,7 @@
 // Fixture for the restart check. Two blocks: `/slow` hangs until the suite hits
 // `/release`, and the Restart ends that Run, which runs in a worker; `/json` is the recovery Run after the
-// window reloads. `baseUrl` comes from the sidecar the test server writes beside this file,
-// never a hardcoded port.
+// Restart. `baseUrl` comes from the sidecar the test server writes beside this file, never a
+// hardcoded port.
 
 #r "nuget: FsHttp, 15.0.3"
 #r "nuget: FsHttp, 15.0.2"

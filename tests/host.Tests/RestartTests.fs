@@ -14,23 +14,25 @@ let private block =
 let tests =
     testList
         "Restart"
-        [ test "a remembered Block gets the starting title while the Companion is Starting" {
+        [ test "a remembered Block gets the starting title while the Companion is Starting, and a click does nothing" {
+              let starting = (block, Refusals.companionStartingLensTitle, DoesNothing)
+
               Expect.equal
-                  (notReadyLensTitles Starting (Some [ block; block ]))
-                  [ Refusals.companionStartingLensTitle; Refusals.companionStartingLensTitle ]
+                  (notReadyLenses Starting (Some [ block; block ]))
+                  [ starting; starting ]
                   "each remembered Block keeps its lens"
           }
 
           test "a first start remembers no Block, so it paints no lens" {
-              Expect.isEmpty (notReadyLensTitles Starting None) "nothing was located yet"
+              Expect.isEmpty (notReadyLenses Starting None) "nothing was located yet"
           }
 
-          test "the stopped title shows in the Stopped state and in SdkNotFound only" {
+          test "the stopped title shows in the Stopped state and in SdkNotFound only, and a click explains the stop" {
               let remembered = Some [ block ]
-              let stopped = [ Refusals.companionStoppedLensTitle ]
-              Expect.equal (notReadyLensTitles Stopped remembered) stopped "Stopped"
-              Expect.equal (notReadyLensTitles SdkNotFound remembered) stopped "SdkNotFound"
-              Expect.isEmpty (notReadyLensTitles Ready remembered) "Ready locates afresh"
+              let stopped = [ block, Refusals.companionStoppedLensTitle, ExplainsStop ]
+              Expect.equal (notReadyLenses Stopped remembered) stopped "Stopped"
+              Expect.equal (notReadyLenses SdkNotFound remembered) stopped "SdkNotFound"
+              Expect.isEmpty (notReadyLenses Ready remembered) "Ready locates afresh"
           }
 
           test "a command during the stop gives the restarting notice and starts no second stop" {
@@ -41,16 +43,31 @@ let tests =
               Expect.equal afterSecond afterFirst "the second command changes nothing"
           }
 
-          test "a command after the new Companion spawns restarts again" {
+          test "a command after the old Companion stops restarts again" {
               let stopping, _ = Restart.onCommand Restart.initial
-              let spawned = Restart.onStopped stopping
-              let _, decision = Restart.onCommand spawned
+              let stopped = Restart.onStopped stopping
+              let _, decision = Restart.onCommand stopped
               Expect.equal decision Restart.BeginRestart "a start that hangs can be restarted"
           }
 
           test "an event of the old Companion after the command changes no state" {
-              let oldEpoch = Restart.initial.Epoch
-              let stopping, _ = Restart.onCommand Restart.initial
-              Expect.isFalse (Restart.accepts stopping oldEpoch) "a late exit of the old Companion is stale"
-              Expect.isTrue (Restart.accepts stopping stopping.Epoch) "the new start is current"
+              let mutable session = Restart.initial
+              let received = ResizeArray<State>()
+              let onOldState = Restart.guard (fun () -> session) session.Epoch received.Add
+              session <- fst (Restart.onCommand session)
+              onOldState Stopped
+              Expect.isEmpty received "a late exit of the old Companion is stale"
+
+              let onNewState = Restart.guard (fun () -> session) session.Epoch received.Add
+              onNewState Starting
+              Expect.equal (List.ofSeq received) [ Starting ] "the new start is current"
+          }
+
+          test "no event counts after the window closes" {
+              let mutable session = Restart.initial
+              let received = ResizeArray<State>()
+              let onState = Restart.guard (fun () -> session) session.Epoch received.Add
+              session <- Restart.onWindowClose session
+              onState Ready
+              Expect.isEmpty received "a start that ends after the window closes is stale"
           } ]

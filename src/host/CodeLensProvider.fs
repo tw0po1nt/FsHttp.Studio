@@ -118,15 +118,15 @@ let private notReadyLenses (document: TextDocument) : ResizeArray<CodeLens> =
         | true, ranges -> Some ranges
         | _ -> None
 
-    let command = if state = Starting then "" else explainStoppedCommandId
+    Protocol.notReadyLenses state remembered
+    |> List.mapi (fun i (r, title, click) ->
+        let command =
+            match click with
+            | DoesNothing -> ""
+            | ExplainsStop -> explainStoppedCommandId
 
-    match remembered with
-    | Some ranges ->
-        notReadyLensTitles state remembered
-        |> List.zip ranges
-        |> List.mapi (fun i (r, title) -> lensAt document i r title command)
-        |> ResizeArray
-    | None -> ResizeArray()
+        lensAt document i r title command)
+    |> ResizeArray
 
 let provider: CodeLensProvider =
     { new CodeLensProvider with
@@ -143,12 +143,12 @@ let provider: CodeLensProvider =
                     | None -> noLenses ()
                     | Some h ->
                         async {
-                            let! located = Companion.locate h (document.getText ())
-                            let ranges = located.Ranges
+                            let! outcome = Companion.locate h (document.getText ())
 
-                            // A companion that exits mid-locate abandons this call to an empty
-                            // list, which is not a reading of the script.
-                            if state = Ready then
+                            match outcome with
+                            | Companion.Abandoned -> return notReadyLenses document
+                            | Companion.Located located ->
+                                let ranges = located.Ranges
                                 lastLocated.[document.fileName] <- ranges
 
                                 let view = Script(ranges.Length, located.ParseFailed)
@@ -157,8 +157,6 @@ let provider: CodeLensProvider =
                                 match noRequestsLensTitle view with
                                 | Some title -> return ResizeArray([ plainTextLens title ])
                                 | None -> return ranges |> List.mapi (buildCodeLens document) |> ResizeArray
-                            else
-                                return notReadyLenses document
                         }
 
             Async.StartAsPromise computation }

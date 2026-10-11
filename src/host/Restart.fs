@@ -1,30 +1,31 @@
 module Restart
 
-type Phase =
-    | Spawned
-    | Stopping
-
-/// `Epoch` numbers the Companion that the Client currently owns. The Companion and its start
-/// sequence tag every event with the epoch they started under.
-type Session = { Epoch: int; Phase: Phase }
+/// `Epoch` numbers the start of the Companion that the Client owns now.
+type Session = { Epoch: int; Stopping: bool }
 
 type Decision =
     | NotifyRestarting
     | BeginRestart
 
-let initial: Session = { Epoch = 0; Phase = Spawned }
+let initial: Session = { Epoch = 0; Stopping = false }
 
-/// A command during the stop gives a notice and changes nothing. Otherwise the epoch moves on at
-/// once, so every later event of the old Companion is stale.
+/// The epoch moves on at once, so every later event of the old Companion is stale.
 let onCommand (session: Session) : Session * Decision =
-    match session.Phase with
-    | Stopping -> session, NotifyRestarting
-    | Spawned ->
+    if session.Stopping then
+        session, NotifyRestarting
+    else
         { Epoch = session.Epoch + 1
-          Phase = Stopping },
+          Stopping = true },
         BeginRestart
 
-/// The old Companion is gone and the new start sequence runs.
-let onStopped (session: Session) : Session = { session with Phase = Spawned }
+let onStopped (session: Session) : Session = { session with Stopping = false }
 
-let accepts (session: Session) (epoch: int) : bool = session.Epoch = epoch
+let onWindowClose (session: Session) : Session =
+    { session with
+        Epoch = session.Epoch + 1 }
+
+/// `current` reads the session when the event arrives, because a Restart can move the epoch first.
+let guard (current: unit -> Session) (epoch: int) (handler: 'T -> unit) : 'T -> unit =
+    fun event ->
+        if (current ()).Epoch = epoch then
+            handler event
