@@ -11,6 +11,8 @@ let private coreBlockLine = 27
 let private loopFixture = "loop-lens.fsx"
 /// The line of the Block in the loop of `loop-lens.fsx`. Must match the fixture.
 let private loopBlockLine = 10
+/// A line of `loop-lens.fsx` that lies outside every Block. Must match the fixture.
+let private loopOutsideLine = 9
 /// A line of `core-path.fsx` that lies outside every Block. Must match the fixture.
 let private coreOutsideLine = 26
 let private emptyFixture = "no-requests-empty.fsx"
@@ -29,6 +31,10 @@ let private coreEntries: ExTester.QuickPickEntry list =
       { Label = "▶ 29: http { GET $\"{baseUrl}/status\" }"
         Detail = None } ]
 
+let private loopEntries: ExTester.QuickPickEntry list =
+    [ { Label = "⊘ 10: http { GET \"http://127.0.0.1:9/\" }"
+        Detail = Some loopBody.Title } ]
+
 let private openQuickPickAt line expected =
     async {
         do!
@@ -39,7 +45,7 @@ let private openQuickPickAt line expected =
 
         do!
             Harness.eventually
-                Harness.ToastDeadlineMs
+                Harness.LensAppearanceDeadlineMs
                 "a quick pick that lists each Block with its glyph, line, and first source line"
                 (quickPickIs expected)
     }
@@ -81,7 +87,7 @@ let private runsTheBlockAtTheCursor =
         do! openQuickPickAt coreOutsideLine coreEntries
 
         do!
-            Harness.eventually Harness.ToastDeadlineMs "the second row to be picked" (fun () ->
+            Harness.eventually Harness.LensAppearanceDeadlineMs "the second row to be picked" (fun () ->
                 ExTester.tryPickQuickPick 1)
 
         do!
@@ -127,6 +133,22 @@ let private refusesTheLoopBlockWithTheToast =
 
         do!
             Harness.eventually Harness.ToastDeadlineMs "the warning toast to dismiss" (fun () ->
+                ExTester.tryDismissWarningNotification loopBody.Detail)
+
+        do! openQuickPickAt loopOutsideLine loopEntries
+
+        do!
+            Harness.eventually Harness.LensAppearanceDeadlineMs "the refused row to be picked" (fun () ->
+                ExTester.tryPickQuickPick 0)
+
+        do!
+            Harness.eventually
+                Harness.ToastDeadlineMs
+                "a warning toast with the shipped loopBody detail after the pick"
+                (fun () -> ExTester.tryWarningNotification loopBody.Detail)
+
+        do!
+            Harness.eventually Harness.ToastDeadlineMs "the warning toast to dismiss after the pick" (fun () ->
                 ExTester.tryDismissWarningNotification loopBody.Detail)
     }
 

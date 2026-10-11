@@ -89,7 +89,7 @@ type QuickPickItem =
 
 type InputBox =
     abstract getQuickPicks: unit -> JS.Promise<QuickPickItem[]>
-    abstract selectQuickPick: indexOrText: int -> JS.Promise<unit>
+    abstract selectQuickPick: index: int -> JS.Promise<unit>
 
 type ProblemsView =
     abstract setFilter: pattern: string -> JS.Promise<unit>
@@ -317,8 +317,8 @@ module InputBox =
     [<Import("InputBox", "vscode-extension-tester")>]
     let private Ctor: obj = jsNative
 
-    /// Waits for the open quick pick, and throws when none opens.
-    let create () : JS.Promise<InputBox> = emitJsExpr Ctor "$0.create(5000)"
+    /// Throws when no quick pick is open. A timeout of 0 makes selenium wait forever.
+    let create () : JS.Promise<InputBox> = emitJsExpr Ctor "$0.create(1)"
 
 module BottomBarPanel =
     [<Import("BottomBarPanel", "vscode-extension-tester")>]

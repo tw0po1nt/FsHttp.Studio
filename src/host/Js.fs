@@ -14,3 +14,7 @@ let isNullish (_x: obj) : bool = jsNative
 /// absent case is spelled once rather than once per property.
 let tryUnbox<'T> (x: obj) : 'T option =
     if isNullish x then None else Some(unbox<'T> x)
+
+/// Reacts to a fulfilled JS promise without a promise CE.
+[<Emit("$0.then($1)")>]
+let onResolved (_p: JS.Promise<'T>) (_onOk: 'T -> unit) : unit = jsNative

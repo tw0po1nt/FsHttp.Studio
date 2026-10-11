@@ -154,44 +154,46 @@ let register () : Disposable =
                 startRun h document (document.getText ()) blockIndex)
     )
 
-[<Emit("$0.then($1)")>]
-let private onResolved (_p: JS.Promise<'T>) (_onOk: 'T -> unit) : unit = jsNative
+let private runOrRefuse
+    (h: Companion.Handle)
+    (document: TextDocument)
+    (source: string)
+    (ranges: BlockRange list)
+    (i: int)
+    =
+    match ranges.[i].Refusal with
+    | Some code -> showRefusalToast code
+    | None -> startRun h document source i
 
-/// The label that `:FsHttp run` writes: `<glyph> <line>: <first source line>`. The glyph is the
-/// first word of the lens title.
+/// The label that `:FsHttp run` writes: `<glyph> <line>: <first source line>`.
 let private quickPickItem (sourceLines: string[]) (r: BlockRange) : obj =
-    let title =
-        match r.Refusal with
-        | Some code -> Refusals.lensTitle code
-        | None -> Refusals.runLensTitle
-
-    let glyph = title.Split(' ').[0]
-
     let firstLine =
         if r.StartLine >= 1 && r.StartLine <= sourceLines.Length then
             sourceLines.[r.StartLine - 1].Trim()
         else
             ""
 
-    let label = sprintf "%s %d: %s" glyph r.StartLine firstLine
+    let label glyph =
+        sprintf "%s %d: %s" glyph r.StartLine firstLine
 
     match r.Refusal with
-    | Some _ -> createObj [ "label" ==> label; "detail" ==> title ]
-    | None -> createObj [ "label" ==> label ]
+    | Some code ->
+        createObj
+            [ "label" ==> label Refusals.refusalGlyph
+              "detail" ==> (Refusals.forCode code).Title ]
+    | None -> createObj [ "label" ==> label Refusals.runGlyph ]
 
 let private pickBlock (h: Companion.Handle) (document: TextDocument) (source: string) (ranges: BlockRange list) =
     let sourceLines = source.Replace("\r\n", "\n").Split('\n')
     let items = ranges |> List.map (quickPickItem sourceLines) |> List.toArray
 
-    onResolved (window.showQuickPick items) (fun picked ->
+    Js.onResolved (window.showQuickPick items) (fun picked ->
         match picked with
         | null -> ()
         | _ ->
-            let i = items |> Array.findIndex (fun item -> obj.ReferenceEquals(item, picked))
-
-            match ranges.[i].Refusal with
-            | Some code -> showRefusalToast code
-            | None -> startRun h document source i)
+            items
+            |> Array.findIndex (fun item -> obj.ReferenceEquals(item, picked))
+            |> runOrRefuse h document source ranges)
 
 [<Literal>]
 let runAtCursorCommandId = "fshttpStudio.runRequestAtCursor"
@@ -208,10 +210,7 @@ let private runAtCursor (h: Companion.Handle) (editor: TextEditor) : Async<unit>
         | [], false -> window.showInformationMessage Refusals.noBlocksEmpty |> ignore
         | ranges, _ ->
             match blockAtCursor cursorLine ranges with
-            | Some i ->
-                match ranges.[i].Refusal with
-                | Some code -> showRefusalToast code
-                | None -> startRun h document source i
+            | Some i -> runOrRefuse h document source ranges i
             | None -> pickBlock h document source ranges
     }
 
