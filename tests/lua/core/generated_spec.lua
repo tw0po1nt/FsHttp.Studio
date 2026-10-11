@@ -42,6 +42,15 @@ describe("fshttp.refusals", function()
         assert.equal("This script has no request. Write an http { } block to run one.", refusals.no_blocks_empty)
     end)
 
+    it("has the three texts of a Restart", function()
+        assert.equal("⊘ Cannot run: the companion is starting", refusals.companion_starting_block_mark_title)
+        assert.equal(
+            "The Run ended because the companion restarted. Run the request again.",
+            refusals.restart_ended_run
+        )
+        assert.equal("The companion is restarting.", refusals.companion_restarting)
+    end)
+
     it("has a Block mark title for each catalog code", function()
         for code, refusal in pairs(refusals.codes) do
             assert.equal("⊘ " .. refusal.title, refusal.block_mark_title, code)

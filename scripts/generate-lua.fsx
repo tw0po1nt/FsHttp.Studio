@@ -59,6 +59,9 @@ let refusalsLua () =
 
     line (sprintf "    companion_stopped = %s," (refusal Refusals.companionStopped))
     line (sprintf "    companion_stopped_block_mark_title = %s," (quote Refusals.companionStoppedLensTitle))
+    line (sprintf "    companion_starting_block_mark_title = %s," (quote Refusals.companionStartingLensTitle))
+    line (sprintf "    restart_ended_run = %s," (quote Refusals.restartEndedRun))
+    line (sprintf "    companion_restarting = %s," (quote Refusals.companionRestarting))
     line (sprintf "    no_blocks_parse_failure = %s," (quote Refusals.noBlocksParseFailure))
     line (sprintf "    no_blocks_parse_failure_block_mark_title = %s," (quote Refusals.noBlocksParseFailureLensTitle))
     line (sprintf "    no_blocks_empty = %s," (quote Refusals.noBlocksEmpty))

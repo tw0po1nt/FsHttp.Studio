@@ -100,6 +100,14 @@ let companionStopped: Refusal =
 
 let companionStoppedLensTitle: string = refusalGlyph + " " + companionStopped.Title
 
+let companionStartingLensTitle: string =
+    refusalGlyph + " Cannot run: the companion is starting"
+
+let restartEndedRun: string =
+    "The Run ended because the companion restarted. Run the request again."
+
+let companionRestarting: string = "The companion is restarting."
+
 /// A Run outcome only. `classify` never produces it, so it has no lens and no `catalog` row.
 let unboundBlockValue (name: string) : Refusal =
     { Title = "Cannot run: depends on another request"
