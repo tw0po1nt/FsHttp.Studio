@@ -137,13 +137,15 @@ let restartTests =
           }
 
           test "the starting title is the sentence behind the refusal glyph" {
+              Expect.stringStarts companionStartingLensTitle (refusalGlyph + " ") "the lens must not promise a Run"
+
               Expect.equal
                   companionStartingLensTitle
                   "⊘ Cannot run: the companion is starting"
                   "each lens and Block mark shows this while the companion starts"
           }
 
-          test "the restarting notice names the Restart in progress" {
+          test "the restarting notice says the companion is restarting" {
               Expect.equal companionRestarting "The companion is restarting." "a second Restart shows this notice"
           } ]
 
