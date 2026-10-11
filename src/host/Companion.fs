@@ -219,7 +219,7 @@ let run
 
                 member _.Abandon reason =
                     match reason with
-                    | CompanionStopped -> resolve (RunProtocolError Refusals.companionStopped.Detail)
+                    | CompanionStopped -> resolve (RunProtocolError (Refusals.companionStopped Refusals.VSCode).Detail)
                     | CompanionRestarted -> resolve (RunRuntimeError Refusals.restartEndedRun) }
 
         send handle (JS.JSON.stringify payload) entry)

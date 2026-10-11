@@ -1115,7 +1115,7 @@ let tryRunAtCursorFromPalette (line: int) : Async<bool> =
             return false
     }
 
-let restartCompanionTitle = "FsHttp.Studio: Restart companion"
+let restartCompanionTitle = Refusals.restartCommandName Refusals.VSCode
 
 /// Runs the Restart command from the command palette, as a user does.
 let tryRestartFromPalette () : Async<bool> =

@@ -1,5 +1,6 @@
 local MiniTest = require("mini.test")
 local harness = require("nvim.harness")
+local refusals = require("fshttp.refusals")
 
 local T = MiniTest.new_set()
 
@@ -46,6 +47,30 @@ T["the live state line is OK when the companion is ready"] = function()
     local items = harness.checkhealth(ready_child())
 
     assert.equal("OK", item_with(items, "Companion", "FsHttp.Studio: companion ready").level)
+end
+
+T["a stopped companion gives an ERROR line that names :FsHttp restart"] = function()
+    local known = harness.companion_pids()
+    local child = harness.start_child({ companion_path = harness.companion_path() })
+    harness.edit(child, harness.fixture("harness-setup.fsx"))
+    harness.eventually(harness.companion_exists_deadline_ms, "the companion of the new child Neovim", function()
+        return #harness.new_companion_pids(known) == 1
+    end)
+    harness.eventually(harness.companion_exists_deadline_ms, "a ready companion", function()
+        return harness.lua_get(child, [[require("fshttp.companion").state()]]) == "ready"
+    end)
+    vim.uv.kill(harness.new_companion_pids(known)[1], "sigkill")
+    harness.eventually(harness.companion_exists_deadline_ms, "a stopped companion", function()
+        return harness.lua_get(child, [[require("fshttp.companion").state()]]) == "stopped"
+    end)
+
+    local items = harness.checkhealth(child)
+
+    local state = item_with(items, "Companion", "FsHttp.Studio: companion stopped")
+    assert.equal("ERROR", state.level)
+    assert.same({ refusals.companion_stopped.detail }, state.advice)
+    assert.equal("restart", state.advice[1]:match(":FsHttp (%a+)"))
+    assert.equal(true, harness.lua_get(child, [[require("fshttp.command").subcommands.restart ~= nil]]))
 end
 
 -- The child of Harness setup can have the snacks.nvim stub of an image Check, so this Check starts its own child.

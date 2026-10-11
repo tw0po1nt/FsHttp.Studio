@@ -18,7 +18,7 @@ local M = {
     run_block_mark_title = "▶ Run request",
     stale_block_index = { title = "Cannot run: the script changed", detail = "This request moved or was removed after you started the Run. FsHttp.Studio cannot find it at the position it had when the Run started. To run this request, run :FsHttp run again." },
     unbound_block_value = { title = "Cannot run: depends on another request", detail = "This request uses `{name}`, which another request in this script binds. One Run evaluates one request, so `{name}` has no value. FsHttp.Studio cannot run a request that depends on another request." },
-    companion_stopped = { title = "Cannot run: the companion stopped", detail = "The FsHttp.Studio companion stopped. Reload the window to start it again." },
+    companion_stopped = { title = "Cannot run: the companion stopped", detail = "The FsHttp.Studio companion stopped. Run :FsHttp restart to start it again." },
     companion_stopped_block_mark_title = "⊘ Cannot run: the companion stopped",
     companion_starting_block_mark_title = "⊘ Cannot run: the companion is starting",
     restart_ended_run = "The Run ended because the companion restarted. Run the request again.",

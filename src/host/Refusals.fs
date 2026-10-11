@@ -92,13 +92,19 @@ let refusalGlyph = "⊘"
 let lensTitle (code: string) : string =
     refusalGlyph + " " + (forCode code).Title
 
+let restartCommandName (client: Client) : string =
+    match client with
+    | VSCode -> "FsHttp.Studio: Restart companion"
+    | Neovim -> ":FsHttp restart"
+
 /// Carries no wire code, because `classify` runs in the companion that stopped.
 /// The lens toast and an abandoning Run both show `Detail`, so those two surfaces cannot drift.
-let companionStopped: Refusal =
+let companionStopped (client: Client) : Refusal =
     { Title = "Cannot run: the companion stopped"
-      Detail = "The FsHttp.Studio companion stopped. Reload the window to start it again." }
+      Detail = sprintf "The FsHttp.Studio companion stopped. Run %s to start it again." (restartCommandName client) }
 
-let companionStoppedLensTitle: string = refusalGlyph + " " + companionStopped.Title
+let companionStoppedLensTitle: string =
+    refusalGlyph + " " + (companionStopped VSCode).Title
 
 let companionStartingLensTitle: string =
     refusalGlyph + " Cannot run: the companion is starting"

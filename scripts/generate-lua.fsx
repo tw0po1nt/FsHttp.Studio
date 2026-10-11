@@ -57,7 +57,7 @@ let refusalsLua () =
     line (sprintf "    stale_block_index = %s," (refusal (Refusals.staleBlockIndex Refusals.Neovim)))
     line (sprintf "    unbound_block_value = %s," (refusal (Refusals.unboundBlockValue "{name}")))
 
-    line (sprintf "    companion_stopped = %s," (refusal Refusals.companionStopped))
+    line (sprintf "    companion_stopped = %s," (refusal (Refusals.companionStopped Refusals.Neovim)))
     line (sprintf "    companion_stopped_block_mark_title = %s," (quote Refusals.companionStoppedLensTitle))
     line (sprintf "    companion_starting_block_mark_title = %s," (quote Refusals.companionStartingLensTitle))
     line (sprintf "    restart_ended_run = %s," (quote Refusals.restartEndedRun))

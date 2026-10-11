@@ -132,7 +132,8 @@ let private showRefusalToast (code: string) =
     window.showWarningMessage ((Refusals.forCode code).Detail) |> ignore
 
 let private showCompanionStoppedToast () =
-    window.showWarningMessage Refusals.companionStopped.Detail |> ignore
+    window.showWarningMessage (Refusals.companionStopped Refusals.VSCode).Detail
+    |> ignore
 
 /// Registers the command that a `▶ Run request` CodeLens invokes. The caller passes the same
 /// `TextDocument` that the lens was computed against, and the block's 0-based index into that

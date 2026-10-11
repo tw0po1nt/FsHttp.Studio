@@ -33,6 +33,13 @@ describe("fshttp.refusals", function()
         assert.equal(tail, detail:sub(-#tail))
     end)
 
+    it("names the Neovim restart command in the stopped sentence", function()
+        assert.equal(
+            "The FsHttp.Studio companion stopped. Run :FsHttp restart to start it again.",
+            refusals.companion_stopped.detail
+        )
+    end)
+
     it("names no lens in the stale Block sentence", function()
         assert.is_nil(refusals.stale_block_index.detail:find("lens", 1, true))
     end)
