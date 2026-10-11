@@ -18,3 +18,8 @@ let tryUnbox<'T> (x: obj) : 'T option =
 /// Reacts to a fulfilled JS promise without a promise CE.
 [<Emit("$0.then($1)")>]
 let onResolved (_p: JS.Promise<'T>) (_onOk: 'T -> unit) : unit = jsNative
+
+/// A pending JS promise, and the function that fulfills it. The executor runs synchronously, so
+/// the function exists when this returns.
+[<Emit("(() => { let fulfill; const p = new Promise(r => { fulfill = r; }); return [p, fulfill]; })()")>]
+let deferred<'T> () : JS.Promise<'T> * ('T -> unit) = jsNative

@@ -83,8 +83,6 @@ let private resultUpdate (request: RequestData) (timing: Timing) (response: Resp
 
 let mutable private companionState = Starting
 
-let setCompanionState (state: State) = companionState <- state
-
 let private runOne
     (h: Companion.Handle)
     (document: TextDocument)
@@ -198,21 +196,75 @@ let private pickBlock (h: Companion.Handle) (document: TextDocument) (source: st
 [<Literal>]
 let runAtCursorCommandId = "fshttpStudio.runRequestAtCursor"
 
-let private runAtCursor (h: Companion.Handle) (editor: TextEditor) : Async<unit> =
+/// The editor text and the 1-based line of the primary cursor at the call.
+[<NoComparison>]
+type private CursorSnapshot =
+    { Document: TextDocument
+      Source: string
+      CursorLine: int }
+
+let private takeSnapshot (editor: TextEditor) : CursorSnapshot =
+    { Document = editor.document
+      Source = editor.document.getText ()
+      CursorLine = editor.selection.active.line + 1 }
+
+let private runAtCursor (h: Companion.Handle) (snapshot: CursorSnapshot) : Async<unit> =
     async {
-        let document = editor.document
-        let source = document.getText ()
-        let cursorLine = editor.selection.active.line + 1
-        let! located = Companion.locate h source
+        let! located = Companion.locate h snapshot.Source
 
         match located.Ranges, located.ParseFailed with
         | [], true -> window.showWarningMessage Refusals.noBlocksParseFailure |> ignore
         | [], false -> window.showInformationMessage Refusals.noBlocksEmpty |> ignore
         | ranges, _ ->
-            match blockAtCursor cursorLine ranges with
-            | Some i -> runOrRefuse h document source ranges i
-            | None -> pickBlock h document source ranges
+            match blockAtCursor snapshot.CursorLine ranges with
+            | Some i -> runOrRefuse h snapshot.Document snapshot.Source ranges i
+            | None -> pickBlock h snapshot.Document snapshot.Source ranges
     }
+
+let mutable private wait: (CursorSnapshot * (unit -> unit)) option = None
+
+let private endWait () =
+    match wait with
+    | Some(_, closeNotification) ->
+        wait <- None
+        closeNotification ()
+    | None -> ()
+
+let private waitNotificationOptions: obj =
+    createObj
+        [ "location" ==> progressLocationNotification
+          "title" ==> "Waiting for the FsHttp.Studio companion to start"
+          "cancellable" ==> true ]
+
+let private waitForCompanion (snapshot: CursorSnapshot) =
+    match wait with
+    | Some(_, closeNotification) -> wait <- Some(snapshot, closeNotification)
+    | None ->
+        let closed, closeNotification = Js.deferred<unit> ()
+        wait <- Some(snapshot, closeNotification)
+
+        window.withProgress (
+            waitNotificationOptions,
+            System.Func<obj, CancellationToken, JS.Promise<unit>>(fun _ token ->
+                token.onCancellationRequested (fun _ -> endWait ()) |> ignore
+                closed)
+        )
+        |> ignore
+
+/// Activation shows the SDK toast on SdkNotFound, so the wait shows no toast in that state.
+let setCompanionState (state: State) =
+    companionState <- state
+
+    match wait, state, handle with
+    | Some(snapshot, _), Ready, Some h ->
+        endWait ()
+        runAtCursor h snapshot |> Async.StartImmediate
+    | Some _, Ready, None
+    | Some _, SdkNotFound, _ -> endWait ()
+    | Some _, Stopped, _ ->
+        endWait ()
+        showCompanionStoppedToast ()
+    | _ -> ()
 
 /// `showNoSdk` is the SDK toast of activation, which this module compiles before.
 let registerRunAtCursor (showNoSdk: unit -> unit) : Disposable =
@@ -224,8 +276,9 @@ let registerRunAtCursor (showNoSdk: unit -> unit) : Disposable =
                 match companionState, handle with
                 | SdkNotFound, _ -> showNoSdk ()
                 | Stopped, _ -> showCompanionStoppedToast ()
-                | Ready, Some h -> runAtCursor h editor |> Async.StartImmediate
-                | _ -> ()
+                | Starting, _ -> waitForCompanion (takeSnapshot editor)
+                | Ready, Some h -> runAtCursor h (takeSnapshot editor) |> Async.StartImmediate
+                | Ready, None -> ()
             | _ -> window.showInformationMessage Refusals.runAtCursorNeedsScript |> ignore)
     )
 
