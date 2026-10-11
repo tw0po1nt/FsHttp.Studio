@@ -341,8 +341,8 @@ function M.start(config)
     end
 end
 
--- An idle companion exits when its stdin closes. The stop retires the process at once, so its late exit
--- leaves the state alone, and the Runs that wait for an answer end with nil.
+-- An idle companion exits when its stdin closes. The stop retires the process at once.
+-- A late exit of that process leaves the state alone. Each Run that waits for an answer gets nil.
 ---@param on_done fun()? runs once the process is gone
 function M.stop_async(on_done)
     local stopping = process
