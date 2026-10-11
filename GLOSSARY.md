@@ -70,6 +70,10 @@ _Avoid_: message, payload, event.
 The long-lived .NET process that parses scripts and evaluates blocks. It hosts an FCS interactive session. The companion is distinct from each Client.
 _Avoid_: server, backend, host.
 
+**Worker**:
+A short-lived child process of the companion that serves one Run and then exits. The companion starts a worker only when a pin of the Run conflicts with a package version that an earlier Run loaded. A worker never starts a worker.
+_Avoid_: child, subprocess, helper.
+
 **Client**:
 The editor-side program that starts the companion, exchanges envelopes with it, and shows the result of each Run. FsHttp.Studio has two clients: the VSCode extension host, which is the extension's own JS side, and the Neovim client.
 _Avoid_: frontend, plugin, host (bare).

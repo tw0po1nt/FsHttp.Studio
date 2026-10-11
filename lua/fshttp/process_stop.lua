@@ -2,6 +2,7 @@ local M = {}
 
 M.stop_delay_ms = 1000
 
+-- Neovim blocks its exit on taskkill, so this limit is shorter than the limit in VSCode.
 M.taskkill_timeout_ms = 1000
 
 ---@alias fshttp.KillCommand { kind: "signal_group", pid: integer }|{ kind: "exec", command: string[] }

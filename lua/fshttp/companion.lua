@@ -316,7 +316,7 @@ function M.start(config)
     end
 end
 
--- Closing stdin ends an idle companion. A companion that is still alive after the delay, and each process that it started, get killed.
+-- An idle companion exits when its stdin closes.
 function M.stop()
     local stopping = process
     if not stopping then

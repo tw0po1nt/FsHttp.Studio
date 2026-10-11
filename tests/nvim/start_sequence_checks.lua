@@ -62,9 +62,9 @@ T["VimLeavePre stops the companion and its worker"] = function()
 
     harness.edit(child, harness.fixture("worker-hang.fsx"))
     harness.eventually(harness.block_mark_deadline_ms, "a Block mark on the hang Block", function()
-        return harness.block_marks(child):find("^26: ") ~= nil
+        return harness.block_marks(child):find("^27: ") ~= nil
     end)
-    harness.run_at(child, 26)
+    harness.run_at(child, 27)
     harness.eventually(harness.response_deadline_ms, "the worker beside the companion", function()
         return #harness.new_companion_pids(known) >= 2
     end)
@@ -72,7 +72,10 @@ T["VimLeavePre stops the companion and its worker"] = function()
     assert.is_true(vim.tbl_contains(processes, companion))
 
     local ok, err = pcall(function()
-        harness.cmd(child, "doautocmd VimLeavePre")
+        child.mini.api_notify.nvim_command("qa!")
+        harness.eventually(harness.quit_deadline_ms, "the child Neovim to quit", function()
+            return not harness.process_exists(child.pid)
+        end)
         harness.eventually(harness.companion_gone_deadline_ms, "each process of the companion to stop", function()
             for _, pid in ipairs(processes) do
                 if harness.process_exists(pid) then
@@ -86,7 +89,6 @@ T["VimLeavePre stops the companion and its worker"] = function()
     if not ok then
         error(err, 0)
     end
-    assert.equal(2, harness.lua_get(child, "1 + 1"), "the child Neovim still answers")
 end
 
 T["a dotnet_path that names a missing file gives the WARN notice and the .NET SDK not found row, and no companion starts"] = function()

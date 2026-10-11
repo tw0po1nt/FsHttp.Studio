@@ -25,6 +25,9 @@ M.block_mark_deadline_ms = 15000
 M.status_line_text_deadline_ms = 15000
 M.response_deadline_ms = 30000
 
+-- The stop delays a quit by 1000 ms and a kill, so a quit that takes longer than this time is hung.
+M.quit_deadline_ms = 5000
+
 -- A child Neovim that gives no answer to one request in this time is hung, and the Harness stops it.
 M.child_answer_deadline_ms = 10000
 

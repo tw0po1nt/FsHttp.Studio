@@ -1,6 +1,7 @@
 // The worker Check of the Neovim suite. The version pin differs from the version-less load of the
 // core path Script, so the companion runs this Script in a `--worker` child. The `/slow` route of
-// the test HTTP server answers only after a `/release` request.
+// the test HTTP server answers only after a `/release` request. `baseUrl` comes from the Sidecar
+// that the test server writes beside this file.
 
 #r "nuget: FsHttp, 14.5.1"
 

@@ -75,6 +75,9 @@ The restart, window close in VSCode, and `VimLeavePre` in Neovim use the same st
    - On Linux and macOS, the Client spawns the companion detached, in its own process group. The
      kill signals the negative pid, so it reaches each process in the group.
    - On Windows, the kill runs `taskkill /T /F /PID <pid>`.
+   - The Client waits for the kill to end. On Windows, the wait for `taskkill` has a time limit:
+     1000 ms in Neovim and 5000 ms in VSCode. Neovim blocks its exit during the wait, so its limit
+     is shorter.
 3. After the command, the Client ignores each event of the old companion. A late `exit` of the old
    companion never writes the Stopped state over the new start.
 
@@ -102,8 +105,8 @@ The tree kill is necessary. A companion can start a `--worker` child, and a work
 
 ### 5. A restart during a restart
 
-- While the Client stops the old companion (1000 ms at most), a second command gives the INFO
-  notice "The companion is restarting." The command does nothing more.
+- While the Client stops the old companion (1000 ms, then the kill), a second command gives the
+  INFO notice "The companion is restarting." The command does nothing more.
 - After the new companion spawns, a command restarts again. Thus a user can recover from a start
   that hangs.
 
