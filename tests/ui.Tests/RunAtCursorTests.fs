@@ -11,9 +11,44 @@ let private coreBlockLine = 27
 let private loopFixture = "loop-lens.fsx"
 /// The line of the Block in the loop of `loop-lens.fsx`. Must match the fixture.
 let private loopBlockLine = 10
+/// A line of `loop-lens.fsx` that lies outside every Block. Must match the fixture.
+let private loopOutsideLine = 9
+/// A line of `core-path.fsx` that lies outside every Block. Must match the fixture.
+let private coreOutsideLine = 26
 let private emptyFixture = "no-requests-empty.fsx"
 
 let private loopBody = Refusals.forCode "loopBody"
+
+let private quickPickIs (expected: ExTester.QuickPickEntry list) () =
+    async {
+        let! entries = ExTester.tryQuickPickEntries ()
+        return entries = Some expected
+    }
+
+let private coreEntries: ExTester.QuickPickEntry list =
+    [ { Label = "▶ 27: http { GET $\"{baseUrl}/json\" }"
+        Detail = None }
+      { Label = "▶ 29: http { GET $\"{baseUrl}/status\" }"
+        Detail = None } ]
+
+let private loopEntries: ExTester.QuickPickEntry list =
+    [ { Label = "⊘ 10: http { GET \"http://127.0.0.1:9/\" }"
+        Detail = Some loopBody.Title } ]
+
+let private openQuickPickAt line expected =
+    async {
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "Run request at cursor from the command palette, with the cursor outside every Block"
+                (fun () -> ExTester.tryRunAtCursorFromPalette line)
+
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "a quick pick that lists each Block with its glyph, line, and first source line"
+                (quickPickIs expected)
+    }
 
 let private runsTheBlockAtTheCursor =
     async {
@@ -48,6 +83,18 @@ let private runsTheBlockAtTheCursor =
                 Harness.ViewerUpdateDeadlineMs
                 "status 200, the absolute URL the first block sent, and the probe body in the response viewer"
                 (fun () -> Checks.tryJsonProbeResponseRendered (Harness.baseUrl () + "/json"))
+
+        do! openQuickPickAt coreOutsideLine coreEntries
+
+        do!
+            Harness.eventually Harness.LensAppearanceDeadlineMs "the second row to be picked" (fun () ->
+                ExTester.tryPickQuickPick 1)
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "the response viewer to show the URL of the second Block"
+                (fun () -> Checks.viewerSatisfies (fun dom -> dom.UrlText.Contains(Harness.baseUrl () + "/status")))
     }
 
 let private refusesTheLoopBlockWithTheToast =
@@ -86,6 +133,22 @@ let private refusesTheLoopBlockWithTheToast =
 
         do!
             Harness.eventually Harness.ToastDeadlineMs "the warning toast to dismiss" (fun () ->
+                ExTester.tryDismissWarningNotification loopBody.Detail)
+
+        do! openQuickPickAt loopOutsideLine loopEntries
+
+        do!
+            Harness.eventually Harness.LensAppearanceDeadlineMs "the refused row to be picked" (fun () ->
+                ExTester.tryPickQuickPick 0)
+
+        do!
+            Harness.eventually
+                Harness.ToastDeadlineMs
+                "a warning toast with the shipped loopBody detail after the pick"
+                (fun () -> ExTester.tryWarningNotification loopBody.Detail)
+
+        do!
+            Harness.eventually Harness.ToastDeadlineMs "the warning toast to dismiss after the pick" (fun () ->
                 ExTester.tryDismissWarningNotification loopBody.Detail)
     }
 

@@ -79,6 +79,12 @@ failed. It cannot tell a stuck runner from a check that is genuinely going bad. 
 accepted gap. Without the retry, the environment dependencies ExTester carries would make unrelated
 pull requests fail. A re-run attempt count above 1 is a signal of possible drift rather than an expected condition.
 
+**The suite Budget comes from few CI runs.**
+The suite Budget is the slowest measured suite on CI plus about 40%, the same rule that the Neovim
+suite uses. The slowest suite took 309.2 s, so the Budget is 435 s. That value comes from the
+three attempts of one `ui-tests.yml` run on 2026-10-10, with 25 Checks. When a Check joins the
+suite, measure the suite on CI again, and set the Budget by the same rule.
+
 **Linux only.**
 A defect that appears only in `dotnet` discovery or in companion-process handling on macOS or
 Windows ships uncaught. This is a known and accepted cost.

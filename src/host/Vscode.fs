@@ -127,6 +127,9 @@ type IWindow =
     abstract showWarningMessage: message: string -> JS.Promise<obj>
     /// vscode.window.showInformationMessage(message).
     abstract showInformationMessage: message: string -> JS.Promise<obj>
+    /// vscode.window.showQuickPick(items). Each item is an object with `label` and an optional
+    /// `detail`. The promise resolves to the picked item, or to `undefined` on cancel.
+    abstract showQuickPick: items: obj[] -> JS.Promise<obj | null>
 
 [<Import("window", "vscode")>]
 let window: IWindow = jsNative

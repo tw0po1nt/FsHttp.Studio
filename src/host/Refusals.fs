@@ -86,10 +86,11 @@ let forCode (code: string) : Refusal =
     table |> Map.tryFind code |> Option.defaultValue fallback
 
 /// Belongs to the lens rather than to the sentence, so no caller has to strip it back off.
-let private glyph = "⊘ "
+let refusalGlyph = "⊘"
 
 /// The CodeLens title for a wire refusal code: the refusal's sentence behind the refusal glyph.
-let lensTitle (code: string) : string = glyph + (forCode code).Title
+let lensTitle (code: string) : string =
+    refusalGlyph + " " + (forCode code).Title
 
 /// Carries no wire code, because `classify` runs in the companion that stopped.
 /// The lens toast and an abandoning Run both show `Detail`, so those two surfaces cannot drift.
@@ -97,7 +98,7 @@ let companionStopped: Refusal =
     { Title = "Cannot run: the companion stopped"
       Detail = "The FsHttp.Studio companion stopped. Reload the window to start it again." }
 
-let companionStoppedLensTitle: string = glyph + companionStopped.Title
+let companionStoppedLensTitle: string = refusalGlyph + " " + companionStopped.Title
 
 /// A Run outcome only. `classify` never produces it, so it has no lens and no `catalog` row.
 let unboundBlockValue (name: string) : Refusal =
@@ -124,10 +125,13 @@ let noBlocksParseFailure: string =
     "No requests found: this script has a syntax error."
 
 /// A lens title ends with no period, so this title drops the period of the sentence.
-let noBlocksParseFailureLensTitle: string = glyph + noBlocksParseFailure.TrimEnd '.'
+let noBlocksParseFailureLensTitle: string =
+    refusalGlyph + " " + noBlocksParseFailure.TrimEnd '.'
+
+let runGlyph = "▶"
 
 /// The CodeLens title for a Block that a Run can reach.
-let runLensTitle: string = "▶ Run request"
+let runLensTitle: string = runGlyph + " Run request"
 
 /// The sentence for the command that runs the Block at the cursor, when there is no Active document,
 /// or the Active document is not a Script.

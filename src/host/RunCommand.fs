@@ -1,5 +1,6 @@
 module RunCommand
 
+open Fable.Core
 open Fable.Core.JsInterop
 open Vscode
 open Protocol
@@ -153,6 +154,47 @@ let register () : Disposable =
                 startRun h document (document.getText ()) blockIndex)
     )
 
+let private runOrRefuse
+    (h: Companion.Handle)
+    (document: TextDocument)
+    (source: string)
+    (ranges: BlockRange list)
+    (i: int)
+    =
+    match ranges.[i].Refusal with
+    | Some code -> showRefusalToast code
+    | None -> startRun h document source i
+
+/// The label that `:FsHttp run` writes: `<glyph> <line>: <first source line>`.
+let private quickPickItem (sourceLines: string[]) (r: BlockRange) : obj =
+    let firstLine =
+        if r.StartLine >= 1 && r.StartLine <= sourceLines.Length then
+            sourceLines.[r.StartLine - 1].Trim()
+        else
+            ""
+
+    let label glyph =
+        sprintf "%s %d: %s" glyph r.StartLine firstLine
+
+    match r.Refusal with
+    | Some code ->
+        createObj
+            [ "label" ==> label Refusals.refusalGlyph
+              "detail" ==> (Refusals.forCode code).Title ]
+    | None -> createObj [ "label" ==> label Refusals.runGlyph ]
+
+let private pickBlock (h: Companion.Handle) (document: TextDocument) (source: string) (ranges: BlockRange list) =
+    let sourceLines = source.Replace("\r\n", "\n").Split('\n')
+    let items = ranges |> List.map (quickPickItem sourceLines) |> List.toArray
+
+    Js.onResolved (window.showQuickPick items) (fun picked ->
+        match picked with
+        | null -> ()
+        | _ ->
+            items
+            |> Array.findIndex (fun item -> obj.ReferenceEquals(item, picked))
+            |> runOrRefuse h document source ranges)
+
 [<Literal>]
 let runAtCursorCommandId = "fshttpStudio.runRequestAtCursor"
 
@@ -168,11 +210,8 @@ let private runAtCursor (h: Companion.Handle) (editor: TextEditor) : Async<unit>
         | [], false -> window.showInformationMessage Refusals.noBlocksEmpty |> ignore
         | ranges, _ ->
             match blockAtCursor cursorLine ranges with
-            | Some i ->
-                match ranges.[i].Refusal with
-                | Some code -> showRefusalToast code
-                | None -> startRun h document source i
-            | None -> ()
+            | Some i -> runOrRefuse h document source ranges i
+            | None -> pickBlock h document source ranges
     }
 
 /// `showNoSdk` is the SDK toast of activation, which this module compiles before.

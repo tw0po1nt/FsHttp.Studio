@@ -100,17 +100,17 @@ The companion and the envelope do not change. No setting is added.
 - The quick pick lists every located block in source order, refused blocks too.
 - Each label shows the glyph of the lens title, the line number, and the first source line of the
   block.
-- A refused item shows its lens title in the detail row.
+- A refused item shows the title of its refusal in the detail row.
 - A pick on a runnable block starts a Run. A pick on a refused block shows the WARN toast of the
   refused lens, and no Run starts.
 - The text matches the picker of `:FsHttp run`.
 
 ```
-▶ 4   let getSnorlax () = http {
-▶ 12  let postBerry = http {
-⊘ 21  http {
+▶ 4: let getSnorlax () = http {
+▶ 12: let postBerry = http {
+⊘ 21: http {
       Cannot run: inside a loop
-▶ 30  let deep = http {
+▶ 30: let deep = http {
 ```
 
 ### 6. The wait while the companion starts

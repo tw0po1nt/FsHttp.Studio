@@ -15,11 +15,6 @@ let private getSdkLabel = "Get the .NET SDK"
 [<Literal>]
 let private dotnetDownloadUrl = "https://aka.ms/dotnet/download"
 
-/// Reacts to a fulfilled JS promise without a promise CE. The single `showWarningMessage` that
-/// the SDK-not-found guidance raises uses it.
-[<Emit("$0.then($1)")>]
-let private onResolved (_p: JS.Promise<'T>) (_onOk: 'T -> unit) : unit = jsNative
-
 /// The `fshttpStudio.dotnetPath` override. It is an explicit path to a `dotnet` executable, or
 /// `None` to detect one on PATH automatically. We own this setting instead of the .NET Install
 /// Tool's `existingDotnetPath`, so a user does not have to install that extension for one key.

@@ -83,6 +83,14 @@ type Workbench =
     abstract executeCommand: command: string -> JS.Promise<unit>
     abstract getNotifications: unit -> JS.Promise<Notification[]>
 
+/// One row of a quick pick. `getText` reads the label and then the detail row, one per line.
+type QuickPickItem =
+    abstract getText: unit -> JS.Promise<string>
+
+type InputBox =
+    abstract getQuickPicks: unit -> JS.Promise<QuickPickItem[]>
+    abstract selectQuickPick: index: int -> JS.Promise<unit>
+
 type ProblemsView =
     abstract setFilter: pattern: string -> JS.Promise<unit>
     /// The visible rows, as ExTester's `Marker` page objects. Typed as opaque because the only
@@ -304,6 +312,13 @@ module Workbench =
     let private Ctor: obj = jsNative
 
     let create () : Workbench = createInst Ctor
+
+module InputBox =
+    [<Import("InputBox", "vscode-extension-tester")>]
+    let private Ctor: obj = jsNative
+
+    /// Throws when no quick pick is open. A timeout of 0 makes selenium wait forever.
+    let create () : JS.Promise<InputBox> = emitJsExpr Ctor "$0.create(1)"
 
 module BottomBarPanel =
     [<Import("BottomBarPanel", "vscode-extension-tester")>]
@@ -1095,6 +1110,47 @@ let tryRunAtCursorFromPalette (line: int) : Async<bool> =
             do! editor.moveCursor (line, 1) |> Async.AwaitPromise
             let workbench = Workbench.create ()
             do! workbench.executeCommand runAtCursorTitle |> Async.AwaitPromise
+            return true
+        with _ ->
+            return false
+    }
+
+/// One row of a quick pick as a person reads it: the label, and the detail row when the row has one.
+type QuickPickEntry =
+    { Label: string; Detail: string option }
+
+/// The rows of the open quick pick, in order. An unreachable quick pick is a `None`, so
+/// `Harness.eventually` can retry it.
+let tryQuickPickEntries () : Async<QuickPickEntry list option> =
+    async {
+        try
+            let! box = InputBox.create () |> Async.AwaitPromise
+            let! picks = box.getQuickPicks () |> Async.AwaitPromise
+            let entries = ResizeArray<QuickPickEntry>()
+
+            for pick in picks do
+                let! text = pick.getText () |> Async.AwaitPromise
+
+                match text.Split('\n') |> Array.toList |> List.map (fun l -> l.Trim()) with
+                | label :: rest ->
+                    let detail = rest |> List.filter (fun l -> l <> "") |> String.concat " "
+
+                    entries.Add
+                        { Label = label
+                          Detail = if detail = "" then None else Some detail }
+                | [] -> ()
+
+            return Some(List.ofSeq entries)
+        with _ ->
+            return None
+    }
+
+/// Picks the row at the 0-based `index` of the open quick pick.
+let tryPickQuickPick (index: int) : Async<bool> =
+    async {
+        try
+            let! box = InputBox.create () |> Async.AwaitPromise
+            do! box.selectQuickPick index |> Async.AwaitPromise
             return true
         with _ ->
             return false
