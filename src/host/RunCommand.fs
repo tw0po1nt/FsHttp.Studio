@@ -83,8 +83,6 @@ let private resultUpdate (request: RequestData) (timing: Timing) (response: Resp
 
 let mutable private companionState = Starting
 
-let setCompanionState (state: State) = companionState <- state
-
 let private runOne
     (h: Companion.Handle)
     (document: TextDocument)
@@ -198,24 +196,82 @@ let private pickBlock (h: Companion.Handle) (document: TextDocument) (source: st
 [<Literal>]
 let runAtCursorCommandId = "fshttpStudio.runRequestAtCursor"
 
-let private runAtCursor (h: Companion.Handle) (editor: TextEditor) : Async<unit> =
+/// The editor text and the 1-based line of the primary cursor at the call.
+[<NoComparison>]
+type private CursorCall =
+    { Document: TextDocument
+      Source: string
+      CursorLine: int }
+
+let private recordCall (editor: TextEditor) : CursorCall =
+    { Document = editor.document
+      Source = editor.document.getText ()
+      CursorLine = editor.selection.active.line + 1 }
+
+let private runAtCursor (h: Companion.Handle) (call: CursorCall) : Async<unit> =
     async {
-        let document = editor.document
-        let source = document.getText ()
-        let cursorLine = editor.selection.active.line + 1
-        let! located = Companion.locate h source
+        let! located = Companion.locate h call.Source
 
         match located.Ranges, located.ParseFailed with
         | [], true -> window.showWarningMessage Refusals.noBlocksParseFailure |> ignore
         | [], false -> window.showInformationMessage Refusals.noBlocksEmpty |> ignore
         | ranges, _ ->
-            match blockAtCursor cursorLine ranges with
-            | Some i -> runOrRefuse h document source ranges i
-            | None -> pickBlock h document source ranges
+            match blockAtCursor call.CursorLine ranges with
+            | Some i -> runOrRefuse h call.Document call.Source ranges i
+            | None -> pickBlock h call.Document call.Source ranges
     }
 
-/// `showNoSdk` is the SDK toast of activation, which this module compiles before.
-let registerRunAtCursor (showNoSdk: unit -> unit) : Disposable =
+let mutable private showNoSdk: unit -> unit = ignore
+
+let mutable private waitingCall: CursorCall option = None
+
+let mutable private closeWaitNotification: (unit -> unit) option = None
+
+let private endWait () =
+    waitingCall <- None
+    closeWaitNotification |> Option.iter (fun close -> close ())
+    closeWaitNotification <- None
+
+let private waitNotificationOptions: obj =
+    createObj
+        [ "location" ==> progressLocationNotification
+          "title" ==> "Waiting for the FsHttp.Studio companion to start"
+          "cancellable" ==> true ]
+
+let private waitForCompanion (call: CursorCall) =
+    waitingCall <- Some call
+
+    if closeWaitNotification.IsNone then
+        let closed, close = Js.deferred<unit> ()
+        closeWaitNotification <- Some close
+
+        window.withProgress (
+            waitNotificationOptions,
+            System.Func<obj, CancellationToken, JS.Promise<unit>>(fun _ token ->
+                token.onCancellationRequested (fun _ -> endWait ()) |> ignore
+                closed)
+        )
+        |> ignore
+
+let setCompanionState (state: State) =
+    companionState <- state
+
+    match waitingCall, state, handle with
+    | Some call, Ready, Some h ->
+        endWait ()
+        runAtCursor h call |> Async.StartImmediate
+    | Some _, Stopped, _ ->
+        endWait ()
+        showCompanionStoppedToast ()
+    | Some _, SdkNotFound, _ ->
+        endWait ()
+        showNoSdk ()
+    | _ -> ()
+
+/// `showNoSdkToast` is the SDK toast of activation, which this module compiles before.
+let registerRunAtCursor (showNoSdkToast: unit -> unit) : Disposable =
+    showNoSdk <- showNoSdkToast
+
     commands.registerCommand (
         runAtCursorCommandId,
         System.Action<obj, obj>(fun _ _ ->
@@ -224,8 +280,9 @@ let registerRunAtCursor (showNoSdk: unit -> unit) : Disposable =
                 match companionState, handle with
                 | SdkNotFound, _ -> showNoSdk ()
                 | Stopped, _ -> showCompanionStoppedToast ()
-                | Ready, Some h -> runAtCursor h editor |> Async.StartImmediate
-                | _ -> ()
+                | Starting, _ -> waitForCompanion (recordCall editor)
+                | Ready, Some h -> runAtCursor h (recordCall editor) |> Async.StartImmediate
+                | Ready, None -> ()
             | _ -> window.showInformationMessage Refusals.runAtCursorNeedsScript |> ignore)
     )
 

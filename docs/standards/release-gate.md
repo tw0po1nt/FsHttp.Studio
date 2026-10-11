@@ -103,6 +103,13 @@ none. The suite drives the covered case only. It opens the fixture while the com
 and then kills the companion. A regression in the uncovered case therefore ships uncaught. See
 [ADR-0003](../adr/0003-block-location-in-companion.md).
 
+**Run request at cursor gets no Check while the companion starts.**
+When a user calls "FsHttp.Studio: Run request at cursor" while the companion starts, a progress
+notification shows. When the companion is ready, the command applies the cursor rule to the
+recorded text and cursor. Harness setup waits until the companion is ready. On a warm reload, the
+starting state lasts less than one second. Thus no Check can call the command in that state. A
+defect in the wait, in its Cancel button, or in a toast that ends the wait ships uncaught.
+
 **A new untestable surface belongs in this section.**
 A spec that finds a surface no suite drives records that surface here. Prefer to automate the
 surface. Do not leave the instruction only inside a shipped spec.

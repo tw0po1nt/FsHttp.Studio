@@ -111,6 +111,10 @@ type WebviewPanel =
     abstract onDidDispose: listener: (unit -> unit) -> Disposable
     abstract dispose: unit -> unit
 
+/// vscode.CancellationToken, narrowed to the event that fires when the user cancels.
+type CancellationToken =
+    abstract onCancellationRequested: listener: (obj -> unit) -> Disposable
+
 type IWindow =
     abstract createStatusBarItem: alignment: float * priority: float -> StatusBarItem
     abstract createWebviewPanel: viewType: string * title: string * showOptions: float * options: obj -> WebviewPanel
@@ -131,6 +135,11 @@ type IWindow =
     /// `detail`. The promise resolves to the picked item, or to `undefined` on cancel.
     abstract showQuickPick: items: obj[] -> JS.Promise<obj | null>
 
+    /// vscode.window.withProgress(options, task). The progress shows until the promise of the
+    /// task settles.
+    abstract withProgress:
+        options: obj * task: System.Func<obj, CancellationToken, JS.Promise<unit>> -> JS.Promise<unit>
+
 [<Import("window", "vscode")>]
 let window: IWindow = jsNative
 
@@ -143,6 +152,9 @@ let uri: IUri = jsNative
 
 /// vscode.StatusBarAlignment.Left
 let statusBarAlignmentLeft = 1.0
+
+/// vscode.ProgressLocation.Notification
+let progressLocationNotification = 15.0
 
 /// vscode.ViewColumn.Beside
 let viewColumnBeside = -2.0
