@@ -101,40 +101,65 @@ local function receive(encoded)
     end
 end
 
-local function on_exit()
-    process = nil
+-- A process that a stop retired is no longer `process`, and its exit leaves the state alone.
+---@type table<vim.SystemObj, boolean>
+local exited = setmetatable({}, { __mode = "k" })
+
+local function abandon_pending()
     local abandoned = pending
     pending = {}
-    set_state("stopped")
     for _, callback in ipairs(abandoned) do
         callback(nil)
     end
+end
+
+---@param exiting vim.SystemObj?
+local function on_exit(exiting)
+    if exiting then
+        exited[exiting] = true
+    end
+    if process ~= exiting then
+        return
+    end
+    process = nil
+    set_state("stopped")
+    abandon_pending()
 end
 
 ---@param dotnet string
 ---@param companion_dll string
 local function spawn(dotnet, companion_dll)
     local parser = frame.parser()
-    local ok, started = pcall(vim.system, { dotnet, companion_dll }, {
-        stdin = true,
-        detach = process_stop.detach_on_spawn(vim.uv.os_uname().sysname),
-        stdout = function(_, chunk)
-            local encoded_envelopes = chunk and parser:push(chunk) or {}
-            if #encoded_envelopes > 0 then
-                vim.schedule(function()
-                    for _, encoded in ipairs(encoded_envelopes) do
-                        receive(encoded)
-                    end
-                end)
-            end
-        end,
-        -- The companion writes its own log to stderr.
-        stderr = function() end,
-    }, vim.schedule_wrap(on_exit))
+    ---@type vim.SystemObj?
+    local spawned
+    local ok, started = pcall(
+        vim.system,
+        { dotnet, companion_dll },
+        {
+            stdin = true,
+            detach = process_stop.detach_on_spawn(vim.uv.os_uname().sysname),
+            stdout = function(_, chunk)
+                local encoded_envelopes = chunk and parser:push(chunk) or {}
+                if #encoded_envelopes > 0 then
+                    vim.schedule(function()
+                        for _, encoded in ipairs(encoded_envelopes) do
+                            receive(encoded)
+                        end
+                    end)
+                end
+            end,
+            -- The companion writes its own log to stderr.
+            stderr = function() end,
+        },
+        vim.schedule_wrap(function()
+            on_exit(spawned)
+        end)
+    )
     if not ok then
         set_state("stopped")
         return
     end
+    spawned = started
     process = started
     started:write(frame.encode(envelope.encode({ tag = "hello" })))
 end
@@ -316,31 +341,79 @@ function M.start(config)
     end
 end
 
--- An idle companion exits when its stdin closes.
-function M.stop()
+-- An idle companion exits when its stdin closes. The stop retires the process at once, so its late exit
+-- leaves the state alone, and the Runs that wait for an answer end with nil.
+---@param on_done fun()? runs once the process is gone
+function M.stop_async(on_done)
     local stopping = process
     if not stopping then
+        if on_done then
+            on_done()
+        end
         return
     end
+    process = nil
+    abandon_pending()
+
+    local function finish()
+        if on_done then
+            on_done()
+        end
+    end
+
+    local function kill()
+        local command = process_stop.kill_command(vim.uv.os_uname().sysname, stopping.pid)
+        if command.kind == "signal_group" then
+            vim.uv.kill(-command.pid, "sigkill")
+            finish()
+            return
+        end
+        local ok = pcall(
+            vim.system,
+            command.command,
+            { timeout = process_stop.taskkill_timeout_ms },
+            vim.schedule_wrap(finish)
+        )
+        if not ok then
+            finish()
+        end
+    end
+
     -- The write can fail when the companion is already exiting.
     pcall(stopping.write, stopping, nil)
-    -- The exit callback clears `process`, and vim.wait runs that callback.
-    if vim.wait(process_stop.stop_delay_ms, function()
-        return process ~= stopping
-    end, 10) then
-        return
-    end
-    local command = process_stop.kill_command(vim.uv.os_uname().sysname, stopping.pid)
-    if command.kind == "signal_group" then
-        vim.uv.kill(-command.pid, "sigkill")
-    else
-        pcall(function()
-            vim.system(command.command, { timeout = process_stop.taskkill_timeout_ms }):wait()
+
+    local poll_ms = 10
+    local waited_ms = 0
+    local timer = assert(vim.uv.new_timer())
+    timer:start(
+        poll_ms,
+        poll_ms,
+        vim.schedule_wrap(function()
+            waited_ms = waited_ms + poll_ms
+            local gone = exited[stopping]
+            if not gone and waited_ms < process_stop.stop_delay_ms then
+                return
+            end
+            timer:stop()
+            timer:close()
+            if gone then
+                finish()
+            else
+                kill()
+            end
         end)
-    end
-    if process == stopping then
-        process = nil
-    end
+    )
+end
+
+-- VimLeavePre needs the stop to end before Neovim exits.
+function M.stop()
+    local done = false
+    M.stop_async(function()
+        done = true
+    end)
+    vim.wait(process_stop.stop_delay_ms + process_stop.taskkill_timeout_ms + 500, function()
+        return done
+    end, 10)
 end
 
 return M
