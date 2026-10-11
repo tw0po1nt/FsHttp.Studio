@@ -126,6 +126,30 @@ let companionStoppedTests =
           } ]
 
 [<Tests>]
+let restartTests =
+    testList
+        "Refusals for a Restart"
+        [ test "the Run-ended sentence tells the user to run the request again" {
+              Expect.equal
+                  restartEndedRun
+                  "The Run ended because the companion restarted. Run the request again."
+                  "a Run that a Restart ends shows this Runtime error"
+          }
+
+          test "the starting title is the sentence behind the refusal glyph" {
+              Expect.stringStarts companionStartingLensTitle (refusalGlyph + " ") "the lens must not promise a Run"
+
+              Expect.equal
+                  companionStartingLensTitle
+                  "⊘ Cannot run: the companion is starting"
+                  "each lens and Block mark shows this while the companion starts"
+          }
+
+          test "the restarting notice says the companion is restarting" {
+              Expect.equal companionRestarting "The companion is restarting." "a second Restart shows this notice"
+          } ]
+
+[<Tests>]
 let forRefusedTests =
     testList
         "Refusals.forRefused"
