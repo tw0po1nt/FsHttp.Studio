@@ -114,6 +114,40 @@ check strip_hash "an escape in a single-quoted string does not skip the close qu
   "echo 'a\\' # A comment." \
   ' A comment.'
 
+check strip_xml "a one-line comment is prose" \
+  '  <!-- A comment. -->' \
+  ' A comment. '
+check strip_xml "an element value contributes nothing" \
+  '  <Description>A value.</Description>' \
+  ''
+check strip_xml "an attribute contributes nothing" \
+  '  <Compile Include="A value." />' \
+  ''
+check strip_xml "the text around a comment contributes nothing" \
+  '<A>before</A> <!-- A comment. --> <B>after</B>' \
+  ' A comment. '
+check strip_xml "each line of a comment keeps its line number" \
+  $'<A />\n<!-- First line,\n     second line,\n     third line,\n     fourth line. -->\n<B />' \
+  $'\n First line,\n     second line,\n     third line,\n     fourth line. '
+check strip_xml "two comments on one line stay separate words" \
+  '<!--One--><A /><!--two-->' \
+  'One two'
+check strip_xml "a comment can start at the end of a line" \
+  $'<A /> <!--\nA comment.\n-->' \
+  $'\nA comment.'
+check strip_xml "an empty comment contributes nothing" \
+  '<!----><A />' \
+  ''
+check strip_xml "a close marker outside a comment contributes nothing" \
+  '<A>x --> y</A>' \
+  ''
+check strip_xml "inline code in backticks is removed" \
+  '<!-- Run `a, not b` here. -->' \
+  ' Run  here. '
+check strip_xml "an open marker inside a comment is comment text" \
+  '<!-- A <!-- B --> C' \
+  ' A <!-- B '
+
 if [ "$failed" -ne 0 ]; then
   echo "strippers: red"
   exit 1
