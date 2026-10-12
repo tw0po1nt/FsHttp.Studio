@@ -94,17 +94,31 @@ T["response_buffer.keys = false leaves l and h their Neovim motions, and each <P
     end)
 end
 
-T["block_mark.virtual_line = false removes the virtual line at once, and the sign stays"] = function()
+T["block_mark.sign is an unknown key: one WARN names it, and each other key applies"] = function()
+    local child = harness.start_child({
+        companion_path = harness.companion_path(),
+        block_mark = { sign = false },
+        response_buffer = { split = "below" },
+    })
+
+    local warnings = harness.notices_at(child, vim.log.levels.WARN)
+    assert.equal(1, #warnings, vim.inspect(warnings))
+    assert.equal("FsHttp.Studio: setup() has no option block_mark.sign. The client ignores it.", warnings[1].message)
+    assert.equal("below", harness.lua_get(child, [[require("fshttp").config().response_buffer.split]]))
+end
+
+T["block_mark.virtual_line = false removes each Block mark at once"] = function()
     local child = harness.start_child({ companion_path = harness.companion_path() })
     harness.edit(child, harness.fixture("block-marks.fsx"))
     harness.eventually(harness.block_mark_deadline_ms, "a Block mark with a virtual line", function()
-        return harness.block_marks(child):find("^%d+: %S.- %[%S+%]") ~= nil
+        return harness.block_marks(child):find("^%d+: %S") ~= nil
     end)
 
     harness.lua_get(child, [[require("fshttp").setup({ block_mark = { virtual_line = false } })]])
 
     local marks = harness.block_marks(child)
-    assert.equal(true, marks:find("^%d+:  %[%S+%]") ~= nil, marks)
+    assert.equal("8: \n10: ", marks)
+    assert.equal(0, harness.signs(child))
 end
 
 T["a change to the dotnet path gives the INFO notice that names :FsHttp restart"] = function()

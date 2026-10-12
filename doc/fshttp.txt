@@ -28,8 +28,8 @@ The client starts one companion when you open the first Script. With no
 version from the GitHub release. A lazy.nvim install or update downloads it at
 once.
 
-Each Block gets a Block mark: a virtual line above the Block, and a sign. The
-Block mark shows `▶ Run request` when a Run can reach the Block. It shows
+Each Block gets a Block mark: a virtual line above the Block. The Block mark
+shows `▶ Run request` when a Run can reach the Block. It shows
 `⊘ Cannot run: ...` with the reason when a Run cannot reach the Block.
 
 The Active document is the buffer that you look at. It can be a Script, the
@@ -218,7 +218,7 @@ the defaults and the new values. The defaults: >lua
         dotnet_path = nil,
         companion_path = nil,
         request_timeout_ms = 30000,
-        block_mark = { virtual_line = true, sign = true },
+        block_mark = { virtual_line = true },
         response_buffer = { split = "right", images = true, keys = true },
         status_line = { lualine = true },
     })
@@ -257,12 +257,9 @@ request_timeout_ms ~
                                               *fshttp-block_mark.virtual_line*
 block_mark.virtual_line ~
     boolean (default: true)
-    Show the virtual line of each Block mark. A change applies at once.
-
-                                                      *fshttp-block_mark.sign*
-block_mark.sign ~
-    boolean (default: true)
-    Show the sign of each Block mark. A change applies at once.
+    Show each Block mark. With false, the Script shows no Block mark, and a
+    Run from the cursor or from the picker still starts. A change applies at
+    once.
 
                                                 *fshttp-response_buffer.split*
 response_buffer.split ~
@@ -324,10 +321,6 @@ change its colors. Each entry gives the group, its default link, and its use.
 The groups of the Block marks:
     FsHttpBlockMark              LspCodeLens
         The virtual line of a Block mark.
-    FsHttpBlockMarkRun           DiagnosticOk
-        The sign of a Block that a Run can reach.
-    FsHttpBlockMarkRefused       DiagnosticWarn
-        The sign of a Block that a Run cannot reach.
 
 The groups of the Response buffer:
     FsHttpResponseSection        Title

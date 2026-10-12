@@ -9,7 +9,7 @@ local stopped_title = refusals.companion_stopped_block_mark_title
 ---@param title string
 ---@return string
 local function mark(line, title)
-    return string.format("%d: %s [%s]", line, title, title:match("^(%S+)"))
+    return string.format("%d: %s", line, title)
 end
 
 ---@param ... string
@@ -48,6 +48,18 @@ T["no-requests Block marks"]["a Parse failure above the Blocks gives the line-1 
         "exactly one no-requests Block mark on line 1",
         mark(1, refusals.no_blocks_parse_failure_block_mark_title)
     )
+end
+
+T["no-requests Block marks"]["the line-1 mark of a Parse failure puts no sign in the sign column"] = function()
+    local child = harness.harness_setup_child()
+    harness.edit(child, harness.ui_fixture("no-requests-above.fsx"))
+    expect_block_marks(
+        child,
+        "exactly one no-requests Block mark on line 1",
+        mark(1, refusals.no_blocks_parse_failure_block_mark_title)
+    )
+
+    assert.equal(0, harness.signs(child))
 end
 
 T["no-requests Block marks"]["a Parse failure below the last Block keeps a Block mark with the run title on each Block"] = function()
@@ -91,6 +103,18 @@ T["the Block mark of a loop Block shows the loopBody refusal title"] = function(
         "the refusal title on the Block in the loop",
         mark(10, refusals.codes.loopBody.block_mark_title)
     )
+end
+
+T["a Block mark is a virtual line only, for a runnable Block and a refused Block"] = function()
+    local child = harness.harness_setup_child()
+    harness.edit(child, harness.fixture("runnable-and-refused.fsx"))
+    expect_block_marks(
+        child,
+        "the run title and the loopBody refusal title",
+        marks(mark(8, run_title), mark(11, refusals.codes.loopBody.block_mark_title))
+    )
+
+    assert.equal(0, harness.signs(child))
 end
 
 T["an edit locates the Script again after the pause"] = function()

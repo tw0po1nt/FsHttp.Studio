@@ -29,8 +29,6 @@ local watching = false
 ---@type table<string, string> the default link of each highlight group
 M.highlight_links = {
     FsHttpBlockMark = "LspCodeLens",
-    FsHttpBlockMarkRun = "DiagnosticOk",
-    FsHttpBlockMarkRefused = "DiagnosticWarn",
 }
 
 local function define_highlights()
@@ -48,23 +46,19 @@ end
 ---@param buf integer
 ---@param row integer 0-based
 ---@param title string
----@param runnable boolean
 ---@param id integer?
 ---@return integer id
-local function set_mark(buf, row, title, runnable, id)
+local function set_mark(buf, row, title, id)
     local indent = vim.api.nvim_buf_call(buf, function()
         return vim.fn.indent(row + 1)
     end)
     local options = require("fshttp").config().block_mark
-    local sign_highlight = runnable and "FsHttpBlockMarkRun" or "FsHttpBlockMarkRefused"
     return vim.api.nvim_buf_set_extmark(buf, namespace, row, 0, {
         id = id,
         virt_lines = options.virtual_line and {
             { { string.rep(" ", math.max(indent, 0)) .. title, "FsHttpBlockMark" } },
         } or nil,
         virt_lines_above = true,
-        sign_text = options.sign and block_mark.glyph(title) or nil,
-        sign_hl_group = options.sign and sign_highlight or nil,
         invalidate = true,
         strict = false,
     })
@@ -90,7 +84,7 @@ local function paint(buf, marks)
     local on_block = {}
     local line_one_count = 0
     for _, mark in ipairs(marks) do
-        local id = set_mark(buf, mark.line - 1, mark.title, mark.runnable)
+        local id = set_mark(buf, mark.line - 1, mark.title)
         if mark.on_block then
             on_block[id] = true
         end
@@ -118,7 +112,7 @@ local function paint_not_ready(buf, state)
     end
     for _, change in ipairs(block_mark.not_ready_changes(marks, state) or {}) do
         if change.title then
-            set_mark(buf, change.row, change.title, false, change.id)
+            set_mark(buf, change.row, change.title, change.id)
         else
             vim.api.nvim_buf_del_extmark(buf, namespace, change.id)
         end
