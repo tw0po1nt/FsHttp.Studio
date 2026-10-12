@@ -3,6 +3,8 @@ module Extension.Tests.RefusalsTests
 // Drives the host's map from a wire refusal code to its shipped words, with no VSCode and no
 // companion process.
 
+open System.IO
+open System.Text.Json
 open Expecto
 open Refusals
 
@@ -98,16 +100,37 @@ let lensTitleTests =
 let companionStoppedTests =
     testList
         "Refusals.companionStopped"
-        [ test "names the companion stopping and tells the user to reload the window" {
+        [ test "names the companion stopping and the restart command of each Client" {
               Expect.equal
-                  companionStopped.Detail
-                  "The FsHttp.Studio companion stopped. Reload the window to start it again."
-                  "a pending run abandons to exactly this text, and the lens's toast shows it"
+                  (companionStopped VSCode).Detail
+                  "The FsHttp.Studio companion stopped. Run FsHttp.Studio: Restart companion to start it again."
+                  "VSCode names its command"
+
+              Expect.equal
+                  (companionStopped Neovim).Detail
+                  "The FsHttp.Studio companion stopped. Run :FsHttp restart to start it again."
+                  "Neovim names its command"
+
+              Expect.equal (companionStopped Neovim).Title (companionStopped VSCode).Title "one heading"
+          }
+
+          test "the VSCode restart command name is the title of a package.json command" {
+              let packageJson =
+                  File.ReadAllText(Path.Combine(__SOURCE_DIRECTORY__, "..", "..", "package.json"))
+
+              use doc = JsonDocument.Parse packageJson
+
+              let titles =
+                  doc.RootElement.GetProperty("contributes").GetProperty("commands").EnumerateArray()
+                  |> Seq.map (fun command -> command.GetProperty("title").GetString())
+                  |> List.ofSeq
+
+              Expect.contains titles (restartCommandName VSCode) "the stopped sentence names a command that exists"
           }
 
           test "its heading is the sentence alone, and its lens title carries the refusal glyph" {
               Expect.isFalse
-                  (companionStopped.Title.Contains "⊘")
+                  ((companionStopped VSCode).Title.Contains "⊘")
                   "the sentence owns no glyph, for the same reason a catalog title owns none"
 
               Expect.equal
@@ -121,7 +144,7 @@ let companionStoppedTests =
               |> List.iter (fun code ->
                   Expect.notEqual
                       (forCode code).Title
-                      companionStopped.Title
+                      (companionStopped VSCode).Title
                       (sprintf "%s is a position refusal, and a stopped companion is not" code))
           } ]
 

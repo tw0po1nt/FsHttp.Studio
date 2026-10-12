@@ -107,7 +107,7 @@ let compileErrorLabel = "Compile error"
 /// and a check that restated the words would pin the wording in a second place. `RefusalsTests`
 /// is where the wording itself is pinned. What this asserts is that the host put *this* sentence
 /// in the viewer rather than a different one.
-let companionStoppedText = Refusals.companionStopped.Detail
+let companionStoppedText = (Refusals.companionStopped Refusals.VSCode).Detail
 
 let private extensionStatusPrefix = "FsHttp.Studio"
 
