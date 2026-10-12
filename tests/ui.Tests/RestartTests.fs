@@ -6,6 +6,7 @@ open Fable.Mocha
 let private blockCount = 2
 let private hangFixtureFileName = "restart-hang.fsx"
 let private workerFixtureFileName = "restart-worker.fsx"
+let private versionlessFixtureFileName = "core-path.fsx"
 let private runInProgressLabel = "Running…"
 let private recoveryUrlPath = "/json"
 let private recoveryLensIndex = 1
@@ -126,12 +127,44 @@ let private restartUnderAHang =
         return! Harness.withTeardown "the hang release" (releaseTheHang serverBaseUrl) body
     }
 
+/// Closes the viewer first, so that the probe response cannot be a stale render of an earlier Run.
+let private loadFsHttpWithNoVersion () =
+    async {
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "the response viewer to be closed"
+                ExTester.tryCloseResponseViewer
+
+        do! Checks.openFixtureAsSoleTab versionlessFixtureFileName
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "a Run request lens above each of the two core-path blocks"
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount versionlessFixtureFileName)
+
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "a click on the first core-path block's Run request lens"
+                (fun () -> ExTester.tryClickCodeLensByTitle Checks.lensTitle)
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "status 200, the /json URL, and the probe body in the response viewer"
+                (fun () -> Checks.tryJsonProbeResponseRendered recoveryUrlPath)
+    }
+
 let private workerUnderAHang =
     async {
         let serverBaseUrl = Harness.baseUrl ()
 
         let body =
             async {
+                do! loadFsHttpWithNoVersion ()
+
                 let! _ = hangThenRestart serverBaseUrl workerFixtureFileName Harness.workerPids
 
                 do!

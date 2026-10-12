@@ -174,8 +174,9 @@ the Response buffer, the lens titles, the toast, and the pids. A rule that depen
    start a Run again, and a recovery Run succeeds.
 2. **Restart from the stopped state.** Kill the companion, click a stopped lens, then click
    "Restart companion" in the toast.
-3. **A worker under a hang.** A hang block with two conflicting `#r "nuget:"` pins runs in a
-   worker. After the restart, the worker pid is gone.
+3. **A worker under a hang.** Run a block that loads `FsHttp` with no version. Then run a hang
+   block with one `#r "nuget:"` pin of `FsHttp`. The pin conflicts with the version-less load, so
+   the hang block runs in a worker. After the restart, the worker pid is gone.
 4. **A click on the stopped Status line text.** Click the status bar item after the companion
    stops. A new companion starts.
 5. **A change to the dotnet path.** Change `fshttpStudio.dotnetPath`. The INFO toast shows.

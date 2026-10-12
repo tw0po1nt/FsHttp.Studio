@@ -1,10 +1,9 @@
-// Fixture for the restart check. Two blocks: `/slow` hangs until the suite hits
-// `/release`, and the Restart ends that Run, which runs in a worker; `/json` is the recovery Run after the
-// Restart. `baseUrl` comes from the sidecar the test server writes beside this file, never a
-// hardcoded port.
+// Fixture for the worker Check of the restart checks. `/slow` hangs until the suite requests
+// `/release`, and the Restart ends that Run. The pin conflicts with the version-less load of an
+// earlier Run, so the companion runs this Script in a `--worker` child. `baseUrl` comes from the
+// sidecar that the test server writes beside this file.
 
 #r "nuget: FsHttp, 15.0.3"
-#r "nuget: FsHttp, 15.0.2"
 
 open System.IO
 open FsHttp
