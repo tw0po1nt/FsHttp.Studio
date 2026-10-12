@@ -1,15 +1,13 @@
 name: Update VSCode pin
 
 # Opens a pull request when the ExTester VSCode pin falls behind the latest
-# stable release, then starts the UI tests job against the pin branch. That
-# run is the gate for the new version: green means a merge completes the
-# update.
+# stable release. The UI tests run on that pull request is the gate for the
+# new version: green means a merge completes the update.
 #
-# The pull request cannot start the gate on its own. GitHub does not raise
-# push or pull_request events for anything the built-in GITHUB_TOKEN does,
-# so a pull request opened here lands with no checks. workflow_dispatch is
-# the documented exception, so this workflow dispatches the UI tests job by
-# hand and links the run from the pull request.
+# The built-in GITHUB_TOKEN opens the pull request, so GitHub starts its
+# checks only after a maintainer approves them. The repository setting "Allow
+# GitHub Actions to create and approve pull requests" must be on, or
+# `gh pr create` fails.
 #
 # Uses gh throughout with the built-in GITHUB_TOKEN. No third-party action
 # opens the pull request. Permissions stay on this workflow only.
@@ -22,7 +20,7 @@ name: Update VSCode pin
 #
 # The freeze has no way to notice that the defect was fixed upstream, because only
 # a suite run against the new version can tell. Run this workflow by hand with
-# the probe input to open the pull request anyway, which dispatches that run.
+# the probe input to open the pull request anyway, then approve its UI tests run.
 # Delete the freeze file once a version passes.
 on:
   schedule:
@@ -43,13 +41,11 @@ concurrency:
 
 permissions:
   contents: write # push the pin branch
-  pull-requests: write # open the pin-update pull request, and comment the gate link on it
-  actions: write # dispatch the UI tests job against the pin branch
+  pull-requests: write # open the pin-update pull request
 
 env:
   CONFIG: tests/ui.Tests/extester.config.json
   FREEZE: tests/ui.Tests/vscode-pin-freeze.json
-  GATE_WORKFLOW: ui-tests.yml
 
 jobs:
   update-pin:
@@ -229,17 +225,11 @@ jobs:
 
           ## Gate
 
-          The UI tests job against this branch is the gate run for the new version.
+          The UI tests run on this pull request is the gate run for the new version.
           A green run means that a merge completes the update.
-          A comment below links the run: it does not appear as a check on this
-          pull request, because a run this workflow starts is not attached to it.
+          A bot opened this pull request, so its checks start only after a maintainer approves them.
+          Approve the workflow runs on this pull request to start the gate.
           ${PROBE_NOTE}
           EOF
           )")"
           echo "Opened $PR_URL"
-
-          # The gate. GITHUB_TOKEN raises no pull_request event, so the job needs
-          # dispatching by hand against the branch.
-          gh workflow run "$GATE_WORKFLOW" --ref "$BRANCH"
-          GATE_RUNS="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/${GATE_WORKFLOW}?query=branch%3A${BRANCH}"
-          gh pr comment "$PR_URL" --body "Gate run for \`${LATEST}\`: ${GATE_RUNS}"
