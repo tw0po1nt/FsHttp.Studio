@@ -284,14 +284,30 @@ local function guarded(child, subject, fn)
     return result
 end
 
+-- snacks.nvim reads a SNACKS_<NAME> variable for each terminal environment. The value replaces the
+-- detection of that environment.
+local snacks_terminal_env = {
+    SNACKS_KITTY = "1",
+    SNACKS_GHOSTTY = "0",
+    SNACKS_WEZTERM = "0",
+    SNACKS_TMUX = "0",
+    SNACKS_ZELLIJ = "0",
+    SNACKS_SSH = "0",
+}
+
 ---@param opts table
 ---@param client_version? string replaces the client version in the child
 ---@param with_lualine? boolean
+---@param with_snacks? boolean loads snacks.nvim in a terminal environment that supports Unicode placeholders
 ---@return nvim_suite.Child
-function M.start_child(opts, client_version, with_lualine)
+function M.start_child(opts, client_version, with_lualine, with_snacks)
     vim.env.NVIM_TEST_CLIENT_OPTS = vim.json.encode(opts)
     vim.env.NVIM_TEST_CLIENT_VERSION = client_version
     vim.env.NVIM_TEST_LUALINE = with_lualine and "1" or nil
+    vim.env.NVIM_TEST_SNACKS = with_snacks and "1" or nil
+    for name, value in pairs(snacks_terminal_env) do
+        vim.env[name] = with_snacks and value or nil
+    end
     local mini = MiniTest.new_child_neovim()
     mini.start({ "-u", child_init })
     local child = { mini = mini, job_id = mini.job.id, pid = vim.fn.jobpid(mini.job.id), stopped = false }

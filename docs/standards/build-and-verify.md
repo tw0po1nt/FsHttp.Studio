@@ -27,6 +27,10 @@ The Neovim suite needs the same Neovim and network access, the .NET SDK, `curl`,
 compiler on `PATH` as `cc`. `tests/nvim/run.sh` builds the tree-sitter JSON parser with `cc`. To use
 a JSON parser that is already built, set `NVIM_TEST_JSON_PARSER` to the path of its library.
 
+The Neovim suite also needs ImageMagick (`magick` or `identify`) on `PATH`. The image Checks expect
+it, and snacks.nvim reads each image with it. On macOS, `brew install imagemagick` installs it. On
+Debian and Ubuntu, install `imagemagick`. On Windows, `choco install imagemagick` installs it.
+
 On Windows, run `tests/nvim/run.sh` in the Bash shell that ships with Git for Windows. The script
 uses `gcc` when `cc` is missing, writes the parser as a `.dll`, and stops processes through
 PowerShell in place of `pkill`. The Harness finds the companion with PowerShell in place of

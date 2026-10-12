@@ -44,8 +44,9 @@ The client shows the Body by its Content-Type:
 - The client gives a JSON, XML, or HTML body highlights and folds from its
   tree-sitter parser. With no JSON parser, the client pretty-prints a JSON
   body.
-- The client shows an image through snacks.nvim, when the terminal can show
-  images.
+- The client shows an image through snacks.nvim, as virtual lines below the
+  pixel size. The terminal must support Unicode placeholders, and ImageMagick
+  must be on PATH.
 - The client shows a binary body as a hex view.
 - The client shows each other body as text.
 
@@ -64,7 +65,8 @@ Required:
   Windows. With |fshttp-companion_path|, the client downloads nothing.
 
 Optional:
-- snacks.nvim and a terminal that can show images, for an image body.
+- snacks.nvim, a terminal with Unicode placeholders (such as kitty or
+  Ghostty), and ImageMagick (`magick` or `identify`), for an image body.
 - The `json`, `xml`, and `html` tree-sitter parsers, for highlights and folds
   in the Body.
 - lualine.nvim, for the Status line text in the statusline.
@@ -350,11 +352,11 @@ Required items ~
     download tool is an INFO line. Each missing item is an ERROR with the fix.
 
 Optional items ~
-    snacks.nvim with a terminal that can show images, and the `json`, `xml`,
-    and `html` tree-sitter parsers. Each missing item is a WARN that names
-    what degrades. A missing optional item stops no Run. With
-    |fshttp-response_buffer.images| set to false, the image item is OK, and
-    it states that images are turned off.
+    snacks.nvim with a terminal that can show images, ImageMagick, and the
+    `json`, `xml`, and `html` tree-sitter parsers. Each missing item is a
+    WARN that names what degrades. A missing optional item stops no Run. With
+    |fshttp-response_buffer.images| set to false, the image item and the
+    ImageMagick item are OK, and they state that images are turned off.
 
 Companion ~
     The state of the companion, and the result of the version check.

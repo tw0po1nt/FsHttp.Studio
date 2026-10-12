@@ -161,9 +161,11 @@ archive that it ships, and each Check that sets `companion_path` uses that folde
 from the test HTTP server. In a release run, that archive is the file that the release attaches. A
 defect in the release URL, or in the redirect of GitHub, ships uncaught.
 
-**No Check compares the pixels of an image.** The image Checks run with no snacks.nvim, or with a
+**No Check compares the pixels of an image.** Most image Checks run with no snacks.nvim, or with a
 stub in place of snacks.nvim. The stub records each image placement and the bytes of the image
-file. A defect that occurs only in the drawn image ships uncaught.
+file. One Check runs the real snacks.nvim, and forces the terminal environment to support Unicode
+placeholders. That Check finds the image extmark below the pixel size, but no terminal
+draws the image. A defect that occurs only in the drawn image ships uncaught.
 
 **The suite Budgets come from two days of CI runs.** The values are 60 s for Harness setup and
 30 s for each Check on each system. The suite Budget is the slowest measured suite of the system

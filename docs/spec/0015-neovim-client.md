@@ -314,10 +314,22 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
   and the folds. With no parser, a pretty-printed JSON body gets folds from the JSON structure, and
   an indented HTML body gets folds from the HTML structure.
 - **Binary body.** The buffer ports the hex view and the reason for a Captured body.
-- **Image body.** The client writes the bytes to a temporary file and calls the image placement of
-  snacks.nvim, when snacks.nvim is present and the terminal supports it. The line below the Body
-  title gives the pixel size, for example `100×100 px`. When no image can show, the same line adds
-  the reason, for example `100×100 px  snacks.nvim is not installed`.
+- **Image body.** The client writes the bytes to a temporary file and calls the inline image
+  placement of snacks.nvim (`inline = true`). The image shows as virtual lines below the line of
+  the pixel size. The text of the Response buffer does not change while the image loads, when it
+  shows, or when it fails. The line below the Body title gives the pixel size, for example
+  `100×100 px`. When no image can show, the same line adds the reason, and the client starts no
+  placement. The reasons, in the order that the client checks them:
+  - `images are off (response_buffer.images)`
+  - `snacks.nvim is not installed`
+  - `the terminal does not support images`
+  - `the terminal does not support Unicode placeholders`. With no placeholders, snacks.nvim draws
+    an inline image over the text of the window.
+  - `ImageMagick is not installed`, when neither `magick` nor `identify` is on PATH. snacks.nvim
+    reads each image with ImageMagick, PNG included.
+
+  A failure inside snacks.nvim after the placement starts relies on the notice of snacks.nvim. The
+  client does not track it.
 - **Hint lines.** For an HTML body or an image body, a virtual line directly below the Body title
   names `:FsHttp open`:
   - HTML: `:FsHttp open  shows the rendered page in the browser, with scripts blocked`
@@ -467,8 +479,9 @@ Ticket: [Which settings does the Neovim client have, and how does a user set the
   only when the client downloads the companion. When `companion_path` is set, a missing tool is an
   INFO line, because the client downloads nothing (A3).
 - **Optional items** as a WARN that names what degrades: snacks.nvim with a terminal that can show
-  images, and the `json`, `xml`, and `html` tree-sitter parsers. With `response_buffer.images =
-  false`, the image item is OK "turned off". A missing optional item stops no Run.
+  images with Unicode placeholders, ImageMagick (`magick` or `identify`), and the `json`, `xml`,
+  and `html` tree-sitter parsers. With `response_buffer.images = false`, the image item and the
+  ImageMagick item are OK "turned off". A missing optional item stops no Run.
 - **The live companion state** (A11), **the version check** (A5), and **the options** (A12).
 
 ### Part C: one source of truth for both Clients
@@ -624,7 +637,15 @@ Ticket: [What gates a release of the Neovim client?](https://github.com/tw0po1nt
 - `:FsHttp open` with a stubbed `vim.ui.open` writes a file with the right extension and the CSP
   meta.
 - An image body without snacks.nvim shows the fallback line. With a stubbed snacks.nvim, the client
-  calls the image placement with the temporary file.
+  calls the image placement with the temporary file and `inline = true`. With the stub, each of
+  these cases gives its reason, and the client starts no placement:
+  - a terminal with no image support
+  - a terminal with no Unicode placeholders
+  - no ImageMagick on PATH
+- A Check runs the real snacks.nvim at a pinned version. The Check forces the terminal environment
+  to support Unicode placeholders. snacks.nvim then puts an image extmark with virtual lines below
+  the line of the pixel size, and the text of the Response buffer does not change. The CI job
+  installs ImageMagick for this Check.
 - A JSON body shows pretty-printed. It gets tree-sitter folds and highlights with the parser, and
   structure folds without it.
 - A minified HTML body with no `html` parser shows indented, with structure folds.
@@ -632,6 +653,8 @@ Ticket: [What gates a release of the Neovim client?](https://github.com/tw0po1nt
 - `:FsHttp status` echoes the text in a script, and the state row in a buffer that is not F#.
 - `:checkhealth fshttp` reports no ERROR for a valid setup, an ERROR for a missing `dotnet_path`,
   a WARN with no snacks.nvim, the live state line, and a value that differs from its default.
+- `:checkhealth fshttp` reports a WARN with no ImageMagick. With `response_buffer.images = false`,
+  the image item and the ImageMagick item are OK "turned off".
 - A bad option value gives the ERROR notice, and its key keeps the default.
 - A `companion_path` with no `Companion.dll` gives `companion not found` and the ERROR notice.
 - `response_buffer.images = false` gives the fallback line with the option as the reason.
@@ -665,7 +688,8 @@ Ticket: [What gates a release of the Neovim client?](https://github.com/tw0po1nt
 
 The build adds these entries to the honest gaps when the Neovim suite ships:
 
-- No Check compares the pixels of an image.
+- No Check compares the pixels of an image. One Check runs the real snacks.nvim and finds the image
+  extmark, but no terminal draws the image.
 - The suites test lazy.nvim only. The `vim.pack` route gets no check.
 - No Check downloads from a real GitHub Release URL.
 - A Beta runs the Lua core suite only.

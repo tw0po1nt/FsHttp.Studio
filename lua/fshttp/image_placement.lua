@@ -15,9 +15,21 @@ local function snacks()
     return nil
 end
 
+-- snacks.nvim reads each image with ImageMagick, PNG included.
+---@return string? path nil when neither magick nor identify is on PATH
+function M.imagemagick_path()
+    for _, command in ipairs({ "magick", "identify" }) do
+        local path = vim.fn.exepath(command)
+        if path ~= "" then
+            return path
+        end
+    end
+    return nil
+end
+
 ---@param content_type string the type with no parameters
----@return string? reason nil when the client can show an image of this type
-function M.unsupported_reason(content_type)
+---@return string? reason nil when snacks.nvim can show an image of this type in this terminal
+function M.snacks_reason(content_type)
     if not require("fshttp").config().response_buffer.images then
         return image_body.images_off_reason
     end
@@ -32,9 +44,27 @@ function M.unsupported_reason(content_type)
     if type(image.supports_terminal) == "function" and not image.supports_terminal() then
         return "the terminal does not support images"
     end
+    -- With no Unicode placeholders, snacks.nvim draws an inline image over the text of the window.
+    local terminal = image.terminal
+    if type(terminal) ~= "table" or type(terminal.env) ~= "function" or not terminal.env().placeholders then
+        return image_body.placeholders_missing_reason
+    end
     local file = "body." .. image_body.extension(content_type)
     if type(image.supports_file) == "function" and not image.supports_file(file) then
         return "snacks.nvim does not show " .. content_type
+    end
+    return nil
+end
+
+---@param content_type string the type with no parameters
+---@return string? reason nil when the client can show an image of this type
+function M.unsupported_reason(content_type)
+    local reason = M.snacks_reason(content_type)
+    if reason then
+        return reason
+    end
+    if not M.imagemagick_path() then
+        return image_body.imagemagick_missing_reason
     end
     return nil
 end
@@ -66,7 +96,7 @@ function M.place(buf, image)
     current = { file = file }
     local module = assert(snacks())
     local ok, placement = pcall(function()
-        return module.image.placement.new(buf, file, { pos = { image.line, 0 }, inline = false, auto_resize = true })
+        return module.image.placement.new(buf, file, { pos = { image.line, 0 }, inline = true, auto_resize = true })
     end)
     if ok then
         current.placement = placement

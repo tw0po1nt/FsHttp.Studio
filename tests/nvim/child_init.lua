@@ -28,5 +28,9 @@ local spec = {
 if vim.env.NVIM_TEST_LUALINE == "1" then
     spec[#spec + 1] = { "nvim-lualine/lualine.nvim" }
 end
+-- The other Checks need snacks.nvim absent, so it loads only when a Check sets NVIM_TEST_SNACKS.
+if vim.env.NVIM_TEST_SNACKS == "1" then
+    spec[#spec + 1] = { "folke/snacks.nvim" }
+end
 
 require("lazy.minit").setup({ spec = spec })
