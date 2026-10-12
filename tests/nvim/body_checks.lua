@@ -170,6 +170,52 @@ T["a JSON body with the parser shows pretty-printed, with tree-sitter folds and 
     assert.equal(true, vim.tbl_contains(body.highlights, "9:13-15 @number.json"), vim.inspect(body.highlights))
 end
 
+T["h on the first non-blank character of a JSON line closes its innermost fold, and h again closes the outer fold"] = function()
+    local child = harness.harness_setup_child()
+    -- The shared child can still show this Body from an earlier Check, and the wait must see the new Run.
+    harness.close_response_windows(child)
+    run_block(child, "json-body.fsx", pretty_json_lines)
+    local title = harness.lua_get(
+        child,
+        [[(function()
+            for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "fshttp_response" then
+                    vim.api.nvim_set_current_win(vim.fn.win_findbuf(buf)[1])
+                    for i, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+                        if line:sub(1, #"▾ Body") == "▾ Body" then
+                            return i
+                        end
+                    end
+                end
+            end
+        end)()]]
+    )
+    assert.equal("number", type(title), "the Response buffer has a Body title")
+    local rest = title + 4
+    assert.equal(pretty_json_lines[4], harness.lua_get(child, "vim.fn.getline(...)", { rest }))
+
+    ---@param subject string
+    ---@param first integer the first body line of the fold
+    ---@param last integer the last body line of the fold
+    local function expect_closed_fold(subject, first, last)
+        local fold
+        local ok, err = pcall(harness.eventually, harness.notice_deadline_ms, subject, function()
+            fold = harness.lua_get(child, "{ vim.fn.foldclosed(...), vim.fn.foldclosedend(...) }", { rest })
+            return vim.deep_equal(fold, { title + first, title + last })
+        end)
+        if not ok then
+            error(string.format("%s\nlast fold:\n%s", err, vim.inspect(fold)), 0)
+        end
+    end
+
+    harness.cmd(child, string.format("call cursor(%d, %d)", rest, #"    " + 1))
+    harness.type_keys(child, "h")
+    expect_closed_fold("h closes the moves fold", 3, 6)
+
+    harness.type_keys(child, "h")
+    expect_closed_fold("h on the closed moves fold closes the fold of the JSON object", 1, 11)
+end
+
 T["an HTML body with no parser shows indented, with folds from its structure"] = function()
     local child = harness.harness_setup_child()
     assert.equal(

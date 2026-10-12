@@ -367,7 +367,7 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
   key with a register, such as `"+yb`, reaches it through `v:register`.
 - The `request`, `headers`, and `body` payloads are the payloads of spec 0013. The `curl` payload
   is the Curl command of spec 0016.
-- The Response buffer maps these local keys:
+- The Response buffer maps these eight local keys:
 
 | Key | Action | `<Plug>` map |
 |---|---|---|
@@ -377,7 +377,13 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
 | `yc` | Yank the Curl command | `<Plug>(FsHttpYankCurl)` |
 | `<CR>` | Move to a Compile error position | `<Plug>(FsHttpJump)` |
 | `g?` | List the active keys | `<Plug>(FsHttpHelp)` |
+| `l` | Open the fold or move right | `<Plug>(FsHttpOpenFold)` |
+| `h` | Close the fold or move left | `<Plug>(FsHttpCloseFold)` |
 
+- `l` on a closed fold opens one level of the fold. `h` on a closed fold closes the fold that
+  contains it. In an open fold, `h` closes the innermost fold of the line when the cursor is on the
+  first non-blank character or to its left. In each other position, `l` and `h` move the cursor,
+  and a count applies to the motion. The two `<Plug>` maps are `expr` maps.
 - A notice confirms each yank, or names the clipboard failure.
 - A yank of a Body of zero bytes writes no register, and an INFO notice states that nothing was
   yanked. This follows the rule of spec 0013 that such a Body has no copy button.
@@ -448,7 +454,7 @@ Ticket: [Which settings does the Neovim client have, and how does a user set the
 - `request_timeout_ms` mirrors `fshttpStudio.requestTimeoutMs`.
 - `response_buffer.images = false` gives the fallback line with the option as the reason:
   `100×100 px  images are off (response_buffer.images)`.
-- `response_buffer.keys = false` turns off the six local keys of A10. Each `<Plug>` map stays.
+- `response_buffer.keys = false` turns off the eight local keys of A10. Each `<Plug>` map stays.
 - `vim.fs.normalize` expands each path option.
 - `setup()` checks the type and the value set of each key. A bad value gives one ERROR notice that
   names the key, the value, and the accepted values, and the key keeps its default. An unknown key

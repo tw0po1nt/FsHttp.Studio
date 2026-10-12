@@ -31,6 +31,14 @@ vim.keymap.set("n", "<Plug>(FsHttpHelp)", function()
     require("fshttp.response_keys").help()
 end, { desc = "FsHttp.Studio: list the keys of the Response buffer" })
 
+vim.keymap.set("n", "<Plug>(FsHttpOpenFold)", function()
+    return require("fshttp.response_keys").open_fold()
+end, { expr = true, desc = "FsHttp.Studio: open the fold or move right" })
+
+vim.keymap.set("n", "<Plug>(FsHttpCloseFold)", function()
+    return require("fshttp.response_keys").close_fold()
+end, { expr = true, desc = "FsHttp.Studio: close the fold or move left" })
+
 local group = vim.api.nvim_create_augroup("fshttp", { clear = true })
 
 vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {

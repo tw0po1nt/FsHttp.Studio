@@ -830,6 +830,75 @@ T["a Run that waits starts nothing when its Script closes"] = function()
     end)
 end
 
+T["l opens the closed Request fold, h in column 1 closes the Response headers fold, and elsewhere l and h move"] = function()
+    local child = harness.harness_setup_child()
+    open_script(child, harness.fixture("request-section.fsx"), { 27 })
+    -- The shared child can still show this response from an earlier Check, and the wait must see the new Run.
+    harness.close_response_windows(child)
+    harness.run_at(child, 28)
+    local snapshot = eventually_response(
+        child,
+        "a closed Request fold and a closed Response headers fold",
+        function(shown)
+            local window = only_window(shown)
+            return window ~= nil
+                and has_line(shown.lines, '  "echoed": "ui-test-server"')
+                and window.closed_folds[2] ~= nil
+                and window.closed_folds[2].text:match("^▸ Response headers") ~= nil
+        end
+    )
+    local window = assert(only_window(snapshot))
+    local request = window.closed_folds[1]
+    local headers = window.closed_folds[2]
+    harness.lua_get(child, "vim.api.nvim_set_current_win(...)", { window.id })
+
+    ---@param keys string
+    ---@param subject string
+    ---@param line integer the line whose fold to read
+    ---@param expected { cursor: integer[]?, closed: integer } with no cursor, the cursor is not compared
+    local function expect_after(keys, subject, line, expected)
+        harness.type_keys(child, keys)
+        local state
+        local ok, err = pcall(harness.eventually, harness.notice_deadline_ms, subject, function()
+            state = harness.lua_get(
+                child,
+                [[{ cursor = vim.api.nvim_win_get_cursor(0), closed = vim.fn.foldclosed(...) }]],
+                { line }
+            )
+            return vim.deep_equal({ cursor = expected.cursor and state.cursor, closed = state.closed }, expected)
+        end)
+        if not ok then
+            error(string.format("%s\nlast state:\n%s", err, vim.inspect(state)), 0)
+        end
+    end
+
+    harness.cmd(child, string.format("call cursor(%d, 1)", request.first))
+    expect_after("l", "l opens the Request fold", request.first, { cursor = { request.first, 0 }, closed = -1 })
+
+    local method_line = request.first + 1
+    harness.cmd(child, string.format("call cursor(%d, 1)", method_line))
+    expect_after("l", "l moves one column right", request.first, { cursor = { method_line, 1 }, closed = -1 })
+    expect_after("3l", "3l moves three columns right", request.first, { cursor = { method_line, 4 }, closed = -1 })
+    expect_after(
+        "h",
+        "h right of the first non-blank character moves one column left",
+        request.first,
+        { cursor = { method_line, 3 }, closed = -1 }
+    )
+
+    local header_line = headers.first + 1
+    harness.cmd(child, string.format("call cursor(%d, 1)", headers.first))
+    expect_after(
+        "l",
+        "l opens the Response headers fold",
+        headers.first,
+        { cursor = { headers.first, 0 }, closed = -1 }
+    )
+    harness.cmd(child, string.format("call cursor(%d, 1)", header_line))
+    expect_after("h", "h in column 1 closes the Response headers fold", header_line, { closed = headers.first })
+    assert.equal(-1, harness.lua_get(child, "vim.fn.foldclosed(...)", { request.first }), "the Request fold stays open")
+end
+
 T[":FsHttp yank and yr, yh, and yb put the Copy text in the register, and g? lists the keys"] = function()
     local child = harness.harness_setup_child()
     local base_url = harness.base_url()
@@ -893,6 +962,8 @@ T[":FsHttp yank and yr, yh, and yb put the Copy text in the register, and g? lis
             "yc  Yank the Curl command",
             "<CR>  Move to a Compile error position",
             "g?  List the active keys",
+            "l  Open the fold or move right",
+            "h  Close the fold or move left",
         }, "\n")
     )
 end

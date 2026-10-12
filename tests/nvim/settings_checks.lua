@@ -48,6 +48,52 @@ T["response_buffer.images = false gives the fallback line with the option as the
     end)
 end
 
+T["response_buffer.keys = false leaves l and h their Neovim motions, and each <Plug> map stays"] = function()
+    local child = harness.start_child({
+        companion_path = harness.companion_path(),
+        response_buffer = { keys = false },
+    })
+    harness.edit(child, harness.fixture("request-section.fsx"))
+    harness.await_block_mark(child, 27)
+
+    harness.run_at(child, 28)
+
+    local headers
+    harness.eventually(harness.response_deadline_ms, "a closed Response headers fold", function()
+        local window = harness.response_buffer(child).windows[1]
+        for _, fold in ipairs(window and window.closed_folds or {}) do
+            if fold.text:match("^▸ Response headers") then
+                headers = fold
+                harness.lua_get(child, "vim.api.nvim_set_current_win(...)", { window.id })
+                return true
+            end
+        end
+        return false
+    end)
+    for _, lhs in ipairs({ "l", "h" }) do
+        assert.equal(0, harness.lua_get(child, "vim.fn.maparg(..., 'n', false, true).buffer or 0", { lhs }), lhs)
+    end
+    for _, plug in ipairs({ "<Plug>(FsHttpOpenFold)", "<Plug>(FsHttpCloseFold)" }) do
+        assert.equal(1, harness.lua_get(child, "vim.fn.maparg(..., 'n', false, true).expr", { plug }), plug)
+    end
+
+    harness.cmd(child, string.format("call cursor(%d, 1)", headers.first))
+    harness.cmd(child, "normal! zo")
+    harness.cmd(child, string.format("call cursor(%d, 1)", headers.first + 1))
+    harness.type_keys(child, "l")
+    harness.eventually(harness.notice_deadline_ms, "l moves one column right", function()
+        return vim.deep_equal(harness.lua_get(child, "vim.api.nvim_win_get_cursor(0)"), { headers.first + 1, 1 })
+    end)
+    harness.type_keys(child, "h")
+    harness.eventually(harness.notice_deadline_ms, "h moves one column left", function()
+        return vim.deep_equal(harness.lua_get(child, "vim.api.nvim_win_get_cursor(0)"), { headers.first + 1, 0 })
+    end)
+    harness.type_keys(child, "h")
+    harness.holds_for_settle("h in column 1 keeps the Response headers fold open", function()
+        return harness.lua_get(child, "vim.fn.foldclosed(...)", { headers.first }) == -1
+    end)
+end
+
 T["block_mark.virtual_line = false removes the virtual line at once, and the sign stays"] = function()
     local child = harness.start_child({ companion_path = harness.companion_path() })
     harness.edit(child, harness.fixture("block-marks.fsx"))
