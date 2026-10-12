@@ -41,6 +41,27 @@ let private waitForANewReadyCompanion (before: int[]) =
                 Harness.tryCompanionReady
     }
 
+let private runRecoveryBlock () =
+    async {
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "a Run request lens above each of the two blocks"
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount hangFixtureFileName)
+
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "a click on the recovery block's Run request lens"
+                (fun () -> ExTester.tryClickCodeLensByIndex recoveryLensIndex)
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "status 200, the recovery URL, and the probe body in the response viewer"
+                (fun () -> Checks.tryJsonProbeResponseRendered recoveryUrlPath)
+    }
+
 let private hangThenRestart (serverBaseUrl: string) (fixtureFileName: string) (pidsToCheck: unit -> int[]) =
     async {
         do! Checks.openFixtureAsSoleTab fixtureFileName
@@ -104,26 +125,23 @@ let private restartUnderAHang =
 
                 do! waitForANewReadyCompanion before
 
-                do!
-                    Harness.eventuallyObserved
-                        Harness.LensAppearanceDeadlineMs
-                        "a Run request lens above each of the two blocks after the Restart"
-                        (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount hangFixtureFileName)
-
-                do!
-                    Harness.eventually
-                        Harness.LensAppearanceDeadlineMs
-                        "a click on the recovery block's Run request lens"
-                        (fun () -> ExTester.tryClickCodeLensByIndex recoveryLensIndex)
-
-                do!
-                    Harness.eventually
-                        Harness.ViewerUpdateDeadlineMs
-                        "status 200, the recovery URL, and the probe body in the response viewer"
-                        (fun () -> Checks.tryJsonProbeResponseRendered recoveryUrlPath)
+                do! runRecoveryBlock ()
             }
 
         return! Harness.withTeardown "the hang release" (releaseTheHang serverBaseUrl) body
+    }
+
+let private loadFsHttpWithNoVersion () =
+    async {
+        // A stale render of an earlier Run can satisfy the `/json` probe.
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "the response viewer to be closed"
+                ExTester.tryCloseResponseViewer
+
+        do! Checks.openFixtureAsSoleTab hangFixtureFileName
+        do! runRecoveryBlock ()
     }
 
 let private workerUnderAHang =
@@ -132,6 +150,8 @@ let private workerUnderAHang =
 
         let body =
             async {
+                do! loadFsHttpWithNoVersion ()
+
                 let! _ = hangThenRestart serverBaseUrl workerFixtureFileName Harness.workerPids
 
                 do!
@@ -173,24 +193,7 @@ let private killCompanionAndOpenFixture () =
 let private restartThenRun (before: int[]) =
     async {
         do! waitForANewReadyCompanion before
-
-        do!
-            Harness.eventuallyObserved
-                Harness.LensAppearanceDeadlineMs
-                "a Run request lens above each of the two blocks after the Restart"
-                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount hangFixtureFileName)
-
-        do!
-            Harness.eventually
-                Harness.LensAppearanceDeadlineMs
-                "a click on the recovery block's Run request lens"
-                (fun () -> ExTester.tryClickCodeLensByIndex recoveryLensIndex)
-
-        do!
-            Harness.eventually
-                Harness.ViewerUpdateDeadlineMs
-                "status 200, the recovery URL, and the probe body in the response viewer"
-                (fun () -> Checks.tryJsonProbeResponseRendered recoveryUrlPath)
+        do! runRecoveryBlock ()
     }
 
 let private restartFromTheStoppedState =
