@@ -8,7 +8,7 @@ local queries_dir = root .. "/tests/nvim/treesitter"
 local fixture = harness.fixture("json-body.fsx")
 local block_line = 25
 
--- Cross-process contract for `GET /nested-json`. It must match the pretty-printed text of `UiTestServer.Server.nestedJsonBody`.
+-- Cross-process contract for `GET /nested-json`. It must match the pretty-printed `UiTestServer.Server.nestedJsonBody`.
 local pretty_json_lines = {
     "{",
     '  "name": "snorlax",',
