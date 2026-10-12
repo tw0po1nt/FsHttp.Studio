@@ -10,7 +10,7 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
 </p>
 
-A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsHttp) request from your F# script and **renders** the response (images, JSON, HTML) instead of flattening it to text.
+FsHttp.Studio runs a single [FsHttp](https://github.com/fsprojects/FsHttp) request from your F# script and **renders** the response (images, JSON, HTML) instead of flattening it to text.
 
 ## Why
 
@@ -24,28 +24,20 @@ A VSCode extension that runs a single [FsHttp](https://github.com/fsprojects/FsH
 
 FsHttp.Studio closes that gap. The request stays pure F#, and the editor renders the response richly.
 
-## What it does
+## VSCode
 
-Open a `.fsx` script that contains FsHttp requests. A **`▶ Run request` CodeLens** appears above each `http { }` block. Click the CodeLens, and:
-
-- Only *that* block runs. FsHttp.Studio blanks every other block, and then evaluates your script from the top down to the end of that block. It stops there. Nothing after the block runs. This reaches top-level, named, nested, and module-qualified blocks alike. Anything that can't be reached shows a `⊘ Cannot run: …` lens instead of failing silently.
-- A **response viewer** panel opens beside your editor. The panel renders the body, and dispatches on the body's `Content-Type`:
-  - **images** display inline,
-  - **JSON** displays as a collapsible, syntax-highlighted tree,
-  - **HTML** displays as a rendered page,
-  - all other content displays as readable, wrapped text.
-- A thin status line shows the method, the URL, a color-coded status code, the round-trip time, and the size. A collapsible **Request** section shows the method, URL, headers, and body exactly as sent, because FsHttp's transformers can rewrite any of them after you write them. Response headers stay one click away in their own collapsible section.
-- Three sections carry a **Copy** button: Request, response headers, and response body. You can paste any of them elsewhere without hand-selecting text out of a panel.
-
-FsHttp.Studio honors your `#r "nuget: FsHttp, x.y.z"` version pin exactly.
+The VSCode extension shows a `▶ Run request` CodeLens above each block, and renders the response in a panel beside the script.
 
 <p align="center">
   <img src="media/demo.gif" alt="Running a request from an .fsx script and rendering the response in a panel beside the editor" width="900">
 </p>
 
-## Install
+### Requirements
 
-**Prerequisite:** a .NET 10 SDK or newer on your `PATH`. Download the SDK from [aka.ms/dotnet/download](https://aka.ms/dotnet/download).
+- VSCode 1.66 or later.
+- A .NET 10 SDK or newer, on your `PATH` or in the `fshttpStudio.dotnetPath` setting. Download the SDK from [aka.ms/dotnet/download](https://aka.ms/dotnet/download).
+
+### Install
 
 - **VS Code Marketplace.** Use one of these:
   - Install the extension from the [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=twopoint.fshttp-studio).
@@ -54,7 +46,7 @@ FsHttp.Studio honors your `#r "nuget: FsHttp, x.y.z"` version pin exactly.
 - **Open VSX** (VSCodium, Cursor, and other editors outside the Marketplace): coming soon.
 - **Direct download (`.vsix`).** Download the latest `fshttp-studio-<version>.vsix` from the [Releases page](https://github.com/tw0po1nt/FsHttp.Studio/releases). Then install it with *Extensions: Install from VSIX…* in the Command Palette, or run `code --install-extension fshttp-studio-<version>.vsix`.
 
-### Verify your download
+#### Verify your download
 
 Each release also ships a `fshttp-studio-<version>.vsix.sha256` checksum file next to the `.vsix`. If *Install from VSIX…* fails with an extraction error such as `too many bytes in the stream`, the download is corrupt. A corporate proxy or an antivirus tool that rewrites binary downloads is the usual cause. Verify the file before you install it. The check either confirms the match or reports a bad download.
 
@@ -82,9 +74,129 @@ if ($actual -ieq $expected) { "OK" } else { "MISMATCH: download is corrupt" }
 
 A mismatch means the bytes changed before they reached your machine. Download the file again, and verify it again before you install it. A different transport often avoids the tool that corrupted the first download. For example, use `curl -L`, `Invoke-WebRequest`, or the `gh` CLI.
 
+### Use it
+
+Open a `.fsx` script that contains FsHttp requests. A **`▶ Run request` CodeLens** appears above each `http { }` block. Click the CodeLens, and:
+
+- Only *that* block runs. FsHttp.Studio blanks every other block, and then evaluates your script from the top down to the end of that block. It stops there. Nothing after the block runs. This reaches top-level, named, nested, and module-qualified blocks alike. Anything that can't be reached shows a `⊘ Cannot run: …` lens instead of failing silently.
+- A **response viewer** panel opens beside your editor. The panel renders the body, and dispatches on the body's `Content-Type`:
+  - **images** display inline,
+  - **JSON** displays as a collapsible, syntax-highlighted tree,
+  - **HTML** displays as a rendered page,
+  - all other content displays as readable, wrapped text.
+- A thin status line shows the method, the URL, a color-coded status code, the round-trip time, and the size. A collapsible **Request** section shows the method, URL, headers, and body exactly as sent, because FsHttp's transformers can rewrite any of them after you write them. Response headers stay one click away in their own collapsible section.
+- Three sections carry a **Copy** button: Request, response headers, and response body. You can paste any of them elsewhere without hand-selecting text out of a panel.
+- The Request section also carries a **Copy as curl** button. It copies a curl command that sends the same method, URL, headers, and body bytes as the run. The command works in a POSIX shell, such as bash, zsh, Git Bash, or WSL. Some requests have no curl command, and then the button is absent. An example is a request whose body the companion did not read, because a command without that body sends a different request.
+
+FsHttp.Studio honors your `#r "nuget: FsHttp, x.y.z"` version pin exactly.
+
+#### Run the request at the cursor
+
+The palette command **FsHttp.Studio: Run request at cursor** runs the innermost block that contains the cursor. When the cursor is outside every block, a quick pick lists each block of the script. A pick on a refused block shows its reason, and no run starts.
+
+The command has no default key. To bind `ctrl+alt+r`, add this entry to your `keybindings.json`:
+
+```json
+{
+  "key": "ctrl+alt+r",
+  "command": "fshttpStudio.runRequestAtCursor",
+  "when": "editorTextFocus && editorLangId == fsharp && resourceExtname == .fsx"
+}
+```
+
+The REST Client extension uses `ctrl+alt+r` for its Send Request command, so the same key works for both extensions.
+
+#### Restart the companion
+
+The palette command **FsHttp.Studio: Restart companion** stops the companion and each process that it started. Then it starts a new companion. Use it to end a run that does not end, to use a .NET SDK that you installed, or to apply a new `fshttpStudio.dotnetPath`. A run in progress ends with a runtime error that says that the companion restarted.
+
+When the companion stops, a toast shows a **Restart companion** button. A click on the status line text in the status bar also restarts a stopped companion. FsHttp.Studio never restarts the companion by itself.
+
+## Neovim
+
+The Neovim client shows a block mark above each block, and shows the response in a buffer beside the script.
+
+<p align="center">
+  <img src="media/demo-nvim.gif" alt="Running a request from an .fsx script in Neovim and showing the response in a buffer beside the script" width="900">
+</p>
+
+### Requirements
+
+- Neovim 0.11 or later.
+- A .NET 10 SDK or newer, on your `PATH` or in the `dotnet_path` option. Download the SDK from [aka.ms/dotnet/download](https://aka.ms/dotnet/download).
+- `curl`, `tar`, and a checksum tool (`sha256sum` on Linux, `shasum` on macOS, or `certutil` on Windows). The client uses them to download the companion from the GitHub release of its own version.
+- Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) and a terminal that can show images, for an image body. [lualine.nvim](https://github.com/nvim-lualine/lualine.nvim), for the Status line text in the statusline.
+
+### Install
+
+#### LazyVim
+
+Add this file to your configuration, for example as `lua/plugins/fshttp.lua`:
+
+```lua
+return {
+    {
+        "tw0po1nt/FsHttp.Studio",
+        version = "*",
+        lazy = false,
+        opts = {},
+        keys = {
+            { "<leader>rr", "<Plug>(FsHttpRun)", ft = "fsharp", desc = "FsHttp: run the request at the cursor" },
+        },
+    },
+}
+```
+
+`version = "*"` installs the latest release, and skips each Beta. lazy.nvim downloads the companion at install and at each update. The `keys` entry maps `<leader>rr` in `fsharp` buffers only. The client binds no key by itself, so choose a key that is free in your configuration.
+
+#### `vim.pack` (Neovim 0.12 and later)
+
+```lua
+vim.pack.add({
+    { src = "https://github.com/tw0po1nt/FsHttp.Studio", version = "v0.3.0" },
+})
+
+vim.api.nvim_create_autocmd("FileType", {
+    pattern = "fsharp",
+    callback = function(args)
+        vim.keymap.set("n", "<leader>rr", "<Plug>(FsHttpRun)", { buffer = args.buf })
+    end,
+})
+```
+
+Pin the tag of a release, and change the tag to update. A version range also matches a Beta tag. A Beta client looks for a release that does not exist yet, so it cannot download the companion. The first `.fsx` buffer downloads the companion in the background. The project tests the lazy.nvim route only.
+
+### Use it
+
+Open a `.fsx` script that contains FsHttp requests. A block mark appears above each `http { }` block: a virtual line and a sign. It shows `▶ Run request`, or `⊘ Cannot run: …` with the reason. Put the cursor in a block, run `:FsHttp run`, and:
+
+- Only *that* block runs, the same as in VSCode.
+- The **response buffer** opens in a split beside your script. The buffer shows the body by its `Content-Type`:
+  - **images** display through snacks.nvim, when your terminal can show images,
+  - **JSON**, **XML**, and **HTML** get highlights and folds from tree-sitter,
+  - binary content displays as a hex view,
+  - all other content displays as text.
+- The winbar shows the status code, the times, the size, the method, and the URL. The buffer has three folds: Request, Response headers, and Body. `yr`, `yh`, and `yb` yank them. `g?` lists the keys of the buffer.
+- `yc`, or `:FsHttp yank curl`, yanks a curl command that sends the same request as the run.
+- `:FsHttp open` opens the body in your browser or image viewer.
+
+`:help fshttp` gives each command, key, and option, and `:checkhealth fshttp` checks your setup.
+
+#### Run the request at the cursor
+
+`:FsHttp run` runs the innermost block that contains the cursor. When the cursor is outside every block, a picker lists each block of the script. A pick on a refused block shows its reason, and no run starts.
+
+The client binds no key. Each install snippet above maps `<leader>rr` to `<Plug>(FsHttpRun)` in `fsharp` buffers.
+
+#### Restart the companion
+
+`:FsHttp restart` stops the companion and each process that it started. Then it starts a new companion. Use it to end a run that does not end, to try a failed download again, or to apply a new `dotnet_path`. A run in progress ends with a runtime error that says that the companion restarted.
+
+With lualine.nvim, a click on the status line text restarts a stopped companion. The client never restarts the companion by itself.
+
 ## Try it
 
-Create a `demo.fsx` file. Paste the code below into it. Then click the **`▶ Run request`** CodeLens above any block.
+Create a `demo.fsx` file. Paste the code below into it. Then click the **`▶ Run request`** CodeLens above any block in VSCode. In Neovim, put the cursor in a block and run `:FsHttp run`.
 
 Each block uses a different `Content-Type`, mostly through the [PokéAPI](https://pokeapi.co/), so you can see every renderer:
 
@@ -118,17 +230,19 @@ http {
 
 ## How it works
 
-Two processes, one protocol:
+One companion, one protocol, two Clients:
 
-- The **extension host**, written in F#, compiled with Fable, owns the CodeLens, the response viewer, and the shell-agnostic **renderer core** (`Content-Type → DOM`).
-- The **companion**, a long-lived .NET process that hosts an FSharp.Compiler.Service interactive session, owns all F# parsing and evaluation. It locates blocks, evaluates the block you clicked, and extracts the response.
-- The two sides exchange tagged **envelopes** across the companion's process boundary. That boundary is editor-agnostic, so a different editor must reimplement only the extension host. If enough people want it, FsHttp.Studio can support editors that are not based on VSCode.
+- The **companion**, a long-lived .NET process that hosts an FSharp.Compiler.Service interactive session, owns all F# parsing and evaluation. It locates blocks, evaluates the block you target, and extracts the response.
+- A **Client** runs in the editor, starts the companion, and shows the result of each Run. FsHttp.Studio has two:
+  - The **extension host** of the VSCode extension, written in F# and compiled with Fable, owns the CodeLens, the response viewer, and the shell-agnostic **renderer core** (`Content-Type → DOM`).
+  - The **Neovim client**, written in plain Lua, owns the Block marks, the Response buffer, and the `:FsHttp` command.
+- A Client and the companion exchange tagged **envelopes** across the companion's process boundary. That boundary is editor-agnostic, so the Neovim client uses the same companion as the extension. A Client for another editor needs no change to the companion.
 
-The companion extracts the response by *reflection* instead of a direct reference to FsHttp, so it never overrides the user's version pin. The extension wires the whole chain end-to-end: block → structured response → rendered image.
+The companion extracts the response by *reflection* instead of a direct reference to FsHttp, so it never overrides the user's version pin.
 
-The companion runs on the **.NET 10 SDK or newer**. FsHttp.Studio detects `dotnet` on your `PATH` automatically. If your SDK is in another location, set the `fshttpStudio.dotnetPath` setting to your `dotnet` executable.
+The companion runs on the **.NET 10 SDK or newer**. FsHttp.Studio detects `dotnet` on your `PATH` automatically. If your SDK is in another location, set `fshttpStudio.dotnetPath` in VSCode, or `dotnet_path` in Neovim, to your `dotnet` executable.
 
-A Run is bounded by `fshttpStudio.requestTimeoutMs` (30 seconds by default), which covers the connection, the request, and the response download. A stall past that bound fails loudly instead of hanging. Set it to `0` to wait as long as `HttpClient` allows.
+A Run is bounded by `fshttpStudio.requestTimeoutMs` in VSCode, or `request_timeout_ms` in Neovim (30 seconds by default). The bound covers the connection, the request, and the response download. A stall past that bound fails loudly instead of hanging. Set it to `0` to wait as long as `HttpClient` allows.
 
 [`docs/adr/`](./docs/adr/) records the architectural decisions and their trade-offs. [`GLOSSARY.md`](./GLOSSARY.md) defines the domain vocabulary.
 
@@ -138,12 +252,11 @@ A Run is bounded by `fshttpStudio.requestTimeoutMs` (30 seconds by default), whi
 - A **session model**: reusing an FSI session across Runs, request chaining for a block that needs the *response* of an earlier request (such as an auth token), and sending a block to a specific existing session.
 - **Cancel** a Run in progress.
 - **Save a response to a file**, for a large or binary body.
-- **Copy as curl**, building on the request-as-sent view.
 - A **first-run walkthrough**.
 - A **copy button on the error render**.
 - **`.fs`-in-a-project** execution. FsHttp.Studio supports `.fsx` only. Blocks in compiled `.fs` files show no Run affordance, by design.
 - The **inline-card** presentation, which renders under the block instead of in a panel.
-- Support for other editors.
+- Clients for more editors.
 
 Feature requests welcome!
 
