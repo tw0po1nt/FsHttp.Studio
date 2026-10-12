@@ -94,7 +94,10 @@ M.parsers = {
         degraded = "A JSON body shows pretty-printed, with folds from its structure and no highlights.",
     },
     { language = "xml", degraded = "An XML body shows as plain text, with no highlights and no folds." },
-    { language = "html", degraded = "An HTML body shows as plain text, with no highlights and no folds." },
+    {
+        language = "html",
+        degraded = "An HTML body shows indented, with folds from its structure and no highlights.",
+    },
 }
 
 ---@param parser fshttp.HealthParser

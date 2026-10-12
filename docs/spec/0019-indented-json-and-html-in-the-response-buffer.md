@@ -78,6 +78,9 @@ long line, and the source of a large page is hard to read.
   `<h1>Snorlax</h1>` or `<p>Sleeps <b>a lot</b>.</p>`.
 - A block element that contains a block element puts its open tag and its close tag on lines of
   their own. Its content goes one step deeper.
+- An inline element that contains a block element gets the line rules of a block element, for
+  example `<a href="/x"><div>card</div></a>`. For this rule, a comment, the doctype, and a raw text
+  element are block elements.
 - The match on an element name ignores letter case.
 
 Example:
@@ -106,6 +109,8 @@ Example:
   added line break and no indent.
 - **A comment** goes on a line of its own, with its text unchanged.
 - **The doctype** goes on a line of its own, with its text unchanged.
+- **A processing instruction**, such as `<?xml version="1.0"?>`, goes on a line of its own, with
+  its text unchanged.
 - **A `<![CDATA[` section** stays unchanged, as text.
 - **Character references** such as `&amp;` stay unchanged.
 
@@ -115,6 +120,9 @@ Example:
   space, a tab, a carriage return, or a line feed.
 - Text that is only whitespace, between two tags that start or end a line, is dropped.
 - Text at the start or at the end of a line loses its leading or trailing space.
+- In a block element on one line, the text directly after the open tag loses its leading space.
+  The text directly before the close tag loses its trailing space. Thus `<li> snore </li>` gives
+  `<li>snore</li>`, and a body that has an indent already gives the same lines as the minified body.
 - A long line stays one line. The window sets `wrap`, `linebreak`, and `breakindent`.
 
 ### 6. HTML: a structure that does not balance
@@ -126,7 +134,9 @@ The indenter is tolerant, and it always gives indented text.
   depth.
 - A close tag closes back to its matching open tag. That also closes each open element between
   them.
-- A close tag with no matching open tag stays in the output, and it changes no depth.
+- A close tag with no matching open tag stays in the output, and it changes no depth. A stray
+  close tag of a block element goes on a line of its own. A stray close tag of an inline element
+  stays in its line of text.
 - An open element with no close tag stays open until the close tag of a parent closes it, or until
   the body ends. Thus an unclosed `<li>` shows one step too deep. This is a known limit.
 

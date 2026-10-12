@@ -201,36 +201,32 @@ local function parse(text)
     return root
 end
 
+local is_block
+
+---@param element fshttp.HtmlNode
+---@return boolean
+local function has_block_child(element)
+    for _, child in ipairs(element.children or {}) do
+        if is_block(child) then
+            return true
+        end
+    end
+    return false
+end
+
 ---@param node fshttp.HtmlNode
 ---@return boolean
-local function is_block(node)
+is_block = function(node)
     if node.block == nil then
         if node.kind == "text" or node.kind == "cdata" then
             node.block = false
         elseif node.kind == "own_line" or node.kind == "raw" or not inline_elements[node.name] then
             node.block = true
         else
-            node.block = false
-            for _, child in ipairs(node.children or {}) do
-                if is_block(child) then
-                    node.block = true
-                    break
-                end
-            end
+            node.block = has_block_child(node)
         end
     end
     return node.block
-end
-
----@param element fshttp.HtmlNode
----@return boolean
-local function has_block_child(element)
-    for _, child in ipairs(element.children) do
-        if is_block(child) then
-            return true
-        end
-    end
-    return false
 end
 
 ---@param node fshttp.HtmlNode a node with no block node inside it
