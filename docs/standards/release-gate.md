@@ -165,14 +165,21 @@ defect in the release URL, or in the redirect of GitHub, ships uncaught.
 stub in place of snacks.nvim. The stub records each image placement and the bytes of the image
 file. A defect that occurs only in the drawn image ships uncaught.
 
-**The suite Budgets come from few CI runs.** The values are 60 s for Harness setup and 30 s for
-each Check on each system. The suite Budget is the slowest measured suite of the system plus about
-40%. The slowest Linux suite took 181.6 s, so the Linux Budget is 255 s. The slowest macOS suite
-took 189.7 s, so the macOS Budget is 265 s. These values come from 12 runs of `nvim-tests.yml` on
-2026-10-09. The Windows suite took 223.1 s on the first passing run, so the Windows Budget is 315 s.
-One run is a small sample, so a slow Windows runner can exceed that Budget. `harness.lua` has one
-row of Budgets for each operating system. Each leg writes its timing table to the job summary. The suite Budget starts at the first Check, so it leaves out Harness setup, as in the UI
-suite.
+**The suite Budgets come from two days of CI runs.** The values are 60 s for Harness setup and
+30 s for each Check on each system. The suite Budget is the slowest measured suite of the system
+plus about 40%, rounded up to the next 5 s. These values come from 29 runs of `nvim-tests.yml` on
+2026-10-11 and 2026-10-12:
+
+- Linux: the slowest suite took 227 s, so the Budget is 320 s. The Neovim 0.11 leg and the pinned
+  stable leg share one row, so the slower leg sets the value.
+- macOS: the slowest suite took 254 s, so the Budget is 360 s.
+- Windows: the slowest suite took 342 s, so the Budget is 480 s. That attempt ran on #362, and the
+  old Budget of 315 s failed it.
+
+`harness.lua` has one row of Budgets for each operating system. Each leg writes its timing table to
+the job summary. The suite Budget starts at the first Check, so it leaves out Harness setup, as in
+the UI suite. When a Check joins the suite, measure the suite on CI again, and set each Budget by
+the same rule.
 
 **The suites test lazy.nvim only.** The `vim.pack` route gets no Check.
 
