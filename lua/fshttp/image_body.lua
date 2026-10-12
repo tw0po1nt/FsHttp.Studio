@@ -2,6 +2,10 @@ local M = {}
 
 M.snacks_missing_reason = "snacks.nvim is not installed"
 
+M.placeholders_missing_reason = "the terminal does not support Unicode placeholders"
+
+M.imagemagick_missing_reason = "ImageMagick is not installed"
+
 -- snacks.nvim needs the file extension to open an image file.
 local extensions = {
     ["image/png"] = "png",

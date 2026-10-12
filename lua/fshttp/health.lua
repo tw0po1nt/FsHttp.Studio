@@ -55,13 +55,25 @@ local function check_download_tools(config)
 end
 
 local function check_images()
-    local reason = require("fshttp.image_placement").unsupported_reason("image/png")
+    local reason = require("fshttp.image_placement").snacks_reason("image/png")
     if reason == nil then
         vim.health.ok(health_rule.images_on)
     elseif reason == image_body.images_off_reason then
         vim.health.ok(health_rule.images_off)
     else
         vim.health.warn(health_rule.images_missing(reason), health_rule.images_fix)
+    end
+end
+
+---@param config fshttp.Config
+local function check_imagemagick(config)
+    local path = require("fshttp.image_placement").imagemagick_path()
+    if not config.response_buffer.images then
+        vim.health.ok(health_rule.imagemagick_off)
+    elseif path then
+        vim.health.ok(health_rule.tool_found("ImageMagick", path))
+    else
+        vim.health.warn(health_rule.imagemagick_missing, health_rule.imagemagick_fix)
     end
 end
 
@@ -128,6 +140,7 @@ function M.check()
 
     vim.health.start("Optional items")
     check_images()
+    check_imagemagick(config)
     check_parsers()
 
     vim.health.start("Companion")

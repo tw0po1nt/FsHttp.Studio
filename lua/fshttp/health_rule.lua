@@ -127,11 +127,21 @@ function M.images_missing(reason)
 end
 
 M.images_fix = {
-    "Install snacks.nvim, and use a terminal that its image module supports.",
+    "Install snacks.nvim, and use a terminal that supports Unicode placeholders, such as kitty or Ghostty.",
     "Run :FsHttp open to show an image body in the system viewer.",
 }
 
 M.images_off = "Images are turned off (response_buffer.images = false)."
+
+M.imagemagick_missing = "ImageMagick is not on PATH (magick or identify). snacks.nvim needs it to read an image, "
+    .. "so an image body shows its pixel size and no image."
+
+M.imagemagick_fix = {
+    "Install ImageMagick.",
+    "Run :FsHttp open to show an image body in the system viewer.",
+}
+
+M.imagemagick_off = "Images are turned off (response_buffer.images = false), so the client does not need ImageMagick."
 
 ---@param companion_version string
 ---@param client_version string

@@ -89,6 +89,26 @@ T["no snacks.nvim gives a WARN that names what degrades"] = function()
     assert.equal(true, #images.advice > 0, vim.inspect(images))
 end
 
+T["no ImageMagick gives a WARN that names what degrades"] = function()
+    local child = harness.start_child({ companion_path = harness.companion_path() })
+    local empty = vim.fn.tempname() .. "-empty"
+    vim.fn.mkdir(empty, "p")
+    harness.lua_get(child, [[(function(empty) vim.env.PATH = empty return true end)(...)]], { empty })
+
+    local items = harness.checkhealth(child)
+
+    local imagemagick = item_with(
+        items,
+        "Optional items",
+        "ImageMagick is not on PATH (magick or identify). snacks.nvim needs it to read an image, so an image body shows its pixel size and no image."
+    )
+    assert.equal("WARNING", imagemagick.level)
+    assert.same(
+        { "Install ImageMagick.", "Run :FsHttp open to show an image body in the system viewer." },
+        imagemagick.advice
+    )
+end
+
 T["a dotnet_path that names a missing file gives an ERROR with the fix, and the live state line is an ERROR"] = function()
     local missing = harness.fixture("missing/dotnet")
     local child = harness.start_child({ companion_path = harness.companion_path(), dotnet_path = missing })
@@ -151,7 +171,7 @@ T["a bad value gives an ERROR line, and an unknown key gives a WARN line, in the
     assert.equal("FsHttp.Studio: setup() has no option theme. The client ignores it.", warnings[1].text)
 end
 
-T["response_buffer.images = false gives an OK image item that states images are turned off"] = function()
+T["response_buffer.images = false gives an OK image item and an OK ImageMagick item that state images are turned off"] = function()
     local child =
         harness.start_child({ companion_path = harness.companion_path(), response_buffer = { images = false } })
 
@@ -159,6 +179,12 @@ T["response_buffer.images = false gives an OK image item that states images are 
 
     local images = item_with(items, "Optional items", "Images are turned off (response_buffer.images = false).")
     assert.equal("OK", images.level)
+    local imagemagick = item_with(
+        items,
+        "Optional items",
+        "Images are turned off (response_buffer.images = false), so the client does not need ImageMagick."
+    )
+    assert.equal("OK", imagemagick.level)
 end
 
 return T
