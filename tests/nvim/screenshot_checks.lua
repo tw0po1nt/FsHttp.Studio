@@ -153,7 +153,7 @@ T["a JSON body with the parser"] = function()
 
     open_script(child, harness.fixture("json-body.fsx"), block_line)
     run_block(child, block_line, "the JSON body", function(snapshot)
-        return has_line(snapshot.lines, '  "speed": 30}}')
+        return has_line(snapshot.lines, '    "speed": 30')
     end)
 
     expect_screenshot(child, "json-body")

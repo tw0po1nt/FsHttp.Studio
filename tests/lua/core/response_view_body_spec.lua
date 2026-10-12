@@ -45,23 +45,24 @@ describe("the Body of fshttp.response_view", function()
     end
 
     local nested = '{"name":"snorlax","moves":["rest","snore"],"stats":{"hp":160}}'
+    local nested_pretty = {
+        "{",
+        '  "name": "snorlax",',
+        '  "moves": [',
+        '    "rest",',
+        '    "snore"',
+        "  ],",
+        '  "stats": {',
+        '    "hp": 160',
+        "  }",
+        "}",
+    }
 
     describe("with no parser", function()
         it("pretty-prints a JSON body, with a fold for each object and each array", function()
             local view = response_view.result(result("application/json; charset=utf-8", nested), no_parser)
             local lines, title = body_lines(view)
-            assert.same({
-                "{",
-                '  "name": "snorlax",',
-                '  "moves": [',
-                '    "rest",',
-                '    "snore"',
-                "  ],",
-                '  "stats": {',
-                '    "hp": 160',
-                "  }",
-                "}",
-            }, lines)
+            assert.same(nested_pretty, lines)
             assert.same({
                 { first = title + 3, last = title + 6, closed = false },
                 { first = title + 7, last = title + 9, closed = false },
@@ -123,25 +124,50 @@ describe("the Body of fshttp.response_view", function()
             end
         end)
 
-        it("keeps the exact bytes, and puts the folds and the highlights of the parser on the body lines", function()
-            local body = '{"name":\n  "snorlax"}'
+        it(
+            "gives the pretty-printed JSON text to the parser, and puts its folds and highlights on the body lines",
+            function()
+                local asked
+                local view = response_view.result(result("application/json", nested), function(language, text)
+                    asked = { language, text }
+                    return {
+                        highlights = { { line = 4, first_col = 4, last_col = 10, group = "@string.json" } },
+                        folds = { { first = 3, last = 6 } },
+                    }
+                end)
+                local lines, title = body_lines(view)
+                assert.same({ "json", table.concat(nested_pretty, "\n") }, asked)
+                assert.same(nested_pretty, lines)
+                assert.same({
+                    { first = title + 3, last = title + 6, closed = false },
+                    { first = title, last = title + 10, closed = false },
+                }, body_folds(view, title))
+                assert.same(
+                    { line = title + 4, first_col = 4, last_col = 10, group = "@string.json" },
+                    view.highlights[#view.highlights]
+                )
+            end
+        )
+
+        it("gives the parser the exact bytes of a JSON body that does not parse, and shows those bytes", function()
+            local body = '{"a":1,\n"b":'
             local asked
             local view = response_view.result(result("application/json", body), function(language, text)
                 asked = { language, text }
                 return {
-                    highlights = { { line = 2, first_col = 2, last_col = 11, group = "@string.json" } },
+                    highlights = { { line = 2, first_col = 0, last_col = 3, group = "@property.json" } },
                     folds = { { first = 1, last = 2 } },
                 }
             end)
             local lines, title = body_lines(view)
             assert.same({ "json", body }, asked)
-            assert.same({ '{"name":', '  "snorlax"}' }, lines)
+            assert.same({ '{"a":1,', '"b":' }, lines)
             assert.same({
                 { first = title + 1, last = title + 2, closed = false },
                 { first = title, last = title + 2, closed = false },
             }, body_folds(view, title))
             assert.same(
-                { line = title + 2, first_col = 2, last_col = 11, group = "@string.json" },
+                { line = title + 2, first_col = 0, last_col = 3, group = "@property.json" },
                 view.highlights[#view.highlights]
             )
         end)
