@@ -8,15 +8,19 @@ local queries_dir = root .. "/tests/nvim/treesitter"
 local fixture = harness.fixture("json-body.fsx")
 local block_line = 25
 
--- Cross-process contract for `GET /nested-json`. It must match `UiTestServer.Server.nestedJsonBody`.
-local nested_json_lines = {
-    '{"name": "snorlax",',
-    ' "moves": [',
-    '  "rest",',
-    '  "snore"',
-    " ],",
-    ' "stats": {"hp": 160,',
-    '  "speed": 30}}',
+-- Cross-process contract for `GET /nested-json`. It must match the pretty-printed text of `UiTestServer.Server.nestedJsonBody`.
+local pretty_json_lines = {
+    "{",
+    '  "name": "snorlax",',
+    '  "moves": [',
+    '    "rest",',
+    '    "snore"',
+    "  ],",
+    '  "stats": {',
+    '    "hp": 160,',
+    '    "speed": 30',
+    "  }",
+    "}",
 }
 
 ---@return string
@@ -122,25 +126,13 @@ T["a JSON body with no parser shows pretty-printed, with folds from its structur
         "the child Neovim has no JSON parser"
     )
 
-    local body = run_json_block(child, {
-        "{",
-        '  "name": "snorlax",',
-        '  "moves": [',
-        '    "rest",',
-        '    "snore"',
-        "  ],",
-        '  "stats": {',
-        '    "hp": 160,',
-        '    "speed": 30',
-        "  }",
-        "}",
-    })
+    local body = run_json_block(child, pretty_json_lines)
 
     assert.same({ "1-11", "3-6", "7-10" }, body.folds)
     assert.same({}, body.highlights)
 end
 
-T["a JSON body with the parser keeps its bytes, with tree-sitter folds and highlights"] = function()
+T["a JSON body with the parser shows pretty-printed, with tree-sitter folds and highlights"] = function()
     local child = harness.start_child({ companion_path = harness.companion_path() })
     harness.lua_get(
         child,
@@ -151,11 +143,11 @@ T["a JSON body with the parser keeps its bytes, with tree-sitter folds and highl
         { json_parser_path(), queries_dir }
     )
 
-    local body = run_json_block(child, nested_json_lines)
+    local body = run_json_block(child, pretty_json_lines)
 
-    assert.same({ "1-7", "2-5", "6-7" }, body.folds)
-    assert.equal(true, vim.tbl_contains(body.highlights, "1:1-7 @property.json"), vim.inspect(body.highlights))
-    assert.equal(true, vim.tbl_contains(body.highlights, "6:17-20 @number.json"), vim.inspect(body.highlights))
+    assert.same({ "1-11", "3-6", "7-10" }, body.folds)
+    assert.equal(true, vim.tbl_contains(body.highlights, "2:2-8 @property.json"), vim.inspect(body.highlights))
+    assert.equal(true, vim.tbl_contains(body.highlights, "9:13-15 @number.json"), vim.inspect(body.highlights))
 end
 
 return T

@@ -252,15 +252,16 @@ end
 local function add_body(view, content_type, body, body_syntax)
     local offset = #view.lines
     local language = body_language(content_type)
-    local syntax = language and body_syntax and body_syntax(language, body)
     local text, folds, highlights = body, {}, {}
-    if syntax then
-        folds, highlights = syntax.folds, syntax.highlights
-    elseif language == "json" then
+    if language == "json" then
         local pretty, pretty_folds = json.pretty_print(body)
         if pretty and pretty_folds then
             text, folds = pretty, pretty_folds
         end
+    end
+    local syntax = language and body_syntax and body_syntax(language, text)
+    if syntax then
+        folds, highlights = syntax.folds, syntax.highlights
     end
     add_text(view, text)
     for _, fold in ipairs(folds) do

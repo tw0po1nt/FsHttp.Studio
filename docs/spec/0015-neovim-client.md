@@ -287,8 +287,7 @@ Tickets: [Where does the Neovim client show a Run's result?](https://github.com/
 - A Run opens the Response buffer in a split (by default on the right). If a window already shows
   the buffer, the Run reuses that window. The cursor stays in the script. A closed window opens
   again on the next Run.
-- The window sets `wrap`, `linebreak`, and `breakindent`. The buffer keeps the exact bytes of the
-  body. The client has no HTML formatter.
+- The window sets `wrap`, `linebreak`, and `breakindent`. The client has no HTML formatter.
 - While a Run is in progress, the buffer shows "Running… Ns".
 
 The layout came from the prototype in the tag `archive/prototype/response-buffer` (variant D):
@@ -308,9 +307,10 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
   the start of the URL (`%<`).
 - **The buffer has three folds:** Request, Response headers, and Body. Request and Response
   headers start closed. Body starts open. A closed fold shows its title and its line count.
-- **Body text.** For a JSON, XML, or HTML body, the client parses the body region with the
-  tree-sitter parser for that language, for highlights and folds. With no parser, a JSON body shows
-  as pretty-printed text, with folds from the JSON structure.
+- **Body text.** The client pretty-prints a JSON body first. A JSON body that does not parse
+  shows its exact bytes. Then the client parses the text of a JSON, XML, or HTML body with the
+  tree-sitter parser for that language. The parser gives the highlights and the folds. With no
+  parser, a pretty-printed JSON body gets folds from the JSON structure.
 - **Binary body.** The buffer ports the hex view and the reason for a Captured body.
 - **Image body.** The client writes the bytes to a temporary file and calls the image placement of
   snacks.nvim, when snacks.nvim is present and the terminal supports it. The line below the Body
@@ -623,7 +623,8 @@ Ticket: [What gates a release of the Neovim client?](https://github.com/tw0po1nt
   meta.
 - An image body without snacks.nvim shows the fallback line. With a stubbed snacks.nvim, the client
   calls the image placement with the temporary file.
-- A JSON body gets tree-sitter folds with the parser, and structure folds without it.
+- A JSON body shows pretty-printed. It gets tree-sitter folds and highlights with the parser, and
+  structure folds without it.
 - The lualine entry: `nvim_eval_statusline` shows the Status line text.
 - `:FsHttp status` echoes the text in a script, and the state row in a buffer that is not F#.
 - `:checkhealth fshttp` reports no ERROR for a valid setup, an ERROR for a missing `dotnet_path`,
