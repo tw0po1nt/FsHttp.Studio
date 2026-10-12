@@ -35,6 +35,13 @@ let tests =
               Expect.isEmpty (notReadyLenses Ready remembered) "Ready locates afresh"
           }
 
+          test "a click on the Status line text restarts in the Stopped state and in SdkNotFound only" {
+              Expect.equal (statusClick Stopped) RestartsCompanion "Stopped"
+              Expect.equal (statusClick SdkNotFound) RestartsCompanion "SdkNotFound"
+              Expect.equal (statusClick Starting) StatusDoesNothing "a click never ends a start"
+              Expect.equal (statusClick Ready) StatusDoesNothing "a click never ends a Run"
+          }
+
           test "a command during the stop gives the restarting notice and starts no second stop" {
               let afterFirst, first = Restart.onCommand Restart.initial
               let afterSecond, second = Restart.onCommand afterFirst

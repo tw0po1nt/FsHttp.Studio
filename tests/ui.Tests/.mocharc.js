@@ -5,7 +5,7 @@ module.exports = {
   // `describe is not defined`, so this setting is mandatory rather than a restatement of a default.
   ui: "bdd",
   // The Mocha per-test timeout must sit above the largest harness deadline
-  // (PostReloadRecoveryDeadlineMs, 60 s). Mocha's 2 s default would kill a waiting check with an
+  // (CompanionStartDeadlineMs, 60 s). Mocha's 2 s default would kill a waiting check with an
   // illegible timeout before `eventually` ever reported which surface never arrived.
   timeout: 120000,
 };

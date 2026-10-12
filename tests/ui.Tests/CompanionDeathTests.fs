@@ -54,13 +54,6 @@ let private tryStoppedMessageRendered () =
 let private tryStoppedLensAboveEachBlock () =
     Checks.tryOnlyLensTitle blockCount Refusals.companionStoppedLensTitle
 
-/// A companion process that is neither absent nor one of the killed ones.
-let private tryFreshCompanion (killed: int[]) =
-    async {
-        let pids = Harness.companionPids ()
-        return pids |> Array.exists (fun pid -> not (Array.contains pid killed))
-    }
-
 /// The recovery Run's success, read on the same channels the core path proves a `/json` Run on.
 let private tryRecoveryResponseRendered () =
     Checks.tryJsonProbeResponseRendered recoveryUrlPath
@@ -163,15 +156,13 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
                 ExTester.tryClickWarningNotificationButton Harness.companionStoppedText Refusals.restartButtonLabel)
 
         do!
-            Harness.eventually
-                Harness.PostReloadRecoveryDeadlineMs
-                "a fresh companion process after the Restart"
-                (fun () -> tryFreshCompanion killed)
+            Harness.eventually Harness.CompanionStartDeadlineMs "a new companion process after the Restart" (fun () ->
+                Harness.tryNewCompanion killed)
 
         do!
             Harness.eventually
-                Harness.PostReloadRecoveryDeadlineMs
-                "the status bar reporting the companion ready after the Restart"
+                Harness.CompanionStartDeadlineMs
+                "the Status line text reporting the companion ready after the Restart"
                 Harness.tryCompanionReady
 
         do! Checks.openFixtureAsSoleTab fixtureFileName
@@ -212,5 +203,5 @@ let tests =
     testList
         "companion death is visible and recoverable"
         [ testCaseAsync
-              "viewer leaves Running… for the stopped message, and the toast button recovers"
+              "viewer leaves Running… for the stopped message, and the toast button restarts the companion"
               companionDeathIsVisibleAndRecoverable ]

@@ -153,15 +153,18 @@ type IWindow =
 [<Import("window", "vscode")>]
 let window: IWindow = jsNative
 
+/// Runs `action` when the user clicks the button `label` on the toast of `shown`.
+let onButton (shown: JS.Promise<obj>) (label: string) (action: unit -> unit) =
+    Js.onResolved shown (fun chosen ->
+        if unbox<string> chosen = label then
+            action ())
+
 type IUri =
     abstract joinPath: baseUri: obj * [<ParamArray>] pathSegments: string[] -> obj
     abstract parse: value: string -> obj
 
 [<Import("Uri", "vscode")>]
 let uri: IUri = jsNative
-
-[<Literal>]
-let restartCommandId = "fshttpStudio.restartCompanion"
 
 /// vscode.StatusBarAlignment.Left
 let statusBarAlignmentLeft = 1.0

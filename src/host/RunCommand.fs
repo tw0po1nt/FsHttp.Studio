@@ -133,11 +133,10 @@ let private showRefusalToast (code: string) =
     window.showWarningMessage ((Refusals.forCode code).Detail) |> ignore
 
 let private showCompanionStoppedToast () =
-    onResolved
+    onButton
         (window.showWarningMessage ((Refusals.companionStopped Refusals.VSCode).Detail, Refusals.restartButtonLabel))
-        (fun chosen ->
-            if unbox<string> chosen = Refusals.restartButtonLabel then
-                commands.executeCommand (restartCommandId, createObj []) |> ignore)
+        Refusals.restartButtonLabel
+        (fun () -> commands.executeCommand (Restart.commandId, createObj []) |> ignore)
 
 /// Registers the command that a `▶ Run request` CodeLens invokes. The caller passes the same
 /// `TextDocument` that the lens was computed against, and the block's 0-based index into that

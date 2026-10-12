@@ -86,9 +86,8 @@ let activate (context: ExtensionContext) =
                 + " to run requests, but found none. Install one, "
                 + "or set the `fshttpStudio.dotnetPath` setting to your `dotnet` executable."
 
-        onResolved (window.showWarningMessage (message, getSdkLabel)) (fun chosen ->
-            if unbox<string> chosen = getSdkLabel then
-                commands.executeCommand ("vscode.open", uri.parse dotnetDownloadUrl) |> ignore)
+        onButton (window.showWarningMessage (message, getSdkLabel)) getSdkLabel (fun () ->
+            commands.executeCommand ("vscode.open", uri.parse dotnetDownloadUrl) |> ignore)
 
     let lastDotnetPathOverride: string option ref = ref None
 
@@ -165,7 +164,7 @@ let activate (context: ExtensionContext) =
     let isCompanionRunning () =
         match currentState.Value with
         | Starting
-        | Ready -> companionHandle.IsSome
+        | Ready -> true
         | SdkNotFound
         | Stopped -> false
 
@@ -173,16 +172,15 @@ let activate (context: ExtensionContext) =
         box (
             workspace.onDidChangeConfiguration (fun change ->
                 if change.affectsConfiguration "fshttpStudio.dotnetPath" && isCompanionRunning () then
-                    onResolved
+                    onButton
                         (window.showInformationMessage (Refusals.dotnetPathChanged, Refusals.restartButtonLabel))
-                        (fun chosen ->
-                            if unbox<string> chosen = Refusals.restartButtonLabel then
-                                restartCompanion ()))
+                        Refusals.restartButtonLabel
+                        restartCompanion)
         )
     )
 
     context.subscriptions.Add(
-        commands.registerCommand (restartCommandId, System.Action<obj, obj>(fun _ _ -> restartCompanion ()))
+        commands.registerCommand (Restart.commandId, System.Action<obj, obj>(fun _ _ -> restartCompanion ()))
     )
 
     startSequence session.Epoch

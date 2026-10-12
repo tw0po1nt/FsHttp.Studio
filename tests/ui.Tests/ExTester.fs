@@ -2,12 +2,11 @@
 // instead of calling vscode-extension-tester directly.
 //
 // Bindings land when a check needs them: Harness setup owns the workbench tells, the core-path
-// check owns CodeLens titles and clicks plus the viewer-beside-the-editor tell, product checks
-// that read the response viewer share the DOM read, and the companion-death check owns the window
-// reload. Every editor-facing binding is scoped to an editor group, because the viewer takes
-// focus when it opens and an unscoped page object would resolve the wrong column's tab. Each
-// binding reads a channel a person reads, the workbench UI or the webview DOM, and adds no
-// seam to the shipping extension.
+// check owns CodeLens titles and clicks plus the viewer-beside-the-editor tell, and product checks
+// that read the response viewer share the DOM read. Every editor-facing binding is scoped to an
+// editor group, because the viewer takes focus when it opens and an unscoped page object would
+// resolve the wrong column's tab. Each binding reads a channel a person reads, the workbench UI or
+// the webview DOM, and adds no seam to the shipping extension.
 module ExTester
 
 open Fable.Core
@@ -81,7 +80,7 @@ type Notification =
     abstract takeAction: title: string -> JS.Promise<unit>
 
 type Setting =
-    abstract setValue: value: string -> JS.Promise<unit>
+    abstract findElement: locator: obj -> JS.Promise<WebElement>
 
 type SettingsEditor =
     abstract findSettingByID: id: string -> JS.Promise<Setting>
@@ -1071,35 +1070,23 @@ let tryWarningNotification (message: string) : Async<bool> = tryNotification "wa
 let tryDismissWarningNotification (message: string) : Async<bool> =
     tryDismissNotification "warning" message
 
+let private tryClickNotificationButton (notificationKind: string) (message: string) (label: string) : Async<bool> =
+    async {
+        try
+            let! found = tryFindNotification notificationKind message
+
+            match found with
+            | Some notification ->
+                do! notification.takeAction label |> Async.AwaitPromise
+                return true
+            | None -> return false
+        with _ ->
+            return false
+    }
+
 /// Clicks the button named `label` on the warning toast whose text is exactly `message`.
 let tryClickWarningNotificationButton (message: string) (label: string) : Async<bool> =
-    async {
-        try
-            let! found = tryFindNotification "warning" message
-
-            match found with
-            | Some notification ->
-                do! notification.takeAction label |> Async.AwaitPromise
-                return true
-            | None -> return false
-        with _ ->
-            return false
-    }
-
-/// Clicks the button named `label` on the info toast whose text is exactly `message`.
-let tryClickInfoNotificationButton (message: string) (label: string) : Async<bool> =
-    async {
-        try
-            let! found = tryFindNotification "info" message
-
-            match found with
-            | Some notification ->
-                do! notification.takeAction label |> Async.AwaitPromise
-                return true
-            | None -> return false
-        with _ ->
-            return false
-    }
+    tryClickNotificationButton "warning" message label
 
 /// True when a standalone info toast shows exactly `message`.
 let tryInfoNotification (message: string) : Async<bool> = tryNotification "info" message
@@ -1174,15 +1161,26 @@ let tryRunAtCursorFromPalette (line: int) : Async<bool> =
             return false
     }
 
+[<Import("SettingsEditor", "vscode-extension-tester")>]
+let private SettingsEditorCtor: obj = jsNative
+
 /// Writes `fshttpStudio.dotnetPath` through the Settings editor, as a user does, and closes the
-/// editor tab again.
+/// editor tab again. An empty `value` clears the setting.
 let trySetDotnetPath (value: string) : Async<bool> =
     async {
         try
             let workbench = Workbench.create ()
             let! settings = workbench.openSettings () |> Async.AwaitPromise
             let! setting = settings.findSettingByID "fshttpStudio.dotnetPath" |> Async.AwaitPromise
-            do! setting.setValue value |> Async.AwaitPromise
+            let! input = setting.findElement (By.css "input") |> Async.AwaitPromise
+
+            let selectAll: string =
+                emitJsExpr (Key, SettingsEditorCtor) "$0.chord($1.ctlKey, 'a')"
+
+            do! input.sendKeys selectAll |> Async.AwaitPromise
+            // ExTester's setValue empties the input with no keystroke, and VSCode then writes nothing.
+            let keys: string = if value = "" then Key?BACK_SPACE else value
+            do! input.sendKeys keys |> Async.AwaitPromise
             do! workbench.executeCommand "View: Close Editor" |> Async.AwaitPromise
             return true
         with _ ->
@@ -1322,36 +1320,6 @@ let tryRevertFixtureFile () : Async<bool> =
             do! workbench.executeCommand focusFixtureGroupCommand |> Async.AwaitPromise
             do! workbench.executeCommand "workbench.action.files.revert" |> Async.AwaitPromise
             return true
-        with _ ->
-            return false
-    }
-
-/// Asks VSCode to reload the window. Returns when ExTester has asked, before the reload has
-/// finished. The companion-death check waits on a fresh companion process for that.
-/// Pre-reload
-/// element handles go stale; every later lookup must be fresh.
-let reloadWindow () : Async<unit> =
-    async {
-        let workbench = Workbench.create ()
-        do! workbench.executeCommand "Developer: Reload Window" |> Async.AwaitPromise
-    }
-
-/// True when the workbench is in the page.
-///
-/// A reload takes the workbench out of the page and builds it again. Every page object and every
-/// workbench command starts by finding the workbench, so a call made between those two moments
-/// raises rather than waits, and the raise reads as the command failing. A fresh companion process
-/// does not settle this: the extension host and the page come back on their own schedules.
-let tryWorkbenchPresent () : Async<bool> =
-    async {
-        try
-            let driver = VSBrowser.instance.driver
-            let script = "return document.querySelector('.monaco-workbench') ? 'yes' : 'no';"
-
-            let call: JS.Promise<objnull> = emitJsExpr (driver, script) "$0.executeScript($1)"
-
-            let! reading = call |> Async.AwaitPromise
-            return not (isNull reading) && string reading = "yes"
         with _ ->
             return false
     }
