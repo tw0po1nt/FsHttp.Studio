@@ -125,7 +125,7 @@ The Neovim client shows a block mark above each block, and shows the response in
 - Neovim 0.11 or later.
 - A .NET 10 SDK or newer, on your `PATH` or in the `dotnet_path` option. Download the SDK from [aka.ms/dotnet/download](https://aka.ms/dotnet/download).
 - `curl`, `tar`, and a checksum tool (`sha256sum` on Linux, `shasum` on macOS, or `certutil` on Windows). The client uses them to download the companion from the GitHub release of its own version.
-- Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) and a terminal that can show images, for an image body. [lualine.nvim](https://github.com/nvim-lualine/lualine.nvim), for the status line text in the statusline.
+- Optional: [snacks.nvim](https://github.com/folke/snacks.nvim), a terminal that supports Unicode placeholders (kitty or Ghostty, for example), and [ImageMagick](https://imagemagick.org) (`magick` or `identify` on your `PATH`), for an image body. [lualine.nvim](https://github.com/nvim-lualine/lualine.nvim), for the status line text in the statusline.
 
 ### Install
 
@@ -172,8 +172,9 @@ Open a `.fsx` script that contains FsHttp requests. A block mark appears above e
 
 - Only *that* block runs, the same as in VSCode.
 - The **response buffer** opens in a split beside your script. The buffer shows the body by its `Content-Type`:
-  - **images** display through snacks.nvim, when your terminal can show images,
-  - **JSON**, **XML**, and **HTML** get highlights and folds from tree-sitter,
+  - **images** display through snacks.nvim, below a line with the pixel size. When an image cannot display, that line gives the reason,
+  - **JSON** displays pretty-printed, and **HTML** displays indented,
+  - **JSON**, **XML**, and **HTML** get highlights and folds from tree-sitter. With no tree-sitter parser, JSON and HTML get folds from their structure,
   - binary content displays as a hex view,
   - all other content displays as text.
 - The winbar shows the status code, the times, the size, the method, and the URL. The buffer has three folds: Request, Response headers, and Body. `yr`, `yh`, and `yb` yank them. `g?` lists the keys of the buffer.
