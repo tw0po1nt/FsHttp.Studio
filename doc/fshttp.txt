@@ -195,14 +195,17 @@ The Response buffer maps these eight local keys. Set
                                                       *<Plug>(FsHttpOpenFold)*
 <Plug>(FsHttpOpenFold)
     On a closed fold, open one level of the fold. On each other line, move
-    the cursor right. A count applies to the motion.
+    the cursor right. A count sets the number of levels to open or the
+    number of columns to move.
 
                                                      *<Plug>(FsHttpCloseFold)*
 <Plug>(FsHttpCloseFold)
     On a closed fold, close the fold that contains it. In an open fold, with
     the cursor on the first non-blank character or to its left, close the
-    innermost fold of the line. In each other position, move the cursor
-    left. A count applies to the motion.
+    innermost fold of the line. On a line that has no non-blank character,
+    close the fold only from column 1. In each other position, move the
+    cursor left. A count sets the number of levels to close or the number
+    of columns to move.
 
 ==============================================================================
 5. Options                                                    *fshttp-options*

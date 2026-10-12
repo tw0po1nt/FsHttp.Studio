@@ -382,8 +382,10 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
 
 - `l` on a closed fold opens one level of the fold. `h` on a closed fold closes the fold that
   contains it. In an open fold, `h` closes the innermost fold of the line when the cursor is on the
-  first non-blank character or to its left. In each other position, `l` and `h` move the cursor,
-  and a count applies to the motion. The two `<Plug>` maps are `expr` maps.
+  first non-blank character or to its left. On a line that has no non-blank character, `h` closes
+  the fold only from column 1. In each other position, `l` and `h` move the cursor. A count sets
+  the number of fold levels to open or close, or the number of columns to move. The two `<Plug>`
+  maps are `expr` maps.
 - A notice confirms each yank, or names the clipboard failure.
 - A yank of a Body of zero bytes writes no register, and an INFO notice states that nothing was
   yanked. This follows the rule of spec 0013 that such a Body has no copy button.

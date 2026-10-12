@@ -833,7 +833,7 @@ end
 T["l opens the closed Request fold, h in column 1 closes the Response headers fold, and elsewhere l and h move"] = function()
     local child = harness.harness_setup_child()
     open_script(child, harness.fixture("request-section.fsx"), { 27 })
-    -- The shared child can still show this response from an earlier Check, and the wait must see the new Run.
+    -- The shared child can still show this Response buffer from an earlier Check, and the wait must see the new Run.
     harness.close_response_windows(child)
     harness.run_at(child, 28)
     local snapshot = eventually_response(
@@ -897,6 +897,28 @@ T["l opens the closed Request fold, h in column 1 closes the Response headers fo
     harness.cmd(child, string.format("call cursor(%d, 1)", header_line))
     expect_after("h", "h in column 1 closes the Response headers fold", header_line, { closed = headers.first })
     assert.equal(-1, harness.lua_get(child, "vim.fn.foldclosed(...)", { request.first }), "the Request fold stays open")
+end
+
+T["h on a line with no non-blank character closes its fold only from column 1"] = function()
+    local child = harness.harness_setup_child()
+    harness.cmd(child, "new")
+    harness.lua_get(child, [[vim.api.nvim_buf_set_lines(0, 0, -1, false, { "{", "    ", "}" })]])
+    harness.cmd(child, "setlocal foldmethod=manual | 1,3fold | normal! zR")
+    harness.lua_get(child, [[vim.keymap.set("n", "h", "<Plug>(FsHttpCloseFold)", { buffer = 0, remap = true })]])
+
+    harness.cmd(child, "call cursor(2, 3)")
+    harness.type_keys(child, "h")
+    harness.eventually(harness.notice_deadline_ms, "h in column 3 moves one column left", function()
+        return vim.deep_equal(harness.lua_get(child, "vim.api.nvim_win_get_cursor(0)"), { 2, 1 })
+    end)
+    assert.equal(-1, harness.lua_get(child, "vim.fn.foldclosed(2)"), "the fold stays open")
+
+    harness.cmd(child, "call cursor(2, 1)")
+    harness.type_keys(child, "h")
+    harness.eventually(harness.notice_deadline_ms, "h in column 1 closes the fold", function()
+        return harness.lua_get(child, "vim.fn.foldclosed(2)") == 1
+    end)
+    harness.cmd(child, "bwipeout!")
 end
 
 T[":FsHttp yank and yr, yh, and yb put the Copy text in the register, and g? lists the keys"] = function()

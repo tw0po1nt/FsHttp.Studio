@@ -29,7 +29,7 @@ function M.close_fold()
     if vim.fn.foldclosed(".") ~= -1 then
         return "zc"
     end
-    local first_non_blank = vim.fn.getline("."):find("%S") or math.huge
+    local first_non_blank = vim.fn.getline("."):find("%S") or 1
     return (vim.fn.foldlevel(".") > 0 and vim.fn.col(".") <= first_non_blank) and "zc" or "h"
 end
 

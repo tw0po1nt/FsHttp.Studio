@@ -191,8 +191,8 @@ T["h on the first non-blank character of a JSON line closes its innermost fold, 
         end)()]]
     )
     assert.equal("number", type(title), "the Response buffer has a Body title")
-    local rest = title + 4
-    assert.equal(pretty_json_lines[4], harness.lua_get(child, "vim.fn.getline(...)", { rest }))
+    local rest_move_line = title + 4
+    assert.equal(pretty_json_lines[4], harness.lua_get(child, "vim.fn.getline(...)", { rest_move_line }))
 
     ---@param subject string
     ---@param first integer the first body line of the fold
@@ -200,7 +200,7 @@ T["h on the first non-blank character of a JSON line closes its innermost fold, 
     local function expect_closed_fold(subject, first, last)
         local fold
         local ok, err = pcall(harness.eventually, harness.notice_deadline_ms, subject, function()
-            fold = harness.lua_get(child, "{ vim.fn.foldclosed(...), vim.fn.foldclosedend(...) }", { rest })
+            fold = harness.lua_get(child, "{ vim.fn.foldclosed(...), vim.fn.foldclosedend(...) }", { rest_move_line })
             return vim.deep_equal(fold, { title + first, title + last })
         end)
         if not ok then
@@ -208,7 +208,7 @@ T["h on the first non-blank character of a JSON line closes its innermost fold, 
         end
     end
 
-    harness.cmd(child, string.format("call cursor(%d, %d)", rest, #"    " + 1))
+    harness.cmd(child, string.format("call cursor(%d, %d)", rest_move_line, #"    " + 1))
     harness.type_keys(child, "h")
     expect_closed_fold("h closes the moves fold", 3, 6)
 
