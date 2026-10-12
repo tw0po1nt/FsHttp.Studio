@@ -201,6 +201,15 @@ function M.new_companion_pids(known)
     return new
 end
 
+---@param known integer[]
+---@param old integer the pid of the companion before the Restart
+function M.await_new_companion(known, old)
+    M.eventually(M.companion_exists_deadline_ms, "a new companion", function()
+        local fresh = M.new_companion_pids(known)
+        return #fresh == 1 and fresh[1] ~= old
+    end)
+end
+
 ---@param pid integer
 ---@return boolean
 function M.process_exists(pid)

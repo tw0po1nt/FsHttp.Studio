@@ -61,4 +61,23 @@ T["block_mark.virtual_line = false removes the virtual line at once, and the sig
     assert.equal(true, marks:find("^%d+:  %[%S+%]") ~= nil, marks)
 end
 
+T["a change to the dotnet path gives the INFO notice that names :FsHttp restart"] = function()
+    local child = harness.start_child({ companion_path = harness.companion_path() })
+    harness.edit(child, harness.fixture("core-path.fsx"))
+    harness.await_block_mark(child, 26)
+    local count = #harness.notices(child)
+
+    harness.lua_get(
+        child,
+        string.format([[require("fshttp").setup({ dotnet_path = %q })]], harness.fixture("missing/dotnet"))
+    )
+
+    local infos = vim.tbl_filter(function(notice)
+        return notice.level == vim.log.levels.INFO
+    end, harness.notices_after(child, count))
+    assert.equal(1, #infos, vim.inspect(infos))
+    assert.is_truthy(infos[1].message:find("dotnet_path", 1, true))
+    assert.is_truthy(infos[1].message:find(":FsHttp restart", 1, true))
+end
+
 return T

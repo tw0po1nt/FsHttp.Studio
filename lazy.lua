@@ -12,6 +12,9 @@ return {
                 function()
                     return require("fshttp").status() or ""
                 end,
+                on_click = function()
+                    require("fshttp").status_click()
+                end,
                 cond = function()
                     return require("fshttp").config().status_line.lualine
                 end,

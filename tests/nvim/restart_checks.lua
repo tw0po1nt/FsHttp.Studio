@@ -56,7 +56,7 @@ T["Restart under a hang"] = function()
         harness.edit(child, harness.fixture("core-path.fsx"))
         harness.await_block_mark(child, 26)
         harness.run_at(child, 26)
-        expect_response_line(child, "the recovery Run", harness.json_probe_body_line)
+        expect_response_line(child, "the Run after the Restart", harness.json_probe_body_line)
     end)
     harness.release_slow()
     if not ok then
@@ -92,6 +92,35 @@ T["A worker under a hang"] = function()
     if not ok then
         error(err, 0)
     end
+end
+
+T["Restart from the stopped state"] = function()
+    local known = harness.companion_pids()
+    local child = harness.start_child({ companion_path = harness.companion_path() })
+    harness.edit(child, harness.fixture("core-path.fsx"))
+    harness.await_block_mark(child, 26)
+    local old = harness.new_companion_pids(known)
+    assert.equal(1, #old, "the new child Neovim started one companion")
+    vim.uv.kill(old[1], "sigkill")
+    harness.eventually(harness.block_mark_deadline_ms, "the stopped title on the Block mark", function()
+        return harness.block_marks(child):find(refusals.companion_stopped_block_mark_title, 1, true) ~= nil
+    end)
+    local count = #harness.notices(child)
+
+    harness.run_at(child, 26)
+
+    local warnings = vim.tbl_filter(function(notice)
+        return notice.level == vim.log.levels.WARN and notice.message == refusals.companion_stopped.detail
+    end, harness.notices_after(child, count))
+    assert.equal(1, #warnings, "the stopped WARN notice")
+    assert.is_truthy(warnings[1].message:find(":FsHttp restart", 1, true))
+
+    harness.cmd(child, "FsHttp restart")
+
+    harness.await_new_companion(known, old[1])
+    harness.await_block_mark(child, 26)
+    harness.run_at(child, 26)
+    expect_response_line(child, "the Run after the Restart", harness.json_probe_body_line)
 end
 
 return T
