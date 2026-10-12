@@ -48,10 +48,6 @@ The VSCode extension shows a `▶ Run request` CodeLens above each block, and re
 
 #### Verify your download
 
-Each release also ships a `fshttp-studio-<version>.vsix.sha256` checksum file next to the `.vsix`. If *Install from VSIX…* fails with an extraction error such as `too many bytes in the stream`, the download is corrupt. A corporate proxy or an antivirus tool that rewrites binary downloads is the usual cause. Verify the file before you install it. The check either confirms the match or reports a bad download.
-
-Download both files into the same folder, then:
-
 **Linux**
 
 ```bash
@@ -72,21 +68,19 @@ $actual   = (Get-FileHash fshttp-studio-<version>.vsix -Algorithm SHA256).Hash
 if ($actual -ieq $expected) { "OK" } else { "MISMATCH: download is corrupt" }
 ```
 
-A mismatch means the bytes changed before they reached your machine. Download the file again, and verify it again before you install it. A different transport often avoids the tool that corrupted the first download. For example, use `curl -L`, `Invoke-WebRequest`, or the `gh` CLI.
-
 ### Use it
 
 Open a `.fsx` script that contains FsHttp requests. A **`▶ Run request` CodeLens** appears above each `http { }` block. Click the CodeLens, and:
 
-- Only *that* block runs. FsHttp.Studio blanks every other block, and then evaluates your script from the top down to the end of that block. It stops there. Nothing after the block runs. This reaches top-level, named, nested, and module-qualified blocks alike. Anything that can't be reached shows a `⊘ Cannot run: …` lens instead of failing silently.
+- Only *that* block runs. FsHttp.Studio blanks every other block, and evaluates the script down to the end of that block. A block that a run cannot reach shows a `⊘ Cannot run: …` CodeLens instead.
 - A **response viewer** panel opens beside your editor. The panel renders the body, and dispatches on the body's `Content-Type`:
   - **images** display inline,
   - **JSON** displays as a collapsible, syntax-highlighted tree,
   - **HTML** displays as a rendered page,
   - all other content displays as readable, wrapped text.
-- A thin status line shows the method, the URL, a color-coded status code, the round-trip time, and the size. A collapsible **Request** section shows the method, URL, headers, and body exactly as sent, because FsHttp's transformers can rewrite any of them after you write them. Response headers stay one click away in their own collapsible section.
-- Three sections carry a **Copy** button: Request, response headers, and response body. You can paste any of them elsewhere without hand-selecting text out of a panel.
-- The Request section also carries a **Copy as curl** button. It copies a curl command that sends the same method, URL, headers, and body bytes as the run. The command works in a POSIX shell, such as bash, zsh, Git Bash, or WSL. Some requests have no curl command, and then the button is absent. An example is a request whose body the companion did not read, because a command without that body sends a different request.
+- The top line of the panel shows the method, the URL, the status code, the round-trip time, and the size. Collapsible sections show the response headers and the request exactly as sent.
+- The Request, Response headers, and Body sections each have a **Copy** button.
+- The Request section also has a **Copy as curl** button. It copies a curl command that sends the same request as the run, in a POSIX shell such as bash, zsh, Git Bash, or WSL.
 
 FsHttp.Studio honors your `#r "nuget: FsHttp, x.y.z"` version pin exactly.
 
