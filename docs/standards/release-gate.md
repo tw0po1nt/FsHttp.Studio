@@ -106,7 +106,7 @@ and then kills the companion. A regression in the uncovered case therefore ships
 **Run request at cursor gets no Check while the companion starts.**
 When a user calls "FsHttp.Studio: Run request at cursor" while the companion starts, a progress
 notification shows. When the companion is ready, the command applies the cursor rule to the
-recorded text and cursor. Harness setup waits until the companion is ready. On a warm reload, the
+recorded text and cursor. Harness setup waits until the companion is ready. On a warm start, the
 starting state lasts less than one second. Thus no Check can call the command in that state. A
 defect in the wait, in its Cancel button, or in a toast that ends the wait ships uncaught.
 
@@ -134,7 +134,8 @@ surface. Do not leave the instruction only inside a shipped spec.
   location in the viewer.
 - Spec 7 (companion death is visible and recoverable): a kill during a Run leaves `Running…` for the
   stopped message, and leaves every `▶ Run request` lens for `⊘ Cannot run: the companion stopped`.
-  A window reload recovers a successful Run.
+  A click on "Restart companion" in the stopped toast starts a new companion, and a Run then
+  succeeds.
 
 ## The Neovim suite
 

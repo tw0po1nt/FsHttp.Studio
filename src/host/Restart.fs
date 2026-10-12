@@ -1,5 +1,8 @@
 module Restart
 
+[<Literal>]
+let commandId = "fshttpStudio.restartCompanion"
+
 /// `Epoch` numbers the start of the Companion that the Client owns now.
 type Session = { Epoch: int; Stopping: bool }
 

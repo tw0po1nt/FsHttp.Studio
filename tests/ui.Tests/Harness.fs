@@ -15,7 +15,9 @@ let ViewerUpdateDeadlineMs = 30_000
 
 let ToastDeadlineMs = 15_000
 
-let PostReloadRecoveryDeadlineMs = 60_000
+/// The bound of the wait for a warm start of the companion, in Harness setup and in each Restart.
+/// `CompanionReadyDeadlineMs` bounds a cold start.
+let CompanionStartDeadlineMs = 60_000
 
 /// Wait for the companion to report `ready`, paid once in Harness setup. It is the longest wait
 /// the harness makes, and deliberately so: the companion's first response costs a
@@ -38,6 +40,10 @@ let StatusStabilitySettleMs = 3_000.0
 /// How long a claim that *no* Response viewer opened must stay true before it is believed. A viewer
 /// that a defect opens can paint after the refusal toast, so a reading at the toast is not evidence.
 let ViewerAbsenceSettleMs = 3_000.0
+
+/// How long a claim that *no* Restart happened must stay true before it is believed. A Restart that
+/// a defect starts can begin after the toast, so a reading at the toast is not evidence.
+let RestartAbsenceSettleMs = 3_000.0
 
 /// Green-path budget for the `before` hook through proven-live.
 let HarnessSetupBudgetMs = 180_000
@@ -112,12 +118,12 @@ let companionStoppedText = (Refusals.companionStopped Refusals.VSCode).Detail
 let private extensionStatusPrefix = "FsHttp.Studio"
 
 /// Companion lifecycle labels that mean the companion is not Ready yet. A Ready status names the
-/// script view instead (`no requests found`, `2 requests`, …), so Harness setup and post-reload
+/// script view instead (`no requests found`, `2 requests`, …), so Harness setup and Restart
 /// waits accept any `FsHttp.Studio:` item that is not one of these.
 ///
 /// Only `companion stopped` is asserted end to end, by the companion-death check, because it is
 /// the only one of the three the suite can reach on purpose. `starting…` was measured as a window
-/// of under a second on a warm reload, where a poll that waited for it read `2 requests` instead.
+/// of under a second on a warm start, where a poll that waited for it read `2 requests` instead.
 /// `.NET SDK not found` needs a workbench with no SDK on PATH, which is not this run. Those two
 /// rows are pinned as pure values in `ProtocolTests.statusTextTests` instead.
 let private companionNotReadyBodies =
@@ -342,12 +348,6 @@ let private tryExtensionActive () =
 /// while Ready is written only once the process is serving. Until then `CodeLensProvider` keeps
 /// every lens back, so a check that opens a fixture sees no lens through no fault of the product.
 ///
-/// The companion-death check reuses this after its window reload. The reading comes from the
-/// status bar, so it is true only once the page carries a workbench, the extension has activated in
-/// it, and the companion is serving. A reload satisfies those three at three different moments,
-/// and a check that resumes on the first of them sends a workbench command to a page that is still
-/// building one.
-///
 /// Ready no longer has one fixed sentence: the status bar names the active script. Any
 /// `FsHttp.Studio:` body that is not a companion-lifecycle label means Ready has arrived.
 let tryCompanionReady () =
@@ -370,9 +370,12 @@ let private companionPattern () =
 
     extensionsDir + ".*Companion.dll"
 
-/// Every companion process belonging to this run. Empty when none match. The companion-death
-/// check kills and confirms these, then waits for a fresh pid after reload.
+/// Every companion process belonging to this run. Empty when none match.
 let companionPids () = Proc.pidsMatching (companionPattern ())
+
+/// True when a companion process runs that is not one of `before`.
+let tryNewCompanion (before: int[]) =
+    async { return companionPids () |> Array.exists (fun pid -> not (Array.contains pid before)) }
 
 /// The `--worker` children of this run's companion. A Run with conflicting `#r "nuget:"` pins
 /// starts one.
@@ -465,17 +468,17 @@ let private runHarnessSetup () =
         verifySidecarLive ()
         provenLive <- { provenLive with ServerLive = true }
 
-        do! eventually PostReloadRecoveryDeadlineMs "the fixture folder to open in the Explorer" tryFixtureFolderOpen
-        do! eventually PostReloadRecoveryDeadlineMs "the harness fixture tab to open" tryFixtureTabOpen
+        do! eventually CompanionStartDeadlineMs "the fixture folder to open in the Explorer" tryFixtureFolderOpen
+        do! eventually CompanionStartDeadlineMs "the harness fixture tab to open" tryFixtureTabOpen
         provenLive <- { provenLive with FixtureOpen = true }
 
-        do! eventually PostReloadRecoveryDeadlineMs "FsHttp.Studio to activate in the status bar" tryExtensionActive
+        do! eventually CompanionStartDeadlineMs "FsHttp.Studio to activate in the status bar" tryExtensionActive
 
         provenLive <-
             { provenLive with
                 ExtensionActive = true }
 
-        do! eventually PostReloadRecoveryDeadlineMs "the companion process to exist" tryCompanionRunning
+        do! eventually CompanionStartDeadlineMs "the companion process to exist" tryCompanionRunning
 
         provenLive <-
             { provenLive with

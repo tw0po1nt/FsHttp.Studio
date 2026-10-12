@@ -34,10 +34,14 @@ let fileExists (_path: string) : bool = jsNative
 [<Emit("require('node:fs').appendFileSync($0, $1)")>]
 let appendFile (_path: string) (_text: string) : unit = jsNative
 
-/// Every pid whose command line matches `pattern`. Empty when nothing matches, because `pgrep`
-/// exits 1 in that case, which `sh` swallows.
+// pgrep runs with no shell, because Linux pgrep matches a parent shell whose command line contains the pattern.
+[<Emit("(() => { try { return require('node:child_process').execFileSync('pgrep', ['-f', $0], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: $1 }); } catch (e) { return ''; } })()")>]
+let private pgrep (_pattern: string) (_timeoutMs: int) : string = jsNative
+
+/// Every pid whose command line matches `pattern`. Empty when nothing matches: `pgrep` then exits 1,
+/// and the call returns no output for a failed exit.
 let pidsMatching (pattern: string) : int[] =
-    (run (sprintf "pgrep -f '%s'" pattern)).Split('\n')
+    (pgrep pattern shellTimeoutMs).Split('\n')
     |> Array.choose (fun line ->
         match System.Int32.TryParse(line.Trim()) with
         | true, pid -> Some pid

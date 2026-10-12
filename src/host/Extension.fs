@@ -12,9 +12,6 @@ let mutable private session = Restart.initial
 let mutable private restartStop: JS.Promise<unit> = resolved ()
 
 [<Literal>]
-let private restartCommandId = "fshttpStudio.restartCompanion"
-
-[<Literal>]
 let private getSdkLabel = "Get the .NET SDK"
 
 [<Literal>]
@@ -89,9 +86,8 @@ let activate (context: ExtensionContext) =
                 + " to run requests, but found none. Install one, "
                 + "or set the `fshttpStudio.dotnetPath` setting to your `dotnet` executable."
 
-        onResolved (window.showWarningMessage (message, getSdkLabel)) (fun chosen ->
-            if unbox<string> chosen = getSdkLabel then
-                commands.executeCommand ("vscode.open", uri.parse dotnetDownloadUrl) |> ignore)
+        onButton (window.showWarningMessage (message, getSdkLabel)) getSdkLabel (fun () ->
+            commands.executeCommand ("vscode.open", uri.parse dotnetDownloadUrl) |> ignore)
 
     let lastDotnetPathOverride: string option ref = ref None
 
@@ -100,7 +96,10 @@ let activate (context: ExtensionContext) =
         box (RunCommand.registerRunAtCursor (fun () -> showNoSdkToast lastDotnetPathOverride.Value))
     )
 
+    let currentState = ref Starting
+
     let setCompanionState state =
+        currentState.Value <- state
         StatusBar.setCompanionState state
         RunCommand.setCompanionState state
         CodeLensProvider.setState state
@@ -162,8 +161,26 @@ let activate (context: ExtensionContext) =
                     session <- Restart.onStopped session
                     startSequence epoch))
 
+    let isCompanionRunning () =
+        match currentState.Value with
+        | Starting
+        | Ready -> true
+        | SdkNotFound
+        | Stopped -> false
+
     context.subscriptions.Add(
-        commands.registerCommand (restartCommandId, System.Action<obj, obj>(fun _ _ -> restartCompanion ()))
+        box (
+            workspace.onDidChangeConfiguration (fun change ->
+                if change.affectsConfiguration "fshttpStudio.dotnetPath" && isCompanionRunning () then
+                    onButton
+                        (window.showInformationMessage (Refusals.dotnetPathChanged, Refusals.restartButtonLabel))
+                        Refusals.restartButtonLabel
+                        restartCompanion)
+        )
+    )
+
+    context.subscriptions.Add(
+        commands.registerCommand (Restart.commandId, System.Action<obj, obj>(fun _ _ -> restartCompanion ()))
     )
 
     startSequence session.Epoch

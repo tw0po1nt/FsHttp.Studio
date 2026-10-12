@@ -28,6 +28,19 @@ let private tryRunEndedRendered () =
 let private tryRunningInViewer () =
     Checks.viewerSatisfies (fun dom -> dom.RunInProgressLabel.Contains runInProgressLabel)
 
+let private waitForANewReadyCompanion (before: int[]) =
+    async {
+        do!
+            Harness.eventually Harness.CompanionStartDeadlineMs "a new companion process" (fun () ->
+                Harness.tryNewCompanion before)
+
+        do!
+            Harness.eventually
+                Harness.CompanionStartDeadlineMs
+                "the Status line text reporting the companion ready"
+                Harness.tryCompanionReady
+    }
+
 let private hangThenRestart (serverBaseUrl: string) (fixtureFileName: string) (pidsToCheck: unit -> int[]) =
     async {
         do! Checks.openFixtureAsSoleTab fixtureFileName
@@ -89,19 +102,7 @@ let private restartUnderAHang =
                         "the Run-ended sentence in the viewer, with Running… gone"
                         tryRunEndedRendered
 
-                do!
-                    Harness.eventually Harness.PostReloadRecoveryDeadlineMs "a new companion process" (fun () ->
-                        async {
-                            return
-                                Harness.companionPids ()
-                                |> Array.exists (fun pid -> not (Array.contains pid before))
-                        })
-
-                do!
-                    Harness.eventually
-                        Harness.PostReloadRecoveryDeadlineMs
-                        "the Status line text reporting the companion ready"
-                        Harness.tryCompanionReady
+                do! waitForANewReadyCompanion before
 
                 do!
                     Harness.eventuallyObserved
@@ -135,7 +136,7 @@ let private workerUnderAHang =
 
                 do!
                     Harness.eventually
-                        Harness.PostReloadRecoveryDeadlineMs
+                        Harness.CompanionStartDeadlineMs
                         "the Status line text reporting the companion ready"
                         Harness.tryCompanionReady
             }
@@ -143,8 +144,149 @@ let private workerUnderAHang =
         return! Harness.withTeardown "the hang release" (releaseTheHang serverBaseUrl) body
     }
 
+let private killCompanionAndOpenFixture () =
+    async {
+        do! Checks.openFixtureAsSoleTab hangFixtureFileName
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "a Run request lens above each of the two blocks"
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount hangFixtureFileName)
+
+        let killed = Harness.companionPids ()
+
+        if Array.isEmpty killed then
+            Assert.fail "no companion process matched before the kill"
+
+        killed |> Array.iter Proc.kill
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "the stopped companion title on the lens above each of the two blocks"
+                (fun () -> Checks.tryOnlyLensTitle blockCount Refusals.companionStoppedLensTitle)
+
+        return killed
+    }
+
+let private restartThenRun (before: int[]) =
+    async {
+        do! waitForANewReadyCompanion before
+
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "a Run request lens above each of the two blocks after the Restart"
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount hangFixtureFileName)
+
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "a click on the recovery block's Run request lens"
+                (fun () -> ExTester.tryClickCodeLensByIndex recoveryLensIndex)
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "status 200, the recovery URL, and the probe body in the response viewer"
+                (fun () -> Checks.tryJsonProbeResponseRendered recoveryUrlPath)
+    }
+
+let private restartFromTheStoppedState =
+    async {
+        let! killed = killCompanionAndOpenFixture ()
+
+        do!
+            Harness.eventually Harness.LensAppearanceDeadlineMs "a click on a stopped lens" (fun () ->
+                ExTester.tryClickCodeLensByIndex 0)
+
+        do!
+            Harness.eventually Harness.ToastDeadlineMs "a click on Restart companion in the stopped toast" (fun () ->
+                ExTester.tryClickWarningNotificationButton Harness.companionStoppedText Refusals.restartButtonLabel)
+
+        do! restartThenRun killed
+    }
+
+let private clickOnTheStoppedStatusLineText =
+    async {
+        let! killed = killCompanionAndOpenFixture ()
+
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "a click on the Status line text"
+                ExTester.tryClickFsHttpStatus
+
+        do! waitForANewReadyCompanion killed
+    }
+
+/// True once `settleUntil` passes with the companion processes of `before` unchanged.
+let private tryNoRestartThroughSettle (before: int[]) (settleUntil: float) =
+    async {
+        let pids = Harness.companionPids ()
+
+        if pids <> before then
+            return Harness.Observed(sprintf "companion processes %A in place of %A" pids before)
+        elif Proc.now () < settleUntil then
+            return Harness.DoesNotHold
+        else
+            return Harness.Holds
+    }
+
+let private aChangeToTheDotnetPath =
+    async {
+        let before = Harness.companionPids ()
+
+        let body =
+            async {
+                do!
+                    Harness.eventually
+                        Harness.LensAppearanceDeadlineMs
+                        "the Settings editor to take the new dotnet path"
+                        (fun () -> ExTester.trySetDotnetPath "dotnet")
+
+                do!
+                    Harness.eventually Harness.ToastDeadlineMs "the dotnet path INFO toast" (fun () ->
+                        ExTester.tryInfoNotification Refusals.dotnetPathChanged)
+
+                let settleUntil = Proc.now () + Harness.RestartAbsenceSettleMs
+
+                do!
+                    Harness.eventuallyObserved
+                        Harness.LensAppearanceDeadlineMs
+                        "the same companion processes once the settle window has passed"
+                        (fun () -> tryNoRestartThroughSettle before settleUntil)
+
+                do!
+                    Harness.eventually Harness.ToastDeadlineMs "a dismiss of the dotnet path INFO toast" (fun () ->
+                        ExTester.tryDismissInfoNotification Refusals.dotnetPathChanged)
+            }
+
+        // The reset also changes the dotnet path, so it gives its own INFO toast.
+        let clearThePath () =
+            async {
+                do!
+                    Harness.eventually
+                        Harness.LensAppearanceDeadlineMs
+                        "the Settings editor to clear the dotnet path"
+                        (fun () -> ExTester.trySetDotnetPath "")
+
+                do!
+                    Harness.eventually
+                        Harness.ToastDeadlineMs
+                        "a dismiss of the INFO toast that the reset gives"
+                        (fun () -> ExTester.tryDismissInfoNotification Refusals.dotnetPathChanged)
+            }
+
+        return! Harness.withTeardown "the dotnet path reset" clearThePath body
+    }
+
 let tests =
     testList
         "restart companion"
         [ testCaseAsync "Restart under a hang" restartUnderAHang
-          testCaseAsync "A worker under a hang" workerUnderAHang ]
+          testCaseAsync "A worker under a hang" workerUnderAHang
+          testCaseAsync "Restart from the stopped state" restartFromTheStoppedState
+          testCaseAsync "A click on the stopped Status line text" clickOnTheStoppedStatusLineText
+          testCaseAsync "A change to the dotnet path" aChangeToTheDotnetPath ]

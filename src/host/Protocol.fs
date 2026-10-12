@@ -90,6 +90,18 @@ let notReadyLenses (state: State) (remembered: BlockRange list option) : (BlockR
     | Some(title, click), Some ranges -> ranges |> List.map (fun r -> r, title, click)
     | _ -> []
 
+type StatusClick =
+    | StatusDoesNothing
+    | RestartsCompanion
+
+/// A click must never end a Run, so a click restarts only a Companion that is not running.
+let statusClick (state: State) : StatusClick =
+    match state with
+    | Starting
+    | Ready -> StatusDoesNothing
+    | SdkNotFound
+    | Stopped -> RestartsCompanion
+
 /// The cursor rule that both Clients obey. `cursorLine` uses FCS numbering, as `BlockRange` does.
 /// The result is the `blockIndex` of the run envelope, or `None` when the cursor is outside every
 /// Block. Of the Blocks that contain the line, the Block with the latest start is the target.
