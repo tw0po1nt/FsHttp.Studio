@@ -106,12 +106,6 @@ The command has no default key. To bind `ctrl+alt+r`, add this entry to your `ke
 
 The REST Client extension uses `ctrl+alt+r` for its Send Request command, so the same key works for both extensions.
 
-#### Restart the companion
-
-The palette command **FsHttp.Studio: Restart companion** stops the companion and each process that it started. Then it starts a new companion. Use it to end a run that does not end, to use a .NET SDK that you installed, or to apply a new `fshttpStudio.dotnetPath`. A run in progress ends with a runtime error that says that the companion restarted.
-
-When the companion stops, a toast shows a **Restart companion** button. A click on the status line text in the status bar also restarts a stopped companion. FsHttp.Studio never restarts the companion by itself.
-
 ## Neovim
 
 The Neovim client shows a block mark above each block, and shows the response in a buffer beside the script.
@@ -189,12 +183,6 @@ Open a `.fsx` script that contains FsHttp requests. A block mark appears above e
 
 The client binds no key. Each install snippet above maps `<leader>rr` to `<Plug>(FsHttpRun)` in `fsharp` buffers.
 
-#### Restart the companion
-
-`:FsHttp restart` stops the companion and each process that it started. Then it starts a new companion. Use it to end a run that does not end, to try a failed download again, or to apply a new `dotnet_path`. A run in progress ends with a runtime error that says that the companion restarted.
-
-With lualine.nvim, a click on the status line text restarts a stopped companion. The client never restarts the companion by itself.
-
 ## Try it
 
 Create a `demo.fsx` file. Paste the code below into it. Then click the **`▶ Run request`** CodeLens above any block in VSCode. In Neovim, put the cursor in a block and run `:FsHttp run`.
@@ -241,11 +229,9 @@ One companion, one protocol, two clients:
 
 The companion extracts the response by *reflection* instead of a direct reference to FsHttp, so it never overrides the user's version pin.
 
-The companion runs on the **.NET 10 SDK or newer**. FsHttp.Studio detects `dotnet` on your `PATH` automatically. If your SDK is in another location, set `fshttpStudio.dotnetPath` in VSCode, or `dotnet_path` in Neovim, to your `dotnet` executable.
+The companion runs on the **.NET 10 SDK or newer**. FsHttp.Studio detects `dotnet` on your `PATH` automatically. If your SDK is in another location, set `fshttpStudio.dotnetPath` in VSCode, or `dotnet_path` in Neovim, to your `dotnet` executable. After you change the setting, run **FsHttp.Studio: Restart companion** in VSCode, or `:FsHttp restart` in Neovim.
 
 A run is bounded by `fshttpStudio.requestTimeoutMs` in VSCode, or `request_timeout_ms` in Neovim (30 seconds by default). The bound covers the connection, the request, and the response download. A stall past that bound fails loudly instead of hanging. Set it to `0` to wait as long as `HttpClient` allows.
-
-[`docs/adr/`](./docs/adr/) records the architectural decisions and their trade-offs. [`GLOSSARY.md`](./GLOSSARY.md) defines the domain vocabulary.
 
 ## Future improvements
 
