@@ -125,7 +125,7 @@ The Neovim client shows a block mark above each block, and shows the response in
 - Neovim 0.11 or later.
 - A .NET 10 SDK or newer, on your `PATH` or in the `dotnet_path` option. Download the SDK from [aka.ms/dotnet/download](https://aka.ms/dotnet/download).
 - `curl`, `tar`, and a checksum tool (`sha256sum` on Linux, `shasum` on macOS, or `certutil` on Windows). The client uses them to download the companion from the GitHub release of its own version.
-- Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) and a terminal that can show images, for an image body. [lualine.nvim](https://github.com/nvim-lualine/lualine.nvim), for the Status line text in the statusline.
+- Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) and a terminal that can show images, for an image body. [lualine.nvim](https://github.com/nvim-lualine/lualine.nvim), for the status line text in the statusline.
 
 ### Install
 
@@ -147,7 +147,7 @@ return {
 }
 ```
 
-`version = "*"` installs the latest release, and skips each Beta. lazy.nvim downloads the companion at install and at each update. The `keys` entry maps `<leader>rr` in `fsharp` buffers only. The client binds no key by itself, so choose a key that is free in your configuration.
+`version = "*"` installs the latest release, and skips each beta. lazy.nvim downloads the companion at install and at each update. The `keys` entry maps `<leader>rr` in `fsharp` buffers only. The client binds no key by itself, so choose a key that is free in your configuration.
 
 #### `vim.pack` (Neovim 0.12 and later)
 
@@ -164,7 +164,7 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 ```
 
-Pin the tag of a release, and change the tag to update. A version range also matches a Beta tag. A Beta client looks for a release that does not exist yet, so it cannot download the companion. The first `.fsx` buffer downloads the companion in the background. The project tests the lazy.nvim route only.
+Pin the tag of a release, and change the tag to update. A version range also matches a beta tag. A beta client looks for a release that does not exist yet, so it cannot download the companion. The first `.fsx` buffer downloads the companion in the background. The project tests the lazy.nvim route only.
 
 ### Use it
 
@@ -230,33 +230,33 @@ http {
 
 ## How it works
 
-One companion, one protocol, two Clients:
+One companion, one protocol, two clients:
 
 - The **companion**, a long-lived .NET process that hosts an FSharp.Compiler.Service interactive session, owns all F# parsing and evaluation. It locates blocks, evaluates the block you target, and extracts the response.
-- A **Client** runs in the editor, starts the companion, and shows the result of each Run. FsHttp.Studio has two:
+- A **client** runs in the editor, starts the companion, and shows the result of each run. FsHttp.Studio has two:
   - The **extension host** of the VSCode extension, written in F# and compiled with Fable, owns the CodeLens, the response viewer, and the shell-agnostic **renderer core** (`Content-Type → DOM`).
-  - The **Neovim client**, written in plain Lua, owns the Block marks, the Response buffer, and the `:FsHttp` command.
-- A Client and the companion exchange tagged **envelopes** across the companion's process boundary. That boundary is editor-agnostic, so the Neovim client uses the same companion as the extension. A Client for another editor needs no change to the companion.
+  - The **Neovim client**, written in plain Lua, owns the block marks, the response buffer, and the `:FsHttp` command.
+- A client and the companion exchange tagged **envelopes** across the companion's process boundary. That boundary is editor-agnostic, so the Neovim client uses the same companion as the extension. A client for another editor needs no change to the companion.
 
 The companion extracts the response by *reflection* instead of a direct reference to FsHttp, so it never overrides the user's version pin.
 
 The companion runs on the **.NET 10 SDK or newer**. FsHttp.Studio detects `dotnet` on your `PATH` automatically. If your SDK is in another location, set `fshttpStudio.dotnetPath` in VSCode, or `dotnet_path` in Neovim, to your `dotnet` executable.
 
-A Run is bounded by `fshttpStudio.requestTimeoutMs` in VSCode, or `request_timeout_ms` in Neovim (30 seconds by default). The bound covers the connection, the request, and the response download. A stall past that bound fails loudly instead of hanging. Set it to `0` to wait as long as `HttpClient` allows.
+A run is bounded by `fshttpStudio.requestTimeoutMs` in VSCode, or `request_timeout_ms` in Neovim (30 seconds by default). The bound covers the connection, the request, and the response download. A stall past that bound fails loudly instead of hanging. Set it to `0` to wait as long as `HttpClient` allows.
 
 [`docs/adr/`](./docs/adr/) records the architectural decisions and their trade-offs. [`GLOSSARY.md`](./GLOSSARY.md) defines the domain vocabulary.
 
 ## Future improvements
 
 - The **request tree**: grouping, naming, and a Testing-API-style tree of your requests.
-- A **session model**: reusing an FSI session across Runs, request chaining for a block that needs the *response* of an earlier request (such as an auth token), and sending a block to a specific existing session.
-- **Cancel** a Run in progress.
+- A **session model**: reusing an FSI session across runs, request chaining for a block that needs the *response* of an earlier request (such as an auth token), and sending a block to a specific existing session.
+- **Cancel** a run in progress.
 - **Save a response to a file**, for a large or binary body.
 - A **first-run walkthrough**.
 - A **copy button on the error render**.
-- **`.fs`-in-a-project** execution. FsHttp.Studio supports `.fsx` only. Blocks in compiled `.fs` files show no Run affordance, by design.
+- **`.fs`-in-a-project** execution. FsHttp.Studio supports `.fsx` only. Blocks in compiled `.fs` files show no run affordance, by design.
 - The **inline-card** presentation, which renders under the block instead of in a panel.
-- Clients for more editors.
+- clients for more editors.
 
 Feature requests welcome!
 
