@@ -5,6 +5,9 @@ open Fable.Core
 
 type StatusBarItem =
     abstract text: string with get, set
+    /// A command id, or `None` for an item that a click does nothing for.
+    abstract command: string option with get, set
+    abstract tooltip: string option with get, set
     abstract show: unit -> unit
     abstract hide: unit -> unit
     abstract dispose: unit -> unit
@@ -92,8 +95,12 @@ type WorkspaceConfiguration =
     [<Emit("$0.get($1)")>]
     abstract getNumber: section: string -> float
 
+type ConfigurationChangeEvent =
+    abstract affectsConfiguration: section: string -> bool
+
 type IWorkspace =
     abstract getConfiguration: section: string -> WorkspaceConfiguration
+    abstract onDidChangeConfiguration: listener: (ConfigurationChangeEvent -> unit) -> Disposable
 
 [<Import("workspace", "vscode")>]
 let workspace: IWorkspace = jsNative
@@ -131,6 +138,9 @@ type IWindow =
     abstract showWarningMessage: message: string -> JS.Promise<obj>
     /// vscode.window.showInformationMessage(message).
     abstract showInformationMessage: message: string -> JS.Promise<obj>
+    /// vscode.window.showInformationMessage(message, item). The promise resolves to the clicked
+    /// item's label, or to `undefined` when the user dismisses the message.
+    abstract showInformationMessage: message: string * item: string -> JS.Promise<obj>
     /// vscode.window.showQuickPick(items). Each item is an object with `label` and an optional
     /// `detail`. The promise resolves to the picked item, or to `undefined` on cancel.
     abstract showQuickPick: items: obj[] -> JS.Promise<obj | null>
@@ -149,6 +159,9 @@ type IUri =
 
 [<Import("Uri", "vscode")>]
 let uri: IUri = jsNative
+
+[<Literal>]
+let restartCommandId = "fshttpStudio.restartCompanion"
 
 /// vscode.StatusBarAlignment.Left
 let statusBarAlignmentLeft = 1.0

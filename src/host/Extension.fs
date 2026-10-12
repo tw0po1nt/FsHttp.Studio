@@ -12,9 +12,6 @@ let mutable private session = Restart.initial
 let mutable private restartStop: JS.Promise<unit> = resolved ()
 
 [<Literal>]
-let private restartCommandId = "fshttpStudio.restartCompanion"
-
-[<Literal>]
 let private getSdkLabel = "Get the .NET SDK"
 
 [<Literal>]
@@ -100,7 +97,10 @@ let activate (context: ExtensionContext) =
         box (RunCommand.registerRunAtCursor (fun () -> showNoSdkToast lastDotnetPathOverride.Value))
     )
 
+    let currentState = ref Starting
+
     let setCompanionState state =
+        currentState.Value <- state
         StatusBar.setCompanionState state
         RunCommand.setCompanionState state
         CodeLensProvider.setState state
@@ -161,6 +161,25 @@ let activate (context: ExtensionContext) =
                 (Restart.guard currentSession epoch (fun () ->
                     session <- Restart.onStopped session
                     startSequence epoch))
+
+    let isCompanionRunning () =
+        match currentState.Value with
+        | Starting
+        | Ready -> companionHandle.IsSome
+        | SdkNotFound
+        | Stopped -> false
+
+    context.subscriptions.Add(
+        box (
+            workspace.onDidChangeConfiguration (fun change ->
+                if change.affectsConfiguration "fshttpStudio.dotnetPath" && isCompanionRunning () then
+                    onResolved
+                        (window.showInformationMessage (Refusals.dotnetPathChanged, Refusals.restartButtonLabel))
+                        (fun chosen ->
+                            if unbox<string> chosen = Refusals.restartButtonLabel then
+                                restartCompanion ()))
+        )
+    )
 
     context.subscriptions.Add(
         commands.registerCommand (restartCommandId, System.Action<obj, obj>(fun _ _ -> restartCompanion ()))

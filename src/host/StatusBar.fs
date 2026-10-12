@@ -13,6 +13,17 @@ let private setStatusText (text: string option) =
     match item, text with
     | Some bar, Some body ->
         bar.text <- "FsHttp.Studio: " + body
+
+        match companionState with
+        | Stopped
+        | SdkNotFound ->
+            bar.command <- Some restartCommandId
+            bar.tooltip <- Some Refusals.restartButtonLabel
+        | Starting
+        | Ready ->
+            bar.command <- None
+            bar.tooltip <- None
+
         bar.show ()
     | Some bar, None -> bar.hide ()
     | None, _ -> ()

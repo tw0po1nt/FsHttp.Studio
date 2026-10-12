@@ -92,6 +92,11 @@ let refusalGlyph = "⊘"
 let lensTitle (code: string) : string =
     refusalGlyph + " " + (forCode code).Title
 
+let restartButtonLabel = "Restart companion"
+
+let dotnetPathChanged =
+    "The fshttpStudio.dotnetPath setting changed. Restart the companion to apply it."
+
 let restartCommandName (client: Client) : string =
     match client with
     | VSCode -> "FsHttp.Studio: Restart companion"

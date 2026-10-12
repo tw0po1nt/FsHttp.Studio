@@ -2,6 +2,7 @@ module RunCommand
 
 open Fable.Core
 open Fable.Core.JsInterop
+open Js
 open Vscode
 open Protocol
 
@@ -132,8 +133,11 @@ let private showRefusalToast (code: string) =
     window.showWarningMessage ((Refusals.forCode code).Detail) |> ignore
 
 let private showCompanionStoppedToast () =
-    window.showWarningMessage (Refusals.companionStopped Refusals.VSCode).Detail
-    |> ignore
+    onResolved
+        (window.showWarningMessage ((Refusals.companionStopped Refusals.VSCode).Detail, Refusals.restartButtonLabel))
+        (fun chosen ->
+            if unbox<string> chosen = Refusals.restartButtonLabel then
+                commands.executeCommand (restartCommandId, createObj []) |> ignore)
 
 /// Registers the command that a `▶ Run request` CodeLens invokes. The caller passes the same
 /// `TextDocument` that the lens was computed against, and the block's 0-based index into that

@@ -1,8 +1,7 @@
 // Companion death is visible and recoverable: hang a Run, wait for the request to arrive at the
 // server, kill every companion process, assert the viewer leaves `Running…` for the stopped
-// message and the lenses leave `▶ Run request` for the stopped title, reload the window, and
-// assert a Run succeeds again, as one check. Runs last, because it kills the companion and
-// reloads the window, so no later check can inherit the session. Teardown releases
+// message and the lenses leave `▶ Run request` for the stopped title, click Restart companion in
+// the stopped toast, and assert a Run succeeds again, as one check. Teardown releases
 // the hang even when the body fails partway.
 module CompanionDeathTests
 
@@ -55,8 +54,7 @@ let private tryStoppedMessageRendered () =
 let private tryStoppedLensAboveEachBlock () =
     Checks.tryOnlyLensTitle blockCount Refusals.companionStoppedLensTitle
 
-/// A companion process that is neither absent nor one of the killed ones. The workbench-ready
-/// wait returns while the pre-reload DOM is still up; only a fresh pid proves the reload happened.
+/// A companion process that is neither absent nor one of the killed ones.
 let private tryFreshCompanion (killed: int[]) =
     async {
         let pids = Harness.companionPids ()
@@ -160,31 +158,20 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
             Harness.eventually Harness.ToastDeadlineMs "the stopped toast" (fun () ->
                 ExTester.tryWarningNotification Harness.companionStoppedText)
 
-        do! ExTester.reloadWindow ()
+        do!
+            Harness.eventually Harness.ToastDeadlineMs "a click on Restart companion in the stopped toast" (fun () ->
+                ExTester.tryClickWarningNotificationButton Harness.companionStoppedText Refusals.restartButtonLabel)
 
         do!
             Harness.eventually
                 Harness.PostReloadRecoveryDeadlineMs
-                "a fresh companion process after the reload"
+                "a fresh companion process after the Restart"
                 (fun () -> tryFreshCompanion killed)
 
-        // A fresh pid says the extension host came back. It says nothing about the page, which the
-        // reload emptied and rebuilds on its own schedule. The open below is a workbench command,
-        // and a workbench command sent to a page that is still building a workbench raises.
-        //
-        // The workbench element alone is too weak a tell. It appears, and the reload then replaces
-        // it, so a poll that waits for the element can return between those two moments. The
-        // status bar reading is true only once the workbench is the one the reload settled on.
         do!
             Harness.eventually
                 Harness.PostReloadRecoveryDeadlineMs
-                "the workbench back in the page after the reload"
-                ExTester.tryWorkbenchPresent
-
-        do!
-            Harness.eventually
-                Harness.PostReloadRecoveryDeadlineMs
-                "the status bar reporting the companion ready after the reload"
+                "the status bar reporting the companion ready after the Restart"
                 Harness.tryCompanionReady
 
         do! Checks.openFixtureAsSoleTab fixtureFileName
@@ -192,7 +179,7 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
         do!
             Harness.eventuallyObserved
                 Harness.LensAppearanceDeadlineMs
-                "a Run request lens above each of the two blocks after the reload"
+                "a Run request lens above each of the two blocks after the Restart"
                 (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount fixtureFileName)
 
         do!
@@ -208,8 +195,8 @@ let private killTheCompanionUnderAHangAndRecover (serverBaseUrl: string) =
                 tryRecoveryResponseRendered
     }
 
-/// Inherits the warm companion and open viewer from the compile-error check, takes over the
-/// fixture column, and leaves the session after a reload, so no later check should inherit it.
+/// Inherits the warm companion and open viewer from the compile-error check, and takes over the
+/// fixture column.
 let private companionDeathIsVisibleAndRecoverable =
     async {
         let serverBaseUrl = Harness.baseUrl ()
@@ -225,5 +212,5 @@ let tests =
     testList
         "companion death is visible and recoverable"
         [ testCaseAsync
-              "viewer leaves Running… for the stopped message, and a reload recovers"
+              "viewer leaves Running… for the stopped message, and the toast button recovers"
               companionDeathIsVisibleAndRecoverable ]

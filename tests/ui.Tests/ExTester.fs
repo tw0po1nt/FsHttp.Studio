@@ -78,9 +78,17 @@ type Notification =
     /// ExTester's `NotificationType` string: `"info"`, `"warning"`, `"error"`, or `"any"`.
     abstract getType: unit -> JS.Promise<string>
     abstract dismiss: unit -> JS.Promise<unit>
+    abstract takeAction: title: string -> JS.Promise<unit>
+
+type Setting =
+    abstract setValue: value: string -> JS.Promise<unit>
+
+type SettingsEditor =
+    abstract findSettingByID: id: string -> JS.Promise<Setting>
 
 type Workbench =
     abstract executeCommand: command: string -> JS.Promise<unit>
+    abstract openSettings: unit -> JS.Promise<SettingsEditor>
     abstract getNotifications: unit -> JS.Promise<Notification[]>
 
 /// One row of a quick pick. `getText` reads the label and then the detail row, one per line.
@@ -299,6 +307,27 @@ let tryReadFsHttpStatus () : Async<FsHttpStatus> =
             | Some text -> return StatusText text
         with e ->
             return StatusUnreadable e.Message
+    }
+
+/// Clicks the FsHttp.Studio status-bar item, as a user does.
+let tryClickFsHttpStatus () : Async<bool> =
+    async {
+        try
+            let bar = StatusBar.create ()
+            let! items = bar.getItems () |> Async.AwaitPromise
+            let mutable clicked = false
+
+            for item in items do
+                if not clicked then
+                    let! text = item.getText () |> Async.AwaitPromise
+
+                    if text.StartsWith fsHttpStatusPrefix then
+                        do! item.click () |> Async.AwaitPromise
+                        clicked <- true
+
+            return clicked
+        with _ ->
+            return false
     }
 
 module ActivityBar =
@@ -1042,6 +1071,36 @@ let tryWarningNotification (message: string) : Async<bool> = tryNotification "wa
 let tryDismissWarningNotification (message: string) : Async<bool> =
     tryDismissNotification "warning" message
 
+/// Clicks the button named `label` on the warning toast whose text is exactly `message`.
+let tryClickWarningNotificationButton (message: string) (label: string) : Async<bool> =
+    async {
+        try
+            let! found = tryFindNotification "warning" message
+
+            match found with
+            | Some notification ->
+                do! notification.takeAction label |> Async.AwaitPromise
+                return true
+            | None -> return false
+        with _ ->
+            return false
+    }
+
+/// Clicks the button named `label` on the info toast whose text is exactly `message`.
+let tryClickInfoNotificationButton (message: string) (label: string) : Async<bool> =
+    async {
+        try
+            let! found = tryFindNotification "info" message
+
+            match found with
+            | Some notification ->
+                do! notification.takeAction label |> Async.AwaitPromise
+                return true
+            | None -> return false
+        with _ ->
+            return false
+    }
+
 /// True when a standalone info toast shows exactly `message`.
 let tryInfoNotification (message: string) : Async<bool> = tryNotification "info" message
 
@@ -1110,6 +1169,21 @@ let tryRunAtCursorFromPalette (line: int) : Async<bool> =
             do! editor.moveCursor (line, 1) |> Async.AwaitPromise
             let workbench = Workbench.create ()
             do! workbench.executeCommand runAtCursorTitle |> Async.AwaitPromise
+            return true
+        with _ ->
+            return false
+    }
+
+/// Writes `fshttpStudio.dotnetPath` through the Settings editor, as a user does, and closes the
+/// editor tab again.
+let trySetDotnetPath (value: string) : Async<bool> =
+    async {
+        try
+            let workbench = Workbench.create ()
+            let! settings = workbench.openSettings () |> Async.AwaitPromise
+            let! setting = settings.findSettingByID "fshttpStudio.dotnetPath" |> Async.AwaitPromise
+            do! setting.setValue value |> Async.AwaitPromise
+            do! workbench.executeCommand "View: Close Editor" |> Async.AwaitPromise
             return true
         with _ ->
             return false
