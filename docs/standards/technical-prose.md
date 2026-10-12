@@ -86,6 +86,22 @@ relation:
 `.banned-patterns` bans each form, because a pattern cannot tell one sense from another. When the
 word is part of a name in code, such as a file name or an identifier, write that name in backticks.
 
+## Write a glossary term in lower case in the README
+
+`README.md` is for a user of a Client. In that file, write each glossary term in lower case, as
+plain English. A capital letter on a term makes the reader ask why the word is special, and the
+reader does not need that context.
+
+| Do not write | Write |
+| --- | --- |
+| `A Run in progress ends with a Runtime error.` | `A run in progress ends with a runtime error.` |
+| `Each Block gets a Block mark.` | `Each block gets a block mark.` |
+| `It has two Clients.` | `It has two clients.` |
+
+`GLOSSARY.md` still sets the word. Only the capital letter changes. Keep the capital letter on a UI
+label and on a proper name, such as `▶ Run request`, `Restart companion`, and `REST Client`. This
+rule applies to `README.md` only.
+
 ## The pattern list bans each form
 
 `.banned-patterns` at the repo root lists the antithesis forms, the em dash, and the forms of
