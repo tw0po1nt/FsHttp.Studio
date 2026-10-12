@@ -50,7 +50,7 @@ build fails on errors that a Fable-only loop never shows.
 
 | Command | What it proves |
 | --- | --- |
-| `./tests/strippers/run.sh` | `strip_hash.awk` gives the same expected text under BSD awk, mawk, and gawk. CI installs all three, and the run fails in CI when one is missing. |
+| `./tests/strippers/run.sh` | `strip_hash.awk` and `strip_xml.awk` give the same expected text under BSD awk, mawk, and gawk. CI installs all three, and the run fails in CI when one is missing. |
 | `dotnet test FsHttp.Studio.slnx --no-build` | The unit suites pass. |
 | `dotnet fantomas --check .` | The formatting matches. Tooling owns layout. See `docs/standards/coding-standards.md`. |
 | `dotnet fsi scripts/generate-lua.fsx --check` | The committed files in `lua/fshttp/` match `Refusals.fs` and `package.json`. Without `--check`, the script writes the files again. |

@@ -3,7 +3,7 @@
 # `.banned-patterns` forbids. Two kinds of call carry prose:
 #
 #   - A Write or an Edit on Markdown, F# source, Lua source, a Vim help file in
-#     doc/, a YAML file, or a shell script.
+#     doc/, a YAML file, a shell script, or an MSBuild project file.
 #   - A Bash command that publishes prose: `git commit`, a `gh` issue or pull
 #     request create, edit, or comment, and a `gh api` call that sends a body.
 #     The check reads the command text and each body file that the command
@@ -58,6 +58,15 @@ else
   # line of the file, so the hook puts a blank line before that text.
   if [ "$tool_name" = "Edit" ] && [ "$kind" = "hash" ]; then
     pending=$'\n'"$pending"
+  fi
+  # strip_xml.awk removes all text outside a `<!-- -->` comment. The text of an
+  # Edit can start in the middle of a comment, with no `<!--` before it. Thus the
+  # hook puts a `<!--` before that text, and the text up to the first `-->` is
+  # comment text. An Edit with no `-->` is comment text from start to end. Thus
+  # the hook refuses a hit in an element value of that Edit. The CI check reads
+  # the whole file and allows the same hit.
+  if [ "$tool_name" = "Edit" ] && [ "$kind" = "xml" ]; then
+    pending="<!--$pending"
   fi
   label="$file_path"
 fi

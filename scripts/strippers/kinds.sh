@@ -15,6 +15,7 @@ stripper_kind() {
     *.lua) kind="lua" ;;
     */doc/*.txt) kind="vimhelp" ;;
     *.yml | *.yaml | *.sh) kind="hash" ;;
+    *.fsproj | *.props) kind="xml" ;;
     *) kind="" ;;
   esac
 }

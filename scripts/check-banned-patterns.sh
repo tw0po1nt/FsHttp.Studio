@@ -10,6 +10,7 @@
 #   - The `--` comments and the string literals of Lua source.
 #   - The Vim help files in doc/, which the Neovim client ships.
 #   - The `#` comments of YAML files and shell scripts.
+#   - The `<!-- -->` comments of MSBuild project files: `*.fsproj` and `*.props`.
 #
 # It strips fenced code blocks, Vim help examples, shebang lines, and inline code
 # spans first, so a rule can name the text it forbids by writing that text in
