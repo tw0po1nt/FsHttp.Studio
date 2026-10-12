@@ -56,8 +56,7 @@ local function stub_snacks(child, terminal)
     )
 end
 
--- The client looks for ImageMagick on PATH at each Run. The child of Harness setup serves the later
--- Checks, so the Check restores the PATH of the child even when the Check fails.
+-- The later Checks reuse the child of Harness setup, so a failed Check must restore the PATH of the child.
 ---@param child nvim_suite.Child
 ---@param check fun()
 local function without_imagemagick(child, check)

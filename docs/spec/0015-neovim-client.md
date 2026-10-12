@@ -316,8 +316,8 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
 - **Binary body.** The buffer ports the hex view and the reason for a Captured body.
 - **Image body.** The client writes the bytes to a temporary file and calls the inline image
   placement of snacks.nvim (`inline = true`). The image shows as virtual lines below the line of
-  the pixel size, and the text of the Response buffer does not change while the image loads, when
-  it shows, or when it fails. The line below the Body title gives the pixel size, for example
+  the pixel size. The text of the Response buffer does not change while the image loads, when it
+  shows, or when it fails. The line below the Body title gives the pixel size, for example
   `100×100 px`. When no image can show, the same line adds the reason, and the client starts no
   placement. The reasons, in the order that the client checks them:
   - `images are off (response_buffer.images)`
@@ -688,7 +688,8 @@ Ticket: [What gates a release of the Neovim client?](https://github.com/tw0po1nt
 
 The build adds these entries to the honest gaps when the Neovim suite ships:
 
-- No Check compares the pixels of an image.
+- No Check compares the pixels of an image. One Check runs the real snacks.nvim and finds the image
+  extmark, but no terminal draws the image.
 - The suites test lazy.nvim only. The `vim.pack` route gets no check.
 - No Check downloads from a real GitHub Release URL.
 - A Beta runs the Lua core suite only.

@@ -80,8 +80,7 @@ runs:
       shell: bash
       run: brew install imagemagick
 
-    # A later step does not see the PATH change of the installer. This step adds the ImageMagick
-    # folder to GITHUB_PATH.
+    # A later step gets new PATH entries only through GITHUB_PATH.
     - name: Install ImageMagick on Windows
       if: runner.os == 'Windows'
       shell: pwsh

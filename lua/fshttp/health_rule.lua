@@ -133,7 +133,8 @@ M.images_fix = {
 
 M.images_off = "Images are turned off (response_buffer.images = false)."
 
-M.imagemagick_missing = "ImageMagick is not on PATH (magick or identify). snacks.nvim needs it to read an image, "
+M.imagemagick_missing = "ImageMagick is not installed (no magick or identify on PATH). snacks.nvim needs it to read "
+    .. "an image, "
     .. "so an image body shows its pixel size and no image."
 
 M.imagemagick_fix = {

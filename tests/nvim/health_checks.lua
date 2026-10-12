@@ -100,7 +100,7 @@ T["no ImageMagick gives a WARN that names what degrades"] = function()
     local imagemagick = item_with(
         items,
         "Optional items",
-        "ImageMagick is not on PATH (magick or identify). snacks.nvim needs it to read an image, so an image body shows its pixel size and no image."
+        "ImageMagick is not installed (no magick or identify on PATH). snacks.nvim needs it to read an image, so an image body shows its pixel size and no image."
     )
     assert.equal("WARNING", imagemagick.level)
     assert.same(
