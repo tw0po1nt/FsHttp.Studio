@@ -227,4 +227,31 @@ T["the lualine entry shows the Status line text, and status_line.lualine = false
     end)
 end
 
+T["a click on the stopped Status line text restarts the companion"] = function()
+    local known = harness.companion_pids()
+    local child = harness.start_child({ companion_path = harness.companion_path() }, nil, true)
+    harness.edit(child, one_fixture)
+    harness.expect_status(child, "1 request before the companion stops", one_row)
+    local old = harness.new_companion_pids(known)
+    assert.equal(1, #old, "the new child Neovim started one companion")
+    local on_click = [[(function()
+        local items = require("lualine").get_config().sections.lualine_x
+        items[#items].on_click()
+    end)()]]
+
+    harness.lua_get(child, on_click)
+
+    harness.holds_for_settle("the same companion after a click in the ready state", function()
+        return harness.new_companion_pids(known)[1] == old[1] and harness.process_exists(old[1])
+    end)
+
+    vim.uv.kill(old[1], "sigkill")
+    harness.expect_status(child, "companion stopped", stopped_row)
+
+    harness.lua_get(child, on_click)
+
+    harness.await_new_companion(known, old[1])
+    harness.expect_status(child, "1 request again", one_row)
+end
+
 return T

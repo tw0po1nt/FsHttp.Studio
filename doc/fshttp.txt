@@ -285,6 +285,9 @@ require("fshttp").status()
                                                               *fshttp-lualine*
 With lazy.nvim and lualine.nvim, the client adds |fshttp.status()| to the
 `lualine_x` section. Set |fshttp-status_line.lualine| to false to remove it.
+A click on the Status line text in lualine restarts the companion when the
+companion is stopped or its start failed. In each other state, a click does
+nothing, so a click by accident never ends a Run.
 
                                                  *FsHttpStatusLineTextChanged*
 Each change of the Status line text fires the |User| autocmd

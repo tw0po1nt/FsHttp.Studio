@@ -103,4 +103,21 @@ describe("fshttp.status_line_text", function()
         end
         assert.equal("FsHttp.Studio: companion not started", status_line_text.state_row(nil, client_version))
     end)
+
+    it("restarts on a click in the stopped state and in each failed start state only", function()
+        local clicks = {
+            starting = "doesNothing",
+            ready = "doesNothing",
+            downloading = "doesNothing",
+            stopped = "restartsCompanion",
+            sdkNotFound = "restartsCompanion",
+            downloadFailed = "restartsCompanion",
+            noRelease = "restartsCompanion",
+            companionNotFound = "restartsCompanion",
+        }
+        for state, click in pairs(clicks) do
+            assert.equal(click, status_line_text.click(state), state)
+        end
+        assert.equal("doesNothing", status_line_text.click(nil))
+    end)
 end)

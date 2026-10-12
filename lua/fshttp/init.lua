@@ -76,6 +76,13 @@ function M.restart()
     end
 end
 
+function M.status_click()
+    local companion = require("fshttp.companion")
+    if require("fshttp.status_line_text").click(companion.state()) == "restartsCompanion" then
+        M.restart()
+    end
+end
+
 ---@return string? text the Status line text, or nil when the Active document does not have the fsharp filetype
 function M.status()
     return require("fshttp.status_line").row(vim.api.nvim_get_current_buf())

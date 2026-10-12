@@ -81,4 +81,22 @@ function M.state_row(state, client_version)
     return M.prefix .. state_text(state, client_version)
 end
 
+---@alias fshttp.StatusClick "restartsCompanion"|"doesNothing"
+
+-- A click must never end a Run, so a click restarts only a companion that is not running.
+---@param state fshttp.CompanionState? nil before the start sequence runs
+---@return fshttp.StatusClick
+function M.click(state)
+    if
+        state == "stopped"
+        or state == "sdkNotFound"
+        or state == "downloadFailed"
+        or state == "noRelease"
+        or state == "companionNotFound"
+    then
+        return "restartsCompanion"
+    end
+    return "doesNothing"
+end
+
 return M
