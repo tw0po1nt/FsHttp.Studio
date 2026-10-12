@@ -151,7 +151,7 @@ choice. Example: >lua
 <Plug>(FsHttpRun)
     Run the Block at the cursor, as |:FsHttp-run| does.
 
-The Response buffer maps these local keys. Set
+The Response buffer maps these eight local keys. Set
 |fshttp-response_buffer.keys| to false to remove them. Each <Plug> map stays.
 
     Key    Action                              <Plug> map ~
@@ -161,6 +161,8 @@ The Response buffer maps these local keys. Set
     `yc`     Yank the Curl command               |<Plug>(FsHttpYankCurl)|
     `<CR>`   Move to a Compile error position    |<Plug>(FsHttpJump)|
     `g?`     List the active keys                |<Plug>(FsHttpHelp)|
+    `l`      Open the fold or move right         |<Plug>(FsHttpOpenFold)|
+    `h`      Close the fold or move left         |<Plug>(FsHttpCloseFold)|
 
                                                    *<Plug>(FsHttpYankRequest)*
 <Plug>(FsHttpYankRequest)
@@ -189,6 +191,21 @@ The Response buffer maps these local keys. Set
                                                           *<Plug>(FsHttpHelp)*
 <Plug>(FsHttpHelp)
     List the active keys of the Response buffer.
+
+                                                      *<Plug>(FsHttpOpenFold)*
+<Plug>(FsHttpOpenFold)
+    On a closed fold, open one level of the fold. On each other line, move
+    the cursor right. A count sets the number of levels to open or the
+    number of columns to move.
+
+                                                     *<Plug>(FsHttpCloseFold)*
+<Plug>(FsHttpCloseFold)
+    On a closed fold, close the fold that contains it. In an open fold, with
+    the cursor on the first non-blank character or to its left, close the
+    innermost fold of the line. On a line that has no non-blank character,
+    close the fold only from column 1. In each other position, move the
+    cursor left. A count sets the number of levels to close or the number
+    of columns to move.
 
 ==============================================================================
 5. Options                                                    *fshttp-options*
@@ -262,8 +279,8 @@ response_buffer.images ~
                                                  *fshttp-response_buffer.keys*
 response_buffer.keys ~
     boolean (default: true)
-    Map the local keys of the Response buffer. See |fshttp-maps|. A change
-    applies to the next Run.
+    Map the eight local keys of the Response buffer. See |fshttp-maps|. A
+    change applies to the next Run.
 
                                                   *fshttp-status_line.lualine*
 status_line.lualine ~

@@ -15,7 +15,23 @@ M.keys = {
     { lhs = "yc", plug = "<Plug>(FsHttpYankCurl)", description = "Yank the Curl command" },
     { lhs = "<CR>", plug = "<Plug>(FsHttpJump)", description = "Move to a Compile error position" },
     { lhs = "g?", plug = "<Plug>(FsHttpHelp)", description = "List the active keys" },
+    { lhs = "l", plug = "<Plug>(FsHttpOpenFold)", description = "Open the fold or move right" },
+    { lhs = "h", plug = "<Plug>(FsHttpCloseFold)", description = "Close the fold or move left" },
 }
+
+---@return string
+function M.open_fold()
+    return vim.fn.foldclosed(".") ~= -1 and "zo" or "l"
+end
+
+---@return string
+function M.close_fold()
+    if vim.fn.foldclosed(".") ~= -1 then
+        return "zc"
+    end
+    local first_non_blank = vim.fn.getline("."):find("%S") or 1
+    return (vim.fn.foldlevel(".") > 0 and vim.fn.col(".") <= first_non_blank) and "zc" or "h"
+end
 
 ---@param buf integer
 function M.attach(buf)
