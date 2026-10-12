@@ -6,7 +6,8 @@ local M = {}
 local sysname = vim.uv.os_uname().sysname
 local is_windows = sysname == "Windows_NT"
 
--- Each Budget comes from the timing table in the CI job summary. A suite Budget is the slowest suite plus about 40%.
+-- Each Budget comes from the timing table in the CI job summary. A suite Budget is the slowest suite plus about 40%,
+-- rounded up to the next 5 s.
 local budgets_ms = {
     Linux = { harness_setup = 60000, check = 30000, suite = 320000 },
     Darwin = { harness_setup = 60000, check = 30000, suite = 360000 },

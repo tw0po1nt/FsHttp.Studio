@@ -179,7 +179,8 @@ plus about 40%, rounded up to the next 5 s. These values come from 29 runs of `n
 `harness.lua` has one row of Budgets for each operating system. Each leg writes its timing table to
 the job summary. The suite Budget starts at the first Check, so it leaves out Harness setup, as in
 the UI suite. When a Check joins the suite, measure the suite on CI again, and set each Budget by
-the same rule.
+the same rule. A slowdown of up to about 40% stays inside the Budget, so that drift ships uncaught.
+On Windows, the margin is 138 s.
 
 **The suites test lazy.nvim only.** The `vim.pack` route gets no Check.
 
