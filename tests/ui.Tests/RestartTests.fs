@@ -6,7 +6,6 @@ open Fable.Mocha
 let private blockCount = 2
 let private hangFixtureFileName = "restart-hang.fsx"
 let private workerFixtureFileName = "restart-worker.fsx"
-let private versionlessFixtureFileName = "core-path.fsx"
 let private runInProgressLabel = "Running…"
 let private recoveryUrlPath = "/json"
 let private recoveryLensIndex = 1
@@ -40,6 +39,27 @@ let private waitForANewReadyCompanion (before: int[]) =
                 Harness.CompanionStartDeadlineMs
                 "the Status line text reporting the companion ready"
                 Harness.tryCompanionReady
+    }
+
+let private runRecoveryBlock () =
+    async {
+        do!
+            Harness.eventuallyObserved
+                Harness.LensAppearanceDeadlineMs
+                "a Run request lens above each of the two blocks"
+                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount hangFixtureFileName)
+
+        do!
+            Harness.eventually
+                Harness.LensAppearanceDeadlineMs
+                "a click on the recovery block's Run request lens"
+                (fun () -> ExTester.tryClickCodeLensByIndex recoveryLensIndex)
+
+        do!
+            Harness.eventually
+                Harness.ViewerUpdateDeadlineMs
+                "status 200, the recovery URL, and the probe body in the response viewer"
+                (fun () -> Checks.tryJsonProbeResponseRendered recoveryUrlPath)
     }
 
 let private hangThenRestart (serverBaseUrl: string) (fixtureFileName: string) (pidsToCheck: unit -> int[]) =
@@ -105,56 +125,23 @@ let private restartUnderAHang =
 
                 do! waitForANewReadyCompanion before
 
-                do!
-                    Harness.eventuallyObserved
-                        Harness.LensAppearanceDeadlineMs
-                        "a Run request lens above each of the two blocks after the Restart"
-                        (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount hangFixtureFileName)
-
-                do!
-                    Harness.eventually
-                        Harness.LensAppearanceDeadlineMs
-                        "a click on the recovery block's Run request lens"
-                        (fun () -> ExTester.tryClickCodeLensByIndex recoveryLensIndex)
-
-                do!
-                    Harness.eventually
-                        Harness.ViewerUpdateDeadlineMs
-                        "status 200, the recovery URL, and the probe body in the response viewer"
-                        (fun () -> Checks.tryJsonProbeResponseRendered recoveryUrlPath)
+                do! runRecoveryBlock ()
             }
 
         return! Harness.withTeardown "the hang release" (releaseTheHang serverBaseUrl) body
     }
 
-/// Closes the viewer first, so that the probe response cannot be a stale render of an earlier Run.
 let private loadFsHttpWithNoVersion () =
     async {
+        // A stale render of an earlier Run can satisfy the `/json` probe.
         do!
             Harness.eventually
                 Harness.ViewerUpdateDeadlineMs
                 "the response viewer to be closed"
                 ExTester.tryCloseResponseViewer
 
-        do! Checks.openFixtureAsSoleTab versionlessFixtureFileName
-
-        do!
-            Harness.eventuallyObserved
-                Harness.LensAppearanceDeadlineMs
-                "a Run request lens above each of the two core-path blocks"
-                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount versionlessFixtureFileName)
-
-        do!
-            Harness.eventually
-                Harness.LensAppearanceDeadlineMs
-                "a click on the first core-path block's Run request lens"
-                (fun () -> ExTester.tryClickCodeLensByTitle Checks.lensTitle)
-
-        do!
-            Harness.eventually
-                Harness.ViewerUpdateDeadlineMs
-                "status 200, the /json URL, and the probe body in the response viewer"
-                (fun () -> Checks.tryJsonProbeResponseRendered recoveryUrlPath)
+        do! Checks.openFixtureAsSoleTab hangFixtureFileName
+        do! runRecoveryBlock ()
     }
 
 let private workerUnderAHang =
@@ -206,24 +193,7 @@ let private killCompanionAndOpenFixture () =
 let private restartThenRun (before: int[]) =
     async {
         do! waitForANewReadyCompanion before
-
-        do!
-            Harness.eventuallyObserved
-                Harness.LensAppearanceDeadlineMs
-                "a Run request lens above each of the two blocks after the Restart"
-                (fun () -> Checks.tryRunRequestLensAboveEachBlock blockCount hangFixtureFileName)
-
-        do!
-            Harness.eventually
-                Harness.LensAppearanceDeadlineMs
-                "a click on the recovery block's Run request lens"
-                (fun () -> ExTester.tryClickCodeLensByIndex recoveryLensIndex)
-
-        do!
-            Harness.eventually
-                Harness.ViewerUpdateDeadlineMs
-                "status 200, the recovery URL, and the probe body in the response viewer"
-                (fun () -> Checks.tryJsonProbeResponseRendered recoveryUrlPath)
+        do! runRecoveryBlock ()
     }
 
 let private restartFromTheStoppedState =

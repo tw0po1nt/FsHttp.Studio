@@ -377,8 +377,8 @@ let companionPids () = Proc.pidsMatching (companionPattern ())
 let tryNewCompanion (before: int[]) =
     async { return companionPids () |> Array.exists (fun pid -> not (Array.contains pid before)) }
 
-/// The `--worker` children of this run's companion. A Run with conflicting `#r "nuget:"` pins
-/// starts one.
+/// The workers of this run's companion. The companion starts one when a pin of a Run conflicts
+/// with a package version that an earlier Run loaded.
 let workerPids () =
     Proc.pidsMatching (companionPattern () + " --worker")
 

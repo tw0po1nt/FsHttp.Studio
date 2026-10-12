@@ -1,6 +1,6 @@
 // Fixture for the worker Check of the restart checks. `/slow` hangs until the suite requests
 // `/release`, and the Restart ends that Run. The pin conflicts with the version-less load of an
-// earlier Run, so the companion runs this Script in a `--worker` child. `baseUrl` comes from the
+// earlier Run, so the companion runs this Script in a worker. `baseUrl` comes from the
 // sidecar that the test server writes beside this file.
 
 #r "nuget: FsHttp, 15.0.3"
