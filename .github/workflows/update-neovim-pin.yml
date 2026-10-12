@@ -1,13 +1,12 @@
 name: Update Neovim pin
 
-# Opens a pull request when the stable Neovim pin falls behind the latest Neovim release, then
-# starts the Neovim tests workflow against the pin branch. That run is the gate for the new
-# version: green means a merge completes the update.
+# Opens a pull request when the stable Neovim pin falls behind the latest Neovim release. The
+# Neovim tests run on that pull request is the gate for the new version: green means a merge
+# completes the update.
 #
-# The pull request cannot start the gate on its own. GitHub raises no push or pull_request event
-# for anything the built-in GITHUB_TOKEN does, so a pull request that this workflow opens has no
-# checks. workflow_dispatch is the documented exception, so this workflow dispatches the Neovim
-# tests workflow by hand and links the run from the pull request.
+# The built-in GITHUB_TOKEN opens the pull request, so GitHub starts its checks only after a
+# maintainer approves them. The repository setting "Allow GitHub Actions to create and approve
+# pull requests" must be on, or `gh pr create` fails.
 #
 # Only the `stable` key moves. The `floor` key is the oldest Neovim version that the client
 # supports, and a person changes it on purpose.
@@ -23,12 +22,10 @@ concurrency:
 
 permissions:
   contents: write # push the pin branch
-  pull-requests: write # open the pin-update pull request, and comment the gate link on it
-  actions: write # dispatch the Neovim tests workflow against the pin branch
+  pull-requests: write # open the pin-update pull request
 
 env:
   PIN_FILE: tests/nvim/neovim-pin.json
-  GATE_WORKFLOW: nvim-tests.yml
 
 jobs:
   update-pin:
@@ -92,7 +89,7 @@ jobs:
           git commit -m "$(cat <<EOF
           Update the stable Neovim pin to ${LATEST}.
 
-          The previous pin was ${PIN}. The Neovim tests workflow on this branch is the gate for the new version.
+          The previous pin was ${PIN}. The Neovim tests run on this pull request is the gate for the new version.
           EOF
           )"
 
@@ -120,16 +117,10 @@ jobs:
 
           ## Gate
 
-          The Neovim tests workflow against this branch is the gate run for the new version.
+          The Neovim tests run on this pull request is the gate run for the new version.
           A green run on the three legs that use the stable pin means that a merge completes the update.
-          A comment below links the run. The run does not appear as a check on this
-          pull request, because a run that this workflow starts is not attached to it.
+          A bot opened this pull request, so its checks start only after a maintainer approves them.
+          Approve the workflow runs on this pull request to start the gate.
           EOF
           )")"
           echo "Opened $PR_URL"
-
-          # The gate. GITHUB_TOKEN raises no pull_request event, so the workflow needs dispatching
-          # by hand against the branch.
-          gh workflow run "$GATE_WORKFLOW" --ref "$BRANCH"
-          GATE_RUNS="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/${GATE_WORKFLOW}?query=branch%3A${BRANCH}"
-          gh pr comment "$PR_URL" --body "Gate run for \`${LATEST}\`: ${GATE_RUNS}"

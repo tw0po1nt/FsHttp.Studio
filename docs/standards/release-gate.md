@@ -66,10 +66,10 @@ reason that has nothing to do with the product. A freeze therefore only delays t
 Run the workflow by hand with the probe input to test the latest release against the suite. Delete
 the freeze file when a release passes.
 
-The workflow dispatches the gate run for a pin update. GitHub raises no `pull_request` event for
-anything the built-in `GITHUB_TOKEN` does. The pin-update pull request therefore shows no status
-checks of its own. The workflow starts the UI tests job against the branch and links the run from a
-comment. That comment link gives the gate result for a pin update.
+A maintainer starts the gate run for a pin update. The workflow opens the pin-update pull request
+with the built-in `GITHUB_TOKEN`, so GitHub starts the checks of that pull request only after a
+maintainer approves them. After the approval, the UI tests check on the pull request gives the gate
+result.
 
 **CI retries the suite three times, and a green third attempt reports green.**
 The CI job runs the suite up to three times and passes if any attempt passes. A check that fails
@@ -144,8 +144,8 @@ Sidecar of the UI suite. lazy.minit loads the client in the child as a lazy.nvim
 `nvim-tests.yml` runs the Neovim suite and the Lua core suite on four legs: Linux with Neovim 0.11,
 and Linux, macOS, and Windows with the pinned stable Neovim. The composite action
 `.github/actions/run-nvim-suite` contains the suite steps. The suite has no retry, so one red Check
-gives a red leg. `update-neovim-pin.yml` opens a pull request when a newer Neovim ships, and it
-dispatches `nvim-tests.yml` against the pin branch.
+gives a red leg. `update-neovim-pin.yml` opens a pull request when a newer Neovim ships. After a
+maintainer approves the checks of that pull request, its `nvim-tests.yml` run is the gate run.
 
 ### Honest gaps of the Neovim suite
 
