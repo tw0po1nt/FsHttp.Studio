@@ -138,7 +138,7 @@ Ticket: [Which language and runtime does the Neovim client use?](https://github.
   code can replace the core in the future.
 - The pure core contains: the envelope decode and encode, the frame parser, the cursor rule, the
   Status line text rows, the copy payload, the Curl command, the binary test, the hex dump, the
-  JSON pretty-printer, the version match rule, and the option validation.
+  JSON pretty-printer, the HTML indenter, the version match rule, and the option validation.
 - `vim.json.decode` loses key order. Thus the Lua JSON pretty-printer reformats the body token by
   token, as the F# pretty-printer does.
 - A new ADR records the choice of plain Lua and the rejected routes (a Lua shim with Fable JS, an
@@ -287,7 +287,7 @@ Tickets: [Where does the Neovim client show a Run's result?](https://github.com/
 - A Run opens the Response buffer in a split (by default on the right). If a window already shows
   the buffer, the Run reuses that window. The cursor stays in the script. A closed window opens
   again on the next Run.
-- The window sets `wrap`, `linebreak`, and `breakindent`. The client has no HTML formatter.
+- The window sets `wrap`, `linebreak`, and `breakindent`.
 - While a Run is in progress, the buffer shows "Running… Ns".
 
 The layout came from the prototype in the tag `archive/prototype/response-buffer` (variant D):
@@ -308,9 +308,11 @@ winbar:  200 OK  294 ms · 336 ms total  6.2 KB  GET https://api.github.com/repo
 - **The buffer has three folds:** Request, Response headers, and Body. Request and Response
   headers start closed. Body starts open. A closed fold shows its title and its line count.
 - **Body text.** The client pretty-prints a JSON body first. A JSON body that does not parse
-  shows its exact bytes. Then the client parses the text of a JSON, XML, or HTML body with the
-  tree-sitter parser for that language. The parser gives the highlights and the folds. With no
-  parser, a pretty-printed JSON body gets folds from the JSON structure.
+  shows its exact bytes. The client also indents an HTML body first. Each block element starts a new
+  line, and inline elements stay in their line of text. Then the client parses the text of a JSON,
+  XML, or HTML body with the tree-sitter parser for that language. The parser gives the highlights
+  and the folds. With no parser, a pretty-printed JSON body gets folds from the JSON structure, and
+  an indented HTML body gets folds from the HTML structure.
 - **Binary body.** The buffer ports the hex view and the reason for a Captured body.
 - **Image body.** The client writes the bytes to a temporary file and calls the image placement of
   snacks.nvim, when snacks.nvim is present and the terminal supports it. The line below the Body
@@ -625,6 +627,7 @@ Ticket: [What gates a release of the Neovim client?](https://github.com/tw0po1nt
   calls the image placement with the temporary file.
 - A JSON body shows pretty-printed. It gets tree-sitter folds and highlights with the parser, and
   structure folds without it.
+- A minified HTML body with no `html` parser shows indented, with structure folds.
 - The lualine entry: `nvim_eval_statusline` shows the Status line text.
 - `:FsHttp status` echoes the text in a script, and the state row in a buffer that is not F#.
 - `:checkhealth fshttp` reports no ERROR for a valid setup, an ERROR for a missing `dotnet_path`,
@@ -679,7 +682,7 @@ The build adds these entries to the honest gaps when the Neovim suite ships:
   request tree, a first-run walkthrough, an inline card, and `.fs` files.
 - **A diagnostic for a Compile error** in either Client.
 - **A luarocks package**, and tests for plugin managers other than lazy.nvim.
-- **An HTML formatter** and HTML rendering in the terminal.
+- **HTML rendering in the terminal.**
 - **A size option** for the Response buffer window.
 
 ## Further Notes

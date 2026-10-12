@@ -102,7 +102,7 @@ end
 T["writes an HTML body with the policy to a static file, and calls vim.ui.open"] = function()
     local child = harness.harness_setup_child()
     stub_open(child)
-    run_block(child, "open-body.fsx", html_body)
+    run_block(child, "open-body.fsx", "<!doctype html>")
 
     harness.cmd(child, "FsHttp open")
 
@@ -130,12 +130,12 @@ end
 
 T["an HTML body shows the open hint directly below the Body title"] = function()
     local child = harness.harness_setup_child()
-    run_block(child, "open-body.fsx", html_body)
+    run_block(child, "open-body.fsx", "<!doctype html>")
 
     local title = body_title(child)
 
     assert.same({ ":FsHttp open  shows the rendered page in the browser, with scripts blocked" }, title.virtual)
-    assert.equal(html_body, title.next_line)
+    assert.equal("<!doctype html>", title.next_line)
 end
 
 T["an image body shows the open hint directly below the Body title, and opens as a png"] = function()

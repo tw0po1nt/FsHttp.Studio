@@ -77,6 +77,11 @@ let imageBody =
 let htmlBody =
     "<!doctype html><html><head><title>probe</title></head><body><h1>ui-test-server</h1><script>document.title = 'ran'</script></body></html>"
 
+/// Cross-process contract for `GET /nested-html`. Match exactly in the Neovim suite. The body is
+/// minified, so its lines differ from the lines of the indented body.
+let nestedHtmlBody =
+    """<!doctype html><html><head><title>Snorlax</title></head><body><div class="card"><h1>Snorlax</h1><p>Sleeps <b>a lot</b>, see <a href="/x">more</a>.</p><ul><li>rest</li><li>snore</li></ul></div></body></html>"""
+
 let private catchAllBody = "ui-test-server:unknown"
 
 let private utf8 = Encoding.UTF8
@@ -191,6 +196,7 @@ type UiTestHttpServer() =
             | "GET", "/status" -> handleStatus ctx
             | "GET", p when p.StartsWith downloadsPrefix -> handleDownload ctx p
             | "GET", "/nested-json" -> writeText ctx 200 "application/json" nestedJsonBody
+            | "GET", "/nested-html" -> writeText ctx 200 "text/html; charset=utf-8" nestedHtmlBody
             // The posted body is read to completion and dropped. Draining it keeps the connection
             // reusable; not echoing it is what makes the request-section check a real claim.
             | "POST", "/echo" ->

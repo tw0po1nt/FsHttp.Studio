@@ -1,4 +1,5 @@
 local binary_body = require("fshttp.binary_body")
+local html_indent = require("fshttp.html_indent")
 local image_body = require("fshttp.image_body")
 local json = require("fshttp.json")
 local open_rule = require("fshttp.open_rule")
@@ -258,6 +259,8 @@ local function add_body(view, content_type, body, body_syntax)
         if pretty and pretty_folds then
             text, folds = pretty, pretty_folds
         end
+    elseif language == "html" then
+        text, folds = html_indent.indent(body)
     end
     local syntax = language and body_syntax and body_syntax(language, text)
     if syntax then

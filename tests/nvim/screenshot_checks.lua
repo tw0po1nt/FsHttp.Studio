@@ -174,9 +174,8 @@ T["an HTML body"] = function()
     local child = start_screen_child()
 
     open_script(child, harness.fixture("open-body.fsx"), block_line)
-    run_block(child, block_line, "the HTML body", function(snapshot)
-        local last = (snapshot.lines or {})[#(snapshot.lines or {})] or ""
-        return last:sub(1, #"<!doctype html>") == "<!doctype html>"
+    run_block(child, block_line, "the indented HTML body", function(snapshot)
+        return has_line(snapshot.lines, "    <script>document.title = 'ran'</script>")
     end)
 
     expect_screenshot(child, "html-body")

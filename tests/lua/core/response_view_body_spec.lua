@@ -58,6 +58,19 @@ describe("the Body of fshttp.response_view", function()
         "}",
     }
 
+    local html = "<html><body>\n<h1>Snorlax</h1><ul><li>rest</li><li>snore</li></ul></body></html>"
+    local html_indented = {
+        "<html>",
+        "  <body>",
+        "    <h1>Snorlax</h1>",
+        "    <ul>",
+        "      <li>rest</li>",
+        "      <li>snore</li>",
+        "    </ul>",
+        "  </body>",
+        "</html>",
+    }
+
     describe("with no parser", function()
         it("pretty-prints a JSON body, with a fold for each object and each array", function()
             local view = response_view.result(result("application/json; charset=utf-8", nested), no_parser)
@@ -88,14 +101,25 @@ describe("the Body of fshttp.response_view", function()
             assert.equal(1, #body_folds(view, select(2, body_lines(view))))
         end)
 
-        it("keeps the exact bytes of an HTML body and an XML body", function()
-            local html = "<html><body>\n<p>snorlax</p></body></html>"
-            local xml = "<pokemon><name>snorlax</name>\n</pokemon>"
-            for content_type, body in pairs({ ["text/html"] = html, ["application/xml"] = xml }) do
-                local view = response_view.result(result(content_type, body), no_parser)
-                assert.equal(body, table.concat(body_lines(view), "\n"), content_type)
-                assert.equal(1, #body_folds(view, select(2, body_lines(view))), content_type)
+        it("shows an HTML body indented, with a fold for each element that spans more than one line", function()
+            for _, content_type in ipairs({ "text/html; charset=utf-8", "application/xhtml+xml" }) do
+                local view = response_view.result(result(content_type, html), no_parser)
+                local lines, title = body_lines(view)
+                assert.same(html_indented, lines, content_type)
+                assert.same({
+                    { first = title + 4, last = title + 7, closed = false },
+                    { first = title + 2, last = title + 8, closed = false },
+                    { first = title + 1, last = title + 9, closed = false },
+                    { first = title, last = title + 9, closed = false },
+                }, body_folds(view, title), content_type)
             end
+        end)
+
+        it("keeps the exact bytes of an XML body", function()
+            local xml = "<pokemon><name>snorlax</name>\n</pokemon>"
+            local view = response_view.result(result("application/xml", xml), no_parser)
+            assert.equal(xml, table.concat(body_lines(view), "\n"))
+            assert.equal(1, #body_folds(view, select(2, body_lines(view))))
         end)
     end)
 
@@ -148,6 +172,28 @@ describe("the Body of fshttp.response_view", function()
                 )
             end
         )
+
+        it("gives the indented HTML text to the parser, and puts its folds and highlights on the body lines", function()
+            local asked
+            local view = response_view.result(result("text/html", html), function(language, text)
+                asked = { language, text }
+                return {
+                    highlights = { { line = 5, first_col = 7, last_col = 9, group = "@tag.html" } },
+                    folds = { { first = 4, last = 7 } },
+                }
+            end)
+            local lines, title = body_lines(view)
+            assert.same({ "html", table.concat(html_indented, "\n") }, asked)
+            assert.same(html_indented, lines)
+            assert.same({
+                { first = title + 4, last = title + 7, closed = false },
+                { first = title, last = title + 9, closed = false },
+            }, body_folds(view, title))
+            assert.same(
+                { line = title + 5, first_col = 7, last_col = 9, group = "@tag.html" },
+                view.highlights[#view.highlights]
+            )
+        end)
 
         it("gives the parser the exact bytes of a JSON body that does not parse, and shows those bytes", function()
             local body = '{"a":1,\n"b":'
