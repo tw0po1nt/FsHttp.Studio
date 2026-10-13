@@ -57,6 +57,7 @@ media/*.svg
 # ship inside the .vsix — only media/icon.png (package.json `icon`) does.
 media/hero.png
 media/demo.gif
+media/demo-nvim.gif
 
 # Redundant with `vsce package --no-dependencies`, but explicit
 node_modules/**

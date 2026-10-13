@@ -19,7 +19,8 @@ the skill before you post the text. A one-line code comment is still prose.
 **Name a domain concept with the term that `GLOSSARY.md` defines.** This binds an identifier, a
 comment, a log string, an envelope tag, a test name, an issue title, and a commit message. A concept
 that you cannot state in glossary terms is a signal: either the glossary is missing it, or your
-language is wrong. Resolve that instead of reaching for a synonym.
+language is wrong. Resolve that instead of reaching for a synonym. In `README.md`, write the term in
+lower case. `docs/standards/technical-prose.md` gives the reason.
 
 **Keep your prose clear of the patterns in `.banned-patterns`.** The file at the repo root has
 one pattern for each line, with the message that a hit reports, and
