@@ -93,7 +93,8 @@ as sent.
 
 ### 5. Headers
 
-- Each header of the Request goes out as `-H 'Name: value'`, in the order of the Request section.
+- Each header of the Request goes out as `-H 'Name: value'`, in the order of the Request section,
+  except `Content-Length` and `Accept-Encoding`. The rules below state why the command drops them.
 - A header whose value is empty, or has only spaces and tabs, goes out as `-H 'Name;'`. curl
   removes a header that it gets as `-H 'Name:'`.
 - The command drops `Content-Length`, because curl computes it.
@@ -101,6 +102,10 @@ as sent.
   a compressed body to the terminal as raw bytes. With `--compressed`, curl asks only for the
   encodings that it can decode, and it decodes the body. A copy of the header can ask for an
   encoding that the local curl cannot decode, such as `br` in the curl of macOS.
+- The rule applies to each value of `Accept-Encoding`, `identity` included. With `identity`, the
+  Run gets a body with no encoding, and the command can get an encoded body. curl decodes that
+  body, so the user reads the same text. A server that sends a different body for each encoding
+  can send a different body to the command.
 - `--compressed` comes after `--globoff` and before the headers.
 - Each other header stays as it is, `Host` included.
 - curl adds `User-Agent` and `Accept` to each request. When the Request has no `User-Agent`, the
@@ -162,7 +167,7 @@ There is one Golden fixture for each rule. renderer.Tests writes each fixture, a
 suite reads it.
 
 - **Method and URL:** `get-no-body`, `post-json-inline`, `get-with-body`, `head`, `put-no-body`, `url-glob-chars`
-- **Headers:** `drops-content-length`, `accept-encoding`, `body-no-content-type`, `value-single-quote`, `header-empty-value`
+- **Headers:** `drops-content-length`, `accept-encoding`, `compressed-after-globoff`, `body-no-content-type`, `value-single-quote`, `header-empty-value`
 - **Inline body:** `body-single-quote`, `body-leading-at`, `body-16384-bytes`
 - **Base64 pipe:** `body-16385-bytes`, `body-crlf`, `body-multipart`, `body-nul`, `body-invalid-utf8`, `body-control-byte`
 - **No command:** `not-captured`, `head-with-body`

@@ -95,7 +95,7 @@ The request body that the companion read at send time, while the content was sti
 _Avoid_: request payload, buffered body, recorded body.
 
 **Curl command**:
-The shell text that a Client builds from the request as sent. In a POSIX shell, it sends the same method, URL, headers, and body bytes as the Run. It replaces `Accept-Encoding` with `--compressed`, so curl asks only for the encodings that it can decode, and it decodes the body. A Captured body that the companion did not read gives no Curl command, because that command would send a different request.
+The shell text that a Client builds from the request as sent. In a POSIX shell, it sends the same method, URL, and body bytes as the Run, and each header of the Run except `Accept-Encoding`. In place of that header, it uses `--compressed`, so curl asks only for the encodings that it can decode, and it decodes the body. A Captured body that the companion did not read gives no Curl command, because that command would send a different request.
 _Avoid_: curl snippet, curl export, cURL.
 
 **Copy text**:
