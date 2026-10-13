@@ -23,7 +23,8 @@ The hand-written command is often wrong:
 ## Solution
 
 **Each Client builds a Curl command from the request as sent.** In a POSIX shell, the command sends
-the same method, URL, headers, and body bytes as the Run.
+the same method, URL, headers, and body bytes as the Run. `Accept-Encoding` is the one exception,
+and section 5 of the Implementation Decisions states the rule for it.
 
 - **VSCode:** a "Copy as curl" button beside the copy button of the Request section.
 - **Neovim:** `:FsHttp yank curl` and the `yc` key in the Response buffer.
@@ -95,8 +96,13 @@ as sent.
 - Each header of the Request goes out as `-H 'Name: value'`, in the order of the Request section.
 - A header whose value is empty, or has only spaces and tabs, goes out as `-H 'Name;'`. curl
   removes a header that it gets as `-H 'Name:'`.
-- The command drops `Content-Length` only, because curl computes it.
-- Each other header stays as it is, `Host` and `Accept-Encoding` included.
+- The command drops `Content-Length`, because curl computes it.
+- The command drops `Accept-Encoding` and adds `--compressed`. Without `--compressed`, curl writes
+  a compressed body to the terminal as raw bytes. With `--compressed`, curl asks only for the
+  encodings that it can decode, and it decodes the body. A copy of the header can ask for an
+  encoding that the local curl cannot decode, such as `br` in the curl of macOS.
+- `--compressed` comes after `--globoff` and before the headers.
+- Each other header stays as it is, `Host` included.
 - curl adds `User-Agent` and `Accept` to each request. When the Request has no `User-Agent`, the
   command adds `-H 'User-Agent:'`. When the Request has no `Accept`, the command adds `-H 'Accept:'`.
 - When the request has a body and no `Content-Type`, the command adds `-H 'Content-Type:'`.
@@ -156,7 +162,7 @@ There is one Golden fixture for each rule. renderer.Tests writes each fixture, a
 suite reads it.
 
 - **Method and URL:** `get-no-body`, `post-json-inline`, `get-with-body`, `head`, `put-no-body`, `url-glob-chars`
-- **Headers:** `drops-content-length`, `body-no-content-type`, `value-single-quote`, `header-empty-value`
+- **Headers:** `drops-content-length`, `accept-encoding`, `body-no-content-type`, `value-single-quote`, `header-empty-value`
 - **Inline body:** `body-single-quote`, `body-leading-at`, `body-16384-bytes`
 - **Base64 pipe:** `body-16385-bytes`, `body-crlf`, `body-multipart`, `body-nul`, `body-invalid-utf8`, `body-control-byte`
 - **No command:** `not-captured`, `head-with-body`
@@ -167,7 +173,8 @@ suite reads it.
 - **A replay test.** It runs the command of each Golden fixture with `sh` and `curl` against a
   local echo server. It compares the method, URL, headers, and body bytes that the server receives.
   The headers must be the headers of the Run, in the same order. `Host` and `Content-Length` are
-  the only other headers that the server can receive.
+  the only other headers that the server can receive. curl sends its own `Accept-Encoding` value,
+  so the test checks only that the server gets `Accept-Encoding` when the Run sent it.
   The test runs on Linux and macOS, outside the Release gate. It adds no `curl` dependency to the
   Release gate on Windows.
 

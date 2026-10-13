@@ -394,9 +394,17 @@ let private curlLines (request: RequestView) (body: CurlBody) : string =
         else
             []
 
+    // curl decodes a body only with `--compressed`, and then it asks only for the encodings that it can decode.
+    let compressed =
+        if List.exists (isHeaderNamed "Accept-Encoding") request.Headers then
+            [ "--compressed" ]
+        else
+            []
+
     let headers =
         request.Headers
-        |> List.filter (isHeaderNamed "Content-Length" >> not)
+        |> List.filter (fun header ->
+            not (isHeaderNamed "Content-Length" header || isHeaderNamed "Accept-Encoding" header))
         |> List.map (fun (name, value) ->
             if value |> Seq.forall (fun c -> c = ' ' || c = '\t') then
                 "-H " + shellQuote (name + ";")
@@ -415,7 +423,7 @@ let private curlLines (request: RequestView) (body: CurlBody) : string =
         // `--data @-` removes each CR and LF from the body.
         | Base64Pipe _ -> [ "--data-binary @-" ]
 
-    let arguments = firstLine :: globoff @ headers @ removedDefaults @ data
+    let arguments = firstLine :: globoff @ compressed @ headers @ removedDefaults @ data
 
     match body with
     | Base64Pipe base64 ->
