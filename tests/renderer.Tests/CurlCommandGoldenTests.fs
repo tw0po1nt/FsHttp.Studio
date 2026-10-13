@@ -65,6 +65,11 @@ let private cases =
         Request = request "POST" "/notes" [ "Accept", "text/plain" ] (Captured(utf8 "hello")) }
       { Name = "value-single-quote"
         Request = request "GET" "/items" [ "X-Note", "it's a 'quoted' value" ] NoBody }
+      { Name = "accept-encoding"
+        Request = request "GET" "/items" [ "Accept", "application/json"; "Accept-Encoding", "gzip, deflate, br" ] NoBody }
+      { Name = "compressed-after-globoff"
+        Request =
+          request "GET" "/search?filter[name]=fs" [ "Accept", "application/json"; "Accept-Encoding", "gzip" ] NoBody }
       { Name = "header-empty-value"
         Request = request "GET" "/items" [ "Accept", "application/json"; "X-Empty", "" ] NoBody }
       { Name = "body-single-quote"
@@ -201,6 +206,31 @@ let tests =
                       + "  -H 'User-Agent:'"
                   ))
                   "the Run sent an Accept, so only User-Agent is removed"
+          }
+
+          test "an Accept-Encoding header becomes --compressed, so that curl decodes the body" {
+              Expect.equal
+                  (curlFor "accept-encoding")
+                  (Some(
+                      "curl 'http://api.example.com/items' \\\n"
+                      + "  --compressed \\\n"
+                      + "  -H 'Accept: application/json' \\\n"
+                      + "  -H 'User-Agent:'"
+                  ))
+                  "curl asks only for the encodings that it can decode"
+          }
+
+          test "--compressed comes after --globoff and before the headers" {
+              Expect.equal
+                  (curlFor "compressed-after-globoff")
+                  (Some(
+                      "curl 'http://api.example.com/search?filter[name]=fs' \\\n"
+                      + "  --globoff \\\n"
+                      + "  --compressed \\\n"
+                      + "  -H 'Accept: application/json' \\\n"
+                      + "  -H 'User-Agent:'"
+                  ))
+                  "the flags come first, in a fixed order"
           }
 
           test "a header with an empty value goes out with a semicolon" {

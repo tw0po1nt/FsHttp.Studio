@@ -131,14 +131,18 @@ Optional:
 <
     A Body of zero bytes has no Copy text, and the command writes no register.
 
-    The Curl command sends the same method, URL, headers, and body bytes as
-    the Run, in a POSIX shell such as bash, zsh, Git Bash, or WSL. A body is
-    safe to paste when it is valid UTF-8 and has no control character except
-    tab and LF. A body that is not safe to paste, or that is above 16,384
-    bytes, goes through `base64 -d` to curl. Two requests have no Curl
-    command: a request whose body the companion did not read, and a HEAD
-    request with a body. For these requests, the command writes no register
-    and gives a WARN notice with the reason.
+    The Curl command sends the same method, URL, and body bytes as the Run,
+    in a POSIX shell such as bash, zsh, Git Bash, or WSL. It sends each
+    header of the Run except `Accept-Encoding`. When the Run sent
+    `Accept-Encoding`, the command uses `--compressed` in place of that
+    header. curl then asks only for the encodings that it can decode, and it
+    decodes the body. A body is safe to paste when it is valid UTF-8
+    and has no control character except tab and LF. A body that is not safe
+    to paste, or that is above 16,384 bytes, goes through `base64 -d` to
+    curl. Two requests have no Curl command: a request whose body the
+    companion did not read, and a HEAD request with a body. For these
+    requests, the command writes no register and gives a WARN notice with
+    the reason.
 
 ==============================================================================
 4. Maps and keys                                                 *fshttp-maps*

@@ -183,9 +183,17 @@ let private replay (case: ReplayCase) =
             |> List.exists (fun n -> String.Equals(name, n, StringComparison.OrdinalIgnoreCase))
 
         Expect.equal
-            (received.Headers |> List.filter (isNamed [ "Host"; "Content-Length" ] >> not))
-            (case.Headers |> List.filter (isNamed [ "Content-Length" ] >> not))
+            (received.Headers
+             |> List.filter (isNamed [ "Host"; "Content-Length"; "Accept-Encoding" ] >> not))
+            (case.Headers
+             |> List.filter (isNamed [ "Content-Length"; "Accept-Encoding" ] >> not))
             "the headers of the Run, in order, and no other header"
+
+        // `--compressed` sends the encodings of the local curl build, so only the header name can match.
+        Expect.equal
+            (headerValue "Accept-Encoding" received.Headers |> Option.isSome)
+            (headerValue "Accept-Encoding" case.Headers |> Option.isSome)
+            "an Accept-Encoding header only when the Run sent one"
 
         match case.Body with
         | None -> Expect.isEmpty received.Body "no body"

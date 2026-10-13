@@ -132,8 +132,12 @@ local function command_text(request, body)
     if request.url:find("[%[%]{}]") then
         arguments[#arguments + 1] = "--globoff"
     end
+    -- curl decodes a body only with `--compressed`, and then it asks only for the encodings that it can decode.
+    if has_header(request.headers, "Accept-Encoding") then
+        arguments[#arguments + 1] = "--compressed"
+    end
     for _, header in ipairs(request.headers) do
-        if not is_header_named(header, "Content-Length") then
+        if not is_header_named(header, "Content-Length") and not is_header_named(header, "Accept-Encoding") then
             local value = header.value:match("^[ \t]*$") and ";" or (": " .. header.value)
             arguments[#arguments + 1] = "-H " .. shell_quote(header.name .. value)
         end
