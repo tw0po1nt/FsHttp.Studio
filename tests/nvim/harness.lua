@@ -431,17 +431,18 @@ function M.block_marks(child)
                     for _, chunk in ipairs((details.virt_lines or {})[1] or {}) do
                         text[#text + 1] = chunk[1]
                     end
-                    lines[#lines + 1] = string.format(
-                        "%d: %s [%s]",
-                        extmark[2] + 1,
-                        vim.trim(table.concat(text)),
-                        vim.trim(details.sign_text or "")
-                    )
+                    lines[#lines + 1] = string.format("%d: %s", extmark[2] + 1, vim.trim(table.concat(text)))
                 end
             end
             return table.concat(lines, "\n")
         end)()]]
     )
+end
+
+---@param child nvim_suite.Child
+---@return integer count the number of signs in the current buffer
+function M.sign_count(child)
+    return M.lua_get(child, [[#vim.fn.sign_getplaced(vim.api.nvim_get_current_buf(), { group = "*" })[1].signs]])
 end
 
 ---@param child nvim_suite.Child

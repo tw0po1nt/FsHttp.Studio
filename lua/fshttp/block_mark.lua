@@ -6,7 +6,6 @@ local M = {}
 ---@field line integer 1-based
 ---@field title string
 ---@field on_block boolean false for the line-1 mark of a Parse failure with no Block
----@field runnable boolean
 
 ---@param refusal string?
 ---@return string
@@ -27,7 +26,6 @@ function M.for_blocks(blocks)
                     line = 1,
                     title = refusals.no_blocks_parse_failure_block_mark_title,
                     on_block = false,
-                    runnable = false,
                 },
             }
         end
@@ -39,7 +37,6 @@ function M.for_blocks(blocks)
             line = range.start_line,
             title = title(range.refusal),
             on_block = true,
-            runnable = range.refusal == nil,
         }
     end
     return marks

@@ -105,7 +105,7 @@ the Neovim suite, and the Lua core suite together are the Release gate.
 ### Settings (Neovim)
 
 51. As a LazyVim user, I want to set options through `opts`, so that I configure the client the LazyVim way.
-52. As a Neovim user, I want to turn off the virtual line or the sign of each Block mark, so that the script looks as I want.
+52. As a Neovim user, I want to turn off the Block marks, so that the script looks as I want.
 53. As a Neovim user, I want to choose the split direction of the Response buffer, so that it fits my layout.
 54. As a Neovim user, I want to turn off images and the default keys, so that the client fits my setup.
 55. As a Neovim user, I want to remove the automatic lualine entry, so that I can put the text where I want.
@@ -264,12 +264,11 @@ The outcome for each state:
 #### A7. Block marks
 
 - Each located block in an `.fsx` buffer gets a **Block mark**: a virtual line above the first line
-  of the block, and a sign. The virtual line shows the lens title from `Refusals`. The sign shows
-  the glyph of that title.
+  of the block. The virtual line shows the lens title from `Refusals`.
 - The client locates a script again on `BufEnter`, and on `TextChanged` and `TextChangedI` after a
   pause of about 300 ms. Extmarks move with the edits of the user between two locates.
 - A Parse failure with no block gives a virtual line above line 1:
-  `⊘ No requests found: this script has a syntax error`, with the `⊘` sign on line 1.
+  `⊘ No requests found: this script has a syntax error`.
 - A script with no block and no Parse failure gets no Block mark.
 - A stopped companion keeps each Block mark, with the title `⊘ Cannot run: the companion stopped`.
   A buffer that no locate covered gets no mark.
@@ -443,7 +442,7 @@ Ticket: [Which settings does the Neovim client have, and how does a user set the
   dotnet_path = nil,            -- nil: dotnet on PATH
   companion_path = nil,         -- nil: download the Companion archive
   request_timeout_ms = 30000,   -- 0: no bound
-  block_mark = { virtual_line = true, sign = true },
+  block_mark = { virtual_line = true },
   response_buffer = {
     split = "right",            -- right | left | below | above
     images = true,

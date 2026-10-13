@@ -4,7 +4,7 @@ local M = {}
 ---@field dotnet_path string?
 ---@field companion_path string?
 ---@field request_timeout_ms number
----@field block_mark { virtual_line: boolean, sign: boolean }
+---@field block_mark { virtual_line: boolean }
 ---@field response_buffer { split: "right"|"left"|"below"|"above", images: boolean, keys: boolean }
 ---@field status_line { lualine: boolean }
 
@@ -15,7 +15,7 @@ M.path_options = { "dotnet_path", "companion_path" }
 function M.defaults()
     return {
         request_timeout_ms = 30000,
-        block_mark = { virtual_line = true, sign = true },
+        block_mark = { virtual_line = true },
         response_buffer = { split = "right", images = true, keys = true },
         status_line = { lualine = true },
     }
@@ -64,7 +64,6 @@ local schema = {
     request_timeout_ms = { accept = is_timeout, accepted = "a number of 0 or more (0 sets no bound)" },
     block_mark = {
         virtual_line = { accept = is_boolean, accepted = "true or false" },
-        sign = { accept = is_boolean, accepted = "true or false" },
     },
     response_buffer = {
         split = { accept = is_split, accepted = "right, left, below, or above" },

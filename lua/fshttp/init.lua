@@ -4,7 +4,7 @@ local M = {}
 ---@field companion_path? string The folder that contains Companion.dll and Companion.runtimeconfig.json.
 ---@field dotnet_path? string A dotnet executable. With no value, the client uses dotnet on PATH.
 ---@field request_timeout_ms? number The bound of each Run in milliseconds. 0 sets no bound.
----@field block_mark? { virtual_line?: boolean, sign?: boolean }
+---@field block_mark? { virtual_line?: boolean }
 ---@field response_buffer? { split?: "right"|"left"|"below"|"above", images?: boolean, keys?: boolean }
 ---@field status_line? { lualine?: boolean } lualine = false removes the lualine entry.
 

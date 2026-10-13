@@ -8,7 +8,7 @@ describe("fshttp.options", function()
         assert.same({}, problems)
         assert.same({
             request_timeout_ms = 30000,
-            block_mark = { virtual_line = true, sign = true },
+            block_mark = { virtual_line = true },
             response_buffer = { split = "right", images = true, keys = true },
             status_line = { lualine = true },
         }, config)
@@ -16,7 +16,6 @@ describe("fshttp.options", function()
 
     it("lists the dotted name of each key, the path options too", function()
         assert.same({
-            "block_mark.sign",
             "block_mark.virtual_line",
             "companion_path",
             "dotnet_path",
@@ -33,7 +32,7 @@ describe("fshttp.options", function()
             dotnet_path = "/opt/dotnet",
             companion_path = "~/companion",
             request_timeout_ms = 0,
-            block_mark = { sign = false },
+            block_mark = { virtual_line = false },
             response_buffer = { split = "below", images = false, keys = false },
             status_line = { lualine = false },
         })
@@ -41,7 +40,7 @@ describe("fshttp.options", function()
         assert.equal("/opt/dotnet", config.dotnet_path)
         assert.equal("~/companion", config.companion_path)
         assert.equal(0, config.request_timeout_ms)
-        assert.same({ virtual_line = true, sign = false }, config.block_mark)
+        assert.same({ virtual_line = false }, config.block_mark)
         assert.same({ split = "below", images = false, keys = false }, config.response_buffer)
         assert.same({ lualine = false }, config.status_line)
     end)
@@ -61,12 +60,13 @@ describe("fshttp.options", function()
     end)
 
     it("checks the type of each boolean key", function()
-        local config, problems = options.resolve({ status_line = { lualine = "no" }, block_mark = { sign = 1 } })
+        local config, problems =
+            options.resolve({ status_line = { lualine = "no" }, block_mark = { virtual_line = 1 } })
         assert.equal(2, #problems)
-        assert.equal("block_mark.sign", problems[1].key)
+        assert.equal("block_mark.virtual_line", problems[1].key)
         assert.equal("status_line.lualine", problems[2].key)
         assert.equal(true, config.status_line.lualine)
-        assert.equal(true, config.block_mark.sign)
+        assert.equal(true, config.block_mark.virtual_line)
     end)
 
     it("rejects a timeout that is negative, a string, a boolean, infinite, or NaN", function()
@@ -91,13 +91,13 @@ describe("fshttp.options", function()
         local config, problems = options.resolve({ block_mark = true })
         assert.equal("block_mark", problems[1].key)
         assert.equal("ERROR", problems[1].level)
-        assert.same({ virtual_line = true, sign = true }, config.block_mark)
+        assert.same({ virtual_line = true }, config.block_mark)
     end)
 
     it("gives a WARN for an unknown key, and applies each other key", function()
         local config, problems = options.resolve({
             theme = "red",
-            block_mark = { glow = true, sign = false },
+            block_mark = { glow = true, virtual_line = false },
             request_timeout_ms = 5,
         })
         assert.equal(2, #problems)
@@ -105,7 +105,19 @@ describe("fshttp.options", function()
         assert.equal("block_mark.glow", problems[1].key)
         assert.equal("theme", problems[2].key)
         assert.equal(5, config.request_timeout_ms)
-        assert.equal(false, config.block_mark.sign)
+        assert.equal(false, config.block_mark.virtual_line)
+    end)
+
+    it("gives a WARN for block_mark.sign, and applies each other key", function()
+        local config, problems = options.resolve({ block_mark = { sign = false, virtual_line = false } })
+        assert.same({
+            {
+                level = "WARN",
+                key = "block_mark.sign",
+                message = "FsHttp.Studio: setup() has no option block_mark.sign. The client ignores it.",
+            },
+        }, problems)
+        assert.same({ virtual_line = false }, config.block_mark)
     end)
 
     it("gives an ERROR for opts that is a string, and uses the defaults", function()
@@ -115,10 +127,10 @@ describe("fshttp.options", function()
     end)
 
     it("gives a fresh configuration on each call", function()
-        local first = options.resolve({ block_mark = { sign = false } })
+        local first = options.resolve({ block_mark = { virtual_line = false } })
         local second = options.resolve(nil)
-        assert.equal(true, second.block_mark.sign)
-        assert.equal(false, first.block_mark.sign)
+        assert.equal(true, second.block_mark.virtual_line)
+        assert.equal(false, first.block_mark.virtual_line)
     end)
 
     it("names the path options that differ", function()

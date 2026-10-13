@@ -39,7 +39,7 @@ The `▶ Run request` affordance above each located block in VSCode. A click on 
 _Avoid_: play button, gutter action.
 
 **Block mark**:
-The virtual line and the sign that the Neovim client shows on each located block. A Block mark states whether a Run can reach the block. It starts no Run.
+The virtual line that the Neovim client shows above each located block. A Block mark states whether a Run can reach the block. It starts no Run.
 _Avoid_: lens, Run mark, extmark.
 
 ### Rendering
