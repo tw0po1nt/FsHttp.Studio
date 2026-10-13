@@ -118,7 +118,7 @@ T["block_mark.virtual_line = false removes each Block mark at once"] = function(
 
     local marks = harness.block_marks(child)
     assert.equal("8: \n10: ", marks)
-    assert.equal(0, harness.signs(child))
+    assert.equal(0, harness.sign_count(child))
 end
 
 T["a change to the dotnet path gives the INFO notice that names :FsHttp restart"] = function()

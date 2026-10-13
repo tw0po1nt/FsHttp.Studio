@@ -59,7 +59,7 @@ T["no-requests Block marks"]["the line-1 mark of a Parse failure puts no sign in
         mark(1, refusals.no_blocks_parse_failure_block_mark_title)
     )
 
-    assert.equal(0, harness.signs(child))
+    assert.equal(0, harness.sign_count(child))
 end
 
 T["no-requests Block marks"]["a Parse failure below the last Block keeps a Block mark with the run title on each Block"] = function()
@@ -114,7 +114,7 @@ T["a Block mark is a virtual line only, for a runnable Block and a refused Block
         marks(mark(8, run_title), mark(11, refusals.codes.loopBody.block_mark_title))
     )
 
-    assert.equal(0, harness.signs(child))
+    assert.equal(0, harness.sign_count(child))
 end
 
 T["an edit locates the Script again after the pause"] = function()

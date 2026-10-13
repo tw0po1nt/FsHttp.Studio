@@ -441,7 +441,7 @@ end
 
 ---@param child nvim_suite.Child
 ---@return integer count the number of signs in the current buffer
-function M.signs(child)
+function M.sign_count(child)
     return M.lua_get(child, [[#vim.fn.sign_getplaced(vim.api.nvim_get_current_buf(), { group = "*" })[1].signs]])
 end
 
